@@ -267,6 +267,7 @@ function addonTable.Config.Initialize()
             value = math.floor(value)
             UIThingsDB.vendor.repairThreshold = value
             _G[self:GetName() .. 'Text']:SetText("Repair Reminder: " .. value .. "%")
+            if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end)
         
         -- Lock Alert Checkbox
