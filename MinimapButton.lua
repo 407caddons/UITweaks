@@ -43,6 +43,7 @@ function addonTable.Minimap.Initialize()
     
     button = CreateFrame("Button", "LunaMinimapButton", Minimap)
     button:SetFrameLevel(8)
+    button:SetFrameStrata("MEDIUM") -- Ensure it's above the map
     button:SetSize(32, 32)
     button:SetMovable(true)
     button:RegisterForDrag("LeftButton")
@@ -55,7 +56,7 @@ function addonTable.Minimap.Initialize()
     
     local icon = button:CreateTexture(nil, "BACKGROUND")
     icon:SetSize(20, 20)
-    icon:SetTexture([[Interface\Icons\Inv_Misc_Gear_01]]) -- Default Gear Icon
+    icon:SetTexture([[Interface\AddOns\LunaUITweaks\Icon.tga]]) -- Use Custom Icon
     icon:SetPoint("CENTER", 0, 1)
     
     button:SetScript("OnClick", function(self, btn)

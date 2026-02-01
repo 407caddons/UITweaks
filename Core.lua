@@ -19,7 +19,10 @@ local function OnEvent(self, event, ...)
         if not UIThingsDB.tracker.y then UIThingsDB.tracker.y = -250 end
         if not UIThingsDB.tracker.point then UIThingsDB.tracker.point = "TOPRIGHT" end
         if UIThingsDB.tracker.showBorder == nil then UIThingsDB.tracker.showBorder = false end
+        if UIThingsDB.tracker.hideInCombat == nil then UIThingsDB.tracker.hideInCombat = false end
         if not UIThingsDB.tracker.backgroundColor then UIThingsDB.tracker.backgroundColor = {r=0, g=0, b=0, a=0} end
+
+        UIThingsDB.minimap = UIThingsDB.minimap or { angle = 45 }
 
         UIThingsDB.vendor = UIThingsDB.vendor or {}
         if UIThingsDB.vendor.enabled == nil then UIThingsDB.vendor.enabled = true end
@@ -55,10 +58,16 @@ local function OnEvent(self, event, ...)
         -- Slash Commands
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"
-        SlashCmdList["UITHINGS"] = function(msg)
+        
+        -- Global function for Addon Compartment
+        function LunaUITweaks_OpenConfig()
             if addonTable.Config and addonTable.Config.ToggleWindow then
                 addonTable.Config.ToggleWindow()
             end
+        end
+        
+        SlashCmdList["UITHINGS"] = function(msg)
+            LunaUITweaks_OpenConfig()
         end
     end
 end

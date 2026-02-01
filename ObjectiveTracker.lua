@@ -106,7 +106,22 @@ local function ReleaseItems()
 end
 
 local function UpdateContent()
-    if not trackerFrame or not trackerFrame:IsShown() then return end
+    if not trackerFrame then return end
+    
+    -- Check Counts for Auto-Hide
+    local numQuests = C_QuestLog.GetNumQuestWatches()
+    local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
+    local total = numQuests + #trackedAchievements
+    
+    if total == 0 and UIThingsDB.tracker.locked then
+        trackerFrame:Hide()
+        return
+    end
+    
+    -- If we have items (or are unlocked), ensure shown (unless combat blocked)
+    if not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) then
+        trackerFrame:Show()
+    end
     
     ReleaseItems()
     
@@ -363,13 +378,25 @@ local function SetupCustomTracker()
     
     -- Event Registry
     trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
-    trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
+    trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED") -- Legacy?
+    trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE") -- Modern
+    trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE") -- Modern
     trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
     trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    trackerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
             C_Timer.After(2, UpdateContent)
+        elseif event == "PLAYER_REGEN_DISABLED" then
+            if UIThingsDB.tracker.hideInCombat then
+                self:Hide()
+            end
+        elseif event == "PLAYER_REGEN_ENABLED" then
+            if UIThingsDB.tracker.enabled then
+                self:Show()
+            end
         else
             UpdateContent()
         end
@@ -406,7 +433,12 @@ function addonTable.ObjectiveTracker.UpdateSettings()
 
     -- Custom Tracker Logic
     SetupCustomTracker()
-    trackerFrame:Show()
+    
+    if UIThingsDB.tracker.hideInCombat and InCombatLockdown() then
+        trackerFrame:Hide()
+    else
+        trackerFrame:Show()
+    end
     
     -- Geometry
     trackerFrame:SetSize(UIThingsDB.tracker.width, UIThingsDB.tracker.height)
