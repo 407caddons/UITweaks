@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'  # Triggers when you push a tag like v1.0.1
-    branches:
-      - main  # Triggers "Alpha" builds on every commit (optional)
 
 jobs:
   release:

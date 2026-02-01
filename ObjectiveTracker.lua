@@ -12,6 +12,17 @@ local function Log(msg)
 end
 
 function addonTable.ObjectiveTracker.UpdateSettings()
+    if not UIThingsDB.tracker.enabled then
+        if scrollContainer then scrollContainer:Hide() end
+        return
+    end
+
+    if not setupDone then
+        SetupScrollingTracker()
+        return
+    end
+
+    if scrollContainer then scrollContainer:Show() end
     if not scrollContainer then return end
     
     local settings = UIThingsDB.tracker
@@ -45,6 +56,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
 end
 
 local function SetupScrollingTracker()
+    if not UIThingsDB.tracker.enabled then return end
     if setupDone then return end
     
     local tracker = ObjectiveTrackerFrame
@@ -129,10 +141,43 @@ local function SetupScrollingTracker()
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsScrollFrame", scrollContainer, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 15, -5)
     scrollFrame:SetPoint("BOTTOMRIGHT", -25, 5)
+    scrollFrame.scrollBarHideable = true
+
+    local function UpdateScrollBarVisibility(scrollFrame)
+        local yrange = scrollFrame:GetVerticalScrollRange()
+        local scrollBar = _G["UIThingsScrollFrameScrollBar"]
+        if scrollBar then
+            -- Check count of tracked items
+            local numQuests = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and C_QuestLog.GetNumQuestWatches() or 0
+            local numAchieves = GetNumTrackedAchievements and GetNumTrackedAchievements() or 0
+            local totalTracked = numQuests + numAchieves
+
+            -- Only show if we need to scroll AND we have at least 5 items tracked
+            if yrange < 1 or totalTracked < 5 then
+                scrollBar:Hide()
+            else
+                scrollBar:Show()
+            end
+        end
+    end
+
+    scrollFrame:HookScript("OnScrollRangeChanged", function(self, xrange, yrange)
+        UpdateScrollBarVisibility(self)
+    end)
+
+    -- Register events for tracking changes
+    local eventFrame = CreateFrame("Frame")
+    eventFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+    eventFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
+    eventFrame:RegisterEvent("ACHIEVEMENT_EARNED")
+    eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
+    eventFrame:SetScript("OnEvent", function()
+        UpdateScrollBarVisibility(scrollFrame)
+    end)
 
     -- Scroll Child
     local scrollChild = CreateFrame("Frame", "UIThingsScrollChild", scrollFrame)
-    scrollChild:SetSize(w - 50, 2000)
+    scrollChild:SetSize(w - 50, 1) -- Start small so we don't show scrollbar if empty
     scrollFrame:SetScrollChild(scrollChild)
 
     -- Reparent Tracker
@@ -149,10 +194,9 @@ local function SetupScrollingTracker()
                 Log("Alert! Parent hijacked. Reclaiming.")
                 addonTable.ObjectiveTracker.UpdateSettings()
             end
-            local h = tracker:GetHeight()
-            if h and h > 0 then
-                scrollChild:SetHeight(h + 50)
-            end
+            local h = tracker:GetHeight() or 0
+            -- Always update height, ensuring at least 1px
+            scrollChild:SetHeight(math.max(1, h + 50))
         end
     end)
 
@@ -165,6 +209,6 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(2, SetupScrollingTracker)
+        C_Timer.After(1, SetupScrollingTracker)
     end
 end)
