@@ -1,214 +1,470 @@
 local addonName, addonTable = ...
 addonTable.ObjectiveTracker = {}
 
-local scrollContainer
-local dragOverlay
-local setupDone = false
-local initAttempts = 0
+local trackerFrame
+local scrollFrame
+local scrollChild
+local contentFrame
+local headerFrame
+local itemPool = {}
 
 -- Standard Logging
 local function Log(msg)
     print("UIThings: " .. tostring(msg))
 end
 
-function addonTable.ObjectiveTracker.UpdateSettings()
-    if not UIThingsDB.tracker.enabled then
-        if scrollContainer then scrollContainer:Hide() end
+local function GetFont()
+    return UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
+end
+
+local function GetFontSize()
+    return UIThingsDB.tracker.fontSize or 12
+end
+
+local function OnQuestClick(self)
+    -- Shift-Click to Untrack
+    if IsShiftKeyDown() and self.questID then
+        C_QuestLog.RemoveQuestWatch(self.questID)
+        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
 
-    if not setupDone then
-        SetupScrollingTracker()
-        return
-    end
-
-    if scrollContainer then scrollContainer:Show() end
-    if not scrollContainer then return end
+    -- Debug Message
+    print("UIThings Debug: Quest Clicked! ID:", tostring(self.questID))
     
-    local settings = UIThingsDB.tracker
-    local tracker = ObjectiveTrackerFrame
-    
-    scrollContainer:SetSize(settings.width, settings.height)
-    
-    if dragOverlay then
-        if settings.locked then
-            dragOverlay:Hide()
+    if self.questID then
+        -- Try modern Map/Quest Log
+        if QuestMapFrame_OpenToQuestDetails then
+            -- Make sure the frame is shown first
+            if not QuestMapFrame:IsShown() then ToggleQuestLog() end
+            QuestMapFrame_OpenToQuestDetails(self.questID)
         else
-            dragOverlay:Show()
+            -- Fallback
+            QuestLog_OpenToQuest(self.questID)
         end
-    end
-
-    local scrollChild = _G["UIThingsScrollChild"]
-    if tracker and scrollChild then
-        if tracker:GetParent() ~= scrollChild then
-            tracker:SetParent(scrollChild)
-        end
-        tracker:ClearAllPoints()
-        -- Add 20px padding on left to prevent marker clipping
-        tracker:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 20, 0)
-        tracker:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", 0, 0)
-    end
-
-    if scrollChild then
-        -- Adjust width to account for the 20px padding + scrollbar
-        scrollChild:SetWidth(math.max(1, settings.width - 50))
+    else
+        print("UIThings Debug: Error - No Quest ID on button")
     end
 end
 
-local function SetupScrollingTracker()
-    if not UIThingsDB.tracker.enabled then return end
-    if setupDone then return end
-    
-    local tracker = ObjectiveTrackerFrame
-    if not tracker then 
-        initAttempts = initAttempts + 1
-        if initAttempts < 10 then
-            C_Timer.After(1, SetupScrollingTracker)
+local function OnAchieveClick(self)
+    -- Shift-Click to Untrack
+    if IsShiftKeyDown() and self.achieID then
+        if C_ContentTracking and C_ContentTracking.StopTracking then
+            C_ContentTracking.StopTracking(Enum.ContentTrackingType.Achievement, self.achieID, Enum.ContentTrackingStopType.Manual)
+        else
+            RemoveTrackedAchievement(self.achieID)
         end
-        return 
+        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent)
+        return
     end
 
+    -- Open Achievement UI
+    if self.achieID then
+        if not AchievementFrame then AchievementFrame_LoadUI() end
+        if AchievementFrame then
+            AchievementFrame_ToggleAchievementFrame()
+            AchievementFrame_SelectAchievement(self.achieID)
+        end
+    end
+end
+
+-- Item Factories
+local function AcquireItem()
+    for _, btn in ipairs(itemPool) do
+        if not btn:IsShown() then
+            return btn
+        end
+    end
+    
+    local btn = CreateFrame("Button", nil, scrollChild)
+    btn:SetHeight(20)
+    btn:RegisterForClicks("LeftButtonUp")
+    
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(14, 14) -- Slightly smaller than text height
+    icon:SetPoint("LEFT", 0, 0)
+    btn.Icon = icon
+    
+    local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("LEFT", icon, "RIGHT", 5, 0) -- Indent text
+    text:SetPoint("RIGHT", 0, 0)
+    text:SetJustifyH("LEFT")
+    btn.Text = text
+    
+    table.insert(itemPool, btn)
+    return btn
+end
+
+local function ReleaseItems()
+    for _, btn in ipairs(itemPool) do
+        btn:Hide()
+        btn:SetScript("OnClick", nil)
+        btn.Icon:Hide()
+        btn.Text:ClearAllPoints() -- Reset points to ensure clean state
+    end
+end
+
+local function UpdateContent()
+    if not trackerFrame or not trackerFrame:IsShown() then return end
+    
+    ReleaseItems()
+    
+    local font = GetFont()
+    local size = GetFontSize()
+    local yOffset = -5
+    local width = scrollChild:GetWidth()
+    
+    -- Helper to add lines
+    local function AddLine(text, isHeader, questID, achieID, isObjective)
+        local btn = AcquireItem()
+        btn:Show()
+        
+        -- Store IDs for Click Handlers
+        btn.questID = questID
+        btn.achieID = achieID
+        
+        btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
+        
+        btn:SetWidth(width)
+        btn:SetPoint("TOPLEFT", 0, yOffset)
+        
+        -- Configurable Font/Size
+        local fontSize = isObjective and (size - 2) or (isHeader and size + 2 or size)
+        
+        if isHeader then
+            btn.Text:SetFont(font, fontSize, "OUTLINE")
+            btn.Text:SetText(text)
+            btn.Text:SetTextColor(1, 0.82, 0) -- Gold
+            btn.Icon:Hide()
+            btn.Text:SetPoint("LEFT", 0, 0)
+            yOffset = yOffset - (fontSize + 6)
+        else
+            -- Normal Line (Quest or Objective or Achievement)
+            btn.Text:SetFont(font, fontSize, "OUTLINE")
+            btn.Text:SetText(text)
+            
+            if isObjective then
+                 -- Objective Text (Grayish, Indented)
+                 btn.Text:SetTextColor(0.8, 0.8, 0.8)
+                 btn.Icon:Hide()
+                 btn.Text:SetPoint("LEFT", 19, 0) -- Indent to match title text start
+                 btn:EnableMouse(false)
+                 yOffset = yOffset - (fontSize + 2)
+            else
+                 -- Main Entry
+                 btn.Text:SetTextColor(1, 1, 1)
+                 
+                 if questID then
+                    local isComplete = C_QuestLog.IsComplete(questID)
+                    local iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" -- Default Yellow !
+                    
+                    local tagInfo = C_QuestLog.GetQuestTagInfo(questID)
+                    local isDaily = false
+                    local isCampaign = false
+                    local isLegendary = false
+                    
+                    if tagInfo then
+                        if tagInfo.isDaily or tagInfo.frequency == Enum.QuestFrequency.Daily or tagInfo.frequency == Enum.QuestFrequency.Weekly then
+                            isDaily = true
+                        elseif tagInfo.tagID == 102 then 
+                            isDaily = true
+                        elseif tagInfo.quality == Enum.QuestTagType.Campaign then
+                            isCampaign = true
+                        elseif tagInfo.quality == Enum.QuestTagType.Legendary then
+                            isLegendary = true
+                        end
+                    end
+                    
+                    if isComplete then
+                        -- Question Marks
+                        if isDaily then
+                            iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon" -- Blue ?
+                        elseif isCampaign then
+                            iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
+                        elseif isLegendary then
+                            iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
+                        else
+                            iconPath = "Interface\\GossipFrame\\ActiveQuestIcon" -- Yellow ?
+                        end
+                    else
+                        -- Exclamation Marks (In Progress)
+                        if isDaily then
+                            iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon" -- Blue !
+                        elseif isCampaign then
+                            iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
+                        elseif isLegendary then
+                            iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
+                        else
+                            iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" -- Yellow !
+                        end
+                    end
+                    
+                    btn.Icon:SetTexture(iconPath)
+                    btn.Icon:Show()
+                    btn.Text:SetPoint("LEFT", btn.Icon, "RIGHT", 5, 0)
+                    btn:EnableMouse(true)
+                 else
+                    -- Achievement
+                    btn.Icon:Hide()
+                    btn.Text:SetPoint("LEFT", 19, 0)
+                    if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
+                 end
+                 
+                 yOffset = yOffset - (fontSize + 4)
+            end
+        end
+    end
+    
+    -- Quests
+    local numQuests = C_QuestLog.GetNumQuestWatches()
+    if numQuests > 0 then
+        AddLine("Quests", true)
+        
+        for i = 1, numQuests do
+            local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+            if questID then
+                local title = C_QuestLog.GetTitleForQuestID(questID)
+                if title then
+                    AddLine(title, false, questID)
+                    
+                    -- Add Objectives
+                    local objectives = C_QuestLog.GetQuestObjectives(questID)
+                    if objectives then
+                        for _, obj in pairs(objectives) do
+                            local objText = obj.text
+                            if objText and objText ~= "" then
+                                if obj.finished then
+                                    objText = "|cFF00FF00" .. objText .. "|r" -- Green if done
+                                end
+                                AddLine(objText, false, nil, nil, true)
+                            end
+                        end
+                    end
+                    yOffset = yOffset - 5 -- Spacing between quests
+                end
+            end
+        end
+        
+        yOffset = yOffset - 10 -- Spacer
+    end
+    
+    -- Achievements
+    local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
+    if #trackedAchievements > 0 then
+        AddLine("Achievements", true)
+        
+        for _, achID in ipairs(trackedAchievements) do
+            local _, name = GetAchievementInfo(achID)
+            if name then
+                AddLine(name, false, nil, achID)
+                
+                -- Add Criteria
+                local numCriteria = GetAchievementNumCriteria(achID)
+                for j = 1, numCriteria do
+                    local criteriaString, _, completed, quantity, reqQuantity, _, _, _, quantityString = GetAchievementCriteriaInfo(achID, j)
+                    if criteriaString then
+                        local text = criteriaString
+                        if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
+                            text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
+                        end
+                         
+                        if completed then
+                            text = "|cFF00FF00" .. text .. "|r"
+                        end
+                        AddLine(text, false, nil, nil, true)
+                    end
+                end
+                
+                yOffset = yOffset - 5 -- Spacing
+            end
+        end
+    end
+    
+    -- Resize Scroll Child
+    local totalHeight = math.abs(yOffset)
+    scrollChild:SetHeight(math.max(totalHeight, 50))
+end
+
+local function SetupCustomTracker()
+    if trackerFrame then return end
     local settings = UIThingsDB.tracker
     
-    -- Safe Fallbacks
-    local point = settings.point or "TOPRIGHT"
-    local x = settings.x or -20
-    local y = settings.y or -250
-    local w = settings.width or 300
-    local h = settings.height or 500
-
-    -- Create Container for the ScrollFrame
-    scrollContainer = CreateFrame("Frame", "UIThingsScrollContainer", UIParent)
-    scrollContainer:SetSize(w, h)
-    scrollContainer:SetPoint(point, UIParent, point, x, y)
-    scrollContainer:SetMovable(true)
-    scrollContainer:SetResizable(true)
-    scrollContainer:SetResizeBounds(150, 150, 800, 1200)
-    scrollContainer:SetClampedToScreen(true)
-
-    -- Create DragOverlay
-    dragOverlay = CreateFrame("Frame", "UIThingsDragOverlay", scrollContainer)
-    dragOverlay:SetAllPoints()
-    dragOverlay:SetFrameLevel(scrollContainer:GetFrameLevel() + 100)
+    -- Main Container
+    trackerFrame = CreateFrame("Frame", "UIThingsCustomTracker", UIParent, "BackdropTemplate")
+    trackerFrame:SetPoint(settings.point or "TOPRIGHT", UIParent, settings.point or "TOPRIGHT", settings.x or -20, settings.y or -250)
+    trackerFrame:SetSize(settings.width, settings.height)
     
-    local bg = dragOverlay:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0.5, 1, 0.5)
+    trackerFrame:SetMovable(true)
+    trackerFrame:SetResizable(true)
+    trackerFrame:SetClampedToScreen(true)
+    trackerFrame:SetResizeBounds(150, 150, 600, 1000)
     
-    local label = dragOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    label:SetPoint("CENTER")
-    label:SetText("LUNA'S UI TWEAKS UNLOCKED")
-
-    dragOverlay:EnableMouse(true)
-    dragOverlay:RegisterForDrag("LeftButton")
+    -- Background for Unlocked state
+    trackerFrame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
     
-    dragOverlay:SetScript("OnDragStart", function(self) scrollContainer:StartMoving() end)
-    dragOverlay:SetScript("OnDragStop", function(self) 
-        scrollContainer:StopMovingOrSizing() 
-        local point, _, relativePoint, xOfs, yOfs = scrollContainer:GetPoint()
-        UIThingsDB.tracker.point = point
-        UIThingsDB.tracker.x = xOfs
-        UIThingsDB.tracker.y = yOfs
+    -- Header ("OBJECTIVES") - Fixed at top
+    headerFrame = CreateFrame("Frame", nil, trackerFrame)
+    headerFrame:SetPoint("TOPLEFT")
+    headerFrame:SetPoint("TOPRIGHT")
+    headerFrame:SetHeight(30)
+    
+    local headerText = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    headerText:SetPoint("CENTER")
+    headerText:SetText("OBJECTIVES")
+    
+    -- Drag Logic
+    trackerFrame:EnableMouse(true)
+    trackerFrame:RegisterForDrag("LeftButton")
+    trackerFrame:SetScript("OnDragStart", function(self)    
+        if not UIThingsDB.tracker.locked then self:StartMoving() end
     end)
-
-    -- Resize Handle
-    local resizeHandle = CreateFrame("Frame", nil, dragOverlay)
-    resizeHandle:SetSize(25, 25)
-    resizeHandle:SetPoint("BOTTOMRIGHT")
-    resizeHandle:EnableMouse(true)
-    
-    local tex = resizeHandle:CreateTexture(nil, "OVERLAY")
-    tex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    tex:SetAllPoints()
-    
-    resizeHandle:SetScript("OnMouseDown", function() scrollContainer:StartSizing("BOTTOMRIGHT") end)
-    resizeHandle:SetScript("OnMouseUp", function()
-        scrollContainer:StopMovingOrSizing()
-        local w, h = scrollContainer:GetSize()
-        UIThingsDB.tracker.width = w
-        UIThingsDB.tracker.height = h
-        
-        UIThingsDB.tracker.point, _, _, UIThingsDB.tracker.x, UIThingsDB.tracker.y = scrollContainer:GetPoint()
-        
-        if _G["UIThingsWidthSlider"] then
-            _G["UIThingsWidthSlider"]:SetValue(w)
-            _G["UIThingsHeightSlider"]:SetValue(h)
-        end
-        addonTable.ObjectiveTracker.UpdateSettings()
+    trackerFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, _, x, y = self:GetPoint()
+        UIThingsDB.tracker.point = point
+        UIThingsDB.tracker.x = x
+        UIThingsDB.tracker.y = y
     end)
     
     -- Scroll Frame
-    local scrollFrame = CreateFrame("ScrollFrame", "UIThingsScrollFrame", scrollContainer, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 15, -5)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -25, 5)
-    scrollFrame.scrollBarHideable = true
-
-    local function UpdateScrollBarVisibility(scrollFrame)
-        local yrange = scrollFrame:GetVerticalScrollRange()
-        local scrollBar = _G["UIThingsScrollFrameScrollBar"]
-        if scrollBar then
-            -- Check count of tracked items
-            local numQuests = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and C_QuestLog.GetNumQuestWatches() or 0
-            local numAchieves = GetNumTrackedAchievements and GetNumTrackedAchievements() or 0
-            local totalTracked = numQuests + numAchieves
-
-            -- Only show if we need to scroll AND we have at least 5 items tracked
-            if yrange < 1 or totalTracked < 5 then
-                scrollBar:Hide()
-            else
-                scrollBar:Show()
-            end
-        end
-    end
-
-    scrollFrame:HookScript("OnScrollRangeChanged", function(self, xrange, yrange)
-        UpdateScrollBarVisibility(self)
-    end)
-
-    -- Register events for tracking changes
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
-    eventFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
-    eventFrame:RegisterEvent("ACHIEVEMENT_EARNED")
-    eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
-    eventFrame:SetScript("OnEvent", function()
-        UpdateScrollBarVisibility(scrollFrame)
-    end)
-
-    -- Scroll Child
-    local scrollChild = CreateFrame("Frame", "UIThingsScrollChild", scrollFrame)
-    scrollChild:SetSize(w - 50, 1) -- Start small so we don't show scrollbar if empty
+    scrollFrame = CreateFrame("ScrollFrame", "UIThingsTrackerScroll", trackerFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", headerFrame, "BOTTOMLEFT", 10, -5) -- Below header
+    scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+    
+    scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(settings.width - 40, 500) 
     scrollFrame:SetScrollChild(scrollChild)
-
-    -- Reparent Tracker
-    tracker:SetParent(scrollChild)
-    tracker:ClearAllPoints()
-    -- Add 20px padding on left to prevent marker clipping
-    tracker:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 20, 0)
-    tracker:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", 0, 0)
-
-    -- Monitor
-    C_Timer.NewTicker(2, function()
-        if setupDone then
-            if tracker:GetParent() ~= scrollChild then
-                Log("Alert! Parent hijacked. Reclaiming.")
-                addonTable.ObjectiveTracker.UpdateSettings()
-            end
-            local h = tracker:GetHeight() or 0
-            -- Always update height, ensuring at least 1px
-            scrollChild:SetHeight(math.max(1, h + 50))
+    
+    -- Resize Handle
+    local resizeHandle = CreateFrame("Frame", nil, trackerFrame)
+    resizeHandle:SetSize(16, 16)
+    resizeHandle:SetPoint("BOTTOMRIGHT", -5, 5)
+    local rTex = resizeHandle:CreateTexture(nil, "OVERLAY")
+    rTex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    rTex:SetAllPoints()
+    resizeHandle:EnableMouse(true)
+    resizeHandle:SetScript("OnMouseDown", function() 
+        if not UIThingsDB.tracker.locked then trackerFrame:StartSizing("BOTTOMRIGHT") end
+    end)
+    resizeHandle:SetScript("OnMouseUp", function()
+        trackerFrame:StopMovingOrSizing()
+        local w, h = trackerFrame:GetSize()
+        UIThingsDB.tracker.width = w
+        UIThingsDB.tracker.height = h
+        UpdateContent() -- Re-layout items
+    end)
+    
+    -- Event Registry
+    trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+    trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
+    trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
+    trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    
+    trackerFrame:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_ENTERING_WORLD" then
+            C_Timer.After(2, UpdateContent)
+        else
+            UpdateContent()
         end
     end)
-
-    setupDone = true
-    addonTable.ObjectiveTracker.UpdateSettings()
-    Log("Setup Complete.")
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-frame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, SetupScrollingTracker)
+function addonTable.ObjectiveTracker.UpdateSettings()
+    local enabled = UIThingsDB.tracker.enabled
+    
+    -- Blizzard Tracker Logic
+    if enabled then
+        if ObjectiveTrackerFrame then
+            ObjectiveTrackerFrame:Hide()
+            ObjectiveTrackerFrame:SetParent(UIThingsHiddenFrame or CreateFrame("Frame", "UIThingsHiddenFrame"))
+            if ObjectiveTrackerFrame.UnregisterAllEvents then
+                ObjectiveTrackerFrame:UnregisterAllEvents()
+            end
+        end
+    else
+        if ObjectiveTrackerFrame then 
+            ObjectiveTrackerFrame:SetParent(UIParent)
+            ObjectiveTrackerFrame:Show()
+            if ObjectiveTrackerFrame.RegisterEvent then
+                 -- We might need to re-register events if we unregistered them.
+                 -- Ideally, a /reload is best for restoring completely, but let's try basic restoration
+                 ObjectiveTrackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+                 ObjectiveTrackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
+                 ObjectiveTrackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
+            end
+        end
+        if trackerFrame then trackerFrame:Hide() end
+        return
+    end
+
+    -- Custom Tracker Logic
+    SetupCustomTracker()
+    trackerFrame:Show()
+    
+    -- Geometry
+    trackerFrame:SetSize(UIThingsDB.tracker.width, UIThingsDB.tracker.height)
+    scrollChild:SetWidth(UIThingsDB.tracker.width - 40)
+    
+    -- Lock/Unlock & Border State
+    if UIThingsDB.tracker.locked then
+        trackerFrame:EnableMouse(false)
+        
+        if UIThingsDB.tracker.showBorder then
+            trackerFrame:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                tile = false, tileSize = 0, edgeSize = 1,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0}
+            trackerFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
+            trackerFrame:SetBackdropBorderColor(0, 0, 0, 1) -- 1px Black Border
+        else
+            trackerFrame:SetBackdrop(nil)
+        end
+    else
+        -- Unlocked: Always show "edit mode" visualization
+        trackerFrame:EnableMouse(true)
+        trackerFrame:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
+        trackerFrame:SetBackdropBorderColor(1, 1, 1, 1)
+    end
+    
+    UpdateContent()
+end
+
+-- Hook into startup
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_LOGIN")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        addonTable.ObjectiveTracker.UpdateSettings()
+    else
+        -- Force update shortly after entering world to override Blizzard's show logic
+        C_Timer.After(1, function() addonTable.ObjectiveTracker.UpdateSettings() end)
     end
 end)
+
+
+-- Aggressive Hide Hook
+if ObjectiveTrackerFrame then
+    hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
+        if UIThingsDB.tracker.enabled then
+            ObjectiveTrackerFrame:Hide()
+        end
+    end)
+end
+

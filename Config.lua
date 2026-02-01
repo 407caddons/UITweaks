@@ -207,6 +207,119 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText("Height: " .. value)
             UpdateTracker()
         end)
+        
+        -- Tracker Font Selector
+        local trackerFontLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        trackerFontLabel:SetPoint("TOPLEFT", 20, -210)
+        trackerFontLabel:SetText("Font:")
+        
+        local trackerFontDropdown = CreateFrame("Frame", "UIThingsTrackerFontDropdown", trackerPanel, "UIDropDownMenuTemplate")
+        trackerFontDropdown:SetPoint("TOPLEFT", trackerFontLabel, "BOTTOMLEFT", -15, -10)
+        
+        local function TrackerFontOnClick(self)
+             UIDropDownMenu_SetSelectedID(trackerFontDropdown, self:GetID())
+             UIThingsDB.tracker.font = self.value
+             UpdateTracker()
+        end
+        
+        local function TrackerFontInit(self, level)
+            local info = UIDropDownMenu_CreateInfo()
+            for k, v in pairs(fonts) do
+                info = UIDropDownMenu_CreateInfo()
+                info.text = v.name
+                info.value = v.path
+                info.func = TrackerFontOnClick
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end
+        
+        UIDropDownMenu_Initialize(trackerFontDropdown, TrackerFontInit)
+        UIDropDownMenu_SetText(trackerFontDropdown, "Select Font")
+        for i, f in ipairs(fonts) do
+            if f.path == UIThingsDB.tracker.font then
+                UIDropDownMenu_SetText(trackerFontDropdown, f.name)
+            end
+        end
+
+        -- Tracker Font Size Slider
+        local trackerFontSizeSlider = CreateFrame("Slider", "UIThingsTrackerFontSizeSlider", trackerPanel, "OptionsSliderTemplate")
+        trackerFontSizeSlider:SetPoint("TOPLEFT", 20, -280)
+        trackerFontSizeSlider:SetMinMaxValues(8, 24)
+        trackerFontSizeSlider:SetValueStep(1)
+        trackerFontSizeSlider:SetObeyStepOnDrag(true)
+        trackerFontSizeSlider:SetWidth(200)
+        _G[trackerFontSizeSlider:GetName() .. 'Text']:SetText("Font Size: " .. UIThingsDB.tracker.fontSize)
+        _G[trackerFontSizeSlider:GetName() .. 'Low']:SetText("8")
+        _G[trackerFontSizeSlider:GetName() .. 'High']:SetText("24")
+        trackerFontSizeSlider:SetValue(UIThingsDB.tracker.fontSize)
+        trackerFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.tracker.fontSize = value
+            _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
+            UpdateTracker()
+        end)
+        
+        -- Show Border Checkbox
+        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBorderCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        borderCheckbox:SetPoint("TOPLEFT", 20, -320)
+        _G[borderCheckbox:GetName().."Text"]:SetText("Show Border")
+        borderCheckbox:SetChecked(UIThingsDB.tracker.showBorder)
+        borderCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.tracker.showBorder = self:GetChecked()
+            UpdateTracker()
+        end)
+        
+        -- Background Color Picker
+        local bgColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        bgColorLabel:SetPoint("TOPLEFT", 20, -350)
+        bgColorLabel:SetText("Background Color:")
+        
+        local bgColorSwatch = CreateFrame("Button", nil, trackerPanel)
+        bgColorSwatch:SetSize(20, 20)
+        bgColorSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 10, 0)
+        
+        -- Create a texture for the swatch to show current color
+        bgColorSwatch.tex = bgColorSwatch:CreateTexture(nil, "OVERLAY")
+        bgColorSwatch.tex:SetAllPoints()
+        local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0.5}
+        bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+        
+        -- Border using BackdropTemplate? Button already has borders usually if standard template not used.
+        -- Let's just add a simple border texture or use standard template.
+        -- Using "BackdropTemplate" for custom border
+        Mixin(bgColorSwatch, BackdropTemplateMixin)
+        bgColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        bgColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+        bgColorSwatch:SetScript("OnClick", function(self)
+            local info = UIDropDownMenu_CreateInfo()
+            info.r, info.g, info.b, info.opacity = c.r, c.g, c.b, c.a
+            info.hasOpacity = true
+            info.opacityFunc = function() 
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                c.r, c.g, c.b, c.a = r, g, b, a
+                bgColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.tracker.backgroundColor = c
+                UpdateTracker()
+            end
+            info.swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                c.r, c.g, c.b, c.a = r, g, b, a
+                bgColorSwatch.tex:SetColorTexture(r, g, b, a)
+                 UIThingsDB.tracker.backgroundColor = c
+                UpdateTracker()
+            end
+            info.cancelFunc = function(previousValues)
+                c.r, c.g, c.b, c.a = previousValues.r, previousValues.g, previousValues.b, previousValues.opacity
+                bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+                UIThingsDB.tracker.backgroundColor = c
+                UpdateTracker()
+            end
+            
+            ColorPickerFrame:SetupColorPickerAndShow(info)
+        end)
 
         -------------------------------------------------------------
         -- VENDOR PANEL CONTENT

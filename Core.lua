@@ -13,9 +13,13 @@ local function OnEvent(self, event, ...)
         if UIThingsDB.tracker.enabled == nil then UIThingsDB.tracker.enabled = true end
         if not UIThingsDB.tracker.width then UIThingsDB.tracker.width = 300 end
         if not UIThingsDB.tracker.height then UIThingsDB.tracker.height = 500 end
+        if not UIThingsDB.tracker.font then UIThingsDB.tracker.font = "Fonts\\FRIZQT__.TTF" end
+        if not UIThingsDB.tracker.fontSize then UIThingsDB.tracker.fontSize = 12 end
         if not UIThingsDB.tracker.x then UIThingsDB.tracker.x = -20 end
         if not UIThingsDB.tracker.y then UIThingsDB.tracker.y = -250 end
         if not UIThingsDB.tracker.point then UIThingsDB.tracker.point = "TOPRIGHT" end
+        if UIThingsDB.tracker.showBorder == nil then UIThingsDB.tracker.showBorder = false end
+        if not UIThingsDB.tracker.backgroundColor then UIThingsDB.tracker.backgroundColor = {r=0, g=0, b=0, a=0} end
 
         UIThingsDB.vendor = UIThingsDB.vendor or {}
         if UIThingsDB.vendor.enabled == nil then UIThingsDB.vendor.enabled = true end
