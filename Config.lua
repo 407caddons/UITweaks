@@ -357,6 +357,34 @@ function addonTable.Config.Initialize()
             
             ColorPickerFrame:SetupColorPickerAndShow(info)
         end)
+        
+        -- Tracker Strata Dropdown
+        local trackerStrataLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        trackerStrataLabel:SetPoint("TOPLEFT", 180, -350)
+        trackerStrataLabel:SetText("Strata:")
+        
+        local trackerStrataDropdown = CreateFrame("Frame", "UIThingsTrackerStrataDropdown", trackerPanel, "UIDropDownMenuTemplate")
+        trackerStrataDropdown:SetPoint("TOPLEFT", trackerStrataLabel, "BOTTOMLEFT", -15, -10)
+        
+        local function TrackerStrataOnClick(self)
+             UIDropDownMenu_SetSelectedID(trackerStrataDropdown, self:GetID())
+             UIThingsDB.tracker.strata = self.value
+             UpdateTracker()
+        end
+        
+        local function TrackerStrataInit(self, level)
+            local stratas = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "TOOLTIP"}
+            for _, s in ipairs(stratas) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = s
+                info.value = s
+                info.func = TrackerStrataOnClick
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end
+        
+        UIDropDownMenu_Initialize(trackerStrataDropdown, TrackerStrataInit)
+        UIDropDownMenu_SetText(trackerStrataDropdown, UIThingsDB.tracker.strata or "LOW")
 
         -------------------------------------------------------------
         -- VENDOR PANEL CONTENT
@@ -688,6 +716,75 @@ function addonTable.Config.Initialize()
             UpdateDropdownText()
             RefreshFrameControls()
             UpdateFrames()
+        end)
+        
+        -- Duplicate Button
+        local duplicateFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
+        duplicateFrameBtn:SetPoint("LEFT", addFrameBtn, "RIGHT", 10, 0)
+        duplicateFrameBtn:SetSize(80, 22)
+        duplicateFrameBtn:SetText("Duplicate")
+        duplicateFrameBtn:SetScript("OnClick", function()
+             if not selectedFrameIndex then return end
+             
+             local source = UIThingsDB.frames.list[selectedFrameIndex]
+             if not source then return end
+             
+             -- Helper to deep copy table
+             local function CopyTable(t)
+                 local copy = {}
+                 for k, v in pairs(t) do
+                     if type(v) == "table" then
+                         copy[k] = CopyTable(v)
+                     else
+                         copy[k] = v
+                     end
+                 end
+                 return copy
+             end
+             
+             local newFrameData = CopyTable(source)
+             
+             -- Generate new name (Increment number if present, else append count)
+             local baseName, num = string.match(source.name, "^(.*%A)(%d+)$")
+             if not baseName then 
+                 baseName = source.name .. " "
+                 num = 1
+             else
+                 num = tonumber(num) + 1
+             end
+             
+             local function NameExists(n)
+                 for _, f in ipairs(UIThingsDB.frames.list) do
+                     if f.name == n then return true end
+                 end
+                 return false
+             end
+             
+             local newName = baseName .. num
+             while NameExists(newName) do
+                 num = num + 1
+                 newName = baseName .. num
+             end
+             newFrameData.name = newName
+             
+             -- Move 10 pixels toward center (0,0)
+             -- If x > 0, subtract 10. If x < 0, add 10.
+             if newFrameData.x > 0 then newFrameData.x = newFrameData.x - 10
+             else newFrameData.x = newFrameData.x + 10 end
+             
+             if newFrameData.y > 0 then newFrameData.y = newFrameData.y - 10
+             else newFrameData.y = newFrameData.y + 10 end
+             
+             -- Ensure it's unlocked
+             newFrameData.locked = false
+             
+             table.insert(UIThingsDB.frames.list, newFrameData)
+             selectedFrameIndex = #UIThingsDB.frames.list
+             
+             UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit)
+             UpdateDropdownText()
+             RefreshFrameControls()
+             UpdateFrames()
         end)
 
         -- Remove Button
@@ -1058,6 +1155,16 @@ function addonTable.Config.Initialize()
             end
         end
         addonTable.Config.RefreshFrameControls = RefreshFrameControls
+        
+        -- Expose SelectFrame for external use
+        function addonTable.Config.SelectFrame(index)
+            if index and UIThingsDB.frames.list[index] then
+                UIDropDownMenu_SetSelectedID(frameDropdown, index)
+                selectedFrameIndex = index
+                UpdateDropdownText()
+                RefreshFrameControls()
+            end
+        end
     end
 end
 

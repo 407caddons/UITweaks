@@ -16,6 +16,9 @@ function addonTable.Frames.UpdateFrames()
         f:EnableMouse(false)
         f:SetScript("OnDragStart", nil)
         f:SetScript("OnDragStop", nil)
+        if f.nudgeButtons then
+            for _, btn in pairs(f.nudgeButtons) do btn:Hide() end
+        end
     end
     
     if not UIThingsDB.frames.enabled then return end
@@ -130,6 +133,78 @@ function addonTable.Frames.UpdateFrames()
             f.nameText:SetPoint("CENTER")
         end
         
+        -- Nudge Buttons Logic
+        if not f.nudgeButtons then
+            f.nudgeButtons = {}
+            
+            local function UpdateButtonLayout(frame)
+                local right = frame:GetRight()
+                local screenRight = UIParent:GetRight()
+                
+                -- Guard against nil
+                if not right or not screenRight then return end
+                
+                local buffer = 40
+                if right > (screenRight - buffer) then
+                     -- Move to Left Side
+                     f.nudgeButtons.L:ClearAllPoints()
+                     f.nudgeButtons.L:SetPoint("TOPRIGHT", f, "TOPLEFT", -2, 0)
+                else
+                     -- Move to Right Side
+                     f.nudgeButtons.L:ClearAllPoints()
+                     f.nudgeButtons.L:SetPoint("TOPLEFT", f, "TOPRIGHT", 2, 0)
+                end
+            end
+            
+            local function UpdatePosition()
+                f:ClearAllPoints()
+                f:SetPoint("CENTER", UIParent, "CENTER", data.x, data.y)
+                 -- Update Config UI if open
+                if addonTable.Config and addonTable.Config.RefreshFrameControls then
+                     addonTable.Config.RefreshFrameControls() 
+                end
+                
+                -- Update button layout after move (in case it crossed the threshold)
+                UpdateButtonLayout(f)
+            end
+    
+            local function CreateBtn(text, relativeTo, point, rPoint, x, y, onClick)
+                 local btn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+                 btn:SetSize(20, 20)
+                 btn:SetPoint(point, relativeTo, rPoint, x, y)
+                 btn:SetText(text)
+                 btn:SetScript("OnClick", onClick)
+                 return btn
+            end
+    
+            -- L (Anchor for others)
+            f.nudgeButtons.L = CreateBtn("L", f, "TOPLEFT", "TOPRIGHT", 2, 0, function() 
+                data.x = data.x - 1
+                UpdatePosition()
+            end)
+            
+            -- R
+            f.nudgeButtons.R = CreateBtn("R", f.nudgeButtons.L, "TOP", "BOTTOM", 0, -2, function()
+                data.x = data.x + 1
+                UpdatePosition()
+            end)
+    
+            -- U
+            f.nudgeButtons.U = CreateBtn("U", f.nudgeButtons.R, "TOP", "BOTTOM", 0, -2, function()
+                data.y = data.y + 1
+                UpdatePosition()
+            end)
+    
+            -- D
+            f.nudgeButtons.D = CreateBtn("D", f.nudgeButtons.U, "TOP", "BOTTOM", 0, -2, function()
+                data.y = data.y - 1
+                UpdatePosition()
+            end)
+            
+            -- Expose UpdateLayout for Initial/Drag calls
+            f.UpdateButtonLayout = UpdateButtonLayout
+        end
+
         -- Interaction
         if not data.locked then
             f:EnableMouse(true)
@@ -137,6 +212,12 @@ function addonTable.Frames.UpdateFrames()
             f:RegisterForDrag("LeftButton")
             f.nameText:SetText(data.name or ("Frame " .. i))
             f.nameText:Show()
+            
+            f:SetScript("OnMouseDown", function()
+                if addonTable.Config and addonTable.Config.SelectFrame then
+                    addonTable.Config.SelectFrame(i)
+                end
+            end)
             
             f:SetScript("OnDragStart", f.StartMoving)
             f:SetScript("OnDragStop", function(self)
@@ -159,20 +240,26 @@ function addonTable.Frames.UpdateFrames()
                 data.x = x
                 data.y = y
                 
-                -- Update Config UI if open? Global update might be heavy.
-                -- We rely on user reopening frame settings or manual refresh.
-                -- We could call addonTable.Config.RefreshFrameControls if exposed.
                 -- Update Config UI if open
                 if addonTable.Config and addonTable.Config.RefreshFrameControls then
                      addonTable.Config.RefreshFrameControls() 
                 end
+                
+                -- Update Button Layout
+                if self.UpdateButtonLayout then self.UpdateButtonLayout(self) end
             end)
             
-            -- Optional: Show a "Drag Me" overlay or highlight?
-            -- For now, the block itself is draggable.
+            -- Show Nudge Buttons
+            for _, btn in pairs(f.nudgeButtons) do btn:Show() end
+            
+            -- Initial Layout Check
+            if f.UpdateButtonLayout then f.UpdateButtonLayout(f) end
         else
             f:EnableMouse(false)
             f.nameText:Hide()
+            
+            -- Hide Nudge Buttons
+            for _, btn in pairs(f.nudgeButtons) do btn:Hide() end
         end
     end
 end

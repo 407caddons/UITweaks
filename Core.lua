@@ -21,6 +21,7 @@ local function OnEvent(self, event, ...)
         if UIThingsDB.tracker.showBorder == nil then UIThingsDB.tracker.showBorder = false end
         if UIThingsDB.tracker.hideInCombat == nil then UIThingsDB.tracker.hideInCombat = false end
         if not UIThingsDB.tracker.backgroundColor then UIThingsDB.tracker.backgroundColor = {r=0, g=0, b=0, a=0} end
+        if not UIThingsDB.tracker.strata then UIThingsDB.tracker.strata = "LOW" end
 
         UIThingsDB.minimap = UIThingsDB.minimap or { angle = 45 }
 

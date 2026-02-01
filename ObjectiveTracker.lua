@@ -448,6 +448,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     
     -- Geometry
     trackerFrame:SetSize(UIThingsDB.tracker.width, UIThingsDB.tracker.height)
+    trackerFrame:SetFrameStrata(UIThingsDB.tracker.strata or "LOW")
     scrollChild:SetWidth(UIThingsDB.tracker.width - 40)
     
     -- Lock/Unlock & Border State
