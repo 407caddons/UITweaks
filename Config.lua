@@ -303,7 +303,11 @@ function addonTable.Config.Initialize()
 
         bgColorSwatch:SetScript("OnClick", function(self)
             local info = UIDropDownMenu_CreateInfo()
-            info.r, info.g, info.b, info.opacity = c.r, c.g, c.b, c.a
+            
+            -- Capture current values for reliable restore
+            local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
+            
+            info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
             info.opacityFunc = function() 
                 local r, g, b = ColorPickerFrame:GetColorRGB()
@@ -322,7 +326,8 @@ function addonTable.Config.Initialize()
                 UpdateTracker()
             end
             info.cancelFunc = function(previousValues)
-                c.r, c.g, c.b, c.a = previousValues.r, previousValues.g, previousValues.b, previousValues.opacity
+                -- Ignore previousValues as it can be tainted
+                c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
                 bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
                 UIThingsDB.tracker.backgroundColor = c
                 UpdateTracker()

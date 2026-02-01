@@ -342,7 +342,13 @@ local function SetupCustomTracker()
     end)
     trackerFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local point, _, _, x, y = self:GetPoint()
+        local point, _, relativePoint, x, y = self:GetPoint()
+        -- Force integer coordinates to prevent blurry/missing 1px borders
+        x = math.floor(x + 0.5)
+        y = math.floor(y + 0.5)
+        self:ClearAllPoints()
+        self:SetPoint(point, UIParent, relativePoint, x, y)
+        
         UIThingsDB.tracker.point = point
         UIThingsDB.tracker.x = x
         UIThingsDB.tracker.y = y
@@ -453,7 +459,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
                 bgFile = "Interface\\Buttons\\WHITE8X8",
                 edgeFile = "Interface\\Buttons\\WHITE8X8",
                 tile = false, tileSize = 0, edgeSize = 1,
-                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+                insets = { left = 1, right = 1, top = 1, bottom = 1 }
             })
             local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0}
             trackerFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
