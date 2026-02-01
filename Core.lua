@@ -44,6 +44,11 @@ local function OnEvent(self, event, ...)
         if not UIThingsDB.combat.colorOutCombat then UIThingsDB.combat.colorOutCombat = {r=0.5, g=0.5, b=0.5} end
         if not UIThingsDB.combat.pos then UIThingsDB.combat.pos = {point="CENTER", x=0, y=0} end
         
+        -- Frames Defaults
+        UIThingsDB.frames = UIThingsDB.frames or {}
+        if UIThingsDB.frames.enabled == nil then UIThingsDB.frames.enabled = false end
+        if not UIThingsDB.frames.list then UIThingsDB.frames.list = {} end
+        
         print("|cFF00FF00Luna's UI Tweaks Loaded!|r")
         self:UnregisterEvent("ADDON_LOADED")
         
@@ -53,6 +58,10 @@ local function OnEvent(self, event, ...)
         
         if addonTable.Minimap and addonTable.Minimap.Initialize then
             addonTable.Minimap.Initialize()
+        end
+
+        if addonTable.Frames and addonTable.Frames.Initialize then
+            addonTable.Frames.Initialize()
         end
         
         -- Slash Commands

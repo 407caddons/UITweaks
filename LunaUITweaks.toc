@@ -26,3 +26,4 @@ ObjectiveTracker.lua
 MinimapButton.lua
 Vendor.lua
 CombatTimer.lua
+Frames.lua
