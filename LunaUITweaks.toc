@@ -27,4 +27,5 @@ MinimapButton.lua
 Vendor.lua
 Loot.lua
 CombatTimer.lua
+Misc.lua
 Frames.lua

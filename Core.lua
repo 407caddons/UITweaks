@@ -76,7 +76,16 @@ local function OnEvent(self, event, ...)
         
         print("|cFF00FF00Luna's UI Tweaks Loaded!|r")
         self:UnregisterEvent("ADDON_LOADED")
+        -- Misc Defaults
+        UIThingsDB.misc = UIThingsDB.misc or {}
+        if UIThingsDB.misc.enabled == nil then UIThingsDB.misc.enabled = false end
+        if UIThingsDB.misc.ahFilter == nil then UIThingsDB.misc.ahFilter = false end
+        if UIThingsDB.misc.personalOrders == nil then UIThingsDB.misc.personalOrders = false end
+        if not UIThingsDB.misc.ttsMessage then UIThingsDB.misc.ttsMessage = "Personal order arrived" end
+        if not UIThingsDB.misc.alertDuration then UIThingsDB.misc.alertDuration = 5 end
+        if not UIThingsDB.misc.alertColor then UIThingsDB.misc.alertColor = {r=1, g=0, b=0, a=1} end
         
+        -- Initialize Modules
         if addonTable.Config and addonTable.Config.Initialize then
             addonTable.Config.Initialize()
         end

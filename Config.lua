@@ -82,7 +82,7 @@ function addonTable.Config.Initialize()
         }
 
         configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent, "BasicFrameTemplateWithInset")
-        configWindow:SetSize(600, 650) -- Resized for more tabs
+        configWindow:SetSize(600, 670) -- Resized for more tabs
         configWindow:SetPoint("CENTER")
         configWindow:SetMovable(true)
         configWindow:EnableMouse(true)
@@ -131,6 +131,10 @@ function addonTable.Config.Initialize()
         lootPanel:SetAllPoints()
         lootPanel:Hide()
 
+        local miscPanel = CreateFrame("Frame", nil, configWindow)
+        miscPanel:SetAllPoints()
+        miscPanel:Hide()
+
         -- Tab Buttons
         local tab1 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
         tab1:SetPoint("BOTTOMLEFT", configWindow, "BOTTOMLEFT", 10, -30)
@@ -157,8 +161,13 @@ function addonTable.Config.Initialize()
         tab5:SetText("Loot")
         tab5:SetID(5)
 
-        configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5}
-        PanelTemplates_SetNumTabs(configWindow, 5)
+        local tab6 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
+        tab6:SetPoint("LEFT", tab5, "RIGHT", 5, 0)
+        tab6:SetText("Misc")
+        tab6:SetID(6)
+
+        configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5, tab6}
+        PanelTemplates_SetNumTabs(configWindow, 6)
         PanelTemplates_SetTab(configWindow, 1)
 
         local function TabOnClick(self)
@@ -168,6 +177,7 @@ function addonTable.Config.Initialize()
              combatPanel:Hide()
              framesPanel:Hide()
              lootPanel:Hide()
+             miscPanel:Hide()
              
              local id = self:GetID()
              if id == 1 then trackerPanel:Show()
@@ -175,6 +185,7 @@ function addonTable.Config.Initialize()
              elseif id == 3 then combatPanel:Show()
              elseif id == 4 then framesPanel:Show()
              elseif id == 5 then lootPanel:Show()
+             elseif id == 6 then miscPanel:Show()
              end
         end
 
@@ -183,6 +194,7 @@ function addonTable.Config.Initialize()
         tab3:SetScript("OnClick", TabOnClick)
         tab4:SetScript("OnClick", TabOnClick)
         tab5:SetScript("OnClick", TabOnClick)
+        tab6:SetScript("OnClick", TabOnClick)
 
         -------------------------------------------------------------
         -- TRACKER PANEL CONTENT
@@ -1568,6 +1580,140 @@ function addonTable.Config.Initialize()
             end)
         end
         SetupLootPanel()
+
+        -- Helper: Create Misc Panel
+        local function SetupMiscPanel()
+            local panel = miscPanel
+            local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+            title:SetPoint("TOPLEFT", 16, -16)
+            title:SetText("Miscellaneous")
+
+            -- Enable Checkbox
+            local enableBtn = CreateFrame("CheckButton", "UIThingsMiscEnable", panel, "ChatConfigCheckButtonTemplate")
+            enableBtn:SetPoint("TOPLEFT", 20, -50)
+            _G[enableBtn:GetName().."Text"]:SetText("Enable Misc Module")
+            enableBtn:SetChecked(UIThingsDB.misc.enabled)
+            enableBtn:SetScript("OnClick", function(self)
+                UIThingsDB.misc.enabled = self:GetChecked()
+            end)
+            
+            -- AH Filter Checkbox
+            local ahBtn = CreateFrame("CheckButton", "UIThingsMiscAHFilter", panel, "ChatConfigCheckButtonTemplate")
+            ahBtn:SetPoint("TOPLEFT", 20, -100)
+            _G[ahBtn:GetName().."Text"]:SetText("Auction Current Expansion Only")
+            ahBtn:SetChecked(UIThingsDB.misc.ahFilter)
+            ahBtn:SetScript("OnClick", function(self)
+                UIThingsDB.misc.ahFilter = self:GetChecked()
+            end)
+            
+            -- Personal Orders Header
+            local header = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            header:SetPoint("TOPLEFT", 20, -150)
+            header:SetText("Personal Orders")
+
+            -- Personal Orders Checkbox
+            local ordersBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersCheck", panel, "ChatConfigCheckButtonTemplate")
+            ordersBtn:SetPoint("TOPLEFT", 20, -180)
+            _G[ordersBtn:GetName().."Text"]:SetText("Enable Personal Order Detection")
+            ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
+            ordersBtn:SetScript("OnClick", function(self)
+                UIThingsDB.misc.personalOrders = self:GetChecked()
+            end)
+
+            -- TTS Message
+            local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            ttsLabel:SetPoint("TOPLEFT", 40, -220)
+            ttsLabel:SetText("TTS Message:")
+            
+            local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+            ttsEdit:SetSize(250, 20)
+            ttsEdit:SetPoint("LEFT", ttsLabel, "RIGHT", 10, 0)
+            ttsEdit:SetAutoFocus(false)
+            ttsEdit:SetText(UIThingsDB.misc.ttsMessage)
+            ttsEdit:SetScript("OnEnterPressed", function(self)
+                UIThingsDB.misc.ttsMessage = self:GetText()
+                self:ClearFocus()
+            end)
+            
+            -- Alert Duration Slider
+            local durSlider = CreateFrame("Slider", "UIThingsMiscAlertDur", panel, "OptionsSliderTemplate")
+            durSlider:SetPoint("TOPLEFT", 40, -260)
+            durSlider:SetMinMaxValues(1, 10)
+            durSlider:SetValueStep(1)
+            durSlider:SetObeyStepOnDrag(true)
+            durSlider:SetWidth(200)
+            _G[durSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.alertDuration .. "s")
+            _G[durSlider:GetName() .. 'Low']:SetText("1s")
+            _G[durSlider:GetName() .. 'High']:SetText("10s")
+            durSlider:SetValue(UIThingsDB.misc.alertDuration)
+            durSlider:SetScript("OnValueChanged", function(self, value)
+                value = math.floor(value)
+                UIThingsDB.misc.alertDuration = value
+                _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
+            end)
+            
+            -- Alert Color Picker
+            local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            colorLabel:SetPoint("TOPLEFT", 40, -300)
+            colorLabel:SetText("Alert Color:")
+            
+            local colorSwatch = CreateFrame("Button", nil, panel)
+            colorSwatch:SetSize(20, 20)
+            colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, 0)
+            
+            colorSwatch.tex = colorSwatch:CreateTexture(nil, "OVERLAY")
+            colorSwatch.tex:SetAllPoints()
+            local c = UIThingsDB.misc.alertColor
+            colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a or 1)
+            
+            Mixin(colorSwatch, BackdropTemplateMixin)
+            colorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            colorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+            colorSwatch:SetScript("OnClick", function()
+                local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
+                
+                if ColorPickerFrame.SetupColorPickerAndShow then
+                    ColorPickerFrame:SetupColorPickerAndShow({
+                        r = c.r, g = c.g, b = c.b, opacity = c.a,
+                        hasOpacity = true,
+                        swatchFunc = function()
+                            local r,g,b = ColorPickerFrame:GetColorRGB()
+                            local a = ColorPickerFrame:GetColorAlpha()
+                            c.r, c.g, c.b, c.a = r, g, b, a
+                            colorSwatch.tex:SetColorTexture(r, g, b, a)
+                            UIThingsDB.misc.alertColor = c
+                        end,
+                        opacityFunc = function()
+                             local a = ColorPickerFrame:GetColorAlpha()
+                             local r,g,b = ColorPickerFrame:GetColorRGB()
+                             c.r, c.g, c.b, c.a = r, g, b, a
+                             colorSwatch.tex:SetColorTexture(r, g, b, a)
+                             UIThingsDB.misc.alertColor = c
+                        end,
+                        cancelFunc = function(restore)
+                             c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
+                             colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+                             UIThingsDB.misc.alertColor = c
+                        end
+                    })
+                else
+                    -- Fallback for older APIs if needed
+                    ColorPickerFrame:SetColorRGB(c.r, c.g, c.b)
+                    ColorPickerFrame.hasOpacity = true
+                    ColorPickerFrame.opacity = c.a
+                    ColorPickerFrame.func = function()
+                        local r,g,b = ColorPickerFrame:GetColorRGB()
+                        local a = ColorPickerFrame:GetOpacity()
+                        c.r, c.g, c.b, c.a = r, g, b, a
+                        colorSwatch.tex:SetColorTexture(r, g, b, a)
+                        UIThingsDB.misc.alertColor = c
+                    end
+                    ColorPickerFrame:Show()
+                end
+            end)
+        end
+        SetupMiscPanel()
     end
 end
 
