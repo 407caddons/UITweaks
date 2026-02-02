@@ -200,16 +200,54 @@ function addonTable.Config.Initialize()
         -- TRACKER PANEL CONTENT
         -------------------------------------------------------------
         
+        -- Helper: Update Visuals based on enabled state
+        local function UpdateModuleVisuals(panel, tab, enabled)
+            if not enabled then
+                 -- Transparent Dark Red
+                 if not panel.bg then
+                     panel.bg = panel:CreateTexture(nil, "BACKGROUND")
+                     -- Inset to avoid covering the border
+                     panel.bg:SetPoint("TOPLEFT", 4, -28)
+                     panel.bg:SetPoint("BOTTOMRIGHT", -4, 4)
+                     panel.bg:SetColorTexture(0.3, 0, 0, 0.5)
+                 else
+                     panel.bg:Show()
+                 end
+                 
+                 -- Tint Tab Text Red
+                 if tab.Text then
+                     tab.Text:SetTextColor(1, 0.2, 0.2)
+                 elseif tab:GetFontString() then
+                     tab:GetFontString():SetTextColor(1, 0.2, 0.2)
+                 end
+            else
+                 if panel.bg then panel.bg:Hide() end
+                 -- Reset Tab Text (Normal Color)
+                 if tab.Text then
+                     tab.Text:SetTextColor(1, 0.82, 0) -- GameFontNormal Color approx
+                 elseif tab:GetFontString() then
+                     tab:GetFontString():SetTextColor(1, 0.82, 0)
+                 end
+            end
+        end
+
+        local trackerTitle = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        trackerTitle:SetPoint("TOPLEFT", 16, -16)
+        trackerTitle:SetText("Objective Tracker")
+
         -- Enable Tracker Checkbox
         local enableTrackerBtn = CreateFrame("CheckButton", "UIThingsTrackerEnableCheck", trackerPanel, "ChatConfigCheckButtonTemplate")
-        enableTrackerBtn:SetPoint("TOPLEFT", 20, -40)
+        enableTrackerBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableTrackerBtn:GetName() .. "Text"]:SetText("Enable Objective Tracker Tweaks")
         enableTrackerBtn:SetChecked(UIThingsDB.tracker.enabled)
         enableTrackerBtn:SetScript("OnClick", function(self)
             local enabled = not not self:GetChecked()
             UIThingsDB.tracker.enabled = enabled
             UpdateTracker()
+            UpdateModuleVisuals(trackerPanel, tab1, enabled)
         end)
+        -- Init Visuals
+        UpdateModuleVisuals(trackerPanel, tab1, UIThingsDB.tracker.enabled)
 
         -- Lock Checkbox
         local lockBtn = CreateFrame("CheckButton", "UIThingsLockCheck", trackerPanel, "ChatConfigCheckButtonTemplate")
@@ -571,15 +609,21 @@ function addonTable.Config.Initialize()
         -- VENDOR PANEL CONTENT
         -------------------------------------------------------------
 
+        local vendorTitle = vendorPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        vendorTitle:SetPoint("TOPLEFT", 16, -16)
+        vendorTitle:SetText("Vendor Automation")
+
         -- Enable Vendor Checkbox
         local enableVendorBtn = CreateFrame("CheckButton", "UIThingsVendorEnableCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
-        enableVendorBtn:SetPoint("TOPLEFT", 20, -40)
+        enableVendorBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableVendorBtn:GetName() .. "Text"]:SetText("Enable Vendor Automation")
         enableVendorBtn:SetChecked(UIThingsDB.vendor.enabled)
         enableVendorBtn:SetScript("OnClick", function(self)
             local enabled = not not self:GetChecked()
             UIThingsDB.vendor.enabled = enabled
+            UpdateModuleVisuals(vendorPanel, tab2, enabled)
         end)
+        UpdateModuleVisuals(vendorPanel, tab2, UIThingsDB.vendor.enabled)
 
         -- Auto Repair
         local repairBtn = CreateFrame("CheckButton", "UIThingsAutoRepairCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
@@ -701,15 +745,21 @@ function addonTable.Config.Initialize()
         end
 
         -- Enable Combat Timer Checkbox
+        local combatTitle = combatPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        combatTitle:SetPoint("TOPLEFT", 16, -16)
+        combatTitle:SetText("Combat Timer")
+
         local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", combatPanel, "ChatConfigCheckButtonTemplate")
-        enableCombatBtn:SetPoint("TOPLEFT", 20, -40)
+        enableCombatBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableCombatBtn:GetName() .. "Text"]:SetText("Enable Combat Timer")
         enableCombatBtn:SetChecked(UIThingsDB.combat.enabled)
         enableCombatBtn:SetScript("OnClick", function(self)
             local enabled = not not self:GetChecked()
             UIThingsDB.combat.enabled = enabled
             UpdateCombat()
+            UpdateModuleVisuals(combatPanel, tab3, enabled)
         end)
+        UpdateModuleVisuals(combatPanel, tab3, UIThingsDB.combat.enabled)
 
         -- Lock Timer
         local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", combatPanel, "ChatConfigCheckButtonTemplate")
@@ -807,14 +857,25 @@ function addonTable.Config.Initialize()
             end
         end
 
+        local framesTitle = framesPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        framesTitle:SetPoint("TOPLEFT", 16, -16)
+        framesTitle:SetText("Custom Frames")
+        
+        local addFrameBtn, duplicateFrameBtn
+
         local framesEnableBtn = CreateFrame("CheckButton", "UIThingsFramesEnableCheck", framesPanel, "ChatConfigCheckButtonTemplate")
-        framesEnableBtn:SetPoint("TOPLEFT", 20, -40)
+        framesEnableBtn:SetPoint("TOPLEFT", 20, -50)
         _G[framesEnableBtn:GetName() .. "Text"]:SetText("Enable Custom Frames")
         framesEnableBtn:SetChecked(UIThingsDB.frames.enabled)
         framesEnableBtn:SetScript("OnClick", function(self)
-            UIThingsDB.frames.enabled = self:GetChecked()
+            local enabled = self:GetChecked()
+            UIThingsDB.frames.enabled = enabled
             UpdateFrames()
+            UpdateModuleVisuals(framesPanel, tab4, enabled)
+            if addFrameBtn then addFrameBtn:SetEnabled(enabled) end
+            if duplicateFrameBtn then duplicateFrameBtn:SetEnabled(enabled) end
         end)
+        UpdateModuleVisuals(framesPanel, tab4, UIThingsDB.frames.enabled)
 
         -- Frame Selector Dropdown
         local frameSelectLabel = framesPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -860,7 +921,7 @@ function addonTable.Config.Initialize()
         UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit)
         
         -- Add Button
-        local addFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
+        addFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
         addFrameBtn:SetPoint("LEFT", frameDropdown, "RIGHT", 130, 2)
         addFrameBtn:SetSize(80, 22)
         addFrameBtn:SetText("Add New")
@@ -900,7 +961,7 @@ function addonTable.Config.Initialize()
         end)
         
         -- Duplicate Button
-        local duplicateFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
+        duplicateFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
         duplicateFrameBtn:SetPoint("LEFT", addFrameBtn, "RIGHT", 10, 0)
         duplicateFrameBtn:SetSize(80, 22)
         duplicateFrameBtn:SetText("Duplicate")
@@ -967,6 +1028,10 @@ function addonTable.Config.Initialize()
              RefreshFrameControls()
              UpdateFrames()
         end)
+
+        -- Initial Button State
+        if addFrameBtn then addFrameBtn:SetEnabled(UIThingsDB.frames.enabled) end
+        if duplicateFrameBtn then duplicateFrameBtn:SetEnabled(UIThingsDB.frames.enabled) end
 
         -- Remove Button
         local removeFrameBtn = CreateFrame("Button", nil, frameControls, "UIPanelButtonTemplate")
@@ -1360,7 +1425,9 @@ function addonTable.Config.Initialize()
             enableCheckbox:SetChecked(UIThingsDB.loot.enabled)
             enableCheckbox:SetScript("OnClick", function(self)
                 UIThingsDB.loot.enabled = self:GetChecked()
+                UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
             end)
+            UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
             
 
             
@@ -1595,7 +1662,9 @@ function addonTable.Config.Initialize()
             enableBtn:SetChecked(UIThingsDB.misc.enabled)
             enableBtn:SetScript("OnClick", function(self)
                 UIThingsDB.misc.enabled = self:GetChecked()
+                UpdateModuleVisuals(miscPanel, tab6, UIThingsDB.misc.enabled)
             end)
+            UpdateModuleVisuals(miscPanel, tab6, UIThingsDB.misc.enabled)
             
             -- AH Filter Checkbox
             local ahBtn = CreateFrame("CheckButton", "UIThingsMiscAHFilter", panel, "ChatConfigCheckButtonTemplate")

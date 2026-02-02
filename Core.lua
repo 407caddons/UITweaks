@@ -10,7 +10,7 @@ local function OnEvent(self, event, ...)
         
         -- Safe Default Defaults
         if UIThingsDB.tracker.locked == nil then UIThingsDB.tracker.locked = true end
-        if UIThingsDB.tracker.enabled == nil then UIThingsDB.tracker.enabled = true end
+        if UIThingsDB.tracker.enabled == nil then UIThingsDB.tracker.enabled = false end
         if not UIThingsDB.tracker.width then UIThingsDB.tracker.width = 300 end
         if not UIThingsDB.tracker.height then UIThingsDB.tracker.height = 500 end
         if not UIThingsDB.tracker.font then UIThingsDB.tracker.font = "Fonts\\FRIZQT__.TTF" end
@@ -36,7 +36,7 @@ local function OnEvent(self, event, ...)
         UIThingsDB.minimap = UIThingsDB.minimap or { angle = 45 }
 
         UIThingsDB.vendor = UIThingsDB.vendor or {}
-        if UIThingsDB.vendor.enabled == nil then UIThingsDB.vendor.enabled = true end
+        if UIThingsDB.vendor.enabled == nil then UIThingsDB.vendor.enabled = false end
         if UIThingsDB.vendor.autoRepair == nil then UIThingsDB.vendor.autoRepair = true end
         if UIThingsDB.vendor.useGuildRepair == nil then UIThingsDB.vendor.useGuildRepair = false end
         if not UIThingsDB.vendor.sellGreys then UIThingsDB.vendor.sellGreys = true end
@@ -61,7 +61,7 @@ local function OnEvent(self, event, ...)
         if not UIThingsDB.loot.anchor then UIThingsDB.loot.anchor = {point="CENTER", x=0, y=200} end
 
         UIThingsDB.combat = UIThingsDB.combat or {}
-        if UIThingsDB.combat.enabled == nil then UIThingsDB.combat.enabled = true end
+        if UIThingsDB.combat.enabled == nil then UIThingsDB.combat.enabled = false end
         if UIThingsDB.combat.locked == nil then UIThingsDB.combat.locked = true end
         if not UIThingsDB.combat.font then UIThingsDB.combat.font = "Fonts\\FRIZQT__.TTF" end
         if not UIThingsDB.combat.fontSize then UIThingsDB.combat.fontSize = 18 end
