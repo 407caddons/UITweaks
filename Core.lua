@@ -46,6 +46,20 @@ local function OnEvent(self, event, ...)
         if UIThingsDB.vendor.warningLocked == nil then UIThingsDB.vendor.warningLocked = true end
         if not UIThingsDB.vendor.warningPos then UIThingsDB.vendor.warningPos = {point="TOP", x=0, y=-150} end
 
+        -- Loot Defaults
+        UIThingsDB.loot = UIThingsDB.loot or {}
+        if UIThingsDB.loot.enabled == nil then UIThingsDB.loot.enabled = false end
+        if UIThingsDB.loot.growUp == nil then UIThingsDB.loot.growUp = true end
+        if UIThingsDB.loot.fasterLoot == nil then UIThingsDB.loot.fasterLoot = false end
+        if not UIThingsDB.loot.fasterLootDelay then UIThingsDB.loot.fasterLootDelay = 0.3 end
+        if not UIThingsDB.loot.duration then UIThingsDB.loot.duration = 3 end
+        if not UIThingsDB.loot.minQuality then UIThingsDB.loot.minQuality = 1 end -- 0=Grey, 1=White...
+        if not UIThingsDB.loot.font then UIThingsDB.loot.font = "Fonts\\FRIZQT__.TTF" end
+        if not UIThingsDB.loot.fontSize then UIThingsDB.loot.fontSize = 14 end
+        if not UIThingsDB.loot.iconSize then UIThingsDB.loot.iconSize = 32 end
+        -- NOTE: Anchor default can be nil initially, handled in Loot.lua or Config
+        if not UIThingsDB.loot.anchor then UIThingsDB.loot.anchor = {point="CENTER", x=0, y=200} end
+
         UIThingsDB.combat = UIThingsDB.combat or {}
         if UIThingsDB.combat.enabled == nil then UIThingsDB.combat.enabled = true end
         if UIThingsDB.combat.locked == nil then UIThingsDB.combat.locked = true end

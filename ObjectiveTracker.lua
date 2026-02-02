@@ -13,20 +13,31 @@ local function Log(msg)
     print("UIThings: " .. tostring(msg))
 end
 
+-- Safe Timer Wrapper
+local function SafeAfter(delay, func)
+    if not func then
+        Log("Error: SafeAfter called with nil function")
+        return
+    end
+    if C_Timer and C_Timer.After then
+        pcall(C_Timer.After, delay, func)
+    end
+end
+
 
 
 local function OnQuestClick(self, button)
     -- Shift-Click to Untrack
     if IsShiftKeyDown() and self.questID then
         C_QuestLog.RemoveQuestWatch(self.questID)
-        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
+        SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
     
     -- Right-Click to Super Track
     if button == "RightButton" and self.questID then
         C_SuperTrack.SetSuperTrackedQuestID(self.questID)
-        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
+        SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
 
@@ -56,7 +67,7 @@ local function OnAchieveClick(self)
         else
             RemoveTrackedAchievement(self.achieID)
         end
-        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent)
+        SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent)
         return
     end
 
@@ -634,6 +645,8 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     
     UpdateContent()
 end
+
+addonTable.ObjectiveTracker.UpdateContent = UpdateContent
 
 -- Hook into startup
 local f = CreateFrame("Frame")

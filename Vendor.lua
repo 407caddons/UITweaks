@@ -7,6 +7,7 @@ local function Log(msg)
 end
 
 local function AutoRepair()
+    if not UIThingsDB.vendor.enabled then return end
     if not UIThingsDB.vendor.autoRepair then return end
     if not CanMerchantRepair() then return end
 
@@ -39,6 +40,7 @@ local function AutoRepair()
 end
 
 local function SellGreys()
+    if not UIThingsDB.vendor.enabled then return end
     if not UIThingsDB.vendor.sellGreys then return end
 
     if C_MerchantFrame.SellAllJunkItems then
@@ -143,6 +145,11 @@ function addonTable.Vendor.UpdateSettings()
         warningFrame:SetPoint("TOP", 0, -150)
     end
     
+    if not settings.enabled then
+        warningFrame:Hide()
+        return
+    end
+
     -- Lock/Unlock
     if settings.warningLocked then
         warningFrame:EnableMouse(false)
