@@ -15,6 +15,15 @@ local function OnEvent(self, event, ...)
         if not UIThingsDB.tracker.height then UIThingsDB.tracker.height = 500 end
         if not UIThingsDB.tracker.font then UIThingsDB.tracker.font = "Fonts\\FRIZQT__.TTF" end
         if not UIThingsDB.tracker.fontSize then UIThingsDB.tracker.fontSize = 12 end
+        -- Specific Fonts
+        if not UIThingsDB.tracker.headerFont then UIThingsDB.tracker.headerFont = "Fonts\\FRIZQT__.TTF" end
+        if not UIThingsDB.tracker.headerFontSize then UIThingsDB.tracker.headerFontSize = 14 end
+        if not UIThingsDB.tracker.detailFont then UIThingsDB.tracker.detailFont = "Fonts\\FRIZQT__.TTF" end
+        if not UIThingsDB.tracker.detailFontSize then UIThingsDB.tracker.detailFontSize = 12 end
+        if not UIThingsDB.tracker.questPadding then UIThingsDB.tracker.questPadding = 2 end
+        if not UIThingsDB.tracker.sectionOrder then UIThingsDB.tracker.sectionOrder = 1 end -- Default: WQ, Quests, Ach
+        if not UIThingsDB.tracker.onlyActiveWorldQuests then UIThingsDB.tracker.onlyActiveWorldQuests = false end
+        if not UIThingsDB.tracker.activeQuestColor then UIThingsDB.tracker.activeQuestColor = {r=0, g=1, b=0, a=1} end
         if not UIThingsDB.tracker.x then UIThingsDB.tracker.x = -20 end
         if not UIThingsDB.tracker.y then UIThingsDB.tracker.y = -250 end
         if not UIThingsDB.tracker.point then UIThingsDB.tracker.point = "TOPRIGHT" end

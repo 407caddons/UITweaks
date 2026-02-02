@@ -114,6 +114,19 @@ local function CheckDurability()
     end
 end
 
+-- Safe Timer Wrapper to prevent errors from other addons hooking C_Timer
+local function SafeAfter(delay, func)
+    if not func then
+        Log("Error: SafeAfter called with nil function")
+        return
+    end
+    
+    if C_Timer and C_Timer.After then
+        -- Wrap in pcall for safety against bad hooks
+        pcall(C_Timer.After, delay, func)
+    end
+end
+
 function addonTable.Vendor.UpdateSettings()
     local settings = UIThingsDB.vendor
     
@@ -142,7 +155,7 @@ function addonTable.Vendor.UpdateSettings()
         end
         
         -- ALWAYS re-check durability logic to ensure correct visibility
-        CheckDurability()
+        SafeAfter(0.5, CheckDurability)
     else
         -- Unlocked -> Show frame + Backdrop
         warningFrame:EnableMouse(true)
@@ -162,7 +175,7 @@ frame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         addonTable.Vendor.UpdateSettings()
         -- Also check durability on login after a slight delay
-        C_Timer.After(1, CheckDurability)
+        SafeAfter(1, CheckDurability)
         return
     end
 
@@ -175,13 +188,13 @@ frame:SetScript("OnEvent", function(self, event)
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
         warningFrame:Hide() -- Hide when at vendor
         -- Run slightly delayed to ensure merchant interaction is fully ready
-        C_Timer.After(0.1, function()
+        SafeAfter(0.1, function()
             AutoRepair()
             SellGreys()
         end)
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" or event == "MERCHANT_CLOSED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "PLAYER_UNGHOST" then
         -- Run check slightly delayed to ensure info is ready/state is consistent
-        C_Timer.After(1, CheckDurability)
+        SafeAfter(1, CheckDurability)
     elseif event == "PLAYER_REGEN_DISABLED" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
         warningFrame:Hide() -- Hide in combat

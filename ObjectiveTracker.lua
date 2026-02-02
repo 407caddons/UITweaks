@@ -13,18 +13,19 @@ local function Log(msg)
     print("UIThings: " .. tostring(msg))
 end
 
-local function GetFont()
-    return UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
-end
 
-local function GetFontSize()
-    return UIThingsDB.tracker.fontSize or 12
-end
 
-local function OnQuestClick(self)
+local function OnQuestClick(self, button)
     -- Shift-Click to Untrack
     if IsShiftKeyDown() and self.questID then
         C_QuestLog.RemoveQuestWatch(self.questID)
+        C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
+        return
+    end
+    
+    -- Right-Click to Super Track
+    if button == "RightButton" and self.questID then
+        C_SuperTrack.SetSuperTrackedQuestID(self.questID)
         C_Timer.After(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
@@ -79,7 +80,7 @@ local function AcquireItem()
     
     local btn = CreateFrame("Button", nil, scrollChild)
     btn:SetHeight(20)
-    btn:RegisterForClicks("LeftButtonUp")
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(14, 14) -- Slightly smaller than text height
@@ -125,13 +126,22 @@ local function UpdateContent()
     
     ReleaseItems()
     
-    local font = GetFont()
-    local size = GetFontSize()
+    -- Base font (for section headers like "Quests")
+    local baseFont = UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
+    local baseSize = UIThingsDB.tracker.fontSize or 12
+    
+    -- Specific fonts (Quest Name and Detail)
+    local questNameFont = UIThingsDB.tracker.headerFont or "Fonts\\FRIZQT__.TTF" 
+    local questNameSize = UIThingsDB.tracker.headerFontSize or 14
+    local detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
+    local detailSize = UIThingsDB.tracker.detailFontSize or 12
+    local questPadding = UIThingsDB.tracker.questPadding or 2
+    
     local yOffset = -5
     local width = scrollChild:GetWidth()
     
     -- Helper to add lines
-    local function AddLine(text, isHeader, questID, achieID, isObjective)
+    local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
         local btn = AcquireItem()
         btn:Show()
         
@@ -144,35 +154,44 @@ local function UpdateContent()
         btn:SetWidth(width)
         btn:SetPoint("TOPLEFT", 0, yOffset)
         
-        -- Configurable Font/Size
-        local fontSize = isObjective and (size - 2) or (isHeader and size + 2 or size)
-        
         if isHeader then
-            btn.Text:SetFont(font, fontSize, "OUTLINE")
+            -- Section Header (e.g. "Quests") - Use Base Font
+            btn.Text:SetFont(baseFont, baseSize + 2, "OUTLINE") -- Slightly larger than base
             btn.Text:SetText(text)
             btn.Text:SetTextColor(1, 0.82, 0) -- Gold
             btn.Icon:Hide()
             btn.Text:SetPoint("LEFT", 0, 0)
-            yOffset = yOffset - (fontSize + 6)
+            yOffset = yOffset - (baseSize + 8)
         else
-            -- Normal Line (Quest or Objective or Achievement)
-            btn.Text:SetFont(font, fontSize, "OUTLINE")
-            btn.Text:SetText(text)
-            
+            -- Content Line
             if isObjective then
-                 -- Objective Text (Grayish, Indented)
+                 -- Objective / Detail
+                 local currentSize = detailSize
+                 
+                 btn.Text:SetFont(detailFont, currentSize, "OUTLINE")
+                 btn.Text:SetText(text)
                  btn.Text:SetTextColor(0.8, 0.8, 0.8)
                  btn.Icon:Hide()
-                 btn.Text:SetPoint("LEFT", 19, 0) -- Indent to match title text start
+                 btn.Text:SetPoint("LEFT", 19, 0)
                  btn:EnableMouse(false)
-                 yOffset = yOffset - (fontSize + 2)
+                 yOffset = yOffset - (currentSize + questPadding)
             else
-                 -- Main Entry
-                 btn.Text:SetTextColor(1, 1, 1)
+                 -- Quest Name / Achievement Title
+                 -- Use "Quest Name" font settings (formerly headerFont)
+                 local currentSize = questNameSize
+                 
+                 btn.Text:SetFont(questNameFont, currentSize, "OUTLINE")
+                 btn.Text:SetText(text)
+                 
+                 if overrideColor then
+                     btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
+                 else
+                     btn.Text:SetTextColor(1, 1, 1)
+                 end
                  
                  if questID then
                     local isComplete = C_QuestLog.IsComplete(questID)
-                    local iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" -- Default Yellow !
+                    local iconPath = "Interface\\GossipFrame\\AvailableQuestIcon"
                     
                     local tagInfo = C_QuestLog.GetQuestTagInfo(questID)
                     local isDaily = false
@@ -192,27 +211,15 @@ local function UpdateContent()
                     end
                     
                     if isComplete then
-                        -- Question Marks
-                        if isDaily then
-                            iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon" -- Blue ?
-                        elseif isCampaign then
-                            iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
-                        elseif isLegendary then
-                            iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
-                        else
-                            iconPath = "Interface\\GossipFrame\\ActiveQuestIcon" -- Yellow ?
-                        end
+                        if isDaily then iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon"
+                        elseif isCampaign then iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
+                        elseif isLegendary then iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
+                        else iconPath = "Interface\\GossipFrame\\ActiveQuestIcon" end
                     else
-                        -- Exclamation Marks (In Progress)
-                        if isDaily then
-                            iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon" -- Blue !
-                        elseif isCampaign then
-                            iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
-                        elseif isLegendary then
-                            iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
-                        else
-                            iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" -- Yellow !
-                        end
+                        if isDaily then iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon"
+                        elseif isCampaign then iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
+                        elseif isLegendary then iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
+                        else iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" end
                     end
                     
                     btn.Icon:SetTexture(iconPath)
@@ -226,74 +233,203 @@ local function UpdateContent()
                     if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
                  end
                  
-                 yOffset = yOffset - (fontSize + 4)
+                 yOffset = yOffset - (currentSize + 4)
             end
         end
     end
     
-    -- Quests
-    local numQuests = C_QuestLog.GetNumQuestWatches()
-    if numQuests > 0 then
-        AddLine("Quests", true)
+    -- Track displayed IDs to prevent duplicates
+    local displayedIDs = {}
+    
+    local function RenderWorldQuests()
+        local mapID = C_Map.GetBestMapForUnit("player")
+        if not mapID then return end
         
-        for i = 1, numQuests do
-            local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-            if questID then
-                local title = C_QuestLog.GetTitleForQuestID(questID)
-                if title then
-                    AddLine(title, false, questID)
+        local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
+        local activeWQs = {}       -- Specifically the one(s) the player is doing now
+        local otherWQs = {}        -- All other available ones
+        local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
+        
+        if tasks then
+            for _, info in ipairs(tasks) do
+                local questID = info.questID
+                -- Check availability
+                if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
+                    local isActive = C_QuestLog.IsOnQuest(questID)
                     
-                    -- Add Objectives
-                    local objectives = C_QuestLog.GetQuestObjectives(questID)
-                    if objectives then
-                        for _, obj in pairs(objectives) do
-                            local objText = obj.text
-                            if objText and objText ~= "" then
-                                if obj.finished then
-                                    objText = "|cFF00FF00" .. objText .. "|r" -- Green if done
+                    if onlyActive then
+                        if isActive then
+                            table.insert(activeWQs, questID)
+                        end
+                    else
+                        -- Show All
+                        if isActive then
+                            table.insert(activeWQs, questID)
+                        else
+                            table.insert(otherWQs, questID)
+                        end
+                    end
+                end
+            end
+        end
+        
+        local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
+        
+        if hasWQs then
+            AddLine("World Quests", true)
+            
+            -- Render Active Ones First (Highlighted)
+            for _, questID in ipairs(activeWQs) do
+                if not displayedIDs[questID] then
+                    local title = C_QuestLog.GetTitleForQuestID(questID)
+                    if title then
+                        -- Apply Active Quest Color
+                        AddLine(title, false, questID, nil, false, UIThingsDB.tracker.activeQuestColor)
+                        displayedIDs[questID] = true
+                        
+                        local objectives = C_QuestLog.GetQuestObjectives(questID)
+                        if objectives then
+                            for _, obj in pairs(objectives) do
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
                                 end
-                                AddLine(objText, false, nil, nil, true)
                             end
                         end
+                        yOffset = yOffset - 5
                     end
-                    yOffset = yOffset - 5 -- Spacing between quests
                 end
             end
+            
+            -- Render Others (Normal)
+            for _, questID in ipairs(otherWQs) do
+                if not displayedIDs[questID] then
+                    local title = C_QuestLog.GetTitleForQuestID(questID)
+                    if title then
+                        AddLine(title, false, questID, nil, false, nil)
+                        displayedIDs[questID] = true
+                        
+                        local objectives = C_QuestLog.GetQuestObjectives(questID)
+                        if objectives then
+                            for _, obj in pairs(objectives) do
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
+                                end
+                            end
+                        end
+                        yOffset = yOffset - 5
+                    end
+                end
+            end
+            
+            yOffset = yOffset - 10
         end
-        
-        yOffset = yOffset - 10 -- Spacer
     end
     
-    -- Achievements
-    local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-    if #trackedAchievements > 0 then
-        AddLine("Achievements", true)
-        
-        for _, achID in ipairs(trackedAchievements) do
-            local _, name = GetAchievementInfo(achID)
-            if name then
-                AddLine(name, false, nil, achID)
-                
-                -- Add Criteria
-                local numCriteria = GetAchievementNumCriteria(achID)
-                for j = 1, numCriteria do
-                    local criteriaString, _, completed, quantity, reqQuantity, _, _, _, quantityString = GetAchievementCriteriaInfo(achID, j)
-                    if criteriaString then
-                        local text = criteriaString
-                        if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
-                            text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
-                        end
-                         
-                        if completed then
-                            text = "|cFF00FF00" .. text .. "|r"
-                        end
-                        AddLine(text, false, nil, nil, true)
+    local function RenderQuests()
+        local numQuests = C_QuestLog.GetNumQuestWatches()
+        if numQuests > 0 then
+            
+            -- Identify Super Tracked Quest
+            local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+            local superTrackedIndex = nil
+            
+            -- Filter out ones already displayed (e.g. if a WQ was also watched)
+            local filteredIndices = {}
+            for i = 1, numQuests do
+                local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                if qID and not displayedIDs[qID] then
+                    if qID == superTrackedQuestID then
+                        superTrackedIndex = i
+                    else
+                        table.insert(filteredIndices, i)
                     end
                 end
-                
-                yOffset = yOffset - 5 -- Spacing
+            end
+            
+            -- Insert Super Tracked at the TOP of the list
+            if superTrackedIndex then
+                table.insert(filteredIndices, 1, superTrackedIndex)
+            end
+            
+            if #filteredIndices > 0 then
+                AddLine("Quests", true)
+                for _, i in ipairs(filteredIndices) do
+                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                    local title = C_QuestLog.GetTitleForQuestID(questID)
+                    if title then
+                        -- Check if this is the super tracked one to apply color
+                        local color = nil
+                        if questID == superTrackedQuestID then
+                            color = UIThingsDB.tracker.activeQuestColor
+                        end
+                        
+                        AddLine(title, false, questID, nil, false, color)
+                        displayedIDs[questID] = true
+                        
+                        local objectives = C_QuestLog.GetQuestObjectives(questID)
+                        if objectives then
+                            for _, obj in pairs(objectives) do
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
+                                end
+                            end
+                        end
+                        yOffset = yOffset - 5
+                    end
+                end
+                yOffset = yOffset - 10
             end
         end
+    end
+    
+    local function RenderAchievements()
+        local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
+        if #trackedAchievements > 0 then
+            AddLine("Achievements", true)
+            for _, achID in ipairs(trackedAchievements) do
+                local _, name = GetAchievementInfo(achID)
+                if name then
+                    AddLine(name, false, nil, achID)
+                    local numCriteria = GetAchievementNumCriteria(achID)
+                    for j = 1, numCriteria do
+                        local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
+                        if criteriaString then
+                            local text = criteriaString
+                            if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
+                                text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
+                            end
+                            if completed then text = "|cFF00FF00" .. text .. "|r" end
+                            AddLine(text, false, nil, nil, true)
+                        end
+                    end
+                    yOffset = yOffset - 5
+                end
+            end
+            yOffset = yOffset - 10
+        end
+    end
+    
+    -- Order Logic
+    local orderMap = {
+        [1] = {RenderWorldQuests, RenderQuests, RenderAchievements},
+        [2] = {RenderWorldQuests, RenderAchievements, RenderQuests},
+        [3] = {RenderQuests, RenderWorldQuests, RenderAchievements},
+        [4] = {RenderQuests, RenderAchievements, RenderWorldQuests},
+        [5] = {RenderAchievements, RenderWorldQuests, RenderQuests},
+        [6] = {RenderAchievements, RenderQuests, RenderWorldQuests},
+    }
+    
+    local selectedOrder = UIThingsDB.tracker.sectionOrder or 1
+    local pipeline = orderMap[selectedOrder] or orderMap[1]
+    
+    for _, renderer in ipairs(pipeline) do
+        renderer()
     end
     
     -- Resize Scroll Child

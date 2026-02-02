@@ -82,7 +82,7 @@ function addonTable.Config.Initialize()
         }
 
         configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent, "BasicFrameTemplateWithInset")
-        configWindow:SetSize(600, 500) -- Resized for more tabs
+        configWindow:SetSize(600, 650) -- Resized for more tabs
         configWindow:SetPoint("CENTER")
         configWindow:SetMovable(true)
         configWindow:EnableMouse(true)
@@ -230,60 +230,202 @@ function addonTable.Config.Initialize()
             UpdateTracker()
         end)
         
-        -- Tracker Font Selector
-        local trackerFontLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        trackerFontLabel:SetPoint("TOPLEFT", 20, -210)
-        trackerFontLabel:SetText("Font:")
-        
-        local trackerFontDropdown = CreateFrame("Frame", "UIThingsTrackerFontDropdown", trackerPanel, "UIDropDownMenuTemplate")
-        trackerFontDropdown:SetPoint("TOPLEFT", trackerFontLabel, "BOTTOMLEFT", -15, -10)
-        
-        local function TrackerFontOnClick(self)
-             UIDropDownMenu_SetSelectedID(trackerFontDropdown, self:GetID())
-             UIThingsDB.tracker.font = self.value
-             UpdateTracker()
-        end
-        
-        local function TrackerFontInit(self, level)
-            local info = UIDropDownMenu_CreateInfo()
-            for k, v in pairs(fonts) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = v.name
-                info.value = v.path
-                info.func = TrackerFontOnClick
-                UIDropDownMenu_AddButton(info, level)
+        -- Helper for Font Dropdowns
+        local function CreateFontDropdown(parent, variableKey, labelText, yOffset)
+            local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            label:SetPoint("TOPLEFT", 20, yOffset)
+            label:SetText(labelText)
+            
+            local dropdown = CreateFrame("Frame", nil, parent, "UIDropDownMenuTemplate")
+            dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -15, -10)
+            
+            local function OnClick(self)
+                UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
+                UIThingsDB.tracker[variableKey] = self.value
+                UpdateTracker()
             end
-        end
-        
-        UIDropDownMenu_Initialize(trackerFontDropdown, TrackerFontInit)
-        UIDropDownMenu_SetText(trackerFontDropdown, "Select Font")
-        for i, f in ipairs(fonts) do
-            if f.path == UIThingsDB.tracker.font then
-                UIDropDownMenu_SetText(trackerFontDropdown, f.name)
+            
+            local function Init(self, level)
+                for k, v in pairs(fonts) do
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = v.name
+                    info.value = v.path
+                    info.func = OnClick
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end
+            
+            UIDropDownMenu_Initialize(dropdown, Init)
+            UIDropDownMenu_SetText(dropdown, "Select Font")
+            -- Set initial text
+            local currentPath = UIThingsDB.tracker[variableKey]
+            for _, f in ipairs(fonts) do
+                if f.path == currentPath then
+                    UIDropDownMenu_SetText(dropdown, f.name)
+                    break
+                end
             end
         end
 
-        -- Tracker Font Size Slider
-        local trackerFontSizeSlider = CreateFrame("Slider", "UIThingsTrackerFontSizeSlider", trackerPanel, "OptionsSliderTemplate")
-        trackerFontSizeSlider:SetPoint("TOPLEFT", 20, -280)
-        trackerFontSizeSlider:SetMinMaxValues(8, 24)
-        trackerFontSizeSlider:SetValueStep(1)
-        trackerFontSizeSlider:SetObeyStepOnDrag(true)
-        trackerFontSizeSlider:SetWidth(200)
-        _G[trackerFontSizeSlider:GetName() .. 'Text']:SetText(string.format("Font Size: %d", UIThingsDB.tracker.fontSize))
-        _G[trackerFontSizeSlider:GetName() .. 'Low']:SetText("8")
-        _G[trackerFontSizeSlider:GetName() .. 'High']:SetText("24")
-        trackerFontSizeSlider:SetValue(UIThingsDB.tracker.fontSize)
-        trackerFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+        -- Quest Name Font (formerly Header)
+        CreateFontDropdown(trackerPanel, "headerFont", "Quest Name Font:", -210)
+
+        -- Quest Name Size
+        local headerSizeSlider = CreateFrame("Slider", "UIThingsTrackerHeaderSizeSlider", trackerPanel, "OptionsSliderTemplate")
+        headerSizeSlider:SetPoint("TOPLEFT", 200, -235)
+        headerSizeSlider:SetMinMaxValues(8, 32)
+        headerSizeSlider:SetValueStep(1)
+        headerSizeSlider:SetObeyStepOnDrag(true)
+        headerSizeSlider:SetWidth(150)
+        _G[headerSizeSlider:GetName() .. 'Text']:SetText(string.format("Size: %d", UIThingsDB.tracker.headerFontSize))
+        _G[headerSizeSlider:GetName() .. 'Low']:SetText("8")
+        _G[headerSizeSlider:GetName() .. 'High']:SetText("32")
+        headerSizeSlider:SetValue(UIThingsDB.tracker.headerFontSize)
+        headerSizeSlider:SetScript("OnValueChanged", function(self, value)
             value = math.floor(value)
-            UIThingsDB.tracker.fontSize = value
-            _G[self:GetName() .. 'Text']:SetText(string.format("Font Size: %d", value))
+            UIThingsDB.tracker.headerFontSize = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Size: %d", value))
             UpdateTracker()
+        end)
+
+        -- Quest Detail Font
+        CreateFontDropdown(trackerPanel, "detailFont", "Quest Detail Font:", -270)
+
+        -- Quest Detail Size
+        local detailSizeSlider = CreateFrame("Slider", "UIThingsTrackerDetailSizeSlider", trackerPanel, "OptionsSliderTemplate")
+        detailSizeSlider:SetPoint("TOPLEFT", 200, -295)
+        detailSizeSlider:SetMinMaxValues(8, 32)
+        detailSizeSlider:SetValueStep(1)
+        detailSizeSlider:SetObeyStepOnDrag(true)
+        detailSizeSlider:SetWidth(150)
+        _G[detailSizeSlider:GetName() .. 'Text']:SetText(string.format("Size: %d", UIThingsDB.tracker.detailFontSize))
+        _G[detailSizeSlider:GetName() .. 'Low']:SetText("8")
+        _G[detailSizeSlider:GetName() .. 'High']:SetText("32")
+        detailSizeSlider:SetValue(UIThingsDB.tracker.detailFontSize)
+        detailSizeSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.tracker.detailFontSize = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Size: %d", value))
+            UpdateTracker()
+        end)
+        
+        -- Quest Padding Slider
+        local paddingSlider = CreateFrame("Slider", "UIThingsTrackerPaddingSlider", trackerPanel, "OptionsSliderTemplate")
+        paddingSlider:SetPoint("TOPLEFT", 20, -355)
+        paddingSlider:SetMinMaxValues(0, 20)
+        paddingSlider:SetValueStep(1)
+        paddingSlider:SetObeyStepOnDrag(true)
+        paddingSlider:SetWidth(200)
+        _G[paddingSlider:GetName() .. 'Text']:SetText(string.format("Padding: %d", UIThingsDB.tracker.questPadding))
+        _G[paddingSlider:GetName() .. 'Low']:SetText("0")
+        _G[paddingSlider:GetName() .. 'High']:SetText("20")
+        paddingSlider:SetValue(UIThingsDB.tracker.questPadding)
+        paddingSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.tracker.questPadding = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Padding: %d", value))
+            UpdateTracker()
+        end)
+        
+        -- Section Order Dropdown
+        local orderLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        orderLabel:SetPoint("TOPLEFT", 20, -400)
+        orderLabel:SetText("Section Order:")
+        
+        local orderDropdown = CreateFrame("Frame", "UIThingsTrackerOrderDropdown", trackerPanel, "UIDropDownMenuTemplate")
+        orderDropdown:SetPoint("TOPLEFT", orderLabel, "BOTTOMLEFT", -15, -10)
+        
+        local function OrderOnClick(self)
+             UIDropDownMenu_SetSelectedID(orderDropdown, self:GetID())
+             UIThingsDB.tracker.sectionOrder = self.value
+             UpdateTracker()
+        end
+        
+        local function OrderInit(self, level)
+            local orders = {
+                { text = "MWQ -> Quests -> Achv", value = 1 },
+                { text = "MWQ -> Achv -> Quests", value = 2 },
+                { text = "Quests -> MWQ -> Achv", value = 3 },
+                { text = "Quests -> Achv -> MWQ", value = 4 },
+                { text = "Achv -> MWQ -> Quests", value = 5 },
+                { text = "Achv -> Quests -> MWQ", value = 6 },
+            }
+            for _, info in ipairs(orders) do
+                local i = UIDropDownMenu_CreateInfo()
+                i.text = info.text
+                i.value = info.value
+                i.func = OrderOnClick
+                UIDropDownMenu_AddButton(i, level)
+            end
+        end
+        
+        UIDropDownMenu_Initialize(orderDropdown, OrderInit)
+        UIDropDownMenu_SetWidth(orderDropdown, 200) -- Make it wider
+        UIDropDownMenu_SetSelectedValue(orderDropdown, UIThingsDB.tracker.sectionOrder or 1)
+        UIDropDownMenu_SetText(orderDropdown, "World Quests -> Quests -> Achievements") -- Initial Text (approximate)
+
+        -- Only Show Active World Quests Checkbox
+        local wqActiveCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQActiveCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        wqActiveCheckbox:SetPoint("TOPLEFT", 20, -450) -- Moved down and left
+        _G[wqActiveCheckbox:GetName().."Text"]:SetText("Only Active World Quests")
+        wqActiveCheckbox:SetChecked(UIThingsDB.tracker.onlyActiveWorldQuests)
+        wqActiveCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.tracker.onlyActiveWorldQuests = self:GetChecked()
+            UpdateTracker()
+        end)
+        
+        -- Active Quest Color Picker
+        local activeColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        activeColorLabel:SetPoint("TOPLEFT", 20, -500)
+        activeColorLabel:SetText("Active Quest Highlight:")
+        
+        local activeColorSwatch = CreateFrame("Button", nil, trackerPanel)
+        activeColorSwatch:SetSize(20, 20)
+        activeColorSwatch:SetPoint("LEFT", activeColorLabel, "RIGHT", 10, 0)
+        
+        activeColorSwatch.tex = activeColorSwatch:CreateTexture(nil, "OVERLAY")
+        activeColorSwatch.tex:SetAllPoints()
+        local ac = UIThingsDB.tracker.activeQuestColor or {r=0, g=1, b=0, a=1}
+        activeColorSwatch.tex:SetColorTexture(ac.r, ac.g, ac.b, ac.a)
+        
+        Mixin(activeColorSwatch, BackdropTemplateMixin)
+        activeColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        activeColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+        activeColorSwatch:SetScript("OnClick", function(self)
+            local info = UIDropDownMenu_CreateInfo()
+            local prevR, prevG, prevB, prevA = ac.r, ac.g, ac.b, ac.a
+            
+            info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
+            info.hasOpacity = true
+            info.opacityFunc = function() 
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                ac.r, ac.g, ac.b, ac.a = r, g, b, a
+                activeColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.tracker.activeQuestColor = ac
+                UpdateTracker()
+            end
+            info.swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                ac.r, ac.g, ac.b, ac.a = r, g, b, a
+                activeColorSwatch.tex:SetColorTexture(r, g, b, a)
+                 UIThingsDB.tracker.activeQuestColor = ac
+                UpdateTracker()
+            end
+            info.cancelFunc = function(previousValues)
+                ac.r, ac.g, ac.b, ac.a = prevR, prevG, prevB, prevA
+                activeColorSwatch.tex:SetColorTexture(ac.r, ac.g, ac.b, ac.a)
+                UIThingsDB.tracker.activeQuestColor = ac
+                UpdateTracker()
+            end
+            ColorPickerFrame:SetupColorPickerAndShow(info)
         end)
         
         -- Show Border Checkbox
         local borderCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBorderCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
-        borderCheckbox:SetPoint("TOPLEFT", 20, -320)
+        borderCheckbox:SetPoint("TOPLEFT", 20, -550)    
         _G[borderCheckbox:GetName().."Text"]:SetText("Show Border")
         borderCheckbox:SetChecked(UIThingsDB.tracker.showBorder)
         borderCheckbox:SetScript("OnClick", function(self)
@@ -293,7 +435,7 @@ function addonTable.Config.Initialize()
         
         -- Hide In Combat Checkbox
         local combatHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCombatHideCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
-        combatHideCheckbox:SetPoint("TOPLEFT", 150, -320)
+        combatHideCheckbox:SetPoint("TOPLEFT", 150, -550) -- Moved down
         _G[combatHideCheckbox:GetName().."Text"]:SetText("Hide in Combat")
         combatHideCheckbox:SetChecked(UIThingsDB.tracker.hideInCombat)
         combatHideCheckbox:SetScript("OnClick", function(self)
@@ -303,7 +445,7 @@ function addonTable.Config.Initialize()
         
         -- Background Color Picker
         local bgColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        bgColorLabel:SetPoint("TOPLEFT", 20, -350)
+        bgColorLabel:SetPoint("TOPLEFT", 20, -600) -- Moved down
         bgColorLabel:SetText("Background Color:")
         
         local bgColorSwatch = CreateFrame("Button", nil, trackerPanel)
@@ -360,7 +502,7 @@ function addonTable.Config.Initialize()
         
         -- Tracker Strata Dropdown
         local trackerStrataLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        trackerStrataLabel:SetPoint("TOPLEFT", 180, -350)
+        trackerStrataLabel:SetPoint("TOPLEFT", 180, -600)
         trackerStrataLabel:SetText("Strata:")
         
         local trackerStrataDropdown = CreateFrame("Frame", "UIThingsTrackerStrataDropdown", trackerPanel, "UIDropDownMenuTemplate")
