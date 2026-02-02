@@ -119,8 +119,8 @@ local function UpdateContent()
         return
     end
     
-    -- If we have items (or are unlocked), ensure shown (unless combat blocked)
-    if not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) then
+    -- If we have items (or are unlocked), ensure shown (unless blocked)
+    if not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
         trackerFrame:Show()
     end
     
@@ -527,6 +527,9 @@ local function SetupCustomTracker()
     trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     trackerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    trackerFrame:RegisterEvent("CHALLENGE_MODE_START")
+    trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+    trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
     
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
@@ -536,7 +539,15 @@ local function SetupCustomTracker()
                 self:Hide()
             end
         elseif event == "PLAYER_REGEN_ENABLED" then
-            if UIThingsDB.tracker.enabled then
+            if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
+                self:Show()
+            end
+        elseif event == "CHALLENGE_MODE_START" then
+            if UIThingsDB.tracker.hideInMPlus then
+                self:Hide()
+            end
+        elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
+            if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) then
                 self:Show()
             end
         else
@@ -576,7 +587,11 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     -- Custom Tracker Logic
     SetupCustomTracker()
     
-    if UIThingsDB.tracker.hideInCombat and InCombatLockdown() then
+    -- Check visibility
+    local shouldHide = (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) or 
+                       (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
+
+    if shouldHide then
         trackerFrame:Hide()
     else
         trackerFrame:Show()

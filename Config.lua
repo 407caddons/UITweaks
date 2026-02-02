@@ -443,6 +443,16 @@ function addonTable.Config.Initialize()
             UpdateTracker()
         end)
         
+        -- Hide In M+ Checkbox (Right of Combat Hide)
+        local mplusHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerMPlusHideCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        mplusHideCheckbox:SetPoint("TOPLEFT", 280, -550)
+        _G[mplusHideCheckbox:GetName().."Text"]:SetText("Hide in m+")
+        mplusHideCheckbox:SetChecked(UIThingsDB.tracker.hideInMPlus)
+        mplusHideCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.tracker.hideInMPlus = self:GetChecked()
+            UpdateTracker()
+        end)
+        
         -- Background Color Picker
         local bgColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         bgColorLabel:SetPoint("TOPLEFT", 20, -600) -- Moved down
