@@ -141,10 +141,40 @@ end
 local function UpdateContent()
     if not trackerFrame then return end
     
-    -- Check Counts for Auto-Hide
+    -- Check Counts for Auto-Hide (validate achievements have valid data)
     local numQuests = C_QuestLog.GetNumQuestWatches()
     local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-    local total = numQuests + #trackedAchievements
+    local validAchievementCount = 0
+    for _, achID in ipairs(trackedAchievements) do
+        local _, name = GetAchievementInfo(achID)
+        if name then
+            validAchievementCount = validAchievementCount + 1
+        end
+    end
+    
+    -- Count world quests
+    local worldQuestCount = 0
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if mapID then
+        local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
+        local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
+        if tasks then
+            for _, info in ipairs(tasks) do
+                local questID = info.questID
+                if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
+                    if onlyActive then
+                        if C_QuestLog.IsOnQuest(questID) then
+                            worldQuestCount = worldQuestCount + 1
+                        end
+                    else
+                        worldQuestCount = worldQuestCount + 1
+                    end
+                end
+            end
+        end
+    end
+    
+    local total = numQuests + validAchievementCount + worldQuestCount
     
     if total == 0 and UIThingsDB.tracker.locked then
         trackerFrame:Hide()
@@ -461,7 +491,17 @@ local function UpdateContent()
     
     local function RenderAchievements()
         local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-        if #trackedAchievements > 0 then
+        
+        -- Filter to only achievements with valid names
+        local validAchievements = {}
+        for _, achID in ipairs(trackedAchievements) do
+            local _, name = GetAchievementInfo(achID)
+            if name then
+                table.insert(validAchievements, achID)
+            end
+        end
+        
+        if #validAchievements > 0 then
             AddLine("Achievements", true, "achievements")
             
             if UIThingsDB.tracker.collapsed["achievements"] then
@@ -469,24 +509,22 @@ local function UpdateContent()
                 return
             end
 
-            for _, achID in ipairs(trackedAchievements) do
+            for _, achID in ipairs(validAchievements) do
                 local _, name = GetAchievementInfo(achID)
-                if name then
-                    AddLine(name, false, nil, achID)
-                    local numCriteria = GetAchievementNumCriteria(achID)
-                    for j = 1, numCriteria do
-                        local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
-                        if criteriaString then
-                            local text = criteriaString
-                            if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
-                                text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
-                            end
-                            if completed then text = "|cFF00FF00" .. text .. "|r" end
-                            AddLine(text, false, nil, nil, true)
+                AddLine(name, false, nil, achID)
+                local numCriteria = GetAchievementNumCriteria(achID)
+                for j = 1, numCriteria do
+                    local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
+                    if criteriaString then
+                        local text = criteriaString
+                        if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
+                            text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
                         end
+                        if completed then text = "|cFF00FF00" .. text .. "|r" end
+                        AddLine(text, false, nil, nil, true)
                     end
-                    yOffset = yOffset - 5
                 end
+                yOffset = yOffset - 5
             end
             yOffset = yOffset - 10
         end
