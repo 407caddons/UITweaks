@@ -81,6 +81,23 @@ local function OnAchieveClick(self)
     end
 end
 
+
+
+-- Toggle Button Factory (Yellow +/-)
+local function CreateToggleButton(parent)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(30, 30)
+    
+    local text = btn:CreateFontString(nil, "OVERLAY")
+    text:SetFont("Fonts\\FRIZQT__.TTF", 25, "OUTLINE")
+    text:SetPoint("CENTER", 0, 0)
+    text:SetShadowOffset(1, -1)
+    text:SetTextColor(1, 0.82, 0) -- Yellow
+    btn.Text = text
+    
+    return btn
+end
+
 -- Item Factories
 local function AcquireItem()
     for _, btn in ipairs(itemPool) do
@@ -104,6 +121,12 @@ local function AcquireItem()
     text:SetJustifyH("LEFT")
     btn.Text = text
     
+    -- Toggle Button (Hidden by default)
+    local toggleBtn = CreateToggleButton(btn)
+    toggleBtn:SetPoint("LEFT", text, "RIGHT", 5, 0)
+    toggleBtn:Hide()
+    btn.ToggleBtn = toggleBtn
+    
     table.insert(itemPool, btn)
     return btn
 end
@@ -113,7 +136,9 @@ local function ReleaseItems()
         btn:Hide()
         btn:SetScript("OnClick", nil)
         btn.Icon:Hide()
+        btn.Icon:Hide()
         btn.Text:ClearAllPoints() -- Reset points to ensure clean state
+        if btn.ToggleBtn then btn.ToggleBtn:Hide() end
     end
 end
 
@@ -146,12 +171,17 @@ local function UpdateContent()
     local questNameSize = UIThingsDB.tracker.headerFontSize or 14
     local detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
     local detailSize = UIThingsDB.tracker.detailFontSize or 12
+    local detailSize = UIThingsDB.tracker.detailFontSize or 12
     local questPadding = UIThingsDB.tracker.questPadding or 2
+    
+    -- Ensure Collapsed State
+    UIThingsDB.tracker.collapsed = UIThingsDB.tracker.collapsed or {}
     
     local yOffset = -5
     local width = scrollChild:GetWidth()
     
     -- Helper to add lines
+    -- questID is repurposed as sectionKey if isHeader is true
     local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
         local btn = AcquireItem()
         btn:Show()
@@ -171,7 +201,35 @@ local function UpdateContent()
             btn.Text:SetText(text)
             btn.Text:SetTextColor(1, 0.82, 0) -- Gold
             btn.Icon:Hide()
+            btn.Text:SetText(text)
+            btn.Text:SetTextColor(1, 0.82, 0) -- Gold
+            btn.Icon:Hide()
             btn.Text:SetPoint("LEFT", 0, 0)
+            
+            -- Toggle Button Logic
+            if questID then -- sectionKey
+                local section = questID
+                local isCollapsed = UIThingsDB.tracker.collapsed[section]
+                
+                btn.ToggleBtn:Show()
+                btn.ToggleBtn:SetScript("OnClick", function()
+                    UIThingsDB.tracker.collapsed[section] = not isCollapsed
+                    UpdateContent()
+                end)
+                
+                if isCollapsed then
+                    btn.ToggleBtn.Text:SetText("+")
+                else
+                    btn.ToggleBtn.Text:SetText("-")
+                end
+                
+                -- Position to right of text
+                local textWidth = btn.Text:GetStringWidth()
+                btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
+            else
+                 btn.ToggleBtn:Hide()
+            end
+            
             yOffset = yOffset - (baseSize + 8)
         else
             -- Content Line
@@ -287,7 +345,12 @@ local function UpdateContent()
         local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
         
         if hasWQs then
-            AddLine("World Quests", true)
+            AddLine("World Quests", true, "worldQuests")
+            
+            if UIThingsDB.tracker.collapsed["worldQuests"] then
+                 yOffset = yOffset - 5
+                 return
+            end
             
             -- Render Active Ones First (Highlighted)
             for _, questID in ipairs(activeWQs) do
@@ -367,8 +430,13 @@ local function UpdateContent()
             end
             
             if #filteredIndices > 0 then
-                AddLine("Quests", true)
-                for _, i in ipairs(filteredIndices) do
+                AddLine("Quests", true, "quests")
+                
+                if UIThingsDB.tracker.collapsed["quests"] then
+                     yOffset = yOffset - 5
+                     return
+                end
+                    for _, i in ipairs(filteredIndices) do
                     local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
                     local title = C_QuestLog.GetTitleForQuestID(questID)
                     if title then
@@ -393,7 +461,7 @@ local function UpdateContent()
                         end
                         yOffset = yOffset - 5
                     end
-                end
+                    end
                 yOffset = yOffset - 10
             end
         end
@@ -402,7 +470,13 @@ local function UpdateContent()
     local function RenderAchievements()
         local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
         if #trackedAchievements > 0 then
-            AddLine("Achievements", true)
+            AddLine("Achievements", true, "achievements")
+            
+            if UIThingsDB.tracker.collapsed["achievements"] then
+                yOffset = yOffset - 5
+                return
+            end
+
             for _, achID in ipairs(trackedAchievements) do
                 local _, name = GetAchievementInfo(achID)
                 if name then
