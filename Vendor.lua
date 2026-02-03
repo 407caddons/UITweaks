@@ -51,10 +51,12 @@ end
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("MERCHANT_SHOW")
+frame:RegisterEvent("MERCHANT_CLOSED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_UNGHOST")
 frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
 
 -- Warning Frame
 local warningFrame = CreateFrame("Frame", "UIThingsRepairWarning", UIParent, "BackdropTemplate")
@@ -116,16 +118,12 @@ local function CheckDurability()
     end
 end
 
--- Safe Timer Wrapper to prevent errors from other addons hooking C_Timer
-local function SafeAfter(delay, func)
-    if not func then
-        Log("Error: SafeAfter called with nil function")
-        return
-    end
-    
-    if C_Timer and C_Timer.After then
-        -- Wrap in pcall for safety against bad hooks
-        pcall(C_Timer.After, delay, func)
+-- Use centralized SafeAfter from Core
+local SafeAfter = function(delay, func)
+    if addonTable.Core and addonTable.Core.SafeAfter then
+        addonTable.Core.SafeAfter(delay, func)
+    elseif C_Timer and C_Timer.After then
+        C_Timer.After(delay, func)
     end
 end
 

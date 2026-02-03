@@ -13,36 +13,31 @@ local function Log(msg)
     print("UIThings: " .. tostring(msg))
 end
 
--- Safe Timer Wrapper
-local function SafeAfter(delay, func)
-    if not func then
-        Log("Error: SafeAfter called with nil function")
-        return
-    end
-    if C_Timer and C_Timer.After then
-        pcall(C_Timer.After, delay, func)
+-- Use centralized SafeAfter from Core
+local SafeAfter = function(delay, func)
+    if addonTable.Core and addonTable.Core.SafeAfter then
+        addonTable.Core.SafeAfter(delay, func)
+    elseif C_Timer and C_Timer.After then
+        C_Timer.After(delay, func)
     end
 end
 
 
 
 local function OnQuestClick(self, button)
-    -- Shift-Click to Untrack
-    if IsShiftKeyDown() and self.questID then
+    -- Shift-Click to Untrack (if enabled)
+    if IsShiftKeyDown() and self.questID and UIThingsDB.tracker.shiftClickUntrack then
         C_QuestLog.RemoveQuestWatch(self.questID)
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
     
-    -- Right-Click to Super Track
-    if button == "RightButton" and self.questID then
+    -- Right-Click to Super Track (if enabled)
+    if button == "RightButton" and self.questID and UIThingsDB.tracker.rightClickSuperTrack then
         C_SuperTrack.SetSuperTrackedQuestID(self.questID)
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
-
-    -- Debug Message
-    print("UIThings Debug: Quest Clicked! ID:", tostring(self.questID))
     
     if self.questID then
         -- Try modern Map/Quest Log
@@ -54,14 +49,12 @@ local function OnQuestClick(self, button)
             -- Fallback
             QuestLog_OpenToQuest(self.questID)
         end
-    else
-        print("UIThings Debug: Error - No Quest ID on button")
     end
 end
 
 local function OnAchieveClick(self)
-    -- Shift-Click to Untrack
-    if IsShiftKeyDown() and self.achieID then
+    -- Shift-Click to Untrack (if enabled)
+    if IsShiftKeyDown() and self.achieID and UIThingsDB.tracker.shiftClickUntrack then
         if C_ContentTracking and C_ContentTracking.StopTracking then
             C_ContentTracking.StopTracking(Enum.ContentTrackingType.Achievement, self.achieID, Enum.ContentTrackingStopType.Manual)
         else
@@ -136,7 +129,6 @@ local function ReleaseItems()
         btn:Hide()
         btn:SetScript("OnClick", nil)
         btn.Icon:Hide()
-        btn.Icon:Hide()
         btn.Text:ClearAllPoints() -- Reset points to ensure clean state
         if btn.ToggleBtn then btn.ToggleBtn:Hide() end
     end
@@ -171,7 +163,6 @@ local function UpdateContent()
     local questNameSize = UIThingsDB.tracker.headerFontSize or 14
     local detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
     local detailSize = UIThingsDB.tracker.detailFontSize or 12
-    local detailSize = UIThingsDB.tracker.detailFontSize or 12
     local questPadding = UIThingsDB.tracker.questPadding or 2
     
     -- Ensure Collapsed State
@@ -198,9 +189,6 @@ local function UpdateContent()
         if isHeader then
             -- Section Header (e.g. "Quests") - Use Base Font
             btn.Text:SetFont(baseFont, baseSize + 2, "OUTLINE") -- Slightly larger than base
-            btn.Text:SetText(text)
-            btn.Text:SetTextColor(1, 0.82, 0) -- Gold
-            btn.Icon:Hide()
             btn.Text:SetText(text)
             btn.Text:SetTextColor(1, 0.82, 0) -- Gold
             btn.Icon:Hide()
@@ -691,16 +679,32 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     if UIThingsDB.tracker.locked then
         trackerFrame:EnableMouse(false)
         
-        if UIThingsDB.tracker.showBorder then
+        local showBorder = UIThingsDB.tracker.showBorder
+        local showBackground = UIThingsDB.tracker.showBackground
+        
+        if showBorder or showBackground then
             trackerFrame:SetBackdrop({
                 bgFile = "Interface\\Buttons\\WHITE8X8",
                 edgeFile = "Interface\\Buttons\\WHITE8X8",
                 tile = false, tileSize = 0, edgeSize = 1,
                 insets = { left = 1, right = 1, top = 1, bottom = 1 }
             })
-            local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0}
-            trackerFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
-            trackerFrame:SetBackdropBorderColor(0, 0, 0, 1) -- 1px Black Border
+            
+            -- Background
+            if showBackground then
+                local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0.5}
+                trackerFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
+            else
+                trackerFrame:SetBackdropColor(0, 0, 0, 0)
+            end
+            
+            -- Border
+            if showBorder then
+                local bc = UIThingsDB.tracker.borderColor or {r=0, g=0, b=0, a=1}
+                trackerFrame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+            else
+                trackerFrame:SetBackdropBorderColor(0, 0, 0, 0)
+            end
         else
             trackerFrame:SetBackdrop(nil)
         end
@@ -745,3 +749,17 @@ if ObjectiveTrackerFrame then
     end)
 end
 
+-- Auto Track Quests Feature
+local autoTrackFrame = CreateFrame("Frame")
+autoTrackFrame:RegisterEvent("QUEST_ACCEPTED")
+autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
+    if event == "QUEST_ACCEPTED" and questID then
+        if UIThingsDB.tracker and UIThingsDB.tracker.enabled and UIThingsDB.tracker.autoTrackQuests then
+            -- Check if quest is not already tracked
+            if not C_QuestLog.GetQuestWatchType(questID) then
+                C_QuestLog.AddQuestWatch(questID, Enum.QuestWatchType.Automatic)
+                SafeAfter(0.2, UpdateContent)
+            end
+        end
+    end
+end)
