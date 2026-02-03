@@ -32,9 +32,13 @@ local function OnQuestClick(self, button)
         return
     end
     
-    -- Right-Click to Super Track (if enabled)
+    -- Right-Click to Super Track (if enabled) - Toggle behavior
     if button == "RightButton" and self.questID and UIThingsDB.tracker.rightClickSuperTrack then
-        C_SuperTrack.SetSuperTrackedQuestID(self.questID)
+        if C_SuperTrack.GetSuperTrackedQuestID() == self.questID then
+            C_SuperTrack.SetSuperTrackedQuestID(0) -- Clear super tracking
+        else
+            C_SuperTrack.SetSuperTrackedQuestID(self.questID)
+        end
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
@@ -603,6 +607,7 @@ local function SetupCustomTracker()
     trackerFrame:RegisterEvent("CHALLENGE_MODE_START")
     trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
+    trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
     
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
@@ -758,6 +763,7 @@ autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
             -- Check if quest is not already tracked
             if not C_QuestLog.GetQuestWatchType(questID) then
                 C_QuestLog.AddQuestWatch(questID, Enum.QuestWatchType.Automatic)
+                C_SuperTrack.SetSuperTrackedQuestID(questID)
                 SafeAfter(0.2, UpdateContent)
             end
         end
