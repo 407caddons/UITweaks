@@ -322,8 +322,20 @@ function TalentReminder.IsMythicPlus()
     return instanceType == "party" and difficultyID == 8
 end
 
+-- Check if player is max level
+function TalentReminder.IsMaxLevel()
+    local maxLevel = GetMaxLevelForPlayerExpansion()
+    local currentLevel = UnitLevel("player")
+    return currentLevel >= maxLevel
+end
+
 -- Check if we should alert for this difficulty
 function TalentReminder.ShouldAlertForDifficulty(difficultyID)
+    -- Only alert at max level
+    if not TalentReminder.IsMaxLevel() then
+        return false
+    end
+    
     if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.alertOnDifficulties then
         return true -- Default to alert on all
     end
@@ -334,17 +346,7 @@ function TalentReminder.ShouldAlertForDifficulty(difficultyID)
     if difficultyID == 1 and filters.dungeonNormal then return true end
     if difficultyID == 2 and filters.dungeonHeroic then return true end
     if difficultyID == 23 and filters.dungeonMythic then return true end
-    if difficultyID == 8 then
-        if filters.mythicPlus then
-            -- Check M+ level if filter exists
-            local level = C_ChallengeMode.GetActiveKeystoneInfo()
-            if filters.mythicPlusMinLevel and level and level < filters.mythicPlusMinLevel then
-                return false
-            end
-            return true
-        end
-        return false
-    end
+    if difficultyID == 8 and filters.mythicPlus then return true end
     
     -- Raid difficulties
     if difficultyID == 17 and filters.raidLFR then return true end

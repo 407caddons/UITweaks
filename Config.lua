@@ -2102,23 +2102,6 @@ function addonTable.Config.Initialize()
             UIThingsDB.talentReminders.alertOnDifficulties.mythicPlus = not not self:GetChecked()
         end)
         
-        -- M+ Min Level Slider
-        local mplusMinSlider = CreateFrame("Slider", "UIThingsTalentMPlusMinSlider", talentPanel, "OptionsSliderTemplate")
-        mplusMinSlider:SetPoint("LEFT", dMPlusCheck, "RIGHT", 80, 0)
-        mplusMinSlider:SetMinMaxValues(0, 50)
-        mplusMinSlider:SetValueStep(1)
-        mplusMinSlider:SetObeyStepOnDrag(true)
-        mplusMinSlider:SetWidth(120)
-        _G[mplusMinSlider:GetName() .. 'Text']:SetText(string.format("Min Level: %d", UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel))
-        _G[mplusMinSlider:GetName() .. 'Low']:SetText("0")
-        _G[mplusMinSlider:GetName() .. 'High']:SetText("50")
-        mplusMinSlider:SetValue(UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel)
-        mplusMinSlider:SetScript("OnValueChanged", function(self, value)
-            value = math.floor(value)
-            UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel = value
-            _G[self:GetName() .. 'Text']:SetText(string.format("Min Level: %d", value))
-        end)
-        
         -- Raids
         local raidLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         raidLabel:SetPoint("TOPLEFT", 20, -285)

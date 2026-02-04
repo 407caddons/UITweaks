@@ -158,7 +158,6 @@ local function OnEvent(self, event, ...)
                     dungeonHeroic = false,
                     dungeonMythic = false,
                     mythicPlus = true,
-                    mythicPlusMinLevel = 10,
                     raidLFR = false,
                     raidNormal = false,
                     raidHeroic = true,
