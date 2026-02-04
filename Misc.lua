@@ -22,9 +22,21 @@ local function ShowAlert()
     
     alertFrame:Show()
     
-    -- TTS
-    if C_TextToSpeech and C_TextToSpeech.Speak then
-         C_TextToSpeech.Speak(UIThingsDB.misc.ttsMessage or "Personal order arrived")
+    -- TTS using correct API (only if enabled)
+    if UIThingsDB.misc.ttsEnabled then
+        local message = UIThingsDB.misc.ttsMessage or "Personal order arrived"
+        local voiceType = UIThingsDB.misc.ttsVoice or 0
+        
+        if TextToSpeech_Speak then
+            local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
+            pcall(function()
+                TextToSpeech_Speak(message, voiceID)
+            end)
+        elseif C_VoiceChat and C_VoiceChat.SpeakText then
+            pcall(function()
+                C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
+            end)
+        end
     end
     
     -- Hide after duration
@@ -39,6 +51,57 @@ local function ShowAlert()
     SafeAfter(duration, function()
         alertFrame:Hide()
     end)
+end
+
+-- Expose ShowAlert for test button
+function Misc.ShowAlert()
+    ShowAlert()
+end
+
+-- Expose for testing
+function Misc.TestTTS()
+    local message = UIThingsDB.misc.ttsMessage or "Personal order arrived"
+    local voiceType = UIThingsDB.misc.ttsVoice or 0
+    
+    print("|cFF00FF00[Luna TTS]|r Testing TTS with message: " .. message)
+    print("|cFF00FF00[Luna TTS]|r Voice type: " .. (voiceType == 0 and "Standard" or "Alternate 1"))
+    
+    local success = false
+    
+    -- Method 1: Try TextToSpeech_Speak (global function)
+    if TextToSpeech_Speak then
+        local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
+        print("|cFF00FF00[Luna TTS]|r Using TextToSpeech_Speak with voice ID: " .. tostring(voiceID))
+        local result = pcall(function()
+            TextToSpeech_Speak(message, voiceID)
+        end)
+        if result then
+            success = true
+            print("|cFF00FF00[Luna TTS]|r TextToSpeech_Speak called successfully")
+        else
+            print("|cFFFF0000[Luna TTS]|r TextToSpeech_Speak failed")
+        end
+    else
+        print("|cFFFFAA00[Luna TTS]|r TextToSpeech_Speak not available")
+    end
+    
+    -- Method 2: Try C_VoiceChat.SpeakText
+    if not success and C_VoiceChat and C_VoiceChat.SpeakText then
+        print("|cFF00FF00[Luna TTS]|r Trying C_VoiceChat.SpeakText")
+        local result = pcall(function()
+            C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
+        end)
+        if result then
+            success = true
+            print("|cFF00FF00[Luna TTS]|r C_VoiceChat.SpeakText called successfully")
+        else
+            print("|cFFFF0000[Luna TTS]|r C_VoiceChat.SpeakText failed")
+        end
+    end
+    
+    if not success then
+        print("|cFFFF0000[Luna TTS]|r No TTS API available. Enable TTS in System > Accessibility > Text-To-Speech")
+    end
 end
 
 -- == AH FILTER ==

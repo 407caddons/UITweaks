@@ -1829,24 +1829,9 @@ function addonTable.Config.Initialize()
                 UIThingsDB.misc.personalOrders = self:GetChecked()
             end)
 
-            -- TTS Message
-            local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            ttsLabel:SetPoint("TOPLEFT", 40, -220)
-            ttsLabel:SetText("TTS Message:")
-            
-            local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-            ttsEdit:SetSize(250, 20)
-            ttsEdit:SetPoint("LEFT", ttsLabel, "RIGHT", 10, 0)
-            ttsEdit:SetAutoFocus(false)
-            ttsEdit:SetText(UIThingsDB.misc.ttsMessage)
-            ttsEdit:SetScript("OnEnterPressed", function(self)
-                UIThingsDB.misc.ttsMessage = self:GetText()
-                self:ClearFocus()
-            end)
-            
             -- Alert Duration Slider
             local durSlider = CreateFrame("Slider", "UIThingsMiscAlertDur", panel, "OptionsSliderTemplate")
-            durSlider:SetPoint("TOPLEFT", 40, -260)
+            durSlider:SetPoint("TOPLEFT", 40, -220)
             durSlider:SetMinMaxValues(1, 10)
             durSlider:SetValueStep(1)
             durSlider:SetObeyStepOnDrag(true)
@@ -1863,7 +1848,7 @@ function addonTable.Config.Initialize()
             
             -- Alert Color Picker
             local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            colorLabel:SetPoint("TOPLEFT", 40, -300)
+            colorLabel:SetPoint("TOPLEFT", 40, -260)
             colorLabel:SetText("Alert Color:")
             
             local colorSwatch = CreateFrame("Button", nil, panel)
@@ -1907,7 +1892,7 @@ function addonTable.Config.Initialize()
                         end
                     })
                 else
-                    -- Fallback for older APIs if needed
+                    -- Fallback for older APIs
                     ColorPickerFrame:SetColorRGB(c.r, c.g, c.b)
                     ColorPickerFrame.hasOpacity = true
                     ColorPickerFrame.opacity = c.a
@@ -1921,6 +1906,78 @@ function addonTable.Config.Initialize()
                     ColorPickerFrame:Show()
                 end
             end)
+
+            -- TTS Section Header
+            local ttsHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            ttsHeader:SetPoint("TOPLEFT", 20, -310)
+            ttsHeader:SetText("Text-To-Speech")
+
+            -- TTS Enable Checkbox
+            local ttsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscTTSEnable", panel, "ChatConfigCheckButtonTemplate")
+            ttsEnableBtn:SetPoint("TOPLEFT", 20, -340)
+            _G[ttsEnableBtn:GetName().."Text"]:SetText("Enable Text-To-Speech")
+            ttsEnableBtn:SetChecked(UIThingsDB.misc.ttsEnabled)
+            ttsEnableBtn:SetScript("OnClick", function(self)
+                UIThingsDB.misc.ttsEnabled = self:GetChecked()
+            end)
+
+            -- TTS Message
+            local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            ttsLabel:SetPoint("TOPLEFT", 40, -380)
+            ttsLabel:SetText("TTS Message:")
+            
+            local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+            ttsEdit:SetSize(250, 20)
+            ttsEdit:SetPoint("LEFT", ttsLabel, "RIGHT", 10, 0)
+            ttsEdit:SetAutoFocus(false)
+            ttsEdit:SetText(UIThingsDB.misc.ttsMessage)
+            ttsEdit:SetScript("OnEnterPressed", function(self)
+                UIThingsDB.misc.ttsMessage = self:GetText()
+                self:ClearFocus()
+            end)
+            
+            -- Test Button (shows full alert)
+            local testTTSBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+            testTTSBtn:SetSize(60, 22)
+            testTTSBtn:SetPoint("LEFT", ttsEdit, "RIGHT", 5, 0)
+            testTTSBtn:SetText("Test")
+            testTTSBtn:SetScript("OnClick", function()
+                -- Save current text first
+                UIThingsDB.misc.ttsMessage = ttsEdit:GetText()
+                -- Show full alert (banner + TTS)
+                if addonTable.Misc and addonTable.Misc.ShowAlert then
+                    addonTable.Misc.ShowAlert()
+                end
+            end)
+
+            -- TTS Voice Dropdown
+            local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            voiceLabel:SetPoint("TOPLEFT", 40, -420)
+            voiceLabel:SetText("Voice Type:")
+            
+            local voiceDropdown = CreateFrame("Frame", "UIThingsMiscVoiceDropdown", panel, "UIDropDownMenuTemplate")
+            voiceDropdown:SetPoint("LEFT", voiceLabel, "RIGHT", -15, -3)
+            
+            local voiceOptions = {
+                {text = "Standard", value = 0},
+                {text = "Alternate 1", value = 1}
+            }
+            
+            UIDropDownMenu_SetWidth(voiceDropdown, 120)
+            UIDropDownMenu_Initialize(voiceDropdown, function(self, level)
+                for _, option in ipairs(voiceOptions) do
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = option.text
+                    info.value = option.value
+                    info.func = function(btn)
+                        UIThingsDB.misc.ttsVoice = btn.value
+                        UIDropDownMenu_SetSelectedValue(voiceDropdown, btn.value)
+                    end
+                    info.checked = (UIThingsDB.misc.ttsVoice == option.value)
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end)
+            UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
         end
         SetupMiscPanel()
     end

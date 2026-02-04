@@ -145,7 +145,9 @@ local function OnEvent(self, event, ...)
                 enabled = false,
                 ahFilter = false,
                 personalOrders = false,
+                ttsEnabled = true,
                 ttsMessage = "Personal order arrived",
+                ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
                 alertDuration = 5,
                 alertColor = {r=1, g=0, b=0, a=1}
             }
