@@ -179,6 +179,9 @@ function addonTable.Config.Initialize()
         configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5, tab6, tab7}
         PanelTemplates_SetNumTabs(configWindow, 7)
         PanelTemplates_SetTab(configWindow, 1)
+        
+        -- Store reference to refresh function that will be defined later
+        local refreshTalentReminderList = nil
 
         local function TabOnClick(self)
              PanelTemplates_SetTab(configWindow, self:GetID())
@@ -197,7 +200,12 @@ function addonTable.Config.Initialize()
              elseif id == 4 then framesPanel:Show()
              elseif id == 5 then lootPanel:Show()
              elseif id == 6 then miscPanel:Show()
-             elseif id == 7 then talentPanel:Show()
+             elseif id == 7 then 
+                 talentPanel:Show()
+                 -- Refresh the reminder list when showing the talent tab
+                 if refreshTalentReminderList then
+                     refreshTalentReminderList()
+                 end
              end
         end
 
@@ -2196,6 +2204,9 @@ function addonTable.Config.Initialize()
                 reminderListText:SetText(text)
             end
         end
+        
+        -- Assign to upvalue so TabOnClick can access it
+        refreshTalentReminderList = RefreshReminderList
         
         RefreshReminderList()
         
