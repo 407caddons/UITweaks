@@ -505,6 +505,17 @@ function addonTable.Config.Initialize()
             UIThingsDB.tracker.onlyActiveWorldQuests = self:GetChecked()
             UpdateTracker()
         end)
+        
+        -- Show World Quest Timer Checkbox
+        local wqTimerCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQTimerCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        wqTimerCheckbox:SetPoint("TOPLEFT", 20, -425)
+        wqTimerCheckbox:SetHitRectInsets(0, -130, 0, 0)
+        _G[wqTimerCheckbox:GetName().."Text"]:SetText("Show World Quest Timer")
+        wqTimerCheckbox:SetChecked(UIThingsDB.tracker.showWorldQuestTimer)
+        wqTimerCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.tracker.showWorldQuestTimer = self:GetChecked()
+            UpdateTracker()
+        end)
 
         -------------------------------------------------------------
         -- SECTION: Behavior

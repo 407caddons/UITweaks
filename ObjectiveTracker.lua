@@ -341,11 +341,68 @@ local function UpdateContent()
         local otherWQs = {}        -- All other available ones
         local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
         
+        -- Get Super Tracked ID
+        local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+
+        local function GetTimeLeftString(questID)
+            local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
+            if timeLeftMinutes and timeLeftMinutes > 0 then
+                local days = math.floor(timeLeftMinutes / 1440)
+                local hours = math.floor((timeLeftMinutes % 1440) / 60)
+                local minutes = timeLeftMinutes % 60
+                
+                if days > 0 then
+                    return string.format(" (%dd %dh)", days, hours) 
+                elseif hours > 0 then
+                    return string.format(" (%dh %dm)", hours, minutes)
+                else
+                    return string.format(" (%dm)", minutes)
+                end
+            end
+            return ""
+        end
+        
+        -- Helper Render Function
+        local function RenderSingleWQ(questID)
+             if not displayedIDs[questID] then
+                 local title = C_QuestLog.GetTitleForQuestID(questID)
+                 if title then
+                    if UIThingsDB.tracker.showWorldQuestTimer then
+                        title = title .. GetTimeLeftString(questID)
+                    end
+                    
+                    local color = nil
+                    if questID == superTrackedQuestID then
+                        color = UIThingsDB.tracker.activeQuestColor
+                    end
+                    
+                    AddLine(title, false, questID, nil, false, color)
+                    displayedIDs[questID] = true
+                    
+                    local objectives = C_QuestLog.GetQuestObjectives(questID)
+                    if objectives then
+                        for _, obj in pairs(objectives) do
+                            local objText = obj.text
+                            if objText and objText ~= "" then
+                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                AddLine(objText, false, nil, nil, true)
+                            end
+                        end
+                    end
+                    yOffset = yOffset - 5
+                 end
+             end
+        end
+        
+        local validWQs = {}
+        
         if tasks then
             for _, info in ipairs(tasks) do
                 local questID = info.questID
                 -- Check availability
                 if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
+                    validWQs[questID] = true
+                    
                     local isActive = C_QuestLog.IsOnQuest(questID)
                     
                     if onlyActive then
@@ -374,51 +431,19 @@ local function UpdateContent()
                  return
             end
             
-            -- Render Active Ones First (Highlighted)
-            for _, questID in ipairs(activeWQs) do
-                if not displayedIDs[questID] then
-                    local title = C_QuestLog.GetTitleForQuestID(questID)
-                    if title then
-                        -- Apply Active Quest Color
-                        AddLine(title, false, questID, nil, false, UIThingsDB.tracker.activeQuestColor)
-                        displayedIDs[questID] = true
-                        
-                        local objectives = C_QuestLog.GetQuestObjectives(questID)
-                        if objectives then
-                            for _, obj in pairs(objectives) do
-                                local objText = obj.text
-                                if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                    AddLine(objText, false, nil, nil, true)
-                                end
-                            end
-                        end
-                        yOffset = yOffset - 5
-                    end
-                end
+            -- 1. Render Super Tracked First (if it matches a valid WQ on this map)
+            if superTrackedQuestID and validWQs[superTrackedQuestID] then
+                RenderSingleWQ(superTrackedQuestID)
             end
             
-            -- Render Others (Normal)
+            -- 2. Render Active Ones
+            for _, questID in ipairs(activeWQs) do
+                RenderSingleWQ(questID)
+            end
+            
+            -- 3. Render Others
             for _, questID in ipairs(otherWQs) do
-                if not displayedIDs[questID] then
-                    local title = C_QuestLog.GetTitleForQuestID(questID)
-                    if title then
-                        AddLine(title, false, questID, nil, false, nil)
-                        displayedIDs[questID] = true
-                        
-                        local objectives = C_QuestLog.GetQuestObjectives(questID)
-                        if objectives then
-                            for _, obj in pairs(objectives) do
-                                local objText = obj.text
-                                if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                    AddLine(objText, false, nil, nil, true)
-                                end
-                            end
-                        end
-                        yOffset = yOffset - 5
-                    end
-                end
+                RenderSingleWQ(questID)
             end
             
             yOffset = yOffset - 10
@@ -646,6 +671,8 @@ local function SetupCustomTracker()
     trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
     trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
+    trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    trackerFrame:RegisterEvent("ZONE_CHANGED")
     
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
