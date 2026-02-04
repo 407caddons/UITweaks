@@ -254,10 +254,18 @@ function TalentReminder.CreateSnapshot()
         local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
         if nodeInfo and nodeInfo.activeEntry then
             local entryInfo = C_Traits.GetEntryInfo(configID, nodeInfo.activeEntry.entryID)
-            local definitionInfo = entryInfo and C_Traits.GetDefinitionInfo(entryInfo.definitionID)
+            
+            -- Get talent name from the definition
+            local talentName = "Unknown Talent"
+            if entryInfo and entryInfo.definitionID then
+                local definitionInfo = C_Traits.GetDefinitionInfo(configID, entryInfo.definitionID)
+                if definitionInfo and definitionInfo.overrideName then
+                    talentName = definitionInfo.overrideName
+                end
+            end
             
             snapshot[nodeID] = {
-                name = definitionInfo and definitionInfo.overrideName or "Unknown Talent",
+                name = talentName,
                 entryID = nodeInfo.activeEntry.entryID,
                 rank = nodeInfo.currentRank or 0,
                 row = nodeInfo.posY or 0
