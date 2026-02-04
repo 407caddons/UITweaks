@@ -29,3 +29,4 @@ Loot.lua
 CombatTimer.lua
 Misc.lua
 Frames.lua
+TalentReminder.lua

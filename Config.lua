@@ -136,6 +136,10 @@ function addonTable.Config.Initialize()
         miscPanel:SetAllPoints()
         miscPanel:Hide()
 
+        local talentPanel = CreateFrame("Frame", nil, configWindow)
+        talentPanel:SetAllPoints()
+        talentPanel:Hide()
+
         -- Tab Buttons
         local tab1 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
         tab1:SetPoint("BOTTOMLEFT", configWindow, "BOTTOMLEFT", 10, -30)
@@ -167,8 +171,13 @@ function addonTable.Config.Initialize()
         tab6:SetText("Misc")
         tab6:SetID(6)
 
-        configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5, tab6}
-        PanelTemplates_SetNumTabs(configWindow, 6)
+        local tab7 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
+        tab7:SetPoint("LEFT", tab6, "RIGHT", 5, 0)
+        tab7:SetText("Talents")
+        tab7:SetID(7)
+
+        configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5, tab6, tab7}
+        PanelTemplates_SetNumTabs(configWindow, 7)
         PanelTemplates_SetTab(configWindow, 1)
 
         local function TabOnClick(self)
@@ -179,6 +188,7 @@ function addonTable.Config.Initialize()
              framesPanel:Hide()
              lootPanel:Hide()
              miscPanel:Hide()
+             talentPanel:Hide()
              
              local id = self:GetID()
              if id == 1 then trackerPanel:Show()
@@ -187,6 +197,7 @@ function addonTable.Config.Initialize()
              elseif id == 4 then framesPanel:Show()
              elseif id == 5 then lootPanel:Show()
              elseif id == 6 then miscPanel:Show()
+             elseif id == 7 then talentPanel:Show()
              end
         end
 
@@ -196,6 +207,7 @@ function addonTable.Config.Initialize()
         tab4:SetScript("OnClick", TabOnClick)
         tab5:SetScript("OnClick", TabOnClick)
         tab6:SetScript("OnClick", TabOnClick)
+        tab7:SetScript("OnClick", TabOnClick)
 
         -------------------------------------------------------------
         -- TRACKER PANEL CONTENT
@@ -1980,6 +1992,286 @@ function addonTable.Config.Initialize()
             UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
         end
         SetupMiscPanel()
+        
+        -------------------------------------------------------------
+        -- TALENT REMINDERS PANEL CONTENT
+        -------------------------------------------------------------
+        
+        local talentTitle = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        talentTitle:SetPoint("TOPLEFT", 16, -16)
+        talentTitle:SetText("Talent Reminders")
+        
+        -- Enable Checkbox
+        local enableTalentBtn = CreateFrame("CheckButton", "UIThingsTalentEnableCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+        enableTalentBtn:SetPoint("TOPLEFT", 20, -50)
+        _G[enableTalentBtn:GetName() .. "Text"]:SetText("Enable Talent Reminders")
+        enableTalentBtn:SetChecked(UIThingsDB.talentReminders.enabled)
+        enableTalentBtn:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.enabled = not not self:GetChecked()
+        end)
+        
+        -- Alert Settings Section
+        CreateSectionHeader(talentPanel, "Alert Settings", -80)
+        
+        local showPopupCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        showPopupCheck:SetPoint("TOPLEFT", 20, -105)
+        _G[showPopupCheck:GetName() .. "Text"]:SetText("Show Popup Alert")
+        showPopupCheck:SetChecked(UIThingsDB.talentReminders.showPopup)
+        showPopupCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.showPopup = not not self:GetChecked()
+        end)
+        
+        local showChatCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        showChatCheck:SetPoint("TOPLEFT", 200, -105)
+        _G[showChatCheck:GetName() .. "Text"]:SetText("Show Chat Message")
+        showChatCheck:SetChecked(UIThingsDB.talentReminders.showChatMessage)
+        showChatCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.showChatMessage = not not self:GetChecked()
+        end)
+        
+        local playSoundCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        playSoundCheck:SetPoint("TOPLEFT", 20, -130)
+        _G[playSoundCheck:GetName() .. "Text"]:SetText("Play Sound")
+        playSoundCheck:SetChecked(UIThingsDB.talentReminders.playSound)
+        playSoundCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.playSound = not not self:GetChecked()
+        end)
+        
+        local useTTSCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        useTTSCheck:SetPoint("TOPLEFT", 200, -130)
+        _G[useTTSCheck:GetName() .. "Text"]:SetText("Use TTS Announcement")
+        useTTSCheck:SetChecked(UIThingsDB.talentReminders.useTTS)
+        useTTSCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.useTTS = not not self:GetChecked()
+        end)
+        
+        -- TTS Volume Slider
+        local ttsVolumeSlider = CreateFrame("Slider", "UIThingsTalentTTSVolumeSlider", talentPanel, "OptionsSliderTemplate")
+        ttsVolumeSlider:SetPoint("TOPLEFT", 40, -165)
+        ttsVolumeSlider:SetMinMaxValues(0, 1)
+        ttsVolumeSlider:SetValueStep(0.1)
+        ttsVolumeSlider:SetObeyStepOnDrag(true)
+        ttsVolumeSlider:SetWidth(150)
+        _G[ttsVolumeSlider:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f", UIThingsDB.talentReminders.ttsVolume))
+        _G[ttsVolumeSlider:GetName() .. 'Low']:SetText("0")
+        _G[ttsVolumeSlider:GetName() .. 'High']:SetText("1")
+        ttsVolumeSlider:SetValue(UIThingsDB.talentReminders.ttsVolume)
+        ttsVolumeSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value * 10) / 10
+            UIThingsDB.talentReminders.ttsVolume = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f", value))
+        end)
+        
+        -- Difficulty Filter Section
+        CreateSectionHeader(talentPanel, "Alert Only On These Difficulties", -200)
+        
+        -- Dungeons
+        local dungeonLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        dungeonLabel:SetPoint("TOPLEFT", 20, -225)
+        dungeonLabel:SetText("Dungeons:")
+        
+        local dNormalCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        dNormalCheck:SetPoint("TOPLEFT", 100, -225)
+        _G[dNormalCheck:GetName() .. "Text"]:SetText("Normal")
+        dNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal)
+        dNormalCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal = not not self:GetChecked()
+        end)
+        
+        local dHeroicCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        dHeroicCheck:SetPoint("LEFT", dNormalCheck, "RIGHT", 70, 0)
+        _G[dHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
+        dHeroicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic)
+        dHeroicCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic = not not self:GetChecked()
+        end)
+        
+        local dMythicCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        dMythicCheck:SetPoint("LEFT", dHeroicCheck, "RIGHT", 70, 0)
+        _G[dMythicCheck:GetName() .. "Text"]:SetText("Mythic")
+        dMythicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic)
+        dMythicCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic = not not self:GetChecked()
+        end)
+        
+        local dMPlusCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        dMPlusCheck:SetPoint("TOPLEFT", 100, -250)
+        _G[dMPlusCheck:GetName() .. "Text"]:SetText("Mythic+")
+        dMPlusCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.mythicPlus)
+        dMPlusCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.mythicPlus = not not self:GetChecked()
+        end)
+        
+        -- M+ Min Level Slider
+        local mplusMinSlider = CreateFrame("Slider", "UIThingsTalentMPlusMinSlider", talentPanel, "OptionsSliderTemplate")
+        mplusMinSlider:SetPoint("LEFT", dMPlusCheck, "RIGHT", 80, 0)
+        mplusMinSlider:SetMinMaxValues(0, 50)
+        mplusMinSlider:SetValueStep(1)
+        mplusMinSlider:SetObeyStepOnDrag(true)
+        mplusMinSlider:SetWidth(120)
+        _G[mplusMinSlider:GetName() .. 'Text']:SetText(string.format("Min Level: %d", UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel))
+        _G[mplusMinSlider:GetName() .. 'Low']:SetText("0")
+        _G[mplusMinSlider:GetName() .. 'High']:SetText("50")
+        mplusMinSlider:SetValue(UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel)
+        mplusMinSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.talentReminders.alertOnDifficulties.mythicPlusMinLevel = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Min Level: %d", value))
+        end)
+        
+        -- Raids
+        local raidLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        raidLabel:SetPoint("TOPLEFT", 20, -285)
+        raidLabel:SetText("Raids:")
+        
+        local rLFRCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        rLFRCheck:SetPoint("TOPLEFT", 100, -285)
+        _G[rLFRCheck:GetName() .. "Text"]:SetText("LFR")
+        rLFRCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidLFR)
+        rLFRCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.raidLFR = not not self:GetChecked()
+        end)
+        
+        local rNormalCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        rNormalCheck:SetPoint("LEFT", rLFRCheck, "RIGHT", 50, 0)
+        _G[rNormalCheck:GetName() .. "Text"]:SetText("Normal")
+        rNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidNormal)
+        rNormalCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.raidNormal = not not self:GetChecked()
+        end)
+        
+        local rHeroicCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        rHeroicCheck:SetPoint("LEFT", rNormalCheck, "RIGHT", 70, 0)
+        _G[rHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
+        rHeroicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic)
+        rHeroicCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic = not not self:GetChecked()
+        end)
+        
+        local rMythicCheck = CreateFrame("CheckButton", nil, talentPanel, "ChatConfigCheckButtonTemplate")
+        rMythicCheck:SetPoint("LEFT", rHeroicCheck, "RIGHT", 70, 0)
+        _G[rMythicCheck:GetName() .. "Text"]:SetText("Mythic")
+        rMythicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidMythic)
+        rMythicCheck:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.alertOnDifficulties.raidMythic = not not self:GetChecked()
+        end)
+        
+        -- Reminders Section
+        CreateSectionHeader(talentPanel, "Saved Reminders", -320)
+        
+        -- Reminder List (Scroll Frame)
+        local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", talentPanel, "UIPanelScrollFrameTemplate")
+        reminderScrollFrame:SetSize(540, 220)
+        reminderScrollFrame:SetPoint("TOPLEFT", 20, -345)
+        
+        local reminderContent = CreateFrame("Frame", nil, reminderScrollFrame)
+        reminderContent:SetSize(520, 220)
+        reminderScrollFrame:SetScrollChild(reminderContent)
+        
+        -- Reminder list text
+        local reminderListText = reminderContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        reminderListText:SetPoint("TOPLEFT", 5, -5)
+        reminderListText:SetWidth(500)
+        reminderListText:SetJustifyH("LEFT")
+        reminderListText:SetText("|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
+        
+        -- Refresh reminder list function
+        local function RefreshReminderList()
+            local text = ""
+            local count = 0
+            
+            if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
+                for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
+                    for diffID, diffReminders in pairs(reminders) do
+                        for bossID, reminder in pairs(diffReminders) do             count = count + 1
+                            text = text .. string.format("|cFFFFAA00%s|r\n", reminder.name)
+                            if reminder.note and reminder.note ~= "" then
+                                text = text .. string.format("  Note: %s\n", reminder.note)
+                            end
+                            text = text .. string.format("  Instance: %s | Diff: %s\n", reminder.instanceName or "Unknown", reminder.difficulty or "Unknown")
+                            text = text .. "\n"
+                        end
+                    end
+                end
+            end
+            
+            if count == 0 then
+                reminderListText:SetText("|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
+            else
+                reminderListText:SetText(text)
+            end
+        end
+        
+        RefreshReminderList()
+        
+        -- Snapshot Button
+        local snapshotBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
+        snapshotBtn:SetSize(200, 30)
+        snapshotBtn:SetPoint("BOTTOMLEFT", 20, 10)
+        snapshotBtn:SetText("Snapshot Current Talents")
+        snapshotBtn:SetNormalFontObject("GameFontNormal")
+        snapshotBtn:SetHighlightFontObject("GameFontHighlight")
+        snapshotBtn:SetScript("OnClick", function(self)
+            if not addonTable.TalentReminder then
+                print("|cFFFF0000[LunaUITweaks]|r TalentReminder module not loaded!")
+                return
+            end
+            
+            local location = addonTable.TalentReminder.GetCurrentLocation()
+            if not location or location.instanceID == 0 then
+                print("|cFFFF0000[LunaUITweaks]|r You must be inside an instance to create a reminder!")
+                return
+            end
+            
+            -- For now, save as "general" - in future we can add boss detection
+            local bossID = "general"
+            local name = string.format("%s (%s)", location.instanceName, location.difficultyName)
+            
+            local success, err, count = addonTable.TalentReminder.SaveReminder(
+                location.instanceID,
+                location.difficultyID,
+                bossID,
+                name,
+                location.instanceName,
+                location.difficultyName,
+                "" -- Note (could add edit box for this)
+            )
+            
+            if success then
+                print(string.format("|cFF00FF00[LunaUITweaks]|r Saved talent reminder for %s (%d talents)", name, count))
+                RefreshReminderList()
+            else
+                print("|cFFFF0000[LunaUITweaks]|r Failed to create snapshot: " .. tostring(err))
+            end
+        end)
+        
+        -- Clear All Button
+        local clearBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
+        clearBtn:SetSize(120, 30)
+        clearBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
+        clearBtn:SetText("Clear All")
+        clearBtn:SetNormalFontObject("GameFontNormal")
+        clearBtn:SetHighlightFontObject("GameFontHighlight")
+        clearBtn:SetScript("OnClick", function(self)
+            StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM")
+        end)
+        
+        -- Confirmation dialog for clear all
+        StaticPopupDialogs["LUNA_TALENT_CLEAR_CONFIRM"] = {
+            text = "Are you sure you want to delete ALL talent reminders?",
+            button1 = "Yes",
+            button2 = "No",
+            OnAccept = function()
+                if LunaUITweaks_TalentReminders then
+                    LunaUITweaks_TalentReminders.reminders = {}
+                    print("|cFF00FF00[LunaUITweaks]|r All talent reminders cleared!")
+                    RefreshReminderList()
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+        }
     end
 end
 

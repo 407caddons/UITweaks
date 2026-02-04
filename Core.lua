@@ -150,6 +150,25 @@ local function OnEvent(self, event, ...)
                 ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
                 alertDuration = 5,
                 alertColor = {r=1, g=0, b=0, a=1}
+            },
+            talentReminders = {
+                enabled = true,
+                alertOnDifficulties = {
+                    dungeonNormal = false,
+                    dungeonHeroic = false,
+                    dungeonMythic = false,
+                    mythicPlus = true,
+                    mythicPlusMinLevel = 10,
+                    raidLFR = false,
+                    raidNormal = false,
+                    raidHeroic = true,
+                    raidMythic = true
+                },
+                playSound = true,
+                useTTS = true,
+                ttsVolume = 1.0,
+                showPopup = true,
+                showChatMessage = true
             }
         }
         
@@ -170,6 +189,10 @@ local function OnEvent(self, event, ...)
 
         if addonTable.Frames and addonTable.Frames.Initialize then
             addonTable.Frames.Initialize()
+        end
+        
+        if addonTable.TalentReminder and addonTable.TalentReminder.Initialize then
+            addonTable.TalentReminder.Initialize()
         end
         
         -- Slash Commands
