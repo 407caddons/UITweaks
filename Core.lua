@@ -4,6 +4,9 @@ _G[addonName] = addonTable
 addonTable.Core = {}
 
 -- Centralized Safe Timer Wrapper
+--- Safely executes a function after a delay using C_Timer
+-- @param delay number Delay in seconds
+-- @param func function Function to execute
 function addonTable.Core.SafeAfter(delay, func)
     if not func then
         print("UIThings: SafeAfter called with nil function")
@@ -14,92 +17,145 @@ function addonTable.Core.SafeAfter(delay, func)
     end
 end
 
+--- Recursively applies default values to a settings table
+-- Only sets values that are currently nil (preserves existing user settings)
+-- @param db table The settings table to populate
+-- @param defaults table The default values to apply
+local function ApplyDefaults(db, defaults)
+    for key, value in pairs(defaults) do
+        if type(value) == "table" and not value.r then -- Not a color table
+            db[key] = db[key] or {}
+            ApplyDefaults(db[key], value)
+        elseif db[key] == nil then
+            db[key] = value
+        end
+    end
+end
+
+-- Logging System
+addonTable.Core.LogLevel = {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3
+}
+
+addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.INFO
+
+--- Centralized logging function
+-- @param module string Module name (e.g., "Tracker", "Vendor")
+-- @param msg string Message to log
+-- @param level number Optional. Log level (default: INFO)
+function addonTable.Core.Log(module, msg, level)
+    level = level or addonTable.Core.LogLevel.INFO
+    if level < addonTable.Core.currentLogLevel then return end
+    
+    local colors = {
+        [0] = "888888", -- DEBUG (gray)
+        [1] = "00FF00", -- INFO (green)
+        [2] = "FFFF00", -- WARN (yellow)
+        [3] = "FF0000"  -- ERROR (red)
+    }
+    
+    local prefix = string.format("|cFF%s[Luna %s]|r", colors[level] or "FFFFFF", module or "Core")
+    print(prefix .. " " .. tostring(msg))
+end
+
+--- Event handler for ADDON_LOADED
+-- Initializes saved variables with defaults and modules
+-- @param self frame The event frame
+-- @param event string The event name
 local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" and ... == addonName then
         UIThingsDB = UIThingsDB or {}
-        UIThingsDB.tracker = UIThingsDB.tracker or {}
         
-        -- Safe Default Defaults
-        if UIThingsDB.tracker.locked == nil then UIThingsDB.tracker.locked = true end
-        if UIThingsDB.tracker.enabled == nil then UIThingsDB.tracker.enabled = false end
-        if not UIThingsDB.tracker.width then UIThingsDB.tracker.width = 300 end
-        if not UIThingsDB.tracker.height then UIThingsDB.tracker.height = 500 end
-        if not UIThingsDB.tracker.font then UIThingsDB.tracker.font = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.tracker.fontSize then UIThingsDB.tracker.fontSize = 12 end
-        -- Specific Fonts
-        if not UIThingsDB.tracker.headerFont then UIThingsDB.tracker.headerFont = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.tracker.headerFontSize then UIThingsDB.tracker.headerFontSize = 14 end
-        if not UIThingsDB.tracker.detailFont then UIThingsDB.tracker.detailFont = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.tracker.detailFontSize then UIThingsDB.tracker.detailFontSize = 12 end
-        if not UIThingsDB.tracker.questPadding then UIThingsDB.tracker.questPadding = 2 end
-        if not UIThingsDB.tracker.sectionOrder then UIThingsDB.tracker.sectionOrder = 1 end -- Default: WQ, Quests, Ach
-        if not UIThingsDB.tracker.onlyActiveWorldQuests then UIThingsDB.tracker.onlyActiveWorldQuests = false end
-        if not UIThingsDB.tracker.activeQuestColor then UIThingsDB.tracker.activeQuestColor = {r=0, g=1, b=0, a=1} end
-        if not UIThingsDB.tracker.x then UIThingsDB.tracker.x = -20 end
-        if not UIThingsDB.tracker.y then UIThingsDB.tracker.y = -250 end
-        if not UIThingsDB.tracker.point then UIThingsDB.tracker.point = "TOPRIGHT" end
-        if UIThingsDB.tracker.showBorder == nil then UIThingsDB.tracker.showBorder = false end
-        if not UIThingsDB.tracker.borderColor then UIThingsDB.tracker.borderColor = {r=0, g=0, b=0, a=1} end
-        if UIThingsDB.tracker.showBackground == nil then UIThingsDB.tracker.showBackground = false end
-        if UIThingsDB.tracker.hideInCombat == nil then UIThingsDB.tracker.hideInCombat = false end
-        if UIThingsDB.tracker.hideInMPlus == nil then UIThingsDB.tracker.hideInMPlus = false end
-        if UIThingsDB.tracker.autoTrackQuests == nil then UIThingsDB.tracker.autoTrackQuests = false end
-        if UIThingsDB.tracker.rightClickSuperTrack == nil then UIThingsDB.tracker.rightClickSuperTrack = true end
-        if UIThingsDB.tracker.shiftClickUntrack == nil then UIThingsDB.tracker.shiftClickUntrack = true end
-        if not UIThingsDB.tracker.backgroundColor then UIThingsDB.tracker.backgroundColor = {r=0, g=0, b=0, a=0.5} end
-        if not UIThingsDB.tracker.strata then UIThingsDB.tracker.strata = "LOW" end
-
-        UIThingsDB.minimap = UIThingsDB.minimap or { angle = 45 }
-
-        UIThingsDB.vendor = UIThingsDB.vendor or {}
-        if UIThingsDB.vendor.enabled == nil then UIThingsDB.vendor.enabled = false end
-        if UIThingsDB.vendor.autoRepair == nil then UIThingsDB.vendor.autoRepair = true end
-        if UIThingsDB.vendor.useGuildRepair == nil then UIThingsDB.vendor.useGuildRepair = false end
-        if UIThingsDB.vendor.sellGreys == nil then UIThingsDB.vendor.sellGreys = true end
-        if not UIThingsDB.vendor.repairThreshold then UIThingsDB.vendor.repairThreshold = 20 end
-        if not UIThingsDB.vendor.font then UIThingsDB.vendor.font = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.vendor.fontSize then UIThingsDB.vendor.fontSize = 24 end
-        if UIThingsDB.vendor.warningLocked == nil then UIThingsDB.vendor.warningLocked = true end
-        if not UIThingsDB.vendor.warningPos then UIThingsDB.vendor.warningPos = {point="TOP", x=0, y=-150} end
-
-        -- Loot Defaults
-        UIThingsDB.loot = UIThingsDB.loot or {}
-        if UIThingsDB.loot.enabled == nil then UIThingsDB.loot.enabled = false end
-        if UIThingsDB.loot.growUp == nil then UIThingsDB.loot.growUp = true end
-        if UIThingsDB.loot.fasterLoot == nil then UIThingsDB.loot.fasterLoot = false end
-        if not UIThingsDB.loot.fasterLootDelay then UIThingsDB.loot.fasterLootDelay = 0.3 end
-        if not UIThingsDB.loot.duration then UIThingsDB.loot.duration = 3 end
-        if not UIThingsDB.loot.minQuality then UIThingsDB.loot.minQuality = 1 end -- 0=Grey, 1=White...
-        if not UIThingsDB.loot.font then UIThingsDB.loot.font = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.loot.fontSize then UIThingsDB.loot.fontSize = 14 end
-        if not UIThingsDB.loot.iconSize then UIThingsDB.loot.iconSize = 32 end
-        -- NOTE: Anchor default can be nil initially, handled in Loot.lua or Config
-        if not UIThingsDB.loot.anchor then UIThingsDB.loot.anchor = {point="CENTER", x=0, y=200} end
-
-        UIThingsDB.combat = UIThingsDB.combat or {}
-        if UIThingsDB.combat.enabled == nil then UIThingsDB.combat.enabled = false end
-        if UIThingsDB.combat.locked == nil then UIThingsDB.combat.locked = true end
-        if not UIThingsDB.combat.font then UIThingsDB.combat.font = "Fonts\\FRIZQT__.TTF" end
-        if not UIThingsDB.combat.fontSize then UIThingsDB.combat.fontSize = 18 end
-        if not UIThingsDB.combat.colorInCombat then UIThingsDB.combat.colorInCombat = {r=1, g=1, b=1} end
-        if not UIThingsDB.combat.colorOutCombat then UIThingsDB.combat.colorOutCombat = {r=0.5, g=0.5, b=0.5} end
-        if not UIThingsDB.combat.pos then UIThingsDB.combat.pos = {point="CENTER", x=0, y=0} end
+        -- Default Settings Table
+        local DEFAULTS = {
+            tracker = {
+                locked = true,
+                enabled = false,
+                width = 300,
+                height = 500,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 12,
+                headerFont = "Fonts\\FRIZQT__.TTF",
+                headerFontSize = 14,
+                detailFont = "Fonts\\FRIZQT__.TTF",
+                detailFontSize = 12,
+                questPadding = 2,
+                sectionOrder = 1, -- 1=WQ/Quests/Ach, 2=Quests/WQ/Ach, etc
+                onlyActiveWorldQuests = false,
+                activeQuestColor = {r=0, g=1, b=0, a=1},
+                x = -20,
+                y = -250,
+                point = "TOPRIGHT",
+                showBorder = false,
+                borderColor = {r=0, g=0, b=0, a=1},
+                showBackground = false,
+                hideInCombat = false,
+                hideInMPlus = false,
+                autoTrackQuests = false,
+                rightClickSuperTrack = true,
+                shiftClickUntrack = true,
+                backgroundColor = {r=0, g=0, b=0, a=0.5},
+                strata = "LOW",
+                showWorldQuestTimer = true,
+                collapsed = {}
+            },
+            minimap = {
+                angle = 45
+            },
+            vendor = {
+                enabled = false,
+                autoRepair = true,
+                useGuildRepair = false,
+                sellGreys = true,
+                repairThreshold = 20,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 24,
+                warningLocked = true,
+                warningPos = {point="TOP", x=0, y=-150}
+            },
+            loot = {
+                enabled = false,
+                growUp = true,
+                fasterLoot = false,
+                fasterLootDelay = 0.3,
+                duration = 3,
+                minQuality = 1,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 14,
+                iconSize = 32,
+                anchor = {point="CENTER", x=0, y=200}
+            },
+            combat = {
+                enabled = false,
+                locked = true,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 18,
+                colorInCombat = {r=1, g=1, b=1},
+                colorOutCombat = {r=0.5, g=0.5, b=0.5},
+                pos = {point="CENTER", x=0, y=0}
+            },
+            frames = {
+                enabled = false,
+                list = {}
+            },
+            misc = {
+                enabled = false,
+                ahFilter = false,
+                personalOrders = false,
+                ttsMessage = "Personal order arrived",
+                alertDuration = 5,
+                alertColor = {r=1, g=0, b=0, a=1}
+            }
+        }
         
-        -- Frames Defaults
-        UIThingsDB.frames = UIThingsDB.frames or {}
-        if UIThingsDB.frames.enabled == nil then UIThingsDB.frames.enabled = false end
-        if not UIThingsDB.frames.list then UIThingsDB.frames.list = {} end
+        -- Apply all defaults
+        ApplyDefaults(UIThingsDB, DEFAULTS)
         
-        print("|cFF00FF00Luna's UI Tweaks Loaded!|r")
+        addonTable.Core.Log("Core", "UI Tweaks Loaded!")
         self:UnregisterEvent("ADDON_LOADED")
-        -- Misc Defaults
-        UIThingsDB.misc = UIThingsDB.misc or {}
-        if UIThingsDB.misc.enabled == nil then UIThingsDB.misc.enabled = false end
-        if UIThingsDB.misc.ahFilter == nil then UIThingsDB.misc.ahFilter = false end
-        if UIThingsDB.misc.personalOrders == nil then UIThingsDB.misc.personalOrders = false end
-        if not UIThingsDB.misc.ttsMessage then UIThingsDB.misc.ttsMessage = "Personal order arrived" end
-        if not UIThingsDB.misc.alertDuration then UIThingsDB.misc.alertDuration = 5 end
-        if not UIThingsDB.misc.alertColor then UIThingsDB.misc.alertColor = {r=1, g=0, b=0, a=1} end
         
         -- Initialize Modules
         if addonTable.Config and addonTable.Config.Initialize then

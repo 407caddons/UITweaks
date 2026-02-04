@@ -8,9 +8,20 @@ local contentFrame
 local headerFrame
 local itemPool = {}
 
--- Standard Logging
-local function Log(msg)
-    print("UIThings: " .. tostring(msg))
+-- Constants
+local MINUTES_PER_DAY = 1440
+local MINUTES_PER_HOUR = 60
+local UPDATE_THROTTLE_DELAY = 0.1
+local SECTION_SPACING = 10
+local ITEM_SPACING = 5
+
+-- Centralized Logging
+local Log = function(msg, level)
+    if addonTable.Core and addonTable.Core.Log then
+        addonTable.Core.Log("Tracker", msg, level)
+    else
+        print("UIThings: " .. tostring(msg))
+    end
 end
 
 -- Use centralized SafeAfter from Core
@@ -332,6 +343,62 @@ local function UpdateContent()
     -- Track displayed IDs to prevent duplicates
     local displayedIDs = {}
     
+    --- Formats time remaining for World Quests
+    -- @param questID number The quest ID
+    -- @return string Formatted time string (e.g., " (2d 3h)")
+    local function GetTimeLeftString(questID)
+        local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
+        if timeLeftMinutes and timeLeftMinutes > 0 then
+            local days = math.floor(timeLeftMinutes / MINUTES_PER_DAY)
+            local hours = math.floor((timeLeftMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR)
+            local minutes = timeLeftMinutes % 60
+            
+            if days > 0 then
+                return string.format(" (%dd %dh)", days, hours) 
+            elseif hours > 0 then
+                return string.format(" (%dh %dm)", hours, minutes)
+            else
+                return string.format(" (%dm)", minutes)
+            end
+        end
+        return ""
+    end
+    
+    --- Renders a single World Quest entry
+    -- @param questID number The quest ID to render
+    -- @param superTrackedQuestID number The currently super tracked quest ID
+    local function RenderSingleWQ(questID, superTrackedQuestID)
+         if not displayedIDs[questID] then
+             local title = C_QuestLog.GetTitleForQuestID(questID)
+             if title then
+                if UIThingsDB.tracker.showWorldQuestTimer then
+                    title = title .. GetTimeLeftString(questID)
+                end
+                
+                local color = nil
+                if questID == superTrackedQuestID then
+                    color = UIThingsDB.tracker.activeQuestColor
+                end
+                
+                AddLine(title, false, questID, nil, false, color)
+                displayedIDs[questID] = true
+                
+                local objectives = C_QuestLog.GetQuestObjectives(questID)
+                if objectives then
+                    for _, obj in pairs(objectives) do
+                        local objText = obj.text
+                        if objText and objText ~= "" then
+                            if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                            AddLine(objText, false, nil, nil, true)
+                        end
+                    end
+                end
+                yOffset = yOffset - ITEM_SPACING
+             end
+         end
+    end
+    
+    --- Renders all World Quests for the current map
     local function RenderWorldQuests()
         local mapID = C_Map.GetBestMapForUnit("player")
         if not mapID then return end
@@ -343,56 +410,6 @@ local function UpdateContent()
         
         -- Get Super Tracked ID
         local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
-
-        local function GetTimeLeftString(questID)
-            local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
-            if timeLeftMinutes and timeLeftMinutes > 0 then
-                local days = math.floor(timeLeftMinutes / 1440)
-                local hours = math.floor((timeLeftMinutes % 1440) / 60)
-                local minutes = timeLeftMinutes % 60
-                
-                if days > 0 then
-                    return string.format(" (%dd %dh)", days, hours) 
-                elseif hours > 0 then
-                    return string.format(" (%dh %dm)", hours, minutes)
-                else
-                    return string.format(" (%dm)", minutes)
-                end
-            end
-            return ""
-        end
-        
-        -- Helper Render Function
-        local function RenderSingleWQ(questID)
-             if not displayedIDs[questID] then
-                 local title = C_QuestLog.GetTitleForQuestID(questID)
-                 if title then
-                    if UIThingsDB.tracker.showWorldQuestTimer then
-                        title = title .. GetTimeLeftString(questID)
-                    end
-                    
-                    local color = nil
-                    if questID == superTrackedQuestID then
-                        color = UIThingsDB.tracker.activeQuestColor
-                    end
-                    
-                    AddLine(title, false, questID, nil, false, color)
-                    displayedIDs[questID] = true
-                    
-                    local objectives = C_QuestLog.GetQuestObjectives(questID)
-                    if objectives then
-                        for _, obj in pairs(objectives) do
-                            local objText = obj.text
-                            if objText and objText ~= "" then
-                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                AddLine(objText, false, nil, nil, true)
-                            end
-                        end
-                    end
-                    yOffset = yOffset - 5
-                 end
-             end
-        end
         
         local validWQs = {}
         
@@ -427,26 +444,26 @@ local function UpdateContent()
             AddLine("World Quests", true, "worldQuests")
             
             if UIThingsDB.tracker.collapsed["worldQuests"] then
-                 yOffset = yOffset - 5
+                 yOffset = yOffset - ITEM_SPACING
                  return
             end
             
             -- 1. Render Super Tracked First (if it matches a valid WQ on this map)
             if superTrackedQuestID and validWQs[superTrackedQuestID] then
-                RenderSingleWQ(superTrackedQuestID)
+                RenderSingleWQ(superTrackedQuestID, superTrackedQuestID)
             end
             
             -- 2. Render Active Ones
             for _, questID in ipairs(activeWQs) do
-                RenderSingleWQ(questID)
+                RenderSingleWQ(questID, superTrackedQuestID)
             end
             
             -- 3. Render Others
             for _, questID in ipairs(otherWQs) do
-                RenderSingleWQ(questID)
+                RenderSingleWQ(questID, superTrackedQuestID)
             end
             
-            yOffset = yOffset - 10
+            yOffset = yOffset - SECTION_SPACING
         end
     end
     

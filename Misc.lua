@@ -29,7 +29,14 @@ local function ShowAlert()
     
     -- Hide after duration
     local duration = UIThingsDB.misc.alertDuration or 5
-    C_Timer.After(duration, function()
+    local SafeAfter = function(delay, func)
+        if addonTable.Core and addonTable.Core.SafeAfter then
+            addonTable.Core.SafeAfter(delay, func)
+        elseif C_Timer and C_Timer.After then
+            C_Timer.After(delay, func)
+        end
+    end
+    SafeAfter(duration, function()
         alertFrame:Hide()
     end)
 end
@@ -54,13 +61,20 @@ local function ApplyAHFilter()
     end
     
     -- Apply immediately (with slight delay for ensuring frame is ready)
-    C_Timer.After(0, SetFilter)
+    local SafeAfter = function(delay, func)
+        if addonTable.Core and addonTable.Core.SafeAfter then
+            addonTable.Core.SafeAfter(delay, func)
+        elseif C_Timer and C_Timer.After then
+            C_Timer.After(delay, func)
+        end
+    end
+    SafeAfter(0, SetFilter)
     
     -- Hook for persistence (Tab switching or re-showing)
     if not hookSet then
         if AuctionHouseFrame.SearchBar then
              AuctionHouseFrame.SearchBar:HookScript("OnShow", function()
-                 C_Timer.After(0, SetFilter)
+                 SafeAfter(0, SetFilter)
              end)
              hookSet = true
         end
@@ -78,7 +92,14 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
     
     if event == "AUCTION_HOUSE_SHOW" then
          -- Apply once initially
-         C_Timer.After(0.5, ApplyAHFilter)
+         local SafeAfter = function(delay, func)
+             if addonTable.Core and addonTable.Core.SafeAfter then
+                 addonTable.Core.SafeAfter(delay, func)
+             elseif C_Timer and C_Timer.After then
+                 C_Timer.After(delay, func)
+             end
+         end
+         SafeAfter(0.5, ApplyAHFilter)
          
     elseif event == "CHAT_MSG_SYSTEM" then
          -- Parse for "Personal Work Order" or similar text

@@ -2,10 +2,23 @@ local addonName, addonTable = ...
 local Vendor = {}
 addonTable.Vendor = Vendor
 
-local function Log(msg)
-    print("|cFF00FFFF[Vendor]|r " .. msg)
+-- Constants
+local EQUIPMENT_SLOT_COUNT = 18
+local UPDATE_DELAY_SHORT = 0.1
+local UPDATE_DELAY_MEDIUM = 0.5
+local UPDATE_DELAY_LONG = 1.0
+
+-- Centralized Logging
+local Log = function(msg, level)
+    if addonTable.Core and addonTable.Core.Log then
+        addonTable.Core.Log("Vendor", msg, level)
+    else
+        print("|cFF00FFFF[Vendor]|r " .. tostring(msg))
+    end
 end
 
+--- Automatically repairs all items at vendor
+-- Uses guild funds if available and configured, otherwise personal funds
 local function AutoRepair()
     if not UIThingsDB.vendor.enabled then return end
     if not UIThingsDB.vendor.autoRepair then return end
@@ -101,7 +114,7 @@ local function CheckDurability()
     
     local lowest = 100
     
-    for i = 1, 18 do
+    for i = 1, EQUIPMENT_SLOT_COUNT do
         local current, max = GetInventoryItemDurability(i)
         if current and max and max > 0 then
             local pct = (current / max) * 100

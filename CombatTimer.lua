@@ -100,10 +100,16 @@ local function Init()
     timerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     timerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     
+    -- Throttled OnUpdate (only update once per second)
+    local updateTimer = 0
     timerFrame:SetScript("OnUpdate", function(self, elapsed)
         if inCombat then
-            timeElapsed = GetTime() - startTime
-            timerText:SetText(FormatTime(timeElapsed))
+            updateTimer = updateTimer + elapsed
+            if updateTimer >= 1.0 then
+                updateTimer = 0
+                timeElapsed = GetTime() - startTime
+                timerText:SetText(FormatTime(timeElapsed))
+            end
         end
     end)
 end
@@ -112,5 +118,9 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:SetScript("OnEvent", function()
-    C_Timer.After(1, Init)
+    if addonTable.Core and addonTable.Core.SafeAfter then
+        addonTable.Core.SafeAfter(1, Init)
+    elseif C_Timer and C_Timer.After then
+        C_Timer.After(1, Init)
+    end
 end)
