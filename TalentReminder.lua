@@ -103,24 +103,35 @@ function TalentReminder.CheckTalentsInInstance()
         return
     end
     
+    -- Check if we should alert for current difficulty
+    if not TalentReminder.ShouldAlertForDifficulty(currentDifficultyID) then
+        return
+    end
+    
     -- Get all reminders for this instance/difficulty
     local reminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID]
     if not reminders or not reminders[currentDifficultyID] then
         return
     end
     
-    -- Check if any reminder has mismatches and update alert
-    -- This is a simplified check - in practice, you'd track which specific boss/reminder triggered the current alert
+    -- Check each reminder and show/hide alerts accordingly
+    local foundMismatch = false
     for bossID, reminder in pairs(reminders[currentDifficultyID]) do
-        local mismatches = TalentReminder.CompareTalents(reminder.talents)
-        if #mismatches > 0 then
-            -- Talent still wrong, keep alert or refresh
-        else
-            -- Talents now match, dismiss alert if it's for this reminder
-            if alertFrame and alertFrame:IsShown() then
-                alertFrame:Hide()
+        -- Skip if snoozed
+        if not (snoozed[currentInstanceID] and snoozed[currentInstanceID][bossID]) then
+            local mismatches = TalentReminder.CompareTalents(reminder.talents)
+            if #mismatches > 0 then
+                -- Talents mismatch - show alert
+                TalentReminder.ShowAlert(reminder, mismatches, bossID)
+                foundMismatch = true
+                break -- Only show one alert at a time
             end
         end
+    end
+    
+    -- If no mismatches found, dismiss any open alert
+    if not foundMismatch and alertFrame and alertFrame:IsShown() then
+        alertFrame:Hide()
     end
 end
 
