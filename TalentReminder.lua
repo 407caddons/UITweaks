@@ -214,12 +214,18 @@ function TalentReminder.CompareTalents(savedTalents)
     for nodeID, savedData in pairs(savedTalents) do
         local current = currentTalents[nodeID]
         
+        -- Try to resolve name if it's unknown
+        local talentName = savedData.name
+        if (not talentName or talentName == "Unknown Talent") and savedData.entryID then
+            talentName = TalentReminder.GetTalentName(savedData.entryID, configID) or "Unknown Talent"
+        end
+        
         if not current then
             -- Missing talent
             table.insert(mismatches, {
                 type = "missing",
                 nodeID = nodeID,
-                name = savedData.name,
+                name = talentName,
                 row = savedData.row,
                 expected = savedData
             })
@@ -228,7 +234,7 @@ function TalentReminder.CompareTalents(savedTalents)
             table.insert(mismatches, {
                 type = "wrong",
                 nodeID = nodeID,
-                name = savedData.name,
+                name = talentName,
                 row = savedData.row,
                 expected = savedData,
                 current = current
@@ -237,6 +243,63 @@ function TalentReminder.CompareTalents(savedTalents)
     end
     
     return mismatches
+end
+
+-- Helper to resolve talent name
+function TalentReminder.GetTalentName(entryID, configID)
+    if not entryID then return "Unknown Talent" end
+    
+    -- If configID not provided, try to get active one
+    if not configID and C_ClassTalents then
+        configID = C_ClassTalents.GetActiveConfigID()
+    end
+    
+    if not configID then 
+        print("DEBUG: No ConfigID found")
+        return "Unknown Talent" 
+    end
+    
+    local entryInfo = C_Traits.GetEntryInfo(configID, entryID)
+    if not entryInfo then
+        print("DEBUG: No entryInfo for entryID " .. tostring(entryID))
+        return "Unknown Talent"
+    end
+
+    if not entryInfo.definitionID then
+        print("DEBUG: No definitionID for entryID " .. tostring(entryID))
+        return "Unknown Talent"
+    end
+    
+    local definitionInfo = C_Traits.GetDefinitionInfo(configID, entryInfo.definitionID)
+    if not definitionInfo then
+        print("DEBUG: No definitionInfo for defID " .. tostring(entryInfo.definitionID))
+        return "Unknown Talent"
+    end
+    
+    -- Try overrideName first
+    if definitionInfo.overrideName and definitionInfo.overrideName ~= "" then
+        return definitionInfo.overrideName
+    end
+    
+    -- Fall back to spell name from spellID
+    if definitionInfo.spellID then
+        local spellName
+        if C_Spell and C_Spell.GetSpellName then
+            spellName = C_Spell.GetSpellName(definitionInfo.spellID)
+        elseif GetSpellInfo then
+            spellName = GetSpellInfo(definitionInfo.spellID)
+        end
+        
+        if spellName then
+            return spellName
+        else
+            print("DEBUG: Name fetch failed for spellID " .. tostring(definitionInfo.spellID))
+        end
+    else
+        print("DEBUG: No spellID for defID " .. tostring(entryInfo.definitionID))
+    end
+    
+    return "Unknown Talent"
 end
 
 -- Create talent snapshot
@@ -267,22 +330,8 @@ function TalentReminder.CreateSnapshot()
             local entryInfo = C_Traits.GetEntryInfo(configID, nodeInfo.activeEntry.entryID)
             
             -- Get talent name from the definition
-            local talentName = "Unknown Talent"
-            if entryInfo and entryInfo.definitionID then
-                local definitionInfo = C_Traits.GetDefinitionInfo(configID, entryInfo.definitionID)
-                if definitionInfo then
-                    -- Try overrideName first
-                    if definitionInfo.overrideName and definitionInfo.overrideName ~= "" then
-                        talentName = definitionInfo.overrideName
-                    -- Fall back to spell name from spellID
-                    elseif definitionInfo.spellID then
-                        local spellName = GetSpellInfo(definitionInfo.spellID)
-                        if spellName then
-                            talentName = spellName
-                        end
-                    end
-                end
-            end
+            -- Get talent name using helper
+            local talentName = TalentReminder.GetTalentName(nodeInfo.activeEntry.entryID, configID)
             
             snapshot[nodeID] = {
                 name = talentName,
@@ -451,14 +500,24 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
     if #missing > 0 then
         text = text .. "|cFFFF6B6BMissing Talents:|r\n"
         for _, m in ipairs(missing) do
-            text = text .. string.format("  • %s (Row %d)\n", m.name, m.row)
+            -- Try to resolve name again if unknown
+            local name = m.name
+            if (not name or name == "Unknown Talent") and m.expected and m.expected.entryID then
+                name = TalentReminder.GetTalentName(m.expected.entryID) or name
+            end
+            text = text .. string.format("  • %s (Row %d)\n", name, m.row)
         end
     end
     
     if #wrong > 0 then
         text = text .. "\n|cFFFFAA00Wrong Selection:|r\n"
         for _, m in ipairs(wrong) do
-            text = text .. string.format("  • Row %d: Need %s (rank %d)\n", m.row, m.name, m.expected.rank)
+            -- Try to resolve name again if unknown
+            local name = m.name
+            if (not name or name == "Unknown Talent") and m.expected and m.expected.entryID then
+                name = TalentReminder.GetTalentName(m.expected.entryID) or name
+            end
+            text = text .. string.format("  • Row %d: Need %s (rank %d)\n", m.row, name, m.expected.rank)
         end
     end
     
