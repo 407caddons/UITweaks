@@ -270,8 +270,17 @@ function TalentReminder.CreateSnapshot()
             local talentName = "Unknown Talent"
             if entryInfo and entryInfo.definitionID then
                 local definitionInfo = C_Traits.GetDefinitionInfo(configID, entryInfo.definitionID)
-                if definitionInfo and definitionInfo.overrideName then
-                    talentName = definitionInfo.overrideName
+                if definitionInfo then
+                    -- Try overrideName first
+                    if definitionInfo.overrideName and definitionInfo.overrideName ~= "" then
+                        talentName = definitionInfo.overrideName
+                    -- Fall back to spell name from spellID
+                    elseif definitionInfo.spellID then
+                        local spellName = GetSpellInfo(definitionInfo.spellID)
+                        if spellName then
+                            talentName = spellName
+                        end
+                    end
                 end
             end
             
