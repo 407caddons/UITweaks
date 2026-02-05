@@ -9,7 +9,6 @@ addonTable.Core = {}
 -- @param func function Function to execute
 function addonTable.Core.SafeAfter(delay, func)
     if not func then
-        print("UIThings: SafeAfter called with nil function")
         return
     end
     if C_Timer and C_Timer.After then
@@ -85,19 +84,19 @@ local function OnEvent(self, event, ...)
                 questPadding = 2,
                 sectionOrder = 1, -- 1=WQ/Quests/Ach, 2=Quests/WQ/Ach, etc
                 onlyActiveWorldQuests = false,
-                activeQuestColor = {r=0, g=1, b=0, a=1},
+                activeQuestColor = { r = 0, g = 1, b = 0, a = 1 },
                 x = -20,
                 y = -250,
                 point = "TOPRIGHT",
                 showBorder = false,
-                borderColor = {r=0, g=0, b=0, a=1},
+                borderColor = { r = 0, g = 0, b = 0, a = 1 },
                 showBackground = false,
                 hideInCombat = false,
                 hideInMPlus = false,
                 autoTrackQuests = false,
                 rightClickSuperTrack = true,
                 shiftClickUntrack = true,
-                backgroundColor = {r=0, g=0, b=0, a=0.5},
+                backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 strata = "LOW",
                 showWorldQuestTimer = true,
                 collapsed = {}
@@ -114,7 +113,7 @@ local function OnEvent(self, event, ...)
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 24,
                 warningLocked = true,
-                warningPos = {point="TOP", x=0, y=-150}
+                warningPos = { point = "TOP", x = 0, y = -150 }
             },
             loot = {
                 enabled = false,
@@ -135,9 +134,9 @@ local function OnEvent(self, event, ...)
                 locked = true,
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 18,
-                colorInCombat = {r=1, g=1, b=1},
-                colorOutCombat = {r=0.5, g=0.5, b=0.5},
-                pos = {point="CENTER", x=0, y=0}
+                colorInCombat = { r = 1, g = 1, b = 1 },
+                colorOutCombat = { r = 0.5, g = 0.5, b = 0.5 },
+                pos = { point = "CENTER", x = 0, y = 0 }
             },
             frames = {
                 enabled = false,
@@ -151,14 +150,34 @@ local function OnEvent(self, event, ...)
                 ttsMessage = "Personal order arrived",
                 ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
                 alertDuration = 5,
-                alertColor = {r=1, g=0, b=0, a=1}
+                alertColor = { r = 1, g = 0, b = 0, a = 1 }
+            },
+            talentReminders = {
+                enabled = true,
+                alertOnDifficulties = {
+                    dungeonNormal = false,
+                    dungeonHeroic = false,
+                    dungeonMythic = false,
+                    mythicPlus = true,
+                    raidLFR = false,
+                    raidNormal = false,
+                    raidHeroic = true,
+                    raidMythic = true
+                },
+                playSound = true,
+                useTTS = true,
+                ttsVolume = 1.0,
+                showPopup = true,
+                showChatMessage = true,
+                alertFont = "Fonts\\FRIZQT__.TTF",
+                alertFontSize = 12,
+                alertIconSize = 16
             }
         }
         
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
         
-        addonTable.Core.Log("Core", "UI Tweaks Loaded!")
         self:UnregisterEvent("ADDON_LOADED")
         
         -- Initialize Modules
@@ -174,6 +193,10 @@ local function OnEvent(self, event, ...)
             addonTable.Frames.Initialize()
         end
         
+        if addonTable.TalentReminder and addonTable.TalentReminder.Initialize then
+            addonTable.TalentReminder.Initialize()
+        end
+
         -- Slash Commands
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__acp__Edit",
+      "WebFetch(domain:)",
+      "mcp__acp__Write",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

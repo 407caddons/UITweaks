@@ -4,7 +4,7 @@
 ## Author: 407c
 ## Version: 0.15
 ## X-Curse-Project-ID: 1450486
-## SavedVariables: UIThingsDB
+## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
 ## AddonCompartmentFunc: LunaUITweaks_OpenConfig
 
@@ -29,3 +29,4 @@ Loot.lua
 CombatTimer.lua
 Misc.lua
 Frames.lua
+TalentReminder.lua
