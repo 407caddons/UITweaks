@@ -1566,10 +1566,20 @@ function addonTable.Config.Initialize()
             enableCheckbox:SetScript("OnClick", function(self)
                 UIThingsDB.loot.enabled = self:GetChecked()
                 UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
+                addonTable.Loot.UpdateSettings()
             end)
             UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
             
-
+            -- Show All Checkbox
+            local showAllBtn = CreateFrame("CheckButton", "UIThingsLootShowAll", panel, "ChatConfigCheckButtonTemplate")
+            showAllBtn:SetPoint("TOPLEFT", 20, -75)
+            _G[showAllBtn:GetName().."Text"]:SetText("Show All Loot (Party/Raid)")
+            showAllBtn:SetChecked(UIThingsDB.loot.showAll)
+            showAllBtn:SetScript("OnClick", function(self)
+                UIThingsDB.loot.showAll = self:GetChecked()
+            end)
+            
+            
             
             -- Unlock Anchor Button
             local unlockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -1592,7 +1602,7 @@ function addonTable.Config.Initialize()
 
             -- Duration Slider
             local durationSlider = CreateFrame("Slider", "UIThingsLootDuration", panel, "OptionsSliderTemplate")
-            durationSlider:SetPoint("TOPLEFT", 20, -100)
+            durationSlider:SetPoint("TOPLEFT", 20, -125)
             durationSlider:SetMinMaxValues(1, 10)
             durationSlider:SetValueStep(0.5)
             durationSlider:SetObeyStepOnDrag(true)
@@ -1609,11 +1619,11 @@ function addonTable.Config.Initialize()
 
             -- Min Quality Dropdown
             local qualityLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            qualityLabel:SetPoint("TOPLEFT", 20, -150)
+            qualityLabel:SetPoint("TOPLEFT", 20, -175)
             qualityLabel:SetText("Minimum Quality:")
             
             local qualityDropdown = CreateFrame("Frame", "UIThingsLootQualityDropdown", panel, "UIDropDownMenuTemplate")
-            qualityDropdown:SetPoint("TOPLEFT", 140, -140)
+            qualityDropdown:SetPoint("TOPLEFT", 140, -165)
             UIDropDownMenu_SetWidth(qualityDropdown, 120)
             
             local qualities = {
@@ -1653,11 +1663,11 @@ function addonTable.Config.Initialize()
 
             
             local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            fontLabel:SetPoint("TOPLEFT", 20, -200)
+            fontLabel:SetPoint("TOPLEFT", 20, -225)
             fontLabel:SetText("Font:")
             
             local fontDropdown = CreateFrame("Frame", "UIThingsLootFontDropdown", panel, "UIDropDownMenuTemplate")
-            fontDropdown:SetPoint("TOPLEFT", 60, -190)
+            fontDropdown:SetPoint("TOPLEFT", 60, -215)
             UIDropDownMenu_SetWidth(fontDropdown, 120)
             
             local function FontOnClick(self)
@@ -1686,7 +1696,7 @@ function addonTable.Config.Initialize()
 
             -- Font Size Slider
             local fontSizeSlider = CreateFrame("Slider", "UIThingsLootFontSize", panel, "OptionsSliderTemplate")
-            fontSizeSlider:SetPoint("TOPLEFT", 250, -200)
+            fontSizeSlider:SetPoint("TOPLEFT", 250, -225)
             fontSizeSlider:SetMinMaxValues(8, 32)
             fontSizeSlider:SetValueStep(1)
             fontSizeSlider:SetObeyStepOnDrag(true)
@@ -1701,10 +1711,28 @@ function addonTable.Config.Initialize()
                 _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
                 addonTable.Loot.UpdateSettings()
             end)
+
+            -- Who Looted Font Size Slider
+            local whoLootedFontSizeSlider = CreateFrame("Slider", "UIThingsLootWhoLootedFontSize", panel, "OptionsSliderTemplate")
+            whoLootedFontSizeSlider:SetPoint("TOPLEFT", 250, -265)
+            whoLootedFontSizeSlider:SetMinMaxValues(8, 32)
+            whoLootedFontSizeSlider:SetValueStep(1)
+            whoLootedFontSizeSlider:SetObeyStepOnDrag(true)
+            whoLootedFontSizeSlider:SetWidth(150)
+            _G[whoLootedFontSizeSlider:GetName() .. 'Text']:SetText("Who Looted Size: " .. (UIThingsDB.loot.whoLootedFontSize or 12))
+            _G[whoLootedFontSizeSlider:GetName() .. 'Low']:SetText("8")
+            _G[whoLootedFontSizeSlider:GetName() .. 'High']:SetText("32")
+            whoLootedFontSizeSlider:SetValue(UIThingsDB.loot.whoLootedFontSize or 12)
+            whoLootedFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+                value = math.floor(value)
+                UIThingsDB.loot.whoLootedFontSize = value
+                _G[self:GetName() .. 'Text']:SetText("Who Looted Size: " .. value)
+                addonTable.Loot.UpdateSettings()
+            end)
             
             -- Icon Size Slider
             local iconSizeSlider = CreateFrame("Slider", "UIThingsLootIconSize", panel, "OptionsSliderTemplate")
-            iconSizeSlider:SetPoint("TOPLEFT", 20, -250)
+            iconSizeSlider:SetPoint("TOPLEFT", 20, -305)
             iconSizeSlider:SetMinMaxValues(16, 64)
             iconSizeSlider:SetValueStep(2)
             iconSizeSlider:SetObeyStepOnDrag(true)
@@ -1722,7 +1750,7 @@ function addonTable.Config.Initialize()
 
             -- Grow Up Checkbox (Moved to bottom)
             local growBtn = CreateFrame("CheckButton", "UIThingsLootGrowCheck", panel, "ChatConfigCheckButtonTemplate")
-            growBtn:SetPoint("TOPLEFT", 20, -300)
+            growBtn:SetPoint("TOPLEFT", 20, -355)
             _G[growBtn:GetName().."Text"]:SetText("Grow Upwards")
             growBtn:SetChecked(UIThingsDB.loot.growUp)
             growBtn:SetScript("OnClick", function(self)
@@ -1732,7 +1760,7 @@ function addonTable.Config.Initialize()
             
             -- Faster Loot Checkbox
             local fasterLootBtn = CreateFrame("CheckButton", "UIThingsLootFasterCheck", panel, "ChatConfigCheckButtonTemplate")
-            fasterLootBtn:SetPoint("TOPLEFT", 20, -350)
+            fasterLootBtn:SetPoint("TOPLEFT", 20, -405)
             _G[fasterLootBtn:GetName().."Text"]:SetText("Faster Loot")
             fasterLootBtn:SetChecked(UIThingsDB.loot.fasterLoot)
             fasterLootBtn:SetScript("OnClick", function(self)
@@ -1741,7 +1769,7 @@ function addonTable.Config.Initialize()
             
             -- Faster Loot Delay Slider
             local delaySlider = CreateFrame("Slider", "UIThingsLootDelaySlider", panel, "OptionsSliderTemplate")
-            delaySlider:SetPoint("TOPLEFT", 20, -400)
+            delaySlider:SetPoint("TOPLEFT", 20, -455)
             delaySlider:SetMinMaxValues(0, 1)
             delaySlider:SetValueStep(0.1)
             delaySlider:SetObeyStepOnDrag(true)

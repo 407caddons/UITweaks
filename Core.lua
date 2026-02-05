@@ -118,6 +118,7 @@ local function OnEvent(self, event, ...)
             },
             loot = {
                 enabled = false,
+                showAll = false,
                 growUp = true,
                 fasterLoot = false,
                 fasterLootDelay = 0.3,
@@ -126,6 +127,7 @@ local function OnEvent(self, event, ...)
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 14,
                 iconSize = 32,
+                whoLootedFontSize = 12,
                 anchor = {point="CENTER", x=0, y=200}
             },
             combat = {

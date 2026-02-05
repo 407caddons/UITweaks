@@ -59,9 +59,14 @@ local function AcquireToast()
         toast.icon:SetPoint("LEFT", 0, 0)
         
         toast.text = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        toast.text:SetPoint("LEFT", toast.icon, "RIGHT", 5, 0)
+        toast.text:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 5, 0)
         toast.text:SetPoint("RIGHT", 0, 0)
         toast.text:SetJustifyH("LEFT")
+        
+        toast.winner = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        toast.winner:SetPoint("BOTTOMLEFT", toast.icon, "BOTTOMRIGHT", 5, 0)
+        toast.winner:SetPoint("RIGHT", 0, 0)
+        toast.winner:SetJustifyH("LEFT")
         
         -- Tooltip Scripts
         toast:SetScript("OnEnter", function(self)
@@ -96,6 +101,8 @@ local function AcquireToast()
     toast:SetSize(300, settings.iconSize)
     toast.icon:SetSize(settings.iconSize, settings.iconSize)
     toast.text:SetFont(settings.font, settings.fontSize, "OUTLINE")
+    -- Adjust winner font size relative to main font
+    toast.winner:SetFont(settings.font, settings.whoLootedFontSize or 12, "OUTLINE")
     
     return toast
 end
@@ -121,17 +128,9 @@ function Loot.UpdateLayout()
     -- Re-stack toasts above anchor
     -- Growing UP
     local settings = UIThingsDB.loot
-    local baseY = 0
     local spacing = 5
     
     if not settings.anchor then return end
-    
-    -- Anchor point relative to UIParent usually, but here relevant to the anchorFrame's position
-    -- We'll attach the first one to the anchor frame, then stack.
-    -- Actually, safer to rely on anchorFrame's position if it's movable.
-    
-    -- If anchorFrame is hidden, we usually want it to stay in place.
-    -- We can set points relative to anchorFrame even if it is hidden.
     
     local prev = anchorFrame
     
@@ -158,7 +157,7 @@ function Loot.UpdateLayout()
     end
 end
 
-local function SpawnToast(itemLink, text, count)
+local function SpawnToast(itemLink, text, count, looterName, looterClass)
     local toast = AcquireToast()
     
     -- Data
@@ -166,10 +165,6 @@ local function SpawnToast(itemLink, text, count)
     local itemName, _, itemRarity, _, _, _, _, _, _, itemTexture = GetItemInfo(itemLink)
     
     if not itemName then 
-        -- Fallback if info not ready? 
-        -- Usually CHAT_MSG_LOOT comes after info is ready, but not always.
-        -- We can retry or just use name from chat msg if parsed?
-        -- Let's assume parsed text or basic info.
         itemName = text or "Unknown Item"
         itemTexture = 134400 -- ?
     end
@@ -185,6 +180,21 @@ local function SpawnToast(itemLink, text, count)
         else
             toast.text:SetTextColor(1, 1, 1)
         end
+    end
+
+    -- Winner Name
+    if looterName then
+        local colorStr = "|cFFFFFFFF" -- Default white
+        if looterClass then
+             local color = C_ClassColor.GetClassColor(looterClass)
+             if color then
+                 colorStr = color:GenerateHexColorMarkup()
+             end
+        end
+        toast.winner:SetText("Won by: " .. colorStr .. looterName .. "|r")
+        toast.winner:Show()
+    else
+        toast.winner:Hide()
     end
 
     -- Timer Setup
@@ -222,8 +232,24 @@ function Loot.UpdateSettings()
         toast:SetSize(300, settings.iconSize)
         toast.icon:SetSize(settings.iconSize, settings.iconSize)
         toast.text:SetFont(settings.font, settings.fontSize, "OUTLINE")
+        toast.winner:SetFont(settings.font, settings.whoLootedFontSize or 12, "OUTLINE")
     end
     Loot.UpdateLayout()
+    Loot.ToggleBlizzardToasts(not settings.enabled)
+end
+
+function Loot.ToggleBlizzardToasts(enable)
+    if enable then
+        AlertFrame:RegisterEvent("SHOW_LOOT_TOAST")
+        AlertFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
+        AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
+        AlertFrame:RegisterEvent("SHOW_RATING_BUST_TOAST")
+    else
+        AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST")
+        AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE")
+        AlertFrame:UnregisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
+        AlertFrame:UnregisterEvent("SHOW_RATING_BUST_TOAST")
+    end
 end
 
 -- Event Handler
@@ -247,13 +273,10 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
             
             local delay = UIThingsDB.loot.fasterLootDelay or 0.3
             
-            -- Iterate backwards to avoid index shifting when items are removed
             for i = numItems, 1, -1 do
                 if delay == 0 then
                     LootSlot(i)
                 else
-                    -- Schedule looting: First item (index numItems) starts at 0 delay
-                    -- Last item (index 1) starts at (numItems - 1) * delay
                     local timerDelay = (numItems - i) * delay
                     C_Timer.After(timerDelay, function()
                         LootSlot(i)
@@ -265,26 +288,56 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
     end
     
     if event == "CHAT_MSG_LOOT" then
-        -- Patterns: 
-        -- LOOT_ITEM = "You receive loot: %s."
-        -- LOOT_ITEM_MULTIPLE = "You receive loot: %sx%d."
-        -- LOOT_ITEM_PUSHED_SELF = "You receive item: %s."
-        -- LOOT_ITEM_PUSHED_SELF_MULTIPLE = "You receive item: %sx%d."
-        
-        -- We can just scan for item links.
         local itemLink = string.match(msg, "|Hitem:.-|h")
         if itemLink then
             -- Get Quality
             local _, _, quality = GetItemInfo(itemLink)
-            if not quality then return end -- wait for sync? 
+            if not quality then return end 
             
             if quality >= UIThingsDB.loot.minQuality then
+                -- Identify Looter
+                local looterName = nil
+                local looterClass = nil
+                
+                -- Check for "You receive..."
+                if string.find(msg, "^You receive") then
+                    looterName = UnitName("player")
+                    _, looterClass = UnitClass("player")
+                else
+                    -- Check for "X receives..."
+                    local otherName = string.match(msg, "^([^%s]+) receive")
+                    if otherName then
+                        looterName = otherName
+                        -- Try to find class from raid/party roster
+                        if IsInRaid() then
+                            for i=1, 40 do
+                                local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
+                                if name == looterName then
+                                    looterClass = classFileName
+                                    break
+                                end
+                            end
+                        elseif IsInGroup() then
+                             if UnitName("party1") == looterName then _, looterClass = UnitClass("party1")
+                             elseif UnitName("party2") == looterName then _, looterClass = UnitClass("party2")
+                             elseif UnitName("party3") == looterName then _, looterClass = UnitClass("party3")
+                             elseif UnitName("party4") == looterName then _, looterClass = UnitClass("party4")
+                             end
+                        end
+                    end
+                end
+
+                -- Filtering
+                if not UIThingsDB.loot.showAll then
+                    if looterName ~= UnitName("player") then return end
+                end
+                
                 -- Parse count
                 local count = 1
                 local matchCount = string.match(msg, "x(%d+)")
                 if matchCount then count = tonumber(matchCount) end
                 
-                SpawnToast(itemLink, nil, count)
+                SpawnToast(itemLink, nil, count, looterName, looterClass)
             end
         end
     end
