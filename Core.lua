@@ -49,14 +49,14 @@ addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.INFO
 function addonTable.Core.Log(module, msg, level)
     level = level or addonTable.Core.LogLevel.INFO
     if level < addonTable.Core.currentLogLevel then return end
-    
+
     local colors = {
         [0] = "888888", -- DEBUG (gray)
         [1] = "00FF00", -- INFO (green)
         [2] = "FFFF00", -- WARN (yellow)
         [3] = "FF0000"  -- ERROR (red)
     }
-    
+
     local prefix = string.format("|cFF%s[Luna %s]|r", colors[level] or "FFFFFF", module or "Core")
     print(prefix .. " " .. tostring(msg))
 end
@@ -68,7 +68,7 @@ end
 local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" and ... == addonName then
         UIThingsDB = UIThingsDB or {}
-        
+
         -- Default Settings Table
         local DEFAULTS = {
             tracker = {
@@ -85,19 +85,19 @@ local function OnEvent(self, event, ...)
                 questPadding = 2,
                 sectionOrder = 1, -- 1=WQ/Quests/Ach, 2=Quests/WQ/Ach, etc
                 onlyActiveWorldQuests = false,
-                activeQuestColor = {r=0, g=1, b=0, a=1},
+                activeQuestColor = { r = 0, g = 1, b = 0, a = 1 },
                 x = -20,
                 y = -250,
                 point = "TOPRIGHT",
                 showBorder = false,
-                borderColor = {r=0, g=0, b=0, a=1},
+                borderColor = { r = 0, g = 0, b = 0, a = 1 },
                 showBackground = false,
                 hideInCombat = false,
                 hideInMPlus = false,
                 autoTrackQuests = false,
                 rightClickSuperTrack = true,
                 shiftClickUntrack = true,
-                backgroundColor = {r=0, g=0, b=0, a=0.5},
+                backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 strata = "LOW",
                 showWorldQuestTimer = true,
                 collapsed = {}
@@ -114,7 +114,7 @@ local function OnEvent(self, event, ...)
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 24,
                 warningLocked = true,
-                warningPos = {point="TOP", x=0, y=-150}
+                warningPos = { point = "TOP", x = 0, y = -150 }
             },
             loot = {
                 enabled = false,
@@ -126,16 +126,16 @@ local function OnEvent(self, event, ...)
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 14,
                 iconSize = 32,
-                anchor = {point="CENTER", x=0, y=200}
+                anchor = { point = "CENTER", x = 0, y = 200 }
             },
             combat = {
                 enabled = false,
                 locked = true,
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 18,
-                colorInCombat = {r=1, g=1, b=1},
-                colorOutCombat = {r=0.5, g=0.5, b=0.5},
-                pos = {point="CENTER", x=0, y=0}
+                colorInCombat = { r = 1, g = 1, b = 1 },
+                colorOutCombat = { r = 0.5, g = 0.5, b = 0.5 },
+                pos = { point = "CENTER", x = 0, y = 0 }
             },
             frames = {
                 enabled = false,
@@ -149,7 +149,7 @@ local function OnEvent(self, event, ...)
                 ttsMessage = "Personal order arrived",
                 ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
                 alertDuration = 5,
-                alertColor = {r=1, g=0, b=0, a=1}
+                alertColor = { r = 1, g = 0, b = 0, a = 1 }
             },
             talentReminders = {
                 enabled = true,
@@ -167,21 +167,24 @@ local function OnEvent(self, event, ...)
                 useTTS = true,
                 ttsVolume = 1.0,
                 showPopup = true,
-                showChatMessage = true
+                showChatMessage = true,
+                alertFont = "Fonts\\FRIZQT__.TTF",
+                alertFontSize = 12,
+                alertIconSize = 16
             }
         }
-        
+
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
-        
+
         addonTable.Core.Log("Core", "UI Tweaks Loaded!")
         self:UnregisterEvent("ADDON_LOADED")
-        
+
         -- Initialize Modules
         if addonTable.Config and addonTable.Config.Initialize then
             addonTable.Config.Initialize()
         end
-        
+
         if addonTable.Minimap and addonTable.Minimap.Initialize then
             addonTable.Minimap.Initialize()
         end
@@ -189,22 +192,22 @@ local function OnEvent(self, event, ...)
         if addonTable.Frames and addonTable.Frames.Initialize then
             addonTable.Frames.Initialize()
         end
-        
+
         if addonTable.TalentReminder and addonTable.TalentReminder.Initialize then
             addonTable.TalentReminder.Initialize()
         end
-        
+
         -- Slash Commands
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"
-        
+
         -- Global function for Addon Compartment
         function LunaUITweaks_OpenConfig()
             if addonTable.Config and addonTable.Config.ToggleWindow then
                 addonTable.Config.ToggleWindow()
             end
         end
-        
+
         SlashCmdList["UITHINGS"] = function(msg)
             LunaUITweaks_OpenConfig()
         end

@@ -16,32 +16,32 @@ local function CreateColorPicker(parent, name, label, getFunc, setFunc, yOffset)
     button:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
     button:EnableMouse(true)
     button:RegisterForClicks("AnyUp")
-    
+
     button.bg = button:CreateTexture(nil, "BACKGROUND")
     button.bg:SetSize(24, 24)
     button.bg:SetPoint("LEFT")
     button.bg:SetColorTexture(1, 1, 1)
-    
+
     button.color = button:CreateTexture(nil, "OVERLAY")
     button.color:SetPoint("LEFT", button.bg, "LEFT", 2, 0)
     button.color:SetSize(20, 20)
-    
+
     local r, g, b = getFunc()
     button.color:SetColorTexture(r, g, b)
-    
+
     button.text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     button.text:SetPoint("LEFT", button.bg, "RIGHT", 10, 0)
     button.text:SetText(label)
-    
+
     button:SetScript("OnClick", function(self)
         local r, g, b = getFunc()
-        
+
         local function SwatchFunc()
             local newR, newG, newB = ColorPickerFrame:GetColorRGB()
             setFunc(newR, newG, newB)
             button.color:SetColorTexture(newR, newG, newB)
         end
-        
+
         local function CancelFunc(previousValues)
             local newR, newG, newB
             if previousValues then
@@ -57,7 +57,9 @@ local function CreateColorPicker(parent, name, label, getFunc, setFunc, yOffset)
             local info = {
                 swatchFunc = SwatchFunc,
                 cancelFunc = CancelFunc,
-                r = r, g = g, b = b,
+                r = r,
+                g = g,
+                b = b,
                 hasOpacity = false,
             }
             ColorPickerFrame:SetupColorPickerAndShow(info)
@@ -75,10 +77,10 @@ function addonTable.Config.Initialize()
     -- Initialize the window if it doesn't exist
     if not configWindow then
         local fonts = {
-            {name="Friz Quadrata", path="Fonts\\FRIZQT__.TTF"},
-            {name="Arial Narrow", path="Fonts\\ARIALN.TTF"},
-            {name="Skurri", path="Fonts\\skurri.ttf"},
-            {name="Morpheus", path="Fonts\\MORPHEUS.TTF"}
+            { name = "Friz Quadrata", path = "Fonts\\FRIZQT__.TTF" },
+            { name = "Arial Narrow",  path = "Fonts\\ARIALN.TTF" },
+            { name = "Skurri",        path = "Fonts\\skurri.ttf" },
+            { name = "Morpheus",      path = "Fonts\\MORPHEUS.TTF" }
         }
 
         configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent, "BasicFrameTemplateWithInset")
@@ -90,32 +92,32 @@ function addonTable.Config.Initialize()
         configWindow:RegisterForDrag("LeftButton")
         configWindow:SetScript("OnDragStart", configWindow.StartMoving)
         configWindow:SetScript("OnDragStop", configWindow.StopMovingOrSizing)
-        
+
         configWindow:SetScript("OnHide", function()
-             -- Auto-lock frames on close
-             if UIThingsDB.frames and UIThingsDB.frames.list then
-                 for _, f in ipairs(UIThingsDB.frames.list) do
-                     f.locked = true
-                 end
-                 -- If the frames module is loaded, update it
-                 if addonTable.Frames and addonTable.Frames.UpdateFrames then
-                     addonTable.Frames.UpdateFrames()
-                 end
-             end
-             
-             -- Auto-lock Loot Anchor
-             if addonTable.Loot and addonTable.Loot.LockAnchor then
-                 addonTable.Loot.LockAnchor()
-             end
+            -- Auto-lock frames on close
+            if UIThingsDB.frames and UIThingsDB.frames.list then
+                for _, f in ipairs(UIThingsDB.frames.list) do
+                    f.locked = true
+                end
+                -- If the frames module is loaded, update it
+                if addonTable.Frames and addonTable.Frames.UpdateFrames then
+                    addonTable.Frames.UpdateFrames()
+                end
+            end
+
+            -- Auto-lock Loot Anchor
+            if addonTable.Loot and addonTable.Loot.LockAnchor then
+                addonTable.Loot.LockAnchor()
+            end
         end)
         configWindow:Hide()
-        
+
         configWindow.TitleText:SetText("Luna's UI Tweaks Config")
 
         -- Create Sub-Panels
         local trackerPanel = CreateFrame("Frame", nil, configWindow)
         trackerPanel:SetAllPoints()
-        
+
         local vendorPanel = CreateFrame("Frame", nil, configWindow)
         vendorPanel:SetAllPoints()
         vendorPanel:Hide()
@@ -145,7 +147,7 @@ function addonTable.Config.Initialize()
         tab1:SetPoint("BOTTOMLEFT", configWindow, "BOTTOMLEFT", 10, -30)
         tab1:SetText("Tracker")
         tab1:SetID(1)
-        
+
         local tab2 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
         tab2:SetPoint("LEFT", tab1, "RIGHT", 5, 0)
         tab2:SetText("Vendor")
@@ -176,37 +178,43 @@ function addonTable.Config.Initialize()
         tab7:SetText("Talents")
         tab7:SetID(7)
 
-        configWindow.Tabs = {tab1, tab2, tab3, tab4, tab5, tab6, tab7}
+        configWindow.Tabs = { tab1, tab2, tab3, tab4, tab5, tab6, tab7 }
         PanelTemplates_SetNumTabs(configWindow, 7)
         PanelTemplates_SetTab(configWindow, 1)
-        
+
         -- Store reference to refresh function that will be defined later
         local refreshTalentReminderList = nil
 
         local function TabOnClick(self)
-             PanelTemplates_SetTab(configWindow, self:GetID())
-             trackerPanel:Hide()
-             vendorPanel:Hide()
-             combatPanel:Hide()
-             framesPanel:Hide()
-             lootPanel:Hide()
-             miscPanel:Hide()
-             talentPanel:Hide()
-             
-             local id = self:GetID()
-             if id == 1 then trackerPanel:Show()
-             elseif id == 2 then vendorPanel:Show()
-             elseif id == 3 then combatPanel:Show()
-             elseif id == 4 then framesPanel:Show()
-             elseif id == 5 then lootPanel:Show()
-             elseif id == 6 then miscPanel:Show()
-             elseif id == 7 then 
-                 talentPanel:Show()
-                 -- Refresh the reminder list when showing the talent tab
-                 if refreshTalentReminderList then
-                     refreshTalentReminderList()
-                 end
-             end
+            PanelTemplates_SetTab(configWindow, self:GetID())
+            trackerPanel:Hide()
+            vendorPanel:Hide()
+            combatPanel:Hide()
+            framesPanel:Hide()
+            lootPanel:Hide()
+            miscPanel:Hide()
+            talentPanel:Hide()
+
+            local id = self:GetID()
+            if id == 1 then
+                trackerPanel:Show()
+            elseif id == 2 then
+                vendorPanel:Show()
+            elseif id == 3 then
+                combatPanel:Show()
+            elseif id == 4 then
+                framesPanel:Show()
+            elseif id == 5 then
+                lootPanel:Show()
+            elseif id == 6 then
+                miscPanel:Show()
+            elseif id == 7 then
+                talentPanel:Show()
+                -- Refresh the reminder list when showing the talent tab
+                if refreshTalentReminderList then
+                    refreshTalentReminderList()
+                end
+            end
         end
 
         tab1:SetScript("OnClick", TabOnClick)
@@ -220,51 +228,51 @@ function addonTable.Config.Initialize()
         -------------------------------------------------------------
         -- TRACKER PANEL CONTENT
         -------------------------------------------------------------
-        
+
         -- Helper: Update Visuals based on enabled state
         local function UpdateModuleVisuals(panel, tab, enabled)
             if not enabled then
-                 -- Transparent Dark Red
-                 if not panel.bg then
-                     panel.bg = panel:CreateTexture(nil, "BACKGROUND")
-                     -- Inset to avoid covering the border
-                     panel.bg:SetPoint("TOPLEFT", 4, -28)
-                     panel.bg:SetPoint("BOTTOMRIGHT", -4, 4)
-                     panel.bg:SetColorTexture(0.3, 0, 0, 0.5)
-                 else
-                     panel.bg:Show()
-                 end
-                 
-                 -- Tint Tab Text Red
-                 if tab.Text then
-                     tab.Text:SetTextColor(1, 0.2, 0.2)
-                 elseif tab:GetFontString() then
-                     tab:GetFontString():SetTextColor(1, 0.2, 0.2)
-                 end
+                -- Transparent Dark Red
+                if not panel.bg then
+                    panel.bg = panel:CreateTexture(nil, "BACKGROUND")
+                    -- Inset to avoid covering the border
+                    panel.bg:SetPoint("TOPLEFT", 4, -28)
+                    panel.bg:SetPoint("BOTTOMRIGHT", -4, 4)
+                    panel.bg:SetColorTexture(0.3, 0, 0, 0.5)
+                else
+                    panel.bg:Show()
+                end
+
+                -- Tint Tab Text Red
+                if tab.Text then
+                    tab.Text:SetTextColor(1, 0.2, 0.2)
+                elseif tab:GetFontString() then
+                    tab:GetFontString():SetTextColor(1, 0.2, 0.2)
+                end
             else
-                 if panel.bg then panel.bg:Hide() end
-                 -- Reset Tab Text (Normal Color)
-                 if tab.Text then
-                     tab.Text:SetTextColor(1, 0.82, 0) -- GameFontNormal Color approx
-                 elseif tab:GetFontString() then
-                     tab:GetFontString():SetTextColor(1, 0.82, 0)
-                 end
+                if panel.bg then panel.bg:Hide() end
+                -- Reset Tab Text (Normal Color)
+                if tab.Text then
+                    tab.Text:SetTextColor(1, 0.82, 0) -- GameFontNormal Color approx
+                elseif tab:GetFontString() then
+                    tab:GetFontString():SetTextColor(1, 0.82, 0)
+                end
             end
         end
-        
+
         -- Helper: Create Section Header
         local function CreateSectionHeader(parent, text, yOffset)
             local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
             header:SetPoint("TOPLEFT", 16, yOffset)
             header:SetText(text)
             header:SetTextColor(1, 0.82, 0) -- Gold
-            
+
             local line = parent:CreateTexture(nil, "ARTWORK")
             line:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
             line:SetPoint("RIGHT", parent, "RIGHT", -16, 0)
             line:SetHeight(1)
             line:SetColorTexture(0.5, 0.5, 0.5, 0.5)
-            
+
             return header
         end
 
@@ -278,7 +286,8 @@ function addonTable.Config.Initialize()
         CreateSectionHeader(trackerPanel, "General", -45)
 
         -- Enable Tracker Checkbox
-        local enableTrackerBtn = CreateFrame("CheckButton", "UIThingsTrackerEnableCheck", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local enableTrackerBtn = CreateFrame("CheckButton", "UIThingsTrackerEnableCheck", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         enableTrackerBtn:SetPoint("TOPLEFT", 20, -70)
         _G[enableTrackerBtn:GetName() .. "Text"]:SetText("Enable Objective Tracker Tweaks")
         enableTrackerBtn:SetChecked(UIThingsDB.tracker.enabled)
@@ -300,12 +309,12 @@ function addonTable.Config.Initialize()
             UIThingsDB.tracker.locked = locked
             UpdateTracker()
         end)
-        
+
         -------------------------------------------------------------
         -- SECTION: Size & Position
         -------------------------------------------------------------
         CreateSectionHeader(trackerPanel, "Size & Position", -100)
-        
+
         -- Width Slider
         local widthSlider = CreateFrame("Slider", "UIThingsWidthSlider", trackerPanel, "OptionsSliderTemplate")
         widthSlider:SetPoint("TOPLEFT", 20, -135)
@@ -323,7 +332,7 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Width: %d", value))
             UpdateTracker()
         end)
-        
+
         -- Height Slider
         local heightSlider = CreateFrame("Slider", "UIThingsHeightSlider", trackerPanel, "OptionsSliderTemplate")
         heightSlider:SetPoint("TOPLEFT", 230, -135)
@@ -341,7 +350,7 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Height: %d", value))
             UpdateTracker()
         end)
-        
+
         -- Quest Padding Slider
         local paddingSlider = CreateFrame("Slider", "UIThingsTrackerPaddingSlider", trackerPanel, "OptionsSliderTemplate")
         paddingSlider:SetPoint("TOPLEFT", 440, -135)
@@ -359,23 +368,24 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Padding: %d", value))
             UpdateTracker()
         end)
-        
+
         -- Strata Dropdown
         local trackerStrataLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         trackerStrataLabel:SetPoint("TOPLEFT", 20, -170)
         trackerStrataLabel:SetText("Strata:")
-        
-        local trackerStrataDropdown = CreateFrame("Frame", "UIThingsTrackerStrataDropdown", trackerPanel, "UIDropDownMenuTemplate")
+
+        local trackerStrataDropdown = CreateFrame("Frame", "UIThingsTrackerStrataDropdown", trackerPanel,
+            "UIDropDownMenuTemplate")
         trackerStrataDropdown:SetPoint("TOPLEFT", trackerStrataLabel, "BOTTOMLEFT", -15, -5)
-        
+
         local function TrackerStrataOnClick(self)
-             UIDropDownMenu_SetSelectedID(trackerStrataDropdown, self:GetID())
-             UIThingsDB.tracker.strata = self.value
-             UpdateTracker()
+            UIDropDownMenu_SetSelectedID(trackerStrataDropdown, self:GetID())
+            UIThingsDB.tracker.strata = self.value
+            UpdateTracker()
         end
-        
+
         local function TrackerStrataInit(self, level)
-            local stratas = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "TOOLTIP"}
+            local stratas = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "TOOLTIP" }
             for _, s in ipairs(stratas) do
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = s
@@ -384,7 +394,7 @@ function addonTable.Config.Initialize()
                 UIDropDownMenu_AddButton(info, level)
             end
         end
-        
+
         UIDropDownMenu_Initialize(trackerStrataDropdown, TrackerStrataInit)
         UIDropDownMenu_SetText(trackerStrataDropdown, UIThingsDB.tracker.strata or "LOW")
 
@@ -392,22 +402,22 @@ function addonTable.Config.Initialize()
         -- SECTION: Fonts
         -------------------------------------------------------------
         CreateSectionHeader(trackerPanel, "Fonts", -225)
-        
+
         -- Helper for Font Dropdowns
         local function CreateFontDropdown(parent, variableKey, labelText, xOffset, yOffset)
             local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             label:SetPoint("TOPLEFT", xOffset, yOffset)
             label:SetText(labelText)
-            
+
             local dropdown = CreateFrame("Frame", nil, parent, "UIDropDownMenuTemplate")
             dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -15, -5)
-            
+
             local function OnClick(self)
                 UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
                 UIThingsDB.tracker[variableKey] = self.value
                 UpdateTracker()
             end
-            
+
             local function Init(self, level)
                 for k, v in pairs(fonts) do
                     local info = UIDropDownMenu_CreateInfo()
@@ -417,7 +427,7 @@ function addonTable.Config.Initialize()
                     UIDropDownMenu_AddButton(info, level)
                 end
             end
-            
+
             UIDropDownMenu_Initialize(dropdown, Init)
             UIDropDownMenu_SetText(dropdown, "Select Font")
             local currentPath = UIThingsDB.tracker[variableKey]
@@ -427,7 +437,7 @@ function addonTable.Config.Initialize()
                     break
                 end
             end
-            
+
             return dropdown
         end
 
@@ -435,7 +445,8 @@ function addonTable.Config.Initialize()
         local headerFontDropdown = CreateFontDropdown(trackerPanel, "headerFont", "Quest Name Font:", 20, -250)
 
         -- Quest Name Size (under font dropdown)
-        local headerSizeSlider = CreateFrame("Slider", "UIThingsTrackerHeaderSizeSlider", trackerPanel, "OptionsSliderTemplate")
+        local headerSizeSlider = CreateFrame("Slider", "UIThingsTrackerHeaderSizeSlider", trackerPanel,
+            "OptionsSliderTemplate")
         headerSizeSlider:SetPoint("TOPLEFT", 20, -315)
         headerSizeSlider:SetMinMaxValues(8, 32)
         headerSizeSlider:SetValueStep(1)
@@ -456,7 +467,8 @@ function addonTable.Config.Initialize()
         local detailFontDropdown = CreateFontDropdown(trackerPanel, "detailFont", "Quest Detail Font:", 250, -250)
 
         -- Quest Detail Size (under font dropdown)
-        local detailSizeSlider = CreateFrame("Slider", "UIThingsTrackerDetailSizeSlider", trackerPanel, "OptionsSliderTemplate")
+        local detailSizeSlider = CreateFrame("Slider", "UIThingsTrackerDetailSizeSlider", trackerPanel,
+            "OptionsSliderTemplate")
         detailSizeSlider:SetPoint("TOPLEFT", 250, -315)
         detailSizeSlider:SetMinMaxValues(8, 32)
         detailSizeSlider:SetValueStep(1)
@@ -477,21 +489,21 @@ function addonTable.Config.Initialize()
         -- SECTION: Content
         -------------------------------------------------------------
         CreateSectionHeader(trackerPanel, "Content", -355)
-        
+
         -- Section Order Dropdown
         local orderLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         orderLabel:SetPoint("TOPLEFT", 20, -380)
         orderLabel:SetText("Section Order:")
-        
+
         local orderDropdown = CreateFrame("Frame", "UIThingsTrackerOrderDropdown", trackerPanel, "UIDropDownMenuTemplate")
         orderDropdown:SetPoint("TOPLEFT", orderLabel, "BOTTOMLEFT", -15, -5)
-        
+
         local function OrderOnClick(self)
-             UIDropDownMenu_SetSelectedID(orderDropdown, self:GetID())
-             UIThingsDB.tracker.sectionOrder = self.value
-             UpdateTracker()
+            UIDropDownMenu_SetSelectedID(orderDropdown, self:GetID())
+            UIThingsDB.tracker.sectionOrder = self.value
+            UpdateTracker()
         end
-        
+
         local function OrderInit(self, level)
             local orders = {
                 { text = "MWQ -> Quests -> Achv", value = 1 },
@@ -509,28 +521,30 @@ function addonTable.Config.Initialize()
                 UIDropDownMenu_AddButton(i, level)
             end
         end
-        
+
         UIDropDownMenu_Initialize(orderDropdown, OrderInit)
         UIDropDownMenu_SetWidth(orderDropdown, 180)
         UIDropDownMenu_SetSelectedValue(orderDropdown, UIThingsDB.tracker.sectionOrder or 1)
         UIDropDownMenu_SetText(orderDropdown, "World Quests -> Quests -> Achievements")
 
         -- Only Show Active World Quests Checkbox
-        local wqActiveCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQActiveCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local wqActiveCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQActiveCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         wqActiveCheckbox:SetPoint("TOPLEFT", 250, -400)
         wqActiveCheckbox:SetHitRectInsets(0, -130, 0, 0)
-        _G[wqActiveCheckbox:GetName().."Text"]:SetText("Only Active World Quests")
+        _G[wqActiveCheckbox:GetName() .. "Text"]:SetText("Only Active World Quests")
         wqActiveCheckbox:SetChecked(UIThingsDB.tracker.onlyActiveWorldQuests)
         wqActiveCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.onlyActiveWorldQuests = self:GetChecked()
             UpdateTracker()
         end)
-        
+
         -- Show World Quest Timer Checkbox
-        local wqTimerCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQTimerCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local wqTimerCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQTimerCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         wqTimerCheckbox:SetPoint("TOPLEFT", 20, -425)
         wqTimerCheckbox:SetHitRectInsets(0, -130, 0, 0)
-        _G[wqTimerCheckbox:GetName().."Text"]:SetText("Show World Quest Timer")
+        _G[wqTimerCheckbox:GetName() .. "Text"]:SetText("Show World Quest Timer")
         wqTimerCheckbox:SetChecked(UIThingsDB.tracker.showWorldQuestTimer)
         wqTimerCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.showWorldQuestTimer = self:GetChecked()
@@ -541,53 +555,58 @@ function addonTable.Config.Initialize()
         -- SECTION: Behavior
         -------------------------------------------------------------
         CreateSectionHeader(trackerPanel, "Behavior", -450)
-        
+
         -- Auto Track Quests Checkbox
-        local autoTrackCheckbox = CreateFrame("CheckButton", "UIThingsTrackerAutoTrackCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local autoTrackCheckbox = CreateFrame("CheckButton", "UIThingsTrackerAutoTrackCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         autoTrackCheckbox:SetPoint("TOPLEFT", 20, -475)
         autoTrackCheckbox:SetHitRectInsets(0, -110, 0, 0)
-        _G[autoTrackCheckbox:GetName().."Text"]:SetText("Auto Track Quests")
+        _G[autoTrackCheckbox:GetName() .. "Text"]:SetText("Auto Track Quests")
         autoTrackCheckbox:SetChecked(UIThingsDB.tracker.autoTrackQuests)
         autoTrackCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.autoTrackQuests = self:GetChecked()
         end)
-        
+
         -- Right-Click Active Quest Checkbox
-        local rightClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerRightClickCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local rightClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerRightClickCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         rightClickCheckbox:SetPoint("TOPLEFT", 180, -475)
         rightClickCheckbox:SetHitRectInsets(0, -130, 0, 0)
-        _G[rightClickCheckbox:GetName().."Text"]:SetText("Right-Click: Active Quest")
+        _G[rightClickCheckbox:GetName() .. "Text"]:SetText("Right-Click: Active Quest")
         rightClickCheckbox:SetChecked(UIThingsDB.tracker.rightClickSuperTrack)
         rightClickCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.rightClickSuperTrack = self:GetChecked()
         end)
-        
+
         -- Shift-Click Untrack Checkbox
-        local shiftClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerShiftClickCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local shiftClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerShiftClickCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         shiftClickCheckbox:SetPoint("TOPLEFT", 380, -475)
         shiftClickCheckbox:SetHitRectInsets(0, -110, 0, 0)
-        _G[shiftClickCheckbox:GetName().."Text"]:SetText("Shift-Click: Untrack")
+        _G[shiftClickCheckbox:GetName() .. "Text"]:SetText("Shift-Click: Untrack")
         shiftClickCheckbox:SetChecked(UIThingsDB.tracker.shiftClickUntrack)
         shiftClickCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.shiftClickUntrack = self:GetChecked()
         end)
-        
+
         -- Hide In Combat Checkbox
-        local combatHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCombatHideCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local combatHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCombatHideCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         combatHideCheckbox:SetPoint("TOPLEFT", 20, -500)
         combatHideCheckbox:SetHitRectInsets(0, -90, 0, 0)
-        _G[combatHideCheckbox:GetName().."Text"]:SetText("Hide in Combat")
+        _G[combatHideCheckbox:GetName() .. "Text"]:SetText("Hide in Combat")
         combatHideCheckbox:SetChecked(UIThingsDB.tracker.hideInCombat)
         combatHideCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.hideInCombat = self:GetChecked()
             UpdateTracker()
         end)
-        
+
         -- Hide In M+ Checkbox
-        local mplusHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerMPlusHideCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local mplusHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerMPlusHideCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         mplusHideCheckbox:SetPoint("TOPLEFT", 180, -500)
         mplusHideCheckbox:SetHitRectInsets(0, -70, 0, 0)
-        _G[mplusHideCheckbox:GetName().."Text"]:SetText("Hide in M+")
+        _G[mplusHideCheckbox:GetName() .. "Text"]:SetText("Hide in M+")
         mplusHideCheckbox:SetChecked(UIThingsDB.tracker.hideInMPlus)
         mplusHideCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.hideInMPlus = self:GetChecked()
@@ -598,42 +617,43 @@ function addonTable.Config.Initialize()
         -- SECTION: Appearance
         -------------------------------------------------------------
         CreateSectionHeader(trackerPanel, "Appearance", -535)
-        
+
         -- Row 1: Border
-        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBorderCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBorderCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         borderCheckbox:SetPoint("TOPLEFT", 20, -560)
         borderCheckbox:SetHitRectInsets(0, -80, 0, 0)
-        _G[borderCheckbox:GetName().."Text"]:SetText("Show Border")
+        _G[borderCheckbox:GetName() .. "Text"]:SetText("Show Border")
         borderCheckbox:SetChecked(UIThingsDB.tracker.showBorder)
         borderCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.showBorder = self:GetChecked()
             UpdateTracker()
         end)
-        
+
         local borderColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         borderColorLabel:SetPoint("TOPLEFT", 140, -563)
         borderColorLabel:SetText("Color:")
-        
+
         local borderColorSwatch = CreateFrame("Button", nil, trackerPanel)
         borderColorSwatch:SetSize(20, 20)
         borderColorSwatch:SetPoint("LEFT", borderColorLabel, "RIGHT", 5, 0)
-        
+
         borderColorSwatch.tex = borderColorSwatch:CreateTexture(nil, "OVERLAY")
         borderColorSwatch.tex:SetAllPoints()
-        local bc = UIThingsDB.tracker.borderColor or {r=0, g=0, b=0, a=1}
+        local bc = UIThingsDB.tracker.borderColor or { r = 0, g = 0, b = 0, a = 1 }
         borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-        
+
         Mixin(borderColorSwatch, BackdropTemplateMixin)
-        borderColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        borderColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         borderColorSwatch:SetBackdropBorderColor(1, 1, 1)
 
         borderColorSwatch:SetScript("OnClick", function(self)
             local info = UIDropDownMenu_CreateInfo()
             local prevR, prevG, prevB, prevA = bc.r, bc.g, bc.b, bc.a
-            
+
             info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
-            info.opacityFunc = function() 
+            info.opacityFunc = function()
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 local a = ColorPickerFrame:GetColorAlpha()
                 bc.r, bc.g, bc.b, bc.a = r, g, b, a
@@ -657,42 +677,43 @@ function addonTable.Config.Initialize()
             end
             ColorPickerFrame:SetupColorPickerAndShow(info)
         end)
-        
+
         -- Row 2: Background
-        local bgCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBgCheckbox", trackerPanel, "ChatConfigCheckButtonTemplate")
+        local bgCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBgCheckbox", trackerPanel,
+            "ChatConfigCheckButtonTemplate")
         bgCheckbox:SetPoint("TOPLEFT", 20, -585)
         bgCheckbox:SetHitRectInsets(0, -110, 0, 0)
-        _G[bgCheckbox:GetName().."Text"]:SetText("Show Background")
+        _G[bgCheckbox:GetName() .. "Text"]:SetText("Show Background")
         bgCheckbox:SetChecked(UIThingsDB.tracker.showBackground)
         bgCheckbox:SetScript("OnClick", function(self)
             UIThingsDB.tracker.showBackground = self:GetChecked()
             UpdateTracker()
         end)
-        
+
         local bgColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         bgColorLabel:SetPoint("TOPLEFT", 165, -588)
         bgColorLabel:SetText("Color:")
-        
+
         local bgColorSwatch = CreateFrame("Button", nil, trackerPanel)
         bgColorSwatch:SetSize(20, 20)
         bgColorSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 5, 0)
-        
+
         bgColorSwatch.tex = bgColorSwatch:CreateTexture(nil, "OVERLAY")
         bgColorSwatch.tex:SetAllPoints()
-        local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0.5}
+        local c = UIThingsDB.tracker.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
         bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-        
+
         Mixin(bgColorSwatch, BackdropTemplateMixin)
-        bgColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        bgColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         bgColorSwatch:SetBackdropBorderColor(1, 1, 1)
 
         bgColorSwatch:SetScript("OnClick", function(self)
             local info = UIDropDownMenu_CreateInfo()
             local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
-            
+
             info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
-            info.opacityFunc = function() 
+            info.opacityFunc = function()
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 local a = ColorPickerFrame:GetColorAlpha()
                 c.r, c.g, c.b, c.a = r, g, b, a
@@ -705,7 +726,7 @@ function addonTable.Config.Initialize()
                 local a = ColorPickerFrame:GetColorAlpha()
                 c.r, c.g, c.b, c.a = r, g, b, a
                 bgColorSwatch.tex:SetColorTexture(r, g, b, a)
-                 UIThingsDB.tracker.backgroundColor = c
+                UIThingsDB.tracker.backgroundColor = c
                 UpdateTracker()
             end
             info.cancelFunc = function(previousValues)
@@ -714,35 +735,35 @@ function addonTable.Config.Initialize()
                 UIThingsDB.tracker.backgroundColor = c
                 UpdateTracker()
             end
-            
+
             ColorPickerFrame:SetupColorPickerAndShow(info)
         end)
-        
+
         -- Row 3: Active Quest Color
         local activeColorLabel = trackerPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         activeColorLabel:SetPoint("TOPLEFT", 20, -613)
         activeColorLabel:SetText("Active Quest:")
-        
+
         local activeColorSwatch = CreateFrame("Button", nil, trackerPanel)
         activeColorSwatch:SetSize(20, 20)
         activeColorSwatch:SetPoint("LEFT", activeColorLabel, "RIGHT", 10, 0)
-        
+
         activeColorSwatch.tex = activeColorSwatch:CreateTexture(nil, "OVERLAY")
         activeColorSwatch.tex:SetAllPoints()
-        local ac = UIThingsDB.tracker.activeQuestColor or {r=0, g=1, b=0, a=1}
+        local ac = UIThingsDB.tracker.activeQuestColor or { r = 0, g = 1, b = 0, a = 1 }
         activeColorSwatch.tex:SetColorTexture(ac.r, ac.g, ac.b, ac.a)
-        
+
         Mixin(activeColorSwatch, BackdropTemplateMixin)
-        activeColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        activeColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         activeColorSwatch:SetBackdropBorderColor(1, 1, 1)
 
         activeColorSwatch:SetScript("OnClick", function(self)
             local info = UIDropDownMenu_CreateInfo()
             local prevR, prevG, prevB, prevA = ac.r, ac.g, ac.b, ac.a
-            
+
             info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
-            info.opacityFunc = function() 
+            info.opacityFunc = function()
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 local a = ColorPickerFrame:GetColorAlpha()
                 ac.r, ac.g, ac.b, ac.a = r, g, b, a
@@ -755,7 +776,7 @@ function addonTable.Config.Initialize()
                 local a = ColorPickerFrame:GetColorAlpha()
                 ac.r, ac.g, ac.b, ac.a = r, g, b, a
                 activeColorSwatch.tex:SetColorTexture(r, g, b, a)
-                 UIThingsDB.tracker.activeQuestColor = ac
+                UIThingsDB.tracker.activeQuestColor = ac
                 UpdateTracker()
             end
             info.cancelFunc = function(previousValues)
@@ -776,7 +797,8 @@ function addonTable.Config.Initialize()
         vendorTitle:SetText("Vendor Automation")
 
         -- Enable Vendor Checkbox
-        local enableVendorBtn = CreateFrame("CheckButton", "UIThingsVendorEnableCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
+        local enableVendorBtn = CreateFrame("CheckButton", "UIThingsVendorEnableCheck", vendorPanel,
+            "ChatConfigCheckButtonTemplate")
         enableVendorBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableVendorBtn:GetName() .. "Text"]:SetText("Enable Vendor Automation")
         enableVendorBtn:SetChecked(UIThingsDB.vendor.enabled)
@@ -788,7 +810,8 @@ function addonTable.Config.Initialize()
         UpdateModuleVisuals(vendorPanel, tab2, UIThingsDB.vendor.enabled)
 
         -- Auto Repair
-        local repairBtn = CreateFrame("CheckButton", "UIThingsAutoRepairCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
+        local repairBtn = CreateFrame("CheckButton", "UIThingsAutoRepairCheck", vendorPanel,
+            "ChatConfigCheckButtonTemplate")
         repairBtn:SetPoint("TOPLEFT", 20, -70)
         _G[repairBtn:GetName() .. "Text"]:SetText("Auto Repair")
         repairBtn:SetChecked(UIThingsDB.vendor.autoRepair)
@@ -798,7 +821,8 @@ function addonTable.Config.Initialize()
         end)
 
         -- Guild Repair
-        local guildBtn = CreateFrame("CheckButton", "UIThingsGuildRepairCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
+        local guildBtn = CreateFrame("CheckButton", "UIThingsGuildRepairCheck", vendorPanel,
+            "ChatConfigCheckButtonTemplate")
         guildBtn:SetPoint("TOPLEFT", 40, -100) -- Indented
         _G[guildBtn:GetName() .. "Text"]:SetText("Use Guild Funds")
         guildBtn:SetChecked(UIThingsDB.vendor.useGuildRepair)
@@ -816,7 +840,7 @@ function addonTable.Config.Initialize()
             local val = not not self:GetChecked()
             UIThingsDB.vendor.sellGreys = val
         end)
-        
+
         -- Durability Threshold Slider
         local thresholdSlider = CreateFrame("Slider", "UIThingsThresholdSlider", vendorPanel, "OptionsSliderTemplate")
         thresholdSlider:SetPoint("TOPLEFT", 20, -170)
@@ -824,7 +848,8 @@ function addonTable.Config.Initialize()
         thresholdSlider:SetValueStep(1)
         thresholdSlider:SetObeyStepOnDrag(true)
         thresholdSlider:SetWidth(200)
-        _G[thresholdSlider:GetName() .. 'Text']:SetText(string.format("Repair Reminder: %d%%", UIThingsDB.vendor.repairThreshold or 20))
+        _G[thresholdSlider:GetName() .. 'Text']:SetText(string.format("Repair Reminder: %d%%",
+            UIThingsDB.vendor.repairThreshold or 20))
         _G[thresholdSlider:GetName() .. 'Low']:SetText("0%")
         _G[thresholdSlider:GetName() .. 'High']:SetText("100%")
         thresholdSlider:SetValue(UIThingsDB.vendor.repairThreshold or 20)
@@ -834,9 +859,10 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Repair Reminder: %d%%", value))
             if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end)
-        
+
         -- Lock Alert Checkbox
-        local vendorLockBtn = CreateFrame("CheckButton", "UIThingsVendorLockCheck", vendorPanel, "ChatConfigCheckButtonTemplate")
+        local vendorLockBtn = CreateFrame("CheckButton", "UIThingsVendorLockCheck", vendorPanel,
+            "ChatConfigCheckButtonTemplate")
         vendorLockBtn:SetPoint("TOPLEFT", 20, -210)
         _G[vendorLockBtn:GetName() .. "Text"]:SetText("Lock Repair Alert")
         vendorLockBtn:SetChecked(UIThingsDB.vendor.warningLocked)
@@ -845,21 +871,22 @@ function addonTable.Config.Initialize()
             UIThingsDB.vendor.warningLocked = locked
             if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end)
-        
+
         -- Vendor Font Selector
         local vendorFontLabel = vendorPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         vendorFontLabel:SetPoint("TOPLEFT", 20, -250)
         vendorFontLabel:SetText("Alert Font:")
-        
-        local vendorFontDropdown = CreateFrame("Frame", "UIThingsVendorFontDropdown", vendorPanel, "UIDropDownMenuTemplate")
+
+        local vendorFontDropdown = CreateFrame("Frame", "UIThingsVendorFontDropdown", vendorPanel,
+            "UIDropDownMenuTemplate")
         vendorFontDropdown:SetPoint("TOPLEFT", vendorFontLabel, "BOTTOMLEFT", -15, -10)
-        
+
         local function VendorFontOnClick(self)
-             UIDropDownMenu_SetSelectedID(vendorFontDropdown, self:GetID())
-             UIThingsDB.vendor.font = self.value
-             if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+            UIDropDownMenu_SetSelectedID(vendorFontDropdown, self:GetID())
+            UIThingsDB.vendor.font = self.value
+            if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end
-        
+
         local function VendorFontInit(self, level)
             for k, v in pairs(fonts) do
                 local info = UIDropDownMenu_CreateInfo()
@@ -869,7 +896,7 @@ function addonTable.Config.Initialize()
                 UIDropDownMenu_AddButton(info, level)
             end
         end
-        
+
         UIDropDownMenu_Initialize(vendorFontDropdown, VendorFontInit)
         UIDropDownMenu_SetText(vendorFontDropdown, "Select Font")
         for i, f in ipairs(fonts) do
@@ -879,7 +906,8 @@ function addonTable.Config.Initialize()
         end
 
         -- Vendor Font Size Slider
-        local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", vendorPanel, "OptionsSliderTemplate")
+        local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", vendorPanel,
+            "OptionsSliderTemplate")
         vendorFontSizeSlider:SetPoint("TOPLEFT", 20, -320)
         vendorFontSizeSlider:SetMinMaxValues(10, 64)
         vendorFontSizeSlider:SetValueStep(1)
@@ -895,7 +923,7 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Alert Size: %d", value))
             if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end)
-        
+
         -------------------------------------------------------------
         -- COMBAT PANEL CONTENT
         -------------------------------------------------------------
@@ -910,7 +938,8 @@ function addonTable.Config.Initialize()
         combatTitle:SetPoint("TOPLEFT", 16, -16)
         combatTitle:SetText("Combat Timer")
 
-        local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", combatPanel, "ChatConfigCheckButtonTemplate")
+        local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", combatPanel,
+            "ChatConfigCheckButtonTemplate")
         enableCombatBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableCombatBtn:GetName() .. "Text"]:SetText("Enable Combat Timer")
         enableCombatBtn:SetChecked(UIThingsDB.combat.enabled)
@@ -923,7 +952,8 @@ function addonTable.Config.Initialize()
         UpdateModuleVisuals(combatPanel, tab3, UIThingsDB.combat.enabled)
 
         -- Lock Timer
-        local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", combatPanel, "ChatConfigCheckButtonTemplate")
+        local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", combatPanel,
+            "ChatConfigCheckButtonTemplate")
         combatLockBtn:SetPoint("TOPLEFT", 20, -70)
         _G[combatLockBtn:GetName() .. "Text"]:SetText("Lock Combat Timer")
         combatLockBtn:SetChecked(UIThingsDB.combat.locked)
@@ -932,23 +962,23 @@ function addonTable.Config.Initialize()
             UIThingsDB.combat.locked = locked
             UpdateCombat()
         end)
-        
+
         -- Font Selector (Simple Dropdown)
         local fontLabel = combatPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         fontLabel:SetPoint("TOPLEFT", 20, -110)
         fontLabel:SetText("Font:")
-        
+
         local fontDropdown = CreateFrame("Frame", "UIThingsFontDropdown", combatPanel, "UIDropDownMenuTemplate")
         fontDropdown:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -15, -10)
-        
+
 
 
         local function OnClick(self)
-             UIDropDownMenu_SetSelectedID(fontDropdown, self:GetID())
-             UIThingsDB.combat.font = self.value
-             UpdateCombat()
+            UIDropDownMenu_SetSelectedID(fontDropdown, self:GetID())
+            UIThingsDB.combat.font = self.value
+            UpdateCombat()
         end
-        
+
         local function Initialize(self, level)
             for k, v in pairs(fonts) do
                 local info = UIDropDownMenu_CreateInfo()
@@ -958,10 +988,10 @@ function addonTable.Config.Initialize()
                 UIDropDownMenu_AddButton(info, level)
             end
         end
-        
+
         UIDropDownMenu_Initialize(fontDropdown, Initialize)
         -- Set initial selection logic (simplified)
-        UIDropDownMenu_SetText(fontDropdown, "Select Font") 
+        UIDropDownMenu_SetText(fontDropdown, "Select Font")
         for i, f in ipairs(fonts) do
             if f.path == UIThingsDB.combat.font then
                 UIDropDownMenu_SetText(fontDropdown, f.name)
@@ -985,21 +1015,27 @@ function addonTable.Config.Initialize()
             _G[self:GetName() .. 'Text']:SetText(string.format("Size: %d", value))
             UpdateCombat()
         end)
-        
+
         -- Color Pickers
-        CreateColorPicker(combatPanel, "UIThingsCombatColorIn", "In Combat Color", 
-            function() return UIThingsDB.combat.colorInCombat.r, UIThingsDB.combat.colorInCombat.g, UIThingsDB.combat.colorInCombat.b end,
-            function(r, g, b) 
-                UIThingsDB.combat.colorInCombat = {r=r, g=g, b=b}
+        CreateColorPicker(combatPanel, "UIThingsCombatColorIn", "In Combat Color",
+            function()
+                return UIThingsDB.combat.colorInCombat.r, UIThingsDB.combat.colorInCombat.g,
+                    UIThingsDB.combat.colorInCombat.b
+            end,
+            function(r, g, b)
+                UIThingsDB.combat.colorInCombat = { r = r, g = g, b = b }
                 UpdateCombat()
             end,
             -230
         )
-        
-        CreateColorPicker(combatPanel, "UIThingsCombatColorOut", "Out Combat Color", 
-            function() return UIThingsDB.combat.colorOutCombat.r, UIThingsDB.combat.colorOutCombat.g, UIThingsDB.combat.colorOutCombat.b end,
-            function(r, g, b) 
-                UIThingsDB.combat.colorOutCombat = {r=r, g=g, b=b}
+
+        CreateColorPicker(combatPanel, "UIThingsCombatColorOut", "Out Combat Color",
+            function()
+                return UIThingsDB.combat.colorOutCombat.r, UIThingsDB.combat.colorOutCombat.g,
+                    UIThingsDB.combat.colorOutCombat.b
+            end,
+            function(r, g, b)
+                UIThingsDB.combat.colorOutCombat = { r = r, g = g, b = b }
                 UpdateCombat()
             end,
             -260
@@ -1010,7 +1046,7 @@ function addonTable.Config.Initialize()
         -- FRAMES PANEL CONTENT
         -------------------------------------------------------------
         local selectedFrameIndex = nil
-        
+
         local function UpdateFrames()
             if addonTable.Frames and addonTable.Frames.UpdateFrames then
                 addonTable.Frames.UpdateFrames()
@@ -1020,10 +1056,11 @@ function addonTable.Config.Initialize()
         local framesTitle = framesPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
         framesTitle:SetPoint("TOPLEFT", 16, -16)
         framesTitle:SetText("Custom Frames")
-        
+
         local addFrameBtn, duplicateFrameBtn
 
-        local framesEnableBtn = CreateFrame("CheckButton", "UIThingsFramesEnableCheck", framesPanel, "ChatConfigCheckButtonTemplate")
+        local framesEnableBtn = CreateFrame("CheckButton", "UIThingsFramesEnableCheck", framesPanel,
+            "ChatConfigCheckButtonTemplate")
         framesEnableBtn:SetPoint("TOPLEFT", 20, -50)
         _G[framesEnableBtn:GetName() .. "Text"]:SetText("Enable Custom Frames")
         framesEnableBtn:SetChecked(UIThingsDB.frames.enabled)
@@ -1044,22 +1081,22 @@ function addonTable.Config.Initialize()
 
         local frameDropdown = CreateFrame("Frame", "UIThingsFrameSelectDropdown", framesPanel, "UIDropDownMenuTemplate")
         frameDropdown:SetPoint("TOPLEFT", frameSelectLabel, "BOTTOMLEFT", -15, -10)
-        
+
         -- Controls Container (hidden if no frame selected)
         local frameControls = CreateFrame("Frame", nil, framesPanel)
         frameControls:SetPoint("TOPLEFT", frameDropdown, "BOTTOMLEFT", 15, -20)
         frameControls:SetSize(400, 300)
         frameControls:Hide()
-        
+
         -- Refresh Function forward declaration
-        local RefreshFrameControls 
+        local RefreshFrameControls
 
         local function FrameSelectOnClick(self)
-             UIDropDownMenu_SetSelectedID(frameDropdown, self:GetID())
-             selectedFrameIndex = self.value
-             RefreshFrameControls()
+            UIDropDownMenu_SetSelectedID(frameDropdown, self:GetID())
+            selectedFrameIndex = self.value
+            RefreshFrameControls()
         end
-        
+
         local function FrameSelectInit(self, level)
             for i, f in ipairs(UIThingsDB.frames.list) do
                 local info = UIDropDownMenu_CreateInfo()
@@ -1072,14 +1109,15 @@ function addonTable.Config.Initialize()
 
         local function UpdateDropdownText()
             if selectedFrameIndex and UIThingsDB.frames.list[selectedFrameIndex] then
-                UIDropDownMenu_SetText(frameDropdown, UIThingsDB.frames.list[selectedFrameIndex].name or ("Frame " .. selectedFrameIndex))
+                UIDropDownMenu_SetText(frameDropdown,
+                    UIThingsDB.frames.list[selectedFrameIndex].name or ("Frame " .. selectedFrameIndex))
             else
                 UIDropDownMenu_SetText(frameDropdown, "Select a Frame")
             end
         end
 
         UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit)
-        
+
         -- Add Button
         addFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
         addFrameBtn:SetPoint("LEFT", frameDropdown, "RIGHT", 130, 2)
@@ -1089,7 +1127,7 @@ function addonTable.Config.Initialize()
             local baseName = "Frame"
             local name = baseName
             local count = 1
-            
+
             -- Simple unique name generator
             local function NameExists(n)
                 for _, f in ipairs(UIThingsDB.frames.list) do
@@ -1097,21 +1135,23 @@ function addonTable.Config.Initialize()
                 end
                 return false
             end
-            
+
             while NameExists(name) do
                 count = count + 1
                 name = baseName .. " " .. count
             end
-            
+
             table.insert(UIThingsDB.frames.list, {
                 name = name,
                 locked = false,
-                width = 100, height = 100,
-                x = 0, y = 0,
+                width = 100,
+                height = 100,
+                x = 0,
+                y = 0,
                 borderSize = 1,
                 strata = "LOW",
-                color = {r=0, g=0, b=0, a=0.5},
-                borderColor = {r=1, g=1, b=1, a=1}
+                color = { r = 0, g = 0, b = 0, a = 0.5 },
+                borderColor = { r = 1, g = 1, b = 1, a = 1 }
             })
             selectedFrameIndex = #UIThingsDB.frames.list
             UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit) -- Refresh list
@@ -1119,74 +1159,80 @@ function addonTable.Config.Initialize()
             RefreshFrameControls()
             UpdateFrames()
         end)
-        
+
         -- Duplicate Button
         duplicateFrameBtn = CreateFrame("Button", nil, framesPanel, "UIPanelButtonTemplate")
         duplicateFrameBtn:SetPoint("LEFT", addFrameBtn, "RIGHT", 10, 0)
         duplicateFrameBtn:SetSize(80, 22)
         duplicateFrameBtn:SetText("Duplicate")
         duplicateFrameBtn:SetScript("OnClick", function()
-             if not selectedFrameIndex then return end
-             
-             local source = UIThingsDB.frames.list[selectedFrameIndex]
-             if not source then return end
-             
-             -- Helper to deep copy table
-             local function CopyTable(t)
-                 local copy = {}
-                 for k, v in pairs(t) do
-                     if type(v) == "table" then
-                         copy[k] = CopyTable(v)
-                     else
-                         copy[k] = v
-                     end
-                 end
-                 return copy
-             end
-             
-             local newFrameData = CopyTable(source)
-             
-             -- Generate new name (Increment number if present, else append count)
-             local baseName, num = string.match(source.name, "^(.*%A)(%d+)$")
-             if not baseName then 
-                 baseName = source.name .. " "
-                 num = 1
-             else
-                 num = tonumber(num) + 1
-             end
-             
-             local function NameExists(n)
-                 for _, f in ipairs(UIThingsDB.frames.list) do
-                     if f.name == n then return true end
-                 end
-                 return false
-             end
-             
-             local newName = baseName .. num
-             while NameExists(newName) do
-                 num = num + 1
-                 newName = baseName .. num
-             end
-             newFrameData.name = newName
-             
-             -- Move 10 pixels toward center (0,0)
-             -- If x > 0, subtract 10. If x < 0, add 10.
-             if newFrameData.x > 0 then newFrameData.x = newFrameData.x - 10
-             else newFrameData.x = newFrameData.x + 10 end
-             
-             if newFrameData.y > 0 then newFrameData.y = newFrameData.y - 10
-             else newFrameData.y = newFrameData.y + 10 end
-             
-             -- Ensure it's unlocked
-             newFrameData.locked = false
-             
-             table.insert(UIThingsDB.frames.list, newFrameData)
-             selectedFrameIndex = #UIThingsDB.frames.list
-             
-             UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit)
-             UpdateDropdownText()
-             RefreshFrameControls()
-             UpdateFrames()
+            if not selectedFrameIndex then return end
+
+            local source = UIThingsDB.frames.list[selectedFrameIndex]
+            if not source then return end
+
+            -- Helper to deep copy table
+            local function CopyTable(t)
+                local copy = {}
+                for k, v in pairs(t) do
+                    if type(v) == "table" then
+                        copy[k] = CopyTable(v)
+                    else
+                        copy[k] = v
+                    end
+                end
+                return copy
+            end
+
+            local newFrameData = CopyTable(source)
+
+            -- Generate new name (Increment number if present, else append count)
+            local baseName, num = string.match(source.name, "^(.*%A)(%d+)$")
+            if not baseName then
+                baseName = source.name .. " "
+                num = 1
+            else
+                num = tonumber(num) + 1
+            end
+
+            local function NameExists(n)
+                for _, f in ipairs(UIThingsDB.frames.list) do
+                    if f.name == n then return true end
+                end
+                return false
+            end
+
+            local newName = baseName .. num
+            while NameExists(newName) do
+                num = num + 1
+                newName = baseName .. num
+            end
+            newFrameData.name = newName
+
+            -- Move 10 pixels toward center (0,0)
+            -- If x > 0, subtract 10. If x < 0, add 10.
+            if newFrameData.x > 0 then
+                newFrameData.x = newFrameData.x - 10
+            else
+                newFrameData.x = newFrameData.x + 10
+            end
+
+            if newFrameData.y > 0 then
+                newFrameData.y = newFrameData.y - 10
+            else
+                newFrameData.y = newFrameData.y + 10
+            end
+
+            -- Ensure it's unlocked
+            newFrameData.locked = false
+
+            table.insert(UIThingsDB.frames.list, newFrameData)
+            selectedFrameIndex = #UIThingsDB.frames.list
+
+            UIDropDownMenu_Initialize(frameDropdown, FrameSelectInit)
+            UpdateDropdownText()
+            RefreshFrameControls()
+            UpdateFrames()
         end)
 
         -- Initial Button State
@@ -1218,7 +1264,7 @@ function addonTable.Config.Initialize()
         nameEdit:SetPoint("LEFT", nameLabel, "RIGHT", 10, 0)
         nameEdit:SetSize(150, 20)
         nameEdit:SetAutoFocus(false)
-        nameEdit:SetScript("OnEnterPressed", function(self) 
+        nameEdit:SetScript("OnEnterPressed", function(self)
             if selectedFrameIndex then
                 UIThingsDB.frames.list[selectedFrameIndex].name = self:GetText()
                 self:ClearFocus()
@@ -1239,7 +1285,7 @@ function addonTable.Config.Initialize()
                 UpdateFrames()
             end
         end)
-        
+
         -- Helper to create input box
         local function CreateValueEditBox(slider, key)
             local edit = CreateFrame("EditBox", nil, slider:GetParent(), "InputBoxTemplate")
@@ -1250,7 +1296,7 @@ function addonTable.Config.Initialize()
                 local val = tonumber(self:GetText())
                 if val and selectedFrameIndex then
                     UIThingsDB.frames.list[selectedFrameIndex][key] = val
-                    slider:SetValue(val) 
+                    slider:SetValue(val)
                     UpdateFrames()
                 end
                 self:ClearFocus()
@@ -1268,9 +1314,9 @@ function addonTable.Config.Initialize()
         widthSlider:SetWidth(120)
         _G[widthSlider:GetName() .. 'Low']:SetText("")
         _G[widthSlider:GetName() .. 'High']:SetText("")
-        
+
         local widthEdit = CreateValueEditBox(widthSlider, "width")
-        
+
         widthSlider:SetScript("OnValueChanged", function(self, value)
             if selectedFrameIndex then
                 value = math.floor(value)
@@ -1289,9 +1335,9 @@ function addonTable.Config.Initialize()
         heightSlider:SetWidth(120)
         _G[heightSlider:GetName() .. 'Low']:SetText("")
         _G[heightSlider:GetName() .. 'High']:SetText("")
-        
+
         local heightEdit = CreateValueEditBox(heightSlider, "height")
-        
+
         heightSlider:SetScript("OnValueChanged", function(self, value)
             if selectedFrameIndex then
                 value = math.floor(value)
@@ -1311,9 +1357,9 @@ function addonTable.Config.Initialize()
         xSlider:SetWidth(120)
         _G[xSlider:GetName() .. 'Low']:SetText("")
         _G[xSlider:GetName() .. 'High']:SetText("")
-        
+
         local xEdit = CreateValueEditBox(xSlider, "x")
-        
+
         xSlider:SetScript("OnValueChanged", function(self, value)
             if selectedFrameIndex then
                 value = math.floor(value)
@@ -1332,9 +1378,9 @@ function addonTable.Config.Initialize()
         ySlider:SetWidth(120)
         _G[ySlider:GetName() .. 'Low']:SetText("")
         _G[ySlider:GetName() .. 'High']:SetText("")
-        
+
         local yEdit = CreateValueEditBox(ySlider, "y")
-        
+
         ySlider:SetScript("OnValueChanged", function(self, value)
             if selectedFrameIndex then
                 value = math.floor(value)
@@ -1365,15 +1411,16 @@ function addonTable.Config.Initialize()
         local strataLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         strataLabel:SetPoint("TOPLEFT", 180, -150)
         strataLabel:SetText("Strata:")
-        local strataDropdown = CreateFrame("Frame", "UIThingsFrameStrataDropdown", frameControls, "UIDropDownMenuTemplate")
+        local strataDropdown = CreateFrame("Frame", "UIThingsFrameStrataDropdown", frameControls,
+            "UIDropDownMenuTemplate")
         strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -10)
-        local stratas = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "TOOLTIP"}
+        local stratas = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "TOOLTIP" }
         local function StrataOnClick(self)
-             UIDropDownMenu_SetSelectedID(strataDropdown, self:GetID())
-             if selectedFrameIndex then
-                 UIThingsDB.frames.list[selectedFrameIndex].strata = self.value
-                 UpdateFrames()
-             end
+            UIDropDownMenu_SetSelectedID(strataDropdown, self:GetID())
+            if selectedFrameIndex then
+                UIThingsDB.frames.list[selectedFrameIndex].strata = self.value
+                UpdateFrames()
+            end
         end
         local function StrataInit(self, level)
             for _, s in ipairs(stratas) do
@@ -1396,7 +1443,7 @@ function addonTable.Config.Initialize()
         fillColorSwatch.tex = fillColorSwatch:CreateTexture(nil, "OVERLAY")
         fillColorSwatch.tex:SetAllPoints()
         Mixin(fillColorSwatch, BackdropTemplateMixin)
-        fillColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        fillColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         fillColorSwatch:SetBackdropBorderColor(1, 1, 1)
         fillColorSwatch:SetScript("OnClick", function(self)
             if not selectedFrameIndex then return end
@@ -1405,7 +1452,7 @@ function addonTable.Config.Initialize()
             local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
             info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
-            info.opacityFunc = function() 
+            info.opacityFunc = function()
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 local a = ColorPickerFrame:GetColorAlpha()
                 c.r, c.g, c.b, c.a = r, g, b, a
@@ -1431,20 +1478,20 @@ function addonTable.Config.Initialize()
         borderColorSwatch.tex = borderColorSwatch:CreateTexture(nil, "OVERLAY")
         borderColorSwatch.tex:SetAllPoints()
         Mixin(borderColorSwatch, BackdropTemplateMixin)
-        borderColorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        borderColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         borderColorSwatch:SetBackdropBorderColor(1, 1, 1)
         borderColorSwatch:SetScript("OnClick", function(self)
             if not selectedFrameIndex then return end
             -- Ensure default exists if old data
             if not UIThingsDB.frames.list[selectedFrameIndex].borderColor then
-                 UIThingsDB.frames.list[selectedFrameIndex].borderColor = {r=1, g=1, b=1, a=1}
+                UIThingsDB.frames.list[selectedFrameIndex].borderColor = { r = 1, g = 1, b = 1, a = 1 }
             end
             local c = UIThingsDB.frames.list[selectedFrameIndex].borderColor
             local info = UIDropDownMenu_CreateInfo()
             local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
             info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
             info.hasOpacity = true
-            info.opacityFunc = function() 
+            info.opacityFunc = function()
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 local a = ColorPickerFrame:GetColorAlpha()
                 c.r, c.g, c.b, c.a = r, g, b, a
@@ -1462,53 +1509,57 @@ function addonTable.Config.Initialize()
 
         -- Border Toggles (Cross Layout)
         -- Top: Center Top
-        local borderTopBtn = CreateFrame("CheckButton", "UIThingsBorderTopCheck", frameControls, "ChatConfigCheckButtonTemplate")
+        local borderTopBtn = CreateFrame("CheckButton", "UIThingsBorderTopCheck", frameControls,
+            "ChatConfigCheckButtonTemplate")
         borderTopBtn:SetPoint("TOPLEFT", 140, -240) -- Moved down and right slightly
         borderTopBtn.tooltip = "Show Top Border"
         borderTopBtn:SetScript("OnClick", function(self)
-             if selectedFrameIndex then
-                 UIThingsDB.frames.list[selectedFrameIndex].showTop = self:GetChecked()
-                 UpdateFrames()
-             end
+            if selectedFrameIndex then
+                UIThingsDB.frames.list[selectedFrameIndex].showTop = self:GetChecked()
+                UpdateFrames()
+            end
         end)
-        
+
         -- Bottom: Below Top with a gap
-        local borderBottomBtn = CreateFrame("CheckButton", "UIThingsBorderBottomCheck", frameControls, "ChatConfigCheckButtonTemplate")
+        local borderBottomBtn = CreateFrame("CheckButton", "UIThingsBorderBottomCheck", frameControls,
+            "ChatConfigCheckButtonTemplate")
         borderBottomBtn:SetPoint("TOP", borderTopBtn, "BOTTOM", 0, -24) -- Gap for the 'middle' row
         borderBottomBtn.tooltip = "Show Bottom Border"
         borderBottomBtn:SetScript("OnClick", function(self)
-             if selectedFrameIndex then
-                 UIThingsDB.frames.list[selectedFrameIndex].showBottom = self:GetChecked()
-                 UpdateFrames()
-             end
+            if selectedFrameIndex then
+                UIThingsDB.frames.list[selectedFrameIndex].showBottom = self:GetChecked()
+                UpdateFrames()
+            end
         end)
-        
+
         -- Left: Left of the vertical gap center
-        local borderLeftBtn = CreateFrame("CheckButton", "UIThingsBorderLeftCheck", frameControls, "ChatConfigCheckButtonTemplate")
+        local borderLeftBtn = CreateFrame("CheckButton", "UIThingsBorderLeftCheck", frameControls,
+            "ChatConfigCheckButtonTemplate")
         -- Align Y with the gap between Top and Bottom. Top is at Y, Bottom is at Y - Height - 24.
         -- Center of gap is approx Y - Height/2 - 12.
         -- Simpler: Anchor to Top Button's Bottom-Left corner, but offset Left and Down
         borderLeftBtn:SetPoint("TOPRIGHT", borderTopBtn, "BOTTOMLEFT", -2, -2)
         borderLeftBtn.tooltip = "Show Left Border"
         borderLeftBtn:SetScript("OnClick", function(self)
-             if selectedFrameIndex then
-                 UIThingsDB.frames.list[selectedFrameIndex].showLeft = self:GetChecked()
-                 UpdateFrames()
-             end
+            if selectedFrameIndex then
+                UIThingsDB.frames.list[selectedFrameIndex].showLeft = self:GetChecked()
+                UpdateFrames()
+            end
         end)
-        
+
         -- Right: Right of the vertical gap center
-        local borderRightBtn = CreateFrame("CheckButton", "UIThingsBorderRightCheck", frameControls, "ChatConfigCheckButtonTemplate")
+        local borderRightBtn = CreateFrame("CheckButton", "UIThingsBorderRightCheck", frameControls,
+            "ChatConfigCheckButtonTemplate")
         borderRightBtn:SetPoint("TOPLEFT", borderTopBtn, "BOTTOMRIGHT", 2, -2)
         borderRightBtn:SetFrameLevel(borderTopBtn:GetFrameLevel() + 5) -- Boost strata to fix "not clickable" issue
         borderRightBtn.tooltip = "Show Right Border"
         borderRightBtn:SetScript("OnClick", function(self)
-             if selectedFrameIndex then
-                 UIThingsDB.frames.list[selectedFrameIndex].showRight = self:GetChecked()
-                 UpdateFrames()
-             end
+            if selectedFrameIndex then
+                UIThingsDB.frames.list[selectedFrameIndex].showRight = self:GetChecked()
+                UpdateFrames()
+            end
         end)
-        
+
         local bordersLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         bordersLabel:SetPoint("RIGHT", borderLeftBtn, "LEFT", -10, 0)
         bordersLabel:SetText("Borders:")
@@ -1517,39 +1568,40 @@ function addonTable.Config.Initialize()
             if selectedFrameIndex and UIThingsDB.frames.list[selectedFrameIndex] then
                 frameControls:Show()
                 local f = UIThingsDB.frames.list[selectedFrameIndex]
-                
+
                 nameEdit:SetText(f.name or "")
                 lockFrameBtn:SetChecked(f.locked)
-                
+
                 widthSlider:SetValue(f.width)
                 _G[widthSlider:GetName() .. 'Text']:SetText("Width") -- Reset text
-                widthEdit:SetText(tostring(f.width)) -- Sync EditBox
-                
+                widthEdit:SetText(tostring(f.width))                 -- Sync EditBox
+
                 heightSlider:SetValue(f.height)
                 _G[heightSlider:GetName() .. 'Text']:SetText("Height")
                 heightEdit:SetText(tostring(f.height))
-                
+
                 xSlider:SetValue(f.x)
                 _G[xSlider:GetName() .. 'Text']:SetText("X Pos")
                 xEdit:SetText(tostring(f.x))
-                
+
                 ySlider:SetValue(f.y)
                 _G[ySlider:GetName() .. 'Text']:SetText("Y Pos")
                 yEdit:SetText(tostring(f.y))
-                
+
                 borderSlider:SetValue(f.borderSize)
                 _G[borderSlider:GetName() .. 'Text']:SetText(string.format("Border: %d", f.borderSize))
-                
+
                 UIDropDownMenu_SetText(strataDropdown, f.strata or "LOW")
-                
+
                 fillColorSwatch.tex:SetColorTexture(f.color.r, f.color.g, f.color.b, f.color.a)
-                
+
                 if f.borderColor then
-                    borderColorSwatch.tex:SetColorTexture(f.borderColor.r, f.borderColor.g, f.borderColor.b, f.borderColor.a)
+                    borderColorSwatch.tex:SetColorTexture(f.borderColor.r, f.borderColor.g, f.borderColor.b,
+                        f.borderColor.a)
                 else
                     borderColorSwatch.tex:SetColorTexture(1, 1, 1, 1)
                 end
-                
+
                 -- Borders
                 -- Defaults to true (nil -> true)
                 borderTopBtn:SetChecked((f.showTop == nil) and true or f.showTop)
@@ -1561,7 +1613,7 @@ function addonTable.Config.Initialize()
             end
         end
         addonTable.Config.RefreshFrameControls = RefreshFrameControls
-        
+
         -- Expose SelectFrame for external use
         function addonTable.Config.SelectFrame(index)
             if index and UIThingsDB.frames.list[index] then
@@ -1571,6 +1623,7 @@ function addonTable.Config.Initialize()
                 RefreshFrameControls()
             end
         end
+
         -- Helper: Create Loot Panel
         local function SetupLootPanel()
             local panel = lootPanel
@@ -1579,18 +1632,19 @@ function addonTable.Config.Initialize()
             title:SetText("Loot Toasts")
 
             -- Enable Checkbox
-            local enableCheckbox = CreateFrame("CheckButton", "UIThingsLootEnable", panel, "ChatConfigCheckButtonTemplate")
+            local enableCheckbox = CreateFrame("CheckButton", "UIThingsLootEnable", panel,
+                "ChatConfigCheckButtonTemplate")
             enableCheckbox:SetPoint("TOPLEFT", 20, -50)
-            _G[enableCheckbox:GetName().."Text"]:SetText("Enable Loot Toasts")
+            _G[enableCheckbox:GetName() .. "Text"]:SetText("Enable Loot Toasts")
             enableCheckbox:SetChecked(UIThingsDB.loot.enabled)
             enableCheckbox:SetScript("OnClick", function(self)
                 UIThingsDB.loot.enabled = self:GetChecked()
                 UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
             end)
             UpdateModuleVisuals(lootPanel, tab5, UIThingsDB.loot.enabled)
-            
 
-            
+
+
             -- Unlock Anchor Button
             local unlockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
             unlockBtn:SetSize(120, 24)
@@ -1631,25 +1685,25 @@ function addonTable.Config.Initialize()
             local qualityLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             qualityLabel:SetPoint("TOPLEFT", 20, -150)
             qualityLabel:SetText("Minimum Quality:")
-            
+
             local qualityDropdown = CreateFrame("Frame", "UIThingsLootQualityDropdown", panel, "UIDropDownMenuTemplate")
             qualityDropdown:SetPoint("TOPLEFT", 140, -140)
             UIDropDownMenu_SetWidth(qualityDropdown, 120)
-            
+
             local qualities = {
-                {text = "|cff9d9d9dPoor|r", value = 0},
-                {text = "|cffffffffCommon|r", value = 1},
-                {text = "|cff1eff00Uncommon|r", value = 2},
-                {text = "|cff0070ddRare|r", value = 3},
-                {text = "|cffa335eeEpic|r", value = 4},
-                {text = "|cffff8000Legendary|r", value = 5},
+                { text = "|cff9d9d9dPoor|r",      value = 0 },
+                { text = "|cffffffffCommon|r",    value = 1 },
+                { text = "|cff1eff00Uncommon|r",  value = 2 },
+                { text = "|cff0070ddRare|r",      value = 3 },
+                { text = "|cffa335eeEpic|r",      value = 4 },
+                { text = "|cffff8000Legendary|r", value = 5 },
             }
-            
+
             local function QualityOnClick(self)
                 UIDropDownMenu_SetSelectedValue(qualityDropdown, self.value)
                 UIThingsDB.loot.minQuality = self.value
             end
-            
+
             UIDropDownMenu_Initialize(qualityDropdown, function()
                 for _, info in ipairs(qualities) do
                     local inf = UIDropDownMenu_CreateInfo()
@@ -1664,28 +1718,28 @@ function addonTable.Config.Initialize()
             -- Initialize text
             for _, q in ipairs(qualities) do
                 if q.value == UIThingsDB.loot.minQuality then
-                     UIDropDownMenu_SetText(qualityDropdown, q.text)
-                     break
+                    UIDropDownMenu_SetText(qualityDropdown, q.text)
+                    break
                 end
             end
 
             -- Font Dropdown
 
-            
+
             local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             fontLabel:SetPoint("TOPLEFT", 20, -200)
             fontLabel:SetText("Font:")
-            
+
             local fontDropdown = CreateFrame("Frame", "UIThingsLootFontDropdown", panel, "UIDropDownMenuTemplate")
             fontDropdown:SetPoint("TOPLEFT", 60, -190)
             UIDropDownMenu_SetWidth(fontDropdown, 120)
-            
+
             local function FontOnClick(self)
                 UIDropDownMenu_SetSelectedValue(fontDropdown, self.value)
                 UIThingsDB.loot.font = self.value
                 addonTable.Loot.UpdateSettings()
             end
-            
+
             UIDropDownMenu_Initialize(fontDropdown, function()
                 for _, font in ipairs(fonts) do
                     local info = UIDropDownMenu_CreateInfo()
@@ -1700,7 +1754,7 @@ function addonTable.Config.Initialize()
             for _, font in ipairs(fonts) do
                 if font.path == UIThingsDB.loot.font then
                     UIDropDownMenu_SetText(fontDropdown, font.name)
-                    break 
+                    break
                 end
             end
 
@@ -1721,7 +1775,7 @@ function addonTable.Config.Initialize()
                 _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
                 addonTable.Loot.UpdateSettings()
             end)
-            
+
             -- Icon Size Slider
             local iconSizeSlider = CreateFrame("Slider", "UIThingsLootIconSize", panel, "OptionsSliderTemplate")
             iconSizeSlider:SetPoint("TOPLEFT", 20, -250)
@@ -1743,22 +1797,23 @@ function addonTable.Config.Initialize()
             -- Grow Up Checkbox (Moved to bottom)
             local growBtn = CreateFrame("CheckButton", "UIThingsLootGrowCheck", panel, "ChatConfigCheckButtonTemplate")
             growBtn:SetPoint("TOPLEFT", 20, -300)
-            _G[growBtn:GetName().."Text"]:SetText("Grow Upwards")
+            _G[growBtn:GetName() .. "Text"]:SetText("Grow Upwards")
             growBtn:SetChecked(UIThingsDB.loot.growUp)
             growBtn:SetScript("OnClick", function(self)
                 UIThingsDB.loot.growUp = self:GetChecked()
                 addonTable.Loot.UpdateSettings()
             end)
-            
+
             -- Faster Loot Checkbox
-            local fasterLootBtn = CreateFrame("CheckButton", "UIThingsLootFasterCheck", panel, "ChatConfigCheckButtonTemplate")
+            local fasterLootBtn = CreateFrame("CheckButton", "UIThingsLootFasterCheck", panel,
+                "ChatConfigCheckButtonTemplate")
             fasterLootBtn:SetPoint("TOPLEFT", 20, -350)
-            _G[fasterLootBtn:GetName().."Text"]:SetText("Faster Loot")
+            _G[fasterLootBtn:GetName() .. "Text"]:SetText("Faster Loot")
             fasterLootBtn:SetChecked(UIThingsDB.loot.fasterLoot)
             fasterLootBtn:SetScript("OnClick", function(self)
                 UIThingsDB.loot.fasterLoot = self:GetChecked()
             end)
-            
+
             -- Faster Loot Delay Slider
             local delaySlider = CreateFrame("Slider", "UIThingsLootDelaySlider", panel, "OptionsSliderTemplate")
             delaySlider:SetPoint("TOPLEFT", 20, -400)
@@ -1766,20 +1821,20 @@ function addonTable.Config.Initialize()
             delaySlider:SetValueStep(0.1)
             delaySlider:SetObeyStepOnDrag(true)
             delaySlider:SetWidth(200)
-            
+
             local currentDelay = UIThingsDB.loot.fasterLootDelay
             _G[delaySlider:GetName() .. 'Text']:SetText("Loot Delay: " .. currentDelay .. "s")
             _G[delaySlider:GetName() .. 'Low']:SetText("0s")
             _G[delaySlider:GetName() .. 'High']:SetText("1s")
             delaySlider:SetValue(currentDelay)
-            
+
             -- EditBox for Delay
             local delayEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
             delayEdit:SetSize(40, 20)
             delayEdit:SetPoint("LEFT", delaySlider, "RIGHT", 10, 0)
             delayEdit:SetAutoFocus(false)
             delayEdit:SetText(tostring(currentDelay))
-            
+
             delaySlider:SetScript("OnValueChanged", function(self, value)
                 -- Round to 1 decimal
                 value = math.floor(value * 10 + 0.5) / 10
@@ -1789,13 +1844,13 @@ function addonTable.Config.Initialize()
                     delayEdit:SetText(tostring(value))
                 end
             end)
-            
+
             delayEdit:SetScript("OnEnterPressed", function(self)
                 local val = tonumber(self:GetText())
                 if val then
-                    val = math.max(0, math.min(1, val)) -- Clamp 0-1
+                    val = math.max(0, math.min(1, val))   -- Clamp 0-1
                     val = math.floor(val * 10 + 0.5) / 10 -- Round
-                    
+
                     UIThingsDB.loot.fasterLootDelay = val
                     delaySlider:SetValue(val)
                     self:SetText(tostring(val))
@@ -1818,32 +1873,33 @@ function addonTable.Config.Initialize()
             -- Enable Checkbox
             local enableBtn = CreateFrame("CheckButton", "UIThingsMiscEnable", panel, "ChatConfigCheckButtonTemplate")
             enableBtn:SetPoint("TOPLEFT", 20, -50)
-            _G[enableBtn:GetName().."Text"]:SetText("Enable Misc Module")
+            _G[enableBtn:GetName() .. "Text"]:SetText("Enable Misc Module")
             enableBtn:SetChecked(UIThingsDB.misc.enabled)
             enableBtn:SetScript("OnClick", function(self)
                 UIThingsDB.misc.enabled = self:GetChecked()
                 UpdateModuleVisuals(miscPanel, tab6, UIThingsDB.misc.enabled)
             end)
             UpdateModuleVisuals(miscPanel, tab6, UIThingsDB.misc.enabled)
-            
+
             -- AH Filter Checkbox
             local ahBtn = CreateFrame("CheckButton", "UIThingsMiscAHFilter", panel, "ChatConfigCheckButtonTemplate")
             ahBtn:SetPoint("TOPLEFT", 20, -100)
-            _G[ahBtn:GetName().."Text"]:SetText("Auction Current Expansion Only")
+            _G[ahBtn:GetName() .. "Text"]:SetText("Auction Current Expansion Only")
             ahBtn:SetChecked(UIThingsDB.misc.ahFilter)
             ahBtn:SetScript("OnClick", function(self)
                 UIThingsDB.misc.ahFilter = self:GetChecked()
             end)
-            
+
             -- Personal Orders Header
             local header = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
             header:SetPoint("TOPLEFT", 20, -150)
             header:SetText("Personal Orders")
 
             -- Personal Orders Checkbox
-            local ordersBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersCheck", panel, "ChatConfigCheckButtonTemplate")
+            local ordersBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersCheck", panel,
+                "ChatConfigCheckButtonTemplate")
             ordersBtn:SetPoint("TOPLEFT", 20, -180)
-            _G[ordersBtn:GetName().."Text"]:SetText("Enable Personal Order Detection")
+            _G[ordersBtn:GetName() .. "Text"]:SetText("Enable Personal Order Detection")
             ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
             ordersBtn:SetScript("OnClick", function(self)
                 UIThingsDB.misc.personalOrders = self:GetChecked()
@@ -1865,50 +1921,53 @@ function addonTable.Config.Initialize()
                 UIThingsDB.misc.alertDuration = value
                 _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
             end)
-            
+
             -- Alert Color Picker
             local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             colorLabel:SetPoint("TOPLEFT", 40, -260)
             colorLabel:SetText("Alert Color:")
-            
+
             local colorSwatch = CreateFrame("Button", nil, panel)
             colorSwatch:SetSize(20, 20)
             colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, 0)
-            
+
             colorSwatch.tex = colorSwatch:CreateTexture(nil, "OVERLAY")
             colorSwatch.tex:SetAllPoints()
             local c = UIThingsDB.misc.alertColor
             colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a or 1)
-            
+
             Mixin(colorSwatch, BackdropTemplateMixin)
-            colorSwatch:SetBackdrop({edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            colorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
             colorSwatch:SetBackdropBorderColor(1, 1, 1)
 
             colorSwatch:SetScript("OnClick", function()
                 local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
-                
+
                 if ColorPickerFrame.SetupColorPickerAndShow then
                     ColorPickerFrame:SetupColorPickerAndShow({
-                        r = c.r, g = c.g, b = c.b, opacity = c.a,
+                        r = c.r,
+                        g = c.g,
+                        b = c.b,
+                        opacity = c.a,
                         hasOpacity = true,
                         swatchFunc = function()
-                            local r,g,b = ColorPickerFrame:GetColorRGB()
+                            local r, g, b = ColorPickerFrame:GetColorRGB()
                             local a = ColorPickerFrame:GetColorAlpha()
                             c.r, c.g, c.b, c.a = r, g, b, a
                             colorSwatch.tex:SetColorTexture(r, g, b, a)
                             UIThingsDB.misc.alertColor = c
                         end,
                         opacityFunc = function()
-                             local a = ColorPickerFrame:GetColorAlpha()
-                             local r,g,b = ColorPickerFrame:GetColorRGB()
-                             c.r, c.g, c.b, c.a = r, g, b, a
-                             colorSwatch.tex:SetColorTexture(r, g, b, a)
-                             UIThingsDB.misc.alertColor = c
+                            local a = ColorPickerFrame:GetColorAlpha()
+                            local r, g, b = ColorPickerFrame:GetColorRGB()
+                            c.r, c.g, c.b, c.a = r, g, b, a
+                            colorSwatch.tex:SetColorTexture(r, g, b, a)
+                            UIThingsDB.misc.alertColor = c
                         end,
                         cancelFunc = function(restore)
-                             c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
-                             colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-                             UIThingsDB.misc.alertColor = c
+                            c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
+                            colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+                            UIThingsDB.misc.alertColor = c
                         end
                     })
                 else
@@ -1917,7 +1976,7 @@ function addonTable.Config.Initialize()
                     ColorPickerFrame.hasOpacity = true
                     ColorPickerFrame.opacity = c.a
                     ColorPickerFrame.func = function()
-                        local r,g,b = ColorPickerFrame:GetColorRGB()
+                        local r, g, b = ColorPickerFrame:GetColorRGB()
                         local a = ColorPickerFrame:GetOpacity()
                         c.r, c.g, c.b, c.a = r, g, b, a
                         colorSwatch.tex:SetColorTexture(r, g, b, a)
@@ -1933,9 +1992,10 @@ function addonTable.Config.Initialize()
             ttsHeader:SetText("Text-To-Speech")
 
             -- TTS Enable Checkbox
-            local ttsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscTTSEnable", panel, "ChatConfigCheckButtonTemplate")
+            local ttsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscTTSEnable", panel,
+                "ChatConfigCheckButtonTemplate")
             ttsEnableBtn:SetPoint("TOPLEFT", 20, -340)
-            _G[ttsEnableBtn:GetName().."Text"]:SetText("Enable Text-To-Speech")
+            _G[ttsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
             ttsEnableBtn:SetChecked(UIThingsDB.misc.ttsEnabled)
             ttsEnableBtn:SetScript("OnClick", function(self)
                 UIThingsDB.misc.ttsEnabled = self:GetChecked()
@@ -1945,7 +2005,7 @@ function addonTable.Config.Initialize()
             local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             ttsLabel:SetPoint("TOPLEFT", 40, -380)
             ttsLabel:SetText("TTS Message:")
-            
+
             local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
             ttsEdit:SetSize(250, 20)
             ttsEdit:SetPoint("LEFT", ttsLabel, "RIGHT", 10, 0)
@@ -1955,7 +2015,7 @@ function addonTable.Config.Initialize()
                 UIThingsDB.misc.ttsMessage = self:GetText()
                 self:ClearFocus()
             end)
-            
+
             -- Test Button (shows full alert)
             local testTTSBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
             testTTSBtn:SetSize(60, 22)
@@ -1974,15 +2034,15 @@ function addonTable.Config.Initialize()
             local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             voiceLabel:SetPoint("TOPLEFT", 40, -420)
             voiceLabel:SetText("Voice Type:")
-            
+
             local voiceDropdown = CreateFrame("Frame", "UIThingsMiscVoiceDropdown", panel, "UIDropDownMenuTemplate")
             voiceDropdown:SetPoint("LEFT", voiceLabel, "RIGHT", -15, -3)
-            
+
             local voiceOptions = {
-                {text = "Standard", value = 0},
-                {text = "Alternate 1", value = 1}
+                { text = "Standard",    value = 0 },
+                { text = "Alternate 1", value = 1 }
             }
-            
+
             UIDropDownMenu_SetWidth(voiceDropdown, 120)
             UIDropDownMenu_Initialize(voiceDropdown, function(self, level)
                 for _, option in ipairs(voiceOptions) do
@@ -2000,28 +2060,30 @@ function addonTable.Config.Initialize()
             UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
         end
         SetupMiscPanel()
-        
+
         -------------------------------------------------------------
         -- TALENT REMINDERS PANEL CONTENT
         -------------------------------------------------------------
-        
+
         local talentTitle = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
         talentTitle:SetPoint("TOPLEFT", 16, -16)
         talentTitle:SetText("Talent Reminders")
-        
+
         -- Enable Checkbox
-        local enableTalentBtn = CreateFrame("CheckButton", "UIThingsTalentEnableCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+        local enableTalentBtn = CreateFrame("CheckButton", "UIThingsTalentEnableCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         enableTalentBtn:SetPoint("TOPLEFT", 20, -50)
         _G[enableTalentBtn:GetName() .. "Text"]:SetText("Enable Talent Reminders")
         enableTalentBtn:SetChecked(UIThingsDB.talentReminders.enabled)
         enableTalentBtn:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.enabled = not not self:GetChecked()
         end)
-        
+
         -- Alert Settings Section
         CreateSectionHeader(talentPanel, "Alert Settings", -80)
-        
-        local showPopupCheck = CreateFrame("CheckButton", "UIThingsTalentShowPopupCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local showPopupCheck = CreateFrame("CheckButton", "UIThingsTalentShowPopupCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         showPopupCheck:SetPoint("TOPLEFT", 20, -105)
         showPopupCheck:SetHitRectInsets(0, -110, 0, 0)
         _G[showPopupCheck:GetName() .. "Text"]:SetText("Show Popup Alert")
@@ -2029,8 +2091,9 @@ function addonTable.Config.Initialize()
         showPopupCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.showPopup = not not self:GetChecked()
         end)
-        
-        local showChatCheck = CreateFrame("CheckButton", "UIThingsTalentShowChatCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local showChatCheck = CreateFrame("CheckButton", "UIThingsTalentShowChatCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         showChatCheck:SetPoint("TOPLEFT", 200, -105)
         showChatCheck:SetHitRectInsets(0, -120, 0, 0)
         _G[showChatCheck:GetName() .. "Text"]:SetText("Show Chat Message")
@@ -2038,8 +2101,9 @@ function addonTable.Config.Initialize()
         showChatCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.showChatMessage = not not self:GetChecked()
         end)
-        
-        local playSoundCheck = CreateFrame("CheckButton", "UIThingsTalentPlaySoundCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local playSoundCheck = CreateFrame("CheckButton", "UIThingsTalentPlaySoundCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         playSoundCheck:SetPoint("TOPLEFT", 20, -130)
         playSoundCheck:SetHitRectInsets(0, -80, 0, 0)
         _G[playSoundCheck:GetName() .. "Text"]:SetText("Play Sound")
@@ -2047,8 +2111,9 @@ function addonTable.Config.Initialize()
         playSoundCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.playSound = not not self:GetChecked()
         end)
-        
-        local useTTSCheck = CreateFrame("CheckButton", "UIThingsTalentUseTTSCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local useTTSCheck = CreateFrame("CheckButton", "UIThingsTalentUseTTSCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         useTTSCheck:SetPoint("TOPLEFT", 200, -130)
         useTTSCheck:SetHitRectInsets(0, -140, 0, 0)
         _G[useTTSCheck:GetName() .. "Text"]:SetText("Use TTS Announcement")
@@ -2056,15 +2121,55 @@ function addonTable.Config.Initialize()
         useTTSCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.useTTS = not not self:GetChecked()
         end)
-        
+
+        -- Font Dropdown
+        local fontLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fontLabel:SetPoint("TOPLEFT", 20, -160)
+        fontLabel:SetText("Alert Font:")
+
+        local fontDropdown = CreateFrame("Frame", "UIThingsTalentFontDropdown", talentPanel, "UIDropDownMenuTemplate")
+        fontDropdown:SetPoint("LEFT", fontLabel, "RIGHT", -15, -3)
+
+        local fontOptions = {
+            { text = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF" },
+            { text = "Arial",                   value = "Fonts\\ARIALN.TTF" },
+            { text = "Skurri",                  value = "Fonts\\skurri.ttf" },
+            { text = "Morpheus",                value = "Fonts\\MORPHEUS.TTF" },
+            { text = "Friends",                 value = "Interface\\AddOns\\LunaUITweaks\\Fonts\\Friends.ttf" }
+        }
+
+        UIDropDownMenu_SetWidth(fontDropdown, 180)
+        UIDropDownMenu_Initialize(fontDropdown, function(self, level)
+            for _, option in ipairs(fontOptions) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = option.text
+                info.value = option.value
+                info.func = function(btn)
+                    UIThingsDB.talentReminders.alertFont = btn.value
+                    UIDropDownMenu_SetText(fontDropdown, btn:GetText())
+                end
+                info.checked = (UIThingsDB.talentReminders.alertFont == option.value)
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+        -- Set initial text
+        for _, option in ipairs(fontOptions) do
+            if UIThingsDB.talentReminders.alertFont == option.value then
+                UIDropDownMenu_SetText(fontDropdown, option.text)
+                break
+            end
+        end
+
         -- TTS Volume Slider
-        local ttsVolumeSlider = CreateFrame("Slider", "UIThingsTalentTTSVolumeSlider", talentPanel, "OptionsSliderTemplate")
-        ttsVolumeSlider:SetPoint("TOPLEFT", 40, -165)
+        local ttsVolumeSlider = CreateFrame("Slider", "UIThingsTalentTTSVolumeSlider", talentPanel,
+            "OptionsSliderTemplate")
+        ttsVolumeSlider:SetPoint("TOPLEFT", 40, -195)
         ttsVolumeSlider:SetMinMaxValues(0, 1)
         ttsVolumeSlider:SetValueStep(0.1)
         ttsVolumeSlider:SetObeyStepOnDrag(true)
         ttsVolumeSlider:SetWidth(150)
-        _G[ttsVolumeSlider:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f", UIThingsDB.talentReminders.ttsVolume))
+        _G[ttsVolumeSlider:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f",
+            UIThingsDB.talentReminders.ttsVolume))
         _G[ttsVolumeSlider:GetName() .. 'Low']:SetText("0")
         _G[ttsVolumeSlider:GetName() .. 'High']:SetText("1")
         ttsVolumeSlider:SetValue(UIThingsDB.talentReminders.ttsVolume)
@@ -2073,25 +2178,202 @@ function addonTable.Config.Initialize()
             UIThingsDB.talentReminders.ttsVolume = value
             _G[self:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f", value))
         end)
+
+        -- Font Size Slider
+        local fontSizeSlider = CreateFrame("Slider", "UIThingsTalentFontSizeSlider", talentPanel,
+            "OptionsSliderTemplate")
+        fontSizeSlider:SetPoint("TOPLEFT", 40, -220)
+        fontSizeSlider:SetMinMaxValues(8, 24)
+        fontSizeSlider:SetValueStep(1)
+        fontSizeSlider:SetObeyStepOnDrag(true)
+        fontSizeSlider:SetWidth(150)
+        _G[fontSizeSlider:GetName() .. 'Text']:SetText(string.format("Font Size: %d",
+            UIThingsDB.talentReminders.alertFontSize))
+        _G[fontSizeSlider:GetName() .. 'Low']:SetText("8")
+        _G[fontSizeSlider:GetName() .. 'High']:SetText("24")
+        fontSizeSlider:SetValue(UIThingsDB.talentReminders.alertFontSize)
+        fontSizeSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.talentReminders.alertFontSize = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Font Size: %d", value))
+        end)
+
+        -- Icon Size Slider
+        local iconSizeSlider = CreateFrame("Slider", "UIThingsTalentIconSizeSlider", talentPanel,
+            "OptionsSliderTemplate")
+        iconSizeSlider:SetPoint("TOPLEFT", 250, -220)
+        iconSizeSlider:SetMinMaxValues(12, 32)
+        iconSizeSlider:SetValueStep(2)
+        iconSizeSlider:SetObeyStepOnDrag(true)
+        iconSizeSlider:SetWidth(150)
+        _G[iconSizeSlider:GetName() .. 'Text']:SetText(string.format("Icon Size: %d",
+            UIThingsDB.talentReminders.alertIconSize))
+        _G[iconSizeSlider:GetName() .. 'Low']:SetText("12")
+        _G[iconSizeSlider:GetName() .. 'High']:SetText("32")
+        iconSizeSlider:SetValue(UIThingsDB.talentReminders.alertIconSize)
+        iconSizeSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value / 2) * 2 -- Round to nearest even number
+            UIThingsDB.talentReminders.alertIconSize = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Icon Size: %d", value))
+        end)
+
+        -- Appearance Settings
+        CreateSectionHeader(talentPanel, "Appearance", -260)
+
+        -- Row 1: Border
+        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTalentBorderCheckbox", talentPanel, "ChatConfigCheckButtonTemplate")
+        borderCheckbox:SetPoint("TOPLEFT", 20, -285)
+        borderCheckbox:SetHitRectInsets(0, -80, 0, 0)
+        _G[borderCheckbox:GetName() .. "Text"]:SetText("Show Border")
+        borderCheckbox:SetChecked(UIThingsDB.talentReminders.showBorder)
+        borderCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.showBorder = not not self:GetChecked()
+            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                addonTable.TalentReminder.UpdateVisuals()
+            end
+        end)
+
+        local borderColorLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        borderColorLabel:SetPoint("TOPLEFT", 140, -288)
+        borderColorLabel:SetText("Color:")
+
+        local borderColorSwatch = CreateFrame("Button", nil, talentPanel)
+        borderColorSwatch:SetSize(20, 20)
+        borderColorSwatch:SetPoint("LEFT", borderColorLabel, "RIGHT", 5, 0)
         
+        borderColorSwatch.tex = borderColorSwatch:CreateTexture(nil, "OVERLAY")
+        borderColorSwatch.tex:SetAllPoints()
+        local bc = UIThingsDB.talentReminders.borderColor or { r = 0, g = 0, b = 0, a = 1 }
+        borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
+        
+        Mixin(borderColorSwatch, BackdropTemplateMixin)
+        borderColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+        borderColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+        borderColorSwatch:SetScript("OnClick", function(self)
+            local info = UIDropDownMenu_CreateInfo()
+            local prevR, prevG, prevB, prevA = bc.r, bc.g, bc.b, bc.a
+
+            info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
+            info.hasOpacity = true
+            info.opacityFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                bc.r, bc.g, bc.b, bc.a = r, g, b, a
+                borderColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.talentReminders.borderColor = bc
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            info.swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                bc.r, bc.g, bc.b, bc.a = r, g, b, a
+                borderColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.talentReminders.borderColor = bc
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            info.cancelFunc = function(previousValues)
+                bc.r, bc.g, bc.b, bc.a = prevR, prevG, prevB, prevA
+                borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
+                UIThingsDB.talentReminders.borderColor = bc
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            ColorPickerFrame:SetupColorPickerAndShow(info)
+        end)
+
+        -- Row 2: Background
+        local bgCheckbox = CreateFrame("CheckButton", "UIThingsTalentBgCheckbox", talentPanel, "ChatConfigCheckButtonTemplate")
+        bgCheckbox:SetPoint("TOPLEFT", 20, -310)
+        bgCheckbox:SetHitRectInsets(0, -110, 0, 0)
+        _G[bgCheckbox:GetName() .. "Text"]:SetText("Show Background")
+        bgCheckbox:SetChecked(UIThingsDB.talentReminders.showBackground)
+        bgCheckbox:SetScript("OnClick", function(self)
+            UIThingsDB.talentReminders.showBackground = not not self:GetChecked()
+            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                addonTable.TalentReminder.UpdateVisuals()
+            end
+        end)
+
+        local bgColorLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        bgColorLabel:SetPoint("TOPLEFT", 165, -313)
+        bgColorLabel:SetText("Color:")
+
+        local bgColorSwatch = CreateFrame("Button", nil, talentPanel)
+        bgColorSwatch:SetSize(20, 20)
+        bgColorSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 5, 0)
+        
+        bgColorSwatch.tex = bgColorSwatch:CreateTexture(nil, "OVERLAY")
+        bgColorSwatch.tex:SetAllPoints()
+        local c = UIThingsDB.talentReminders.backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
+        bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+        
+        Mixin(bgColorSwatch, BackdropTemplateMixin)
+        bgColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+        bgColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+        bgColorSwatch:SetScript("OnClick", function(self)
+            local info = UIDropDownMenu_CreateInfo()
+            local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
+
+            info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
+            info.hasOpacity = true
+            info.opacityFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                c.r, c.g, c.b, c.a = r, g, b, a
+                bgColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.talentReminders.backgroundColor = c
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            info.swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                c.r, c.g, c.b, c.a = r, g, b, a
+                bgColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.talentReminders.backgroundColor = c
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            info.cancelFunc = function(previousValues)
+                c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
+                bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
+                UIThingsDB.talentReminders.backgroundColor = c
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
+            end
+            ColorPickerFrame:SetupColorPickerAndShow(info)
+        end)
+
         -- Difficulty Filter Section
-        CreateSectionHeader(talentPanel, "Alert Only On These Difficulties", -200)
-        
+        CreateSectionHeader(talentPanel, "Alert Only On These Difficulties", -360)
+
         -- Dungeons
         local dungeonLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        dungeonLabel:SetPoint("TOPLEFT", 20, -225)
+        dungeonLabel:SetPoint("TOPLEFT", 20, -385)
         dungeonLabel:SetText("Dungeons:")
-        
-        local dNormalCheck = CreateFrame("CheckButton", "UIThingsTalentDNormalCheck", talentPanel, "ChatConfigCheckButtonTemplate")
-        dNormalCheck:SetPoint("TOPLEFT", 100, -225)
+
+        local dNormalCheck = CreateFrame("CheckButton", "UIThingsTalentDNormalCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
+        dNormalCheck:SetPoint("TOPLEFT", 100, -385)
         dNormalCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[dNormalCheck:GetName() .. "Text"]:SetText("Normal")
         dNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal)
         dNormalCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal = not not self:GetChecked()
         end)
-        
-        local dHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentDHeroicCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local dHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentDHeroicCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         dHeroicCheck:SetPoint("LEFT", dNormalCheck, "RIGHT", 70, 0)
         dHeroicCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[dHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
@@ -2099,8 +2381,9 @@ function addonTable.Config.Initialize()
         dHeroicCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic = not not self:GetChecked()
         end)
-        
-        local dMythicCheck = CreateFrame("CheckButton", "UIThingsTalentDMythicCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local dMythicCheck = CreateFrame("CheckButton", "UIThingsTalentDMythicCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         dMythicCheck:SetPoint("LEFT", dHeroicCheck, "RIGHT", 70, 0)
         dMythicCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[dMythicCheck:GetName() .. "Text"]:SetText("Mythic")
@@ -2108,31 +2391,24 @@ function addonTable.Config.Initialize()
         dMythicCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic = not not self:GetChecked()
         end)
-        
-        local dMPlusCheck = CreateFrame("CheckButton", "UIThingsTalentDMPlusCheck", talentPanel, "ChatConfigCheckButtonTemplate")
-        dMPlusCheck:SetPoint("TOPLEFT", 100, -250)
-        dMPlusCheck:SetHitRectInsets(0, -65, 0, 0)
-        _G[dMPlusCheck:GetName() .. "Text"]:SetText("Mythic+")
-        dMPlusCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.mythicPlus)
-        dMPlusCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.mythicPlus = not not self:GetChecked()
-        end)
-        
+
         -- Raids
         local raidLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        raidLabel:SetPoint("TOPLEFT", 20, -285)
+        raidLabel:SetPoint("TOPLEFT", 20, -415)
         raidLabel:SetText("Raids:")
-        
-        local rLFRCheck = CreateFrame("CheckButton", "UIThingsTalentRLFRCheck", talentPanel, "ChatConfigCheckButtonTemplate")
-        rLFRCheck:SetPoint("TOPLEFT", 100, -285)
+
+        local rLFRCheck = CreateFrame("CheckButton", "UIThingsTalentRLFRCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
+        rLFRCheck:SetPoint("TOPLEFT", 100, -415)
         rLFRCheck:SetHitRectInsets(0, -40, 0, 0)
         _G[rLFRCheck:GetName() .. "Text"]:SetText("LFR")
         rLFRCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidLFR)
         rLFRCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.raidLFR = not not self:GetChecked()
         end)
-        
-        local rNormalCheck = CreateFrame("CheckButton", "UIThingsTalentRNormalCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local rNormalCheck = CreateFrame("CheckButton", "UIThingsTalentRNormalCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         rNormalCheck:SetPoint("LEFT", rLFRCheck, "RIGHT", 50, 0)
         rNormalCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[rNormalCheck:GetName() .. "Text"]:SetText("Normal")
@@ -2140,8 +2416,9 @@ function addonTable.Config.Initialize()
         rNormalCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.raidNormal = not not self:GetChecked()
         end)
-        
-        local rHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentRHeroicCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local rHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentRHeroicCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         rHeroicCheck:SetPoint("LEFT", rNormalCheck, "RIGHT", 70, 0)
         rHeroicCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[rHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
@@ -2149,8 +2426,9 @@ function addonTable.Config.Initialize()
         rHeroicCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic = not not self:GetChecked()
         end)
-        
-        local rMythicCheck = CreateFrame("CheckButton", "UIThingsTalentRMythicCheck", talentPanel, "ChatConfigCheckButtonTemplate")
+
+        local rMythicCheck = CreateFrame("CheckButton", "UIThingsTalentRMythicCheck", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         rMythicCheck:SetPoint("LEFT", rHeroicCheck, "RIGHT", 70, 0)
         rMythicCheck:SetHitRectInsets(0, -60, 0, 0)
         _G[rMythicCheck:GetName() .. "Text"]:SetText("Mythic")
@@ -2158,58 +2436,64 @@ function addonTable.Config.Initialize()
         rMythicCheck:SetScript("OnClick", function(self)
             UIThingsDB.talentReminders.alertOnDifficulties.raidMythic = not not self:GetChecked()
         end)
-        
+
         -- Reminders Section
-        CreateSectionHeader(talentPanel, "Saved Reminders", -320)
-        
+        CreateSectionHeader(talentPanel, "Saved Reminders", -450)
+
         -- Reminder List (Scroll Frame)
-        local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", talentPanel, "UIPanelScrollFrameTemplate")
+        local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", talentPanel,
+            "UIPanelScrollFrameTemplate")
         reminderScrollFrame:SetSize(540, 220)
-        reminderScrollFrame:SetPoint("TOPLEFT", 20, -345)
-        
+        reminderScrollFrame:SetPoint("TOPLEFT", 20, -475)
+
         local reminderContent = CreateFrame("Frame", nil, reminderScrollFrame)
         reminderContent:SetSize(520, 220)
         reminderScrollFrame:SetScrollChild(reminderContent)
-        
+
         -- Reminder list text
         local reminderListText = reminderContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         reminderListText:SetPoint("TOPLEFT", 5, -5)
         reminderListText:SetWidth(500)
         reminderListText:SetJustifyH("LEFT")
-        reminderListText:SetText("|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
-        
+        reminderListText:SetText(
+            "|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
+
         -- Refresh reminder list function
         local function RefreshReminderList()
             local text = ""
             local count = 0
-            
+
             if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
                 for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
                     for diffID, diffReminders in pairs(reminders) do
-                        for bossID, reminder in pairs(diffReminders) do             count = count + 1
+                        for bossID, reminder in pairs(diffReminders) do
+                            count = count + 1
                             text = text .. string.format("|cFFFFAA00%s|r\n", reminder.name)
                             if reminder.note and reminder.note ~= "" then
                                 text = text .. string.format("  Note: %s\n", reminder.note)
                             end
-                            text = text .. string.format("  Instance: %s | Diff: %s\n", reminder.instanceName or "Unknown", reminder.difficulty or "Unknown")
+                            text = text ..
+                                string.format("  Instance: %s | Diff: %s\n", reminder.instanceName or "Unknown",
+                                    reminder.difficulty or "Unknown")
                             text = text .. "\n"
                         end
                     end
                 end
             end
-            
+
             if count == 0 then
-                reminderListText:SetText("|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
+                reminderListText:SetText(
+                    "|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
             else
                 reminderListText:SetText(text)
             end
         end
-        
+
         -- Assign to upvalue so TabOnClick can access it
         refreshTalentReminderList = RefreshReminderList
-        
+
         RefreshReminderList()
-        
+
         -- Snapshot Button
         local snapshotBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
         snapshotBtn:SetSize(200, 30)
@@ -2222,17 +2506,17 @@ function addonTable.Config.Initialize()
                 print("|cFFFF0000[LunaUITweaks]|r TalentReminder module not loaded!")
                 return
             end
-            
+
             local location = addonTable.TalentReminder.GetCurrentLocation()
             if not location or location.instanceID == 0 then
                 print("|cFFFF0000[LunaUITweaks]|r You must be inside an instance to create a reminder!")
                 return
             end
-            
+
             -- For now, save as "general" - in future we can add boss detection
             local bossID = "general"
             local name = string.format("%s (%s)", location.instanceName, location.difficultyName)
-            
+
             local success, err, count = addonTable.TalentReminder.SaveReminder(
                 location.instanceID,
                 location.difficultyID,
@@ -2242,7 +2526,7 @@ function addonTable.Config.Initialize()
                 location.difficultyName,
                 "" -- Note (could add edit box for this)
             )
-            
+
             if success then
                 print(string.format("|cFF00FF00[LunaUITweaks]|r Saved talent reminder for %s (%d talents)", name, count))
                 RefreshReminderList()
@@ -2250,18 +2534,59 @@ function addonTable.Config.Initialize()
                 print("|cFFFF0000[LunaUITweaks]|r Failed to create snapshot: " .. tostring(err))
             end
         end)
-        
+
+        -- Test Button
+        local testBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
+        testBtn:SetSize(120, 30)
+        testBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
+        testBtn:SetText("Test")
+        testBtn:SetNormalFontObject("GameFontNormal")
+        testBtn:SetHighlightFontObject("GameFontHighlight")
+        testBtn:SetScript("OnClick", function(self)
+            if not addonTable.TalentReminder then
+                print("|cFFFF0000[LunaUITweaks]|r TalentReminder module not loaded!")
+                return
+            end
+
+            if not LunaUITweaks_TalentReminders or not LunaUITweaks_TalentReminders.reminders then
+                print("|cFFFF0000[LunaUITweaks]|r No talent reminders saved!")
+                return
+            end
+
+            local foundMismatch = false
+            for instanceID, difficulties in pairs(LunaUITweaks_TalentReminders.reminders) do
+                for difficultyID, bosses in pairs(difficulties) do
+                    for bossID, reminder in pairs(bosses) do
+                        local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
+                        print("DEBUG Test button: Got " .. #mismatches .. " mismatches")
+                        if #mismatches > 0 then
+                            print("DEBUG Test button: Calling ShowAlert with " .. #mismatches .. " mismatches")
+                            addonTable.TalentReminder.ShowAlert(reminder, mismatches, bossID)
+                            foundMismatch = true
+                            break
+                        end
+                    end
+                    if foundMismatch then break end
+                end
+                if foundMismatch then break end
+            end
+
+            if not foundMismatch then
+                print("|cFF00FF00[LunaUITweaks]|r All talents match saved reminders!")
+            end
+        end)
+
         -- Clear All Button
         local clearBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
         clearBtn:SetSize(120, 30)
-        clearBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
+        clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
         clearBtn:SetText("Clear All")
         clearBtn:SetNormalFontObject("GameFontNormal")
         clearBtn:SetHighlightFontObject("GameFontHighlight")
         clearBtn:SetScript("OnClick", function(self)
             StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM")
         end)
-        
+
         -- Confirmation dialog for clear all
         StaticPopupDialogs["LUNA_TALENT_CLEAR_CONFIRM"] = {
             text = "Are you sure you want to delete ALL talent reminders?",
@@ -2285,11 +2610,10 @@ function addonTable.Config.ToggleWindow()
     if not configWindow then
         addonTable.Config.Initialize()
     end
-    
+
     if configWindow:IsShown() then
         configWindow:Hide()
     else
         configWindow:Show()
     end
 end
-
