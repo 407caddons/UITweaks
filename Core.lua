@@ -9,7 +9,6 @@ addonTable.Core = {}
 -- @param func function Function to execute
 function addonTable.Core.SafeAfter(delay, func)
     if not func then
-        print("UIThings: SafeAfter called with nil function")
         return
     end
     if C_Timer and C_Timer.After then
@@ -177,7 +176,6 @@ local function OnEvent(self, event, ...)
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
 
-        addonTable.Core.Log("Core", "UI Tweaks Loaded!")
         self:UnregisterEvent("ADDON_LOADED")
 
         -- Initialize Modules

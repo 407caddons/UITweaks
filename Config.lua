@@ -2112,14 +2112,26 @@ function addonTable.Config.Initialize()
             UIThingsDB.talentReminders.playSound = not not self:GetChecked()
         end)
 
-        local useTTSCheck = CreateFrame("CheckButton", "UIThingsTalentUseTTSCheck", talentPanel,
-            "ChatConfigCheckButtonTemplate")
-        useTTSCheck:SetPoint("TOPLEFT", 200, -130)
-        useTTSCheck:SetHitRectInsets(0, -140, 0, 0)
-        _G[useTTSCheck:GetName() .. "Text"]:SetText("Use TTS Announcement")
-        useTTSCheck:SetChecked(UIThingsDB.talentReminders.useTTS)
-        useTTSCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.useTTS = not not self:GetChecked()
+        -- Height Slider
+        local heightSlider = CreateFrame("Slider", "UIThingsTalentHeightSlider", talentPanel,
+            "OptionsSliderTemplate")
+        heightSlider:SetPoint("TOPLEFT", 200, -135)
+        heightSlider:SetMinMaxValues(200, 600)
+        heightSlider:SetValueStep(10)
+        heightSlider:SetObeyStepOnDrag(true)
+        heightSlider:SetWidth(150)
+        _G[heightSlider:GetName() .. 'Text']:SetText(string.format("Height: %d",
+            UIThingsDB.talentReminders.frameHeight or 300))
+        _G[heightSlider:GetName() .. 'Low']:SetText("200")
+        _G[heightSlider:GetName() .. 'High']:SetText("600")
+        heightSlider:SetValue(UIThingsDB.talentReminders.frameHeight or 300)
+        heightSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.talentReminders.frameHeight = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Height: %d", value))
+            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                addonTable.TalentReminder.UpdateVisuals()
+            end
         end)
 
         -- Font Dropdown
@@ -2160,23 +2172,26 @@ function addonTable.Config.Initialize()
             end
         end
 
-        -- TTS Volume Slider
-        local ttsVolumeSlider = CreateFrame("Slider", "UIThingsTalentTTSVolumeSlider", talentPanel,
+        -- Width Slider
+        local widthSlider = CreateFrame("Slider", "UIThingsTalentWidthSlider", talentPanel,
             "OptionsSliderTemplate")
-        ttsVolumeSlider:SetPoint("TOPLEFT", 40, -195)
-        ttsVolumeSlider:SetMinMaxValues(0, 1)
-        ttsVolumeSlider:SetValueStep(0.1)
-        ttsVolumeSlider:SetObeyStepOnDrag(true)
-        ttsVolumeSlider:SetWidth(150)
-        _G[ttsVolumeSlider:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f",
-            UIThingsDB.talentReminders.ttsVolume))
-        _G[ttsVolumeSlider:GetName() .. 'Low']:SetText("0")
-        _G[ttsVolumeSlider:GetName() .. 'High']:SetText("1")
-        ttsVolumeSlider:SetValue(UIThingsDB.talentReminders.ttsVolume)
-        ttsVolumeSlider:SetScript("OnValueChanged", function(self, value)
-            value = math.floor(value * 10) / 10
-            UIThingsDB.talentReminders.ttsVolume = value
-            _G[self:GetName() .. 'Text']:SetText(string.format("TTS Volume: %.1f", value))
+        widthSlider:SetPoint("TOPLEFT", 40, -195)
+        widthSlider:SetMinMaxValues(300, 800)
+        widthSlider:SetValueStep(10)
+        widthSlider:SetObeyStepOnDrag(true)
+        widthSlider:SetWidth(150)
+        _G[widthSlider:GetName() .. 'Text']:SetText(string.format("Width: %d",
+            UIThingsDB.talentReminders.frameWidth or 400))
+        _G[widthSlider:GetName() .. 'Low']:SetText("300")
+        _G[widthSlider:GetName() .. 'High']:SetText("800")
+        widthSlider:SetValue(UIThingsDB.talentReminders.frameWidth or 400)
+        widthSlider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value)
+            UIThingsDB.talentReminders.frameWidth = value
+            _G[self:GetName() .. 'Text']:SetText(string.format("Width: %d", value))
+            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                addonTable.TalentReminder.UpdateVisuals()
+            end
         end)
 
         -- Font Size Slider
@@ -2221,7 +2236,8 @@ function addonTable.Config.Initialize()
         CreateSectionHeader(talentPanel, "Appearance", -260)
 
         -- Row 1: Border
-        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTalentBorderCheckbox", talentPanel, "ChatConfigCheckButtonTemplate")
+        local borderCheckbox = CreateFrame("CheckButton", "UIThingsTalentBorderCheckbox", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         borderCheckbox:SetPoint("TOPLEFT", 20, -285)
         borderCheckbox:SetHitRectInsets(0, -80, 0, 0)
         _G[borderCheckbox:GetName() .. "Text"]:SetText("Show Border")
@@ -2240,12 +2256,12 @@ function addonTable.Config.Initialize()
         local borderColorSwatch = CreateFrame("Button", nil, talentPanel)
         borderColorSwatch:SetSize(20, 20)
         borderColorSwatch:SetPoint("LEFT", borderColorLabel, "RIGHT", 5, 0)
-        
+
         borderColorSwatch.tex = borderColorSwatch:CreateTexture(nil, "OVERLAY")
         borderColorSwatch.tex:SetAllPoints()
         local bc = UIThingsDB.talentReminders.borderColor or { r = 0, g = 0, b = 0, a = 1 }
         borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-        
+
         Mixin(borderColorSwatch, BackdropTemplateMixin)
         borderColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         borderColorSwatch:SetBackdropBorderColor(1, 1, 1)
@@ -2288,7 +2304,8 @@ function addonTable.Config.Initialize()
         end)
 
         -- Row 2: Background
-        local bgCheckbox = CreateFrame("CheckButton", "UIThingsTalentBgCheckbox", talentPanel, "ChatConfigCheckButtonTemplate")
+        local bgCheckbox = CreateFrame("CheckButton", "UIThingsTalentBgCheckbox", talentPanel,
+            "ChatConfigCheckButtonTemplate")
         bgCheckbox:SetPoint("TOPLEFT", 20, -310)
         bgCheckbox:SetHitRectInsets(0, -110, 0, 0)
         _G[bgCheckbox:GetName() .. "Text"]:SetText("Show Background")
@@ -2307,12 +2324,12 @@ function addonTable.Config.Initialize()
         local bgColorSwatch = CreateFrame("Button", nil, talentPanel)
         bgColorSwatch:SetSize(20, 20)
         bgColorSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 5, 0)
-        
+
         bgColorSwatch.tex = bgColorSwatch:CreateTexture(nil, "OVERLAY")
         bgColorSwatch.tex:SetAllPoints()
         local c = UIThingsDB.talentReminders.backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
         bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-        
+
         Mixin(bgColorSwatch, BackdropTemplateMixin)
         bgColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         bgColorSwatch:SetBackdropBorderColor(1, 1, 1)
@@ -2357,6 +2374,29 @@ function addonTable.Config.Initialize()
         -- Difficulty Filter Section
         CreateSectionHeader(talentPanel, "Alert Only On These Difficulties", -360)
 
+        -- Helper function to handle difficulty checkbox changes
+        local function OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
+            if not addonTable.TalentReminder then return end
+
+            -- Get current difficulty to see if it matches the one that changed
+            local _, _, currentDifficultyID = GetInstanceInfo()
+
+            if wasEnabled and not isNowEnabled then
+                -- Difficulty was just disabled - hide alert if shown
+                local alertFrame = _G["LunaTalentReminderAlert"]
+                if alertFrame and alertFrame:IsShown() then
+                    alertFrame:Hide()
+                end
+            elseif not wasEnabled and isNowEnabled then
+                -- Difficulty was just enabled - check talents after a short delay
+                addonTable.Core.SafeAfter(0.5, function()
+                    if addonTable.TalentReminder.CheckTalentsInInstance then
+                        addonTable.TalentReminder.CheckTalentsInInstance()
+                    end
+                end)
+            end
+        end
+
         -- Dungeons
         local dungeonLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         dungeonLabel:SetPoint("TOPLEFT", 20, -385)
@@ -2369,7 +2409,10 @@ function addonTable.Config.Initialize()
         _G[dNormalCheck:GetName() .. "Text"]:SetText("Normal")
         dNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal)
         dNormalCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         local dHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentDHeroicCheck", talentPanel,
@@ -2379,7 +2422,10 @@ function addonTable.Config.Initialize()
         _G[dHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
         dHeroicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic)
         dHeroicCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonHeroic = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         local dMythicCheck = CreateFrame("CheckButton", "UIThingsTalentDMythicCheck", talentPanel,
@@ -2389,7 +2435,10 @@ function addonTable.Config.Initialize()
         _G[dMythicCheck:GetName() .. "Text"]:SetText("Mythic")
         dMythicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic)
         dMythicCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.dungeonMythic = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         -- Raids
@@ -2404,7 +2453,10 @@ function addonTable.Config.Initialize()
         _G[rLFRCheck:GetName() .. "Text"]:SetText("LFR")
         rLFRCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidLFR)
         rLFRCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.raidLFR = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.raidLFR
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.raidLFR = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         local rNormalCheck = CreateFrame("CheckButton", "UIThingsTalentRNormalCheck", talentPanel,
@@ -2414,7 +2466,10 @@ function addonTable.Config.Initialize()
         _G[rNormalCheck:GetName() .. "Text"]:SetText("Normal")
         rNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidNormal)
         rNormalCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.raidNormal = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.raidNormal
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.raidNormal = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         local rHeroicCheck = CreateFrame("CheckButton", "UIThingsTalentRHeroicCheck", talentPanel,
@@ -2424,7 +2479,10 @@ function addonTable.Config.Initialize()
         _G[rHeroicCheck:GetName() .. "Text"]:SetText("Heroic")
         rHeroicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic)
         rHeroicCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.raidHeroic = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         local rMythicCheck = CreateFrame("CheckButton", "UIThingsTalentRMythicCheck", talentPanel,
@@ -2434,11 +2492,14 @@ function addonTable.Config.Initialize()
         _G[rMythicCheck:GetName() .. "Text"]:SetText("Mythic")
         rMythicCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidMythic)
         rMythicCheck:SetScript("OnClick", function(self)
-            UIThingsDB.talentReminders.alertOnDifficulties.raidMythic = not not self:GetChecked()
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties.raidMythic
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties.raidMythic = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
         end)
 
         -- Reminders Section
-        CreateSectionHeader(talentPanel, "Saved Reminders", -450)
+        CreateSectionHeader(talentPanel, "Saved Builds", -450)
 
         -- Reminder List (Scroll Frame)
         local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", talentPanel,
@@ -2450,52 +2511,313 @@ function addonTable.Config.Initialize()
         reminderContent:SetSize(520, 220)
         reminderScrollFrame:SetScrollChild(reminderContent)
 
-        -- Reminder list text
-        local reminderListText = reminderContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        reminderListText:SetPoint("TOPLEFT", 5, -5)
-        reminderListText:SetWidth(500)
-        reminderListText:SetJustifyH("LEFT")
-        reminderListText:SetText(
-            "|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
+        -- Track created rows for reuse
+        local reminderRows = {}
 
-        -- Refresh reminder list function
+        -- Refresh reminder list function (frame-based)
         local function RefreshReminderList()
-            local text = ""
-            local count = 0
+            -- Get current class/spec for filtering
+            local _, _, playerClassID = UnitClass("player")
+            local specIndex = GetSpecialization()
+            local playerSpecID = specIndex and select(1, GetSpecializationInfo(specIndex))
+
+            -- Get current instance info
+            local _, currentInstanceType, currentDifficultyID, _, _, _, _, currentInstanceID = GetInstanceInfo()
+
+            -- Get current zone for zone-specific highlighting
+            local currentZone = addonTable.TalentReminder and addonTable.TalentReminder.GetCurrentZone() or nil
+
+            -- Hide all existing rows first
+            for _, row in ipairs(reminderRows) do
+                row:Hide()
+            end
+
+            local rowIndex = 0
+            local yOffset = -5
+
+            -- First pass: collect and sort reminders
+            local sortedReminders = {}
 
             if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
                 for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
                     for diffID, diffReminders in pairs(reminders) do
-                        for bossID, reminder in pairs(diffReminders) do
-                            count = count + 1
-                            text = text .. string.format("|cFFFFAA00%s|r\n", reminder.name)
-                            if reminder.note and reminder.note ~= "" then
-                                text = text .. string.format("  Note: %s\n", reminder.note)
+                        for zoneKey, reminder in pairs(diffReminders) do
+                            -- Filter: only show reminders for current class/spec OR unknown
+                            local showReminder = true
+                            if reminder.classID and reminder.classID ~= playerClassID then
+                                showReminder = false
+                            elseif reminder.specID and reminder.specID ~= playerSpecID then
+                                showReminder = false
                             end
-                            text = text ..
-                                string.format("  Instance: %s | Diff: %s\n", reminder.instanceName or "Unknown",
-                                    reminder.difficulty or "Unknown")
-                            text = text .. "\n"
+
+                            if showReminder then
+                                -- Check if this reminder matches current instance/difficulty/zone
+                                local isCurrentZone = (currentInstanceID ~= 0 and
+                                    tonumber(instanceID) == tonumber(currentInstanceID) and
+                                    tonumber(diffID) == tonumber(currentDifficultyID) and
+                                    currentZone and currentZone ~= "" and
+                                    zoneKey == currentZone)
+
+                                table.insert(sortedReminders, {
+                                    instanceID = instanceID,
+                                    diffID = diffID,
+                                    zoneKey = zoneKey,
+                                    reminder = reminder,
+                                    isCurrentZone = isCurrentZone
+                                })
+                            end
                         end
                     end
                 end
+
+                -- Sort: current zone first, then alphabetically by name
+                table.sort(sortedReminders, function(a, b)
+                    if a.isCurrentZone ~= b.isCurrentZone then
+                        return a.isCurrentZone
+                    end
+                    return (a.reminder.name or "") < (b.reminder.name or "")
+                end)
             end
 
-            if count == 0 then
-                reminderListText:SetText(
-                    "|cFFAAAAAANo reminders saved yet.\n\nEnter a dungeon or raid, configure your talents, then click 'Snapshot Current Talents' below.|r")
-            else
-                reminderListText:SetText(text)
+            -- Second pass: display sorted reminders
+            for _, entry in ipairs(sortedReminders) do
+                local instanceID = entry.instanceID
+                local diffID = entry.diffID
+                local zoneKey = entry.zoneKey
+                local reminder = entry.reminder
+                local isCurrentZone = entry.isCurrentZone
+
+                rowIndex = rowIndex + 1
+
+                -- Create or reuse row frame
+                local row = reminderRows[rowIndex]
+                if not row then
+                    row = CreateFrame("Frame", nil, reminderContent)
+                    row:SetSize(500, 50)
+
+                    -- Background for highlighting
+                    row.bg = row:CreateTexture(nil, "BACKGROUND")
+                    row.bg:SetAllPoints()
+                    row.bg:SetColorTexture(0, 0, 0, 0)
+
+                    -- Class/Spec label
+                    row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.classSpecLabel:SetPoint("TOPLEFT", 5, -2)
+                    row.classSpecLabel:SetWidth(350)
+                    row.classSpecLabel:SetJustifyH("LEFT")
+
+                    -- Reminder name
+                    row.nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                    row.nameLabel:SetPoint("TOPLEFT", 5, -15)
+                    row.nameLabel:SetWidth(350)
+                    row.nameLabel:SetJustifyH("LEFT")
+
+                    -- Instance/Difficulty
+                    row.infoLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.infoLabel:SetPoint("TOPLEFT", 10, -30)
+                    row.infoLabel:SetWidth(350)
+                    row.infoLabel:SetJustifyH("LEFT")
+
+                    -- Validation status icon/text
+                    row.validationLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.validationLabel:SetPoint("TOPRIGHT", -85, -15)
+                    row.validationLabel:SetWidth(100)
+                    row.validationLabel:SetJustifyH("RIGHT")
+
+                    -- Delete button
+                    row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                    row.deleteBtn:SetSize(60, 22)
+                    row.deleteBtn:SetPoint("RIGHT", -10, 0)
+                    row.deleteBtn:SetText("Delete")
+                    row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
+
+                    reminderRows[rowIndex] = row
+                end
+
+                -- Position row
+                row:ClearAllPoints()
+                row:SetSize(500, 50) -- Ensure consistent size (may have been 100 if used for message)
+                row:SetPoint("TOPLEFT", 0, yOffset)
+                yOffset = yOffset - 55
+
+                -- Create background if it doesn't exist (for rows created before this feature)
+                if not row.bg then
+                    row.bg = row:CreateTexture(nil, "BACKGROUND")
+                    row.bg:SetAllPoints()
+                end
+
+                -- Ensure all labels exist (in case this was previously a message row)
+                if not row.nameLabel then
+                    row.nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                    row.nameLabel:SetPoint("TOPLEFT", 5, -15)
+                    row.nameLabel:SetWidth(350)
+                    row.nameLabel:SetJustifyH("LEFT")
+                else
+                    -- Reset font in case this was previously a message row with different font
+                    row.nameLabel:SetFontObject("GameFontNormal")
+                end
+                if not row.classSpecLabel then
+                    row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.classSpecLabel:SetPoint("TOPLEFT", 5, -2)
+                    row.classSpecLabel:SetWidth(350)
+                    row.classSpecLabel:SetJustifyH("LEFT")
+                end
+                if not row.infoLabel then
+                    row.infoLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.infoLabel:SetPoint("TOPLEFT", 10, -30)
+                    row.infoLabel:SetWidth(350)
+                    row.infoLabel:SetJustifyH("LEFT")
+                end
+                if not row.validationLabel then
+                    row.validationLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.validationLabel:SetPoint("TOPRIGHT", -85, -15)
+                    row.validationLabel:SetWidth(100)
+                    row.validationLabel:SetJustifyH("RIGHT")
+                end
+                if not row.deleteBtn then
+                    row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                    row.deleteBtn:SetSize(60, 22)
+                    row.deleteBtn:SetPoint("RIGHT", -10, 0)
+                    row.deleteBtn:SetText("Delete")
+                    row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
+                end
+
+                -- Show all reminder elements (in case they were hidden when used as message row)
+                row.nameLabel:Show()
+                row.classSpecLabel:Show()
+                row.infoLabel:Show()
+                row.validationLabel:Show()
+                row.deleteBtn:Show()
+
+                -- Hide message label if it exists
+                if row.messageLabel then
+                    row.messageLabel:Hide()
+                end
+
+                -- Highlight current zone with green background
+                if isCurrentZone then
+                    row.bg:SetColorTexture(0, 0.3, 0, 0.3)
+                    row.nameLabel:SetText(string.format("|cFF00FF00%s|r", reminder.name))
+                else
+                    row.bg:SetColorTexture(0, 0, 0, 0)
+                    row.nameLabel:SetText(string.format("|cFFFFAA00%s|r", reminder.name))
+                end
+
+                -- Set data
+                row.classSpecLabel:SetText(addonTable.TalentReminder.GetClassSpecString(reminder))
+
+                -- Show zone and "CURRENT ZONE" indicator on a separate line
+                local infoText = string.format("Instance: %s | Diff: %s",
+                    reminder.instanceName or "Unknown",
+                    reminder.difficulty or "Unknown")
+                if isCurrentZone then
+                    infoText = infoText .. " |cFF00FF00- CURRENT ZONE|r"
+                end
+                row.infoLabel:SetText(infoText)
+
+                -- Validate build
+                local isValid, invalidTalents = addonTable.TalentReminder.ValidateTalentBuild(reminder.talents)
+                if not isValid and #invalidTalents > 0 then
+                    row.validationLabel:SetText("|cFFFF0000Invalid Build|r")
+                    row.validationLabel:SetPoint("TOPRIGHT", -85, -15)
+                else
+                    row.validationLabel:SetText("")
+                end
+
+                -- Set delete button action
+                row.deleteBtn.instanceID = instanceID
+                row.deleteBtn.difficultyID = diffID
+                row.deleteBtn.zoneKey = zoneKey
+                row.deleteBtn:SetScript("OnClick", function(self)
+                    StaticPopup_Show("LUNA_TALENT_DELETE_SINGLE_CONFIRM", reminder.name, nil, {
+                        instanceID = self.instanceID,
+                        difficultyID = self.difficultyID,
+                        zoneKey = self.zoneKey
+                    })
+                end)
+
+                row:Show()
             end
+
+            -- Show "no reminders" message if empty
+            if rowIndex == 0 then
+                local row = reminderRows[1]
+                if not row then
+                    row = CreateFrame("Frame", nil, reminderContent)
+                    row:SetSize(500, 100)
+                    reminderRows[1] = row
+                end
+
+                -- Create or update message label
+                if not row.messageLabel then
+                    row.messageLabel = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    row.messageLabel:SetPoint("TOPLEFT", 5, -5)
+                    row.messageLabel:SetWidth(490)
+                    row.messageLabel:SetJustifyH("LEFT")
+                end
+
+                -- Hide all reminder-specific elements if they exist
+                if row.classSpecLabel then row.classSpecLabel:Hide() end
+                if row.nameLabel then row.nameLabel:Hide() end
+                if row.infoLabel then row.infoLabel:Hide() end
+                if row.validationLabel then row.validationLabel:Hide() end
+                if row.deleteBtn then row.deleteBtn:Hide() end
+                if row.bg then row.bg:SetColorTexture(0, 0, 0, 0) end
+
+                row:SetPoint("TOPLEFT", 0, -5)
+                row.messageLabel:SetText(
+                    "|cFFAAAAAANo reminders saved for your current class/spec.\n\n" ..
+                    "Enter a dungeon or raid, configure your talents, then click " ..
+                    "'Snapshot Current Talents' below.|r")
+                row.messageLabel:Show()
+                row:Show()
+            end
+
+            -- Update scroll child height
+            local contentHeight = math.max(220, math.abs(yOffset) + 5)
+            reminderContent:SetHeight(contentHeight)
         end
 
         -- Assign to upvalue so TabOnClick can access it
         refreshTalentReminderList = RefreshReminderList
 
+        -- Function to check if player is in an instance
+        local function IsInInstance()
+            local _, instanceType = GetInstanceInfo()
+            return instanceType ~= "none"
+        end
+
         RefreshReminderList()
 
+        -- Declare buttons upfront
+        local snapshotBtn
+        local testBtn
+
+        -- Function to update button states based on instance status
+        local function UpdateButtonStates()
+            local inInstance = IsInInstance()
+            if snapshotBtn then
+                if inInstance then
+                    snapshotBtn:Enable()
+                    snapshotBtn:SetAlpha(1.0)
+                else
+                    snapshotBtn:Disable()
+                    snapshotBtn:SetAlpha(0.5)
+                end
+            end
+            if testBtn then
+                if inInstance then
+                    testBtn:Enable()
+                    testBtn:SetAlpha(1.0)
+                else
+                    testBtn:Disable()
+                    testBtn:SetAlpha(0.5)
+                end
+            end
+        end
+
         -- Snapshot Button
-        local snapshotBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
+        snapshotBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
         snapshotBtn:SetSize(200, 30)
         snapshotBtn:SetPoint("BOTTOMLEFT", 20, 10)
         snapshotBtn:SetText("Snapshot Current Talents")
@@ -2503,24 +2825,29 @@ function addonTable.Config.Initialize()
         snapshotBtn:SetHighlightFontObject("GameFontHighlight")
         snapshotBtn:SetScript("OnClick", function(self)
             if not addonTable.TalentReminder then
-                print("|cFFFF0000[LunaUITweaks]|r TalentReminder module not loaded!")
                 return
             end
 
             local location = addonTable.TalentReminder.GetCurrentLocation()
             if not location or location.instanceID == 0 then
-                print("|cFFFF0000[LunaUITweaks]|r You must be inside an instance to create a reminder!")
                 return
             end
 
-            -- For now, save as "general" - in future we can add boss detection
-            local bossID = "general"
-            local name = string.format("%s (%s)", location.instanceName, location.difficultyName)
+            -- Use zone name as the unique identifier for this boss area
+            local zoneName = location.zoneName or "general"
+
+            -- Create a descriptive name for the reminder
+            local name
+            if zoneName == "general" or not zoneName then
+                name = string.format("%s (%s)", location.instanceName, location.difficultyName)
+            else
+                name = string.format("%s - %s (%s)", location.instanceName, zoneName, location.difficultyName)
+            end
 
             local success, err, count = addonTable.TalentReminder.SaveReminder(
                 location.instanceID,
                 location.difficultyID,
-                bossID,
+                zoneName, -- Use zone name instead of boss/encounter ID
                 name,
                 location.instanceName,
                 location.difficultyName,
@@ -2528,15 +2855,12 @@ function addonTable.Config.Initialize()
             )
 
             if success then
-                print(string.format("|cFF00FF00[LunaUITweaks]|r Saved talent reminder for %s (%d talents)", name, count))
                 RefreshReminderList()
-            else
-                print("|cFFFF0000[LunaUITweaks]|r Failed to create snapshot: " .. tostring(err))
             end
         end)
 
         -- Test Button
-        local testBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
+        testBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
         testBtn:SetSize(120, 30)
         testBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
         testBtn:SetText("Test")
@@ -2544,39 +2868,100 @@ function addonTable.Config.Initialize()
         testBtn:SetHighlightFontObject("GameFontHighlight")
         testBtn:SetScript("OnClick", function(self)
             if not addonTable.TalentReminder then
-                print("|cFFFF0000[LunaUITweaks]|r TalentReminder module not loaded!")
                 return
             end
 
             if not LunaUITweaks_TalentReminders or not LunaUITweaks_TalentReminders.reminders then
-                print("|cFFFF0000[LunaUITweaks]|r No talent reminders saved!")
                 return
             end
 
+            -- Get current zone for debugging
+            local currentZone = addonTable.TalentReminder.GetCurrentZone()
+            local location = addonTable.TalentReminder.GetCurrentLocation()
+
+            print("|cFF00FF00[Talent Reminder Test]|r")
+            print(string.format("  Current Zone: |cFFFFFF00%s|r", currentZone or "nil"))
+            print(string.format("  Instance: |cFFFFFF00%s|r (ID: %s)",
+                location and location.instanceName or "Unknown",
+                location and location.instanceID or "nil"))
+            print(string.format("  Difficulty: |cFFFFFF00%s|r (ID: %s)",
+                location and location.difficultyName or "Unknown",
+                location and location.difficultyID or "nil"))
+
+            -- Get current class/spec
+            local _, _, classID = UnitClass("player")
+            local specIndex = GetSpecialization()
+            local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+
+            local currentInstanceID = location and location.instanceID or 0
+            local currentDifficultyID = location and location.difficultyID or 0
+
+            print("  Checking reminders for CURRENT instance/difficulty/class/spec only:")
+
             local foundMismatch = false
-            for instanceID, difficulties in pairs(LunaUITweaks_TalentReminders.reminders) do
-                for difficultyID, bosses in pairs(difficulties) do
-                    for bossID, reminder in pairs(bosses) do
+            local checkedCount = 0
+            local skippedCount = 0
+
+            -- Only check reminders for current instance and difficulty
+            if LunaUITweaks_TalentReminders.reminders[currentInstanceID] and
+                LunaUITweaks_TalentReminders.reminders[currentInstanceID][currentDifficultyID] then
+                local zoneReminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID][currentDifficultyID]
+
+                -- Build priority list: current zone first, then general
+                local priorityList = {}
+
+                if currentZone and currentZone ~= "" and zoneReminders[currentZone] then
+                    table.insert(priorityList,
+                        { zoneKey = currentZone, reminder = zoneReminders[currentZone], priority = 1 })
+                end
+
+                if zoneReminders["general"] then
+                    table.insert(priorityList, { zoneKey = "general", reminder = zoneReminders["general"], priority = 2 })
+                end
+
+                table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+
+                for _, entry in ipairs(priorityList) do
+                    local zoneKey = entry.zoneKey
+                    local reminder = entry.reminder
+
+                    -- Filter by class/spec - skip if doesn't match
+                    if reminder.classID and reminder.classID ~= classID then
+                        skippedCount = skippedCount + 1
+                    elseif reminder.specID and reminder.specID ~= specID then
+                        skippedCount = skippedCount + 1
+                    else
+                        checkedCount = checkedCount + 1
+
+                        -- Show what we're checking
+                        print(string.format("    - Reminder: |cFFFFAA00%s|r (Zone: |cFFFFFF00%s|r)",
+                            reminder.name or "Unknown", zoneKey))
+
                         local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
-                        print("DEBUG Test button: Got " .. #mismatches .. " mismatches")
                         if #mismatches > 0 then
-                            print("DEBUG Test button: Calling ShowAlert with " .. #mismatches .. " mismatches")
-                            addonTable.TalentReminder.ShowAlert(reminder, mismatches, bossID)
+                            print(string.format("      |cFF00FF00✓ Found %d talent mismatches - showing alert|r",
+                                #mismatches))
+                            addonTable.TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
                             foundMismatch = true
                             break
+                        else
+                            print("      |cFFAAAA00○ Talents match - no alert needed|r")
                         end
                     end
-                    if foundMismatch then break end
                 end
-                if foundMismatch then break end
             end
 
-            if not foundMismatch then
-                print("|cFF00FF00[LunaUITweaks]|r All talents match saved reminders!")
+            print(string.format("  Checked: %d | Skipped (wrong class/spec/instance/diff): %d", checkedCount,
+                skippedCount))
+
+            if not foundMismatch and checkedCount > 0 then
+                print("  |cFFFF6B6BNo talent mismatches found in matching reminders.|r")
+            elseif checkedCount == 0 then
+                print("  |cFFFF6B6BNo reminders found for current instance/difficulty/class/spec.|r")
             end
         end)
 
-        -- Clear All Button
+        -- Clear All Button (clears current class/spec only)
         local clearBtn = CreateFrame("Button", nil, talentPanel, "GameMenuButtonTemplate")
         clearBtn:SetSize(120, 30)
         clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
@@ -2584,25 +2969,86 @@ function addonTable.Config.Initialize()
         clearBtn:SetNormalFontObject("GameFontNormal")
         clearBtn:SetHighlightFontObject("GameFontHighlight")
         clearBtn:SetScript("OnClick", function(self)
-            StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM")
+            local _, _, classID = UnitClass("player")
+            local specIndex = GetSpecialization()
+            local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+            local _, specName = specIndex and GetSpecializationInfo(specIndex) or nil, nil
+
+            StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM", specName or "Unknown Spec", nil, {
+                classID = classID,
+                specID = specID
+            })
         end)
 
-        -- Confirmation dialog for clear all
+        -- Confirmation dialog for clear all (current class/spec)
         StaticPopupDialogs["LUNA_TALENT_CLEAR_CONFIRM"] = {
-            text = "Are you sure you want to delete ALL talent reminders?",
+            text = "Are you sure you want to delete ALL talent reminders for %s?",
             button1 = "Yes",
             button2 = "No",
-            OnAccept = function()
-                if LunaUITweaks_TalentReminders then
-                    LunaUITweaks_TalentReminders.reminders = {}
-                    print("|cFF00FF00[LunaUITweaks]|r All talent reminders cleared!")
-                    RefreshReminderList()
+            OnAccept = function(self, data)
+                if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
+                    -- Delete only reminders matching current class/spec
+                    local deleteCount = 0
+                    for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
+                        for diffID, diffReminders in pairs(reminders) do
+                            for bossID, reminder in pairs(diffReminders) do
+                                local shouldDelete = false
+                                if not reminder.classID and not reminder.specID then
+                                    -- Unknown class/spec - don't delete
+                                    shouldDelete = false
+                                elseif reminder.classID == data.classID and reminder.specID == data.specID then
+                                    -- Matches current class and spec
+                                    shouldDelete = true
+                                end
+
+                                if shouldDelete then
+                                    diffReminders[bossID] = nil
+                                    deleteCount = deleteCount + 1
+                                end
+                            end
+                        end
+                    end
+
+                    if refreshTalentReminderList then
+                        refreshTalentReminderList()
+                    end
                 end
             end,
             timeout = 0,
             whileDead = true,
             hideOnEscape = true,
         }
+
+        StaticPopupDialogs["LUNA_TALENT_DELETE_SINGLE_CONFIRM"] = {
+            text = "Delete talent reminder:\n\n%s",
+            button1 = "Delete",
+            button2 = "Cancel",
+            OnAccept = function(self, data)
+                if addonTable.TalentReminder then
+                    addonTable.TalentReminder.DeleteReminder(
+                        data.instanceID,
+                        data.difficultyID,
+                        data.zoneKey
+                    )
+                    if refreshTalentReminderList then
+                        refreshTalentReminderList()
+                    end
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+        }
+
+        -- Set up event listener to update button states when entering/leaving instances
+        local instanceCheckFrame = CreateFrame("Frame", nil, talentPanel)
+        instanceCheckFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        instanceCheckFrame:SetScript("OnEvent", function(self, event)
+            UpdateButtonStates()
+        end)
+
+        -- Initial button state update
+        UpdateButtonStates()
     end
 end
 

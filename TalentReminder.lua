@@ -2,9 +2,9 @@ local addonName, addonTable = ...
 addonTable.TalentReminder = {}
 
 local TalentReminder = addonTable.TalentReminder
-local snoozed = {} -- Session-only snooze tracking: [instanceID][bossID] = true
-local alertFrame   -- Popup alert frame
+local alertFrame     -- Popup alert frame
 local currentInstanceID, currentDifficultyID
+local lastZone = nil -- Track last zone for zone change detection
 
 -- Initialize saved variables
 function TalentReminder.Initialize()
@@ -17,8 +17,10 @@ function TalentReminder.Initialize()
     if UIThingsDB.talentReminders then
         if UIThingsDB.talentReminders.showBorder == nil then UIThingsDB.talentReminders.showBorder = true end
         if UIThingsDB.talentReminders.showBackground == nil then UIThingsDB.talentReminders.showBackground = true end
-        if not UIThingsDB.talentReminders.borderColor then UIThingsDB.talentReminders.borderColor = {r=1, g=1, b=1, a=1} end
-        if not UIThingsDB.talentReminders.backgroundColor then UIThingsDB.talentReminders.backgroundColor = {r=0, g=0, b=0, a=0.8} end
+        if not UIThingsDB.talentReminders.borderColor then UIThingsDB.talentReminders.borderColor = { r = 1, g = 1, b = 1, a = 1 } end
+        if not UIThingsDB.talentReminders.backgroundColor then UIThingsDB.talentReminders.backgroundColor = { r = 0, g = 0, b = 0, a = 0.8 } end
+        if not UIThingsDB.talentReminders.frameWidth then UIThingsDB.talentReminders.frameWidth = 400 end
+        if not UIThingsDB.talentReminders.frameHeight then UIThingsDB.talentReminders.frameHeight = 300 end
     end
 
     TalentReminder.CreateAlertFrame()
@@ -29,6 +31,10 @@ function TalentReminder.Initialize()
     frame:RegisterEvent("ENCOUNTER_END")
     frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+    frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
+    frame:RegisterEvent("ZONE_CHANGED")
+    frame:RegisterEvent("ZONE_CHANGED_INDOORS")
+    frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     frame:SetScript("OnEvent", TalentReminder.OnEvent)
 
     addonTable.Core.Log("TalentReminder", "Initialized")
@@ -49,43 +55,62 @@ function TalentReminder.OnEvent(self, event, ...)
         addonTable.Core.SafeAfter(0.5, function()
             TalentReminder.CheckTalentsInInstance()
         end)
+    elseif event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
+        -- Boss frame appeared - check for boss-specific reminders
+        TalentReminder.OnBossFrameUpdated()
+    elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
+        -- Zone changed - check if we need to show an alert
+        TalentReminder.OnZoneChanged()
+    end
+end
+
+-- On zone changed
+function TalentReminder.OnZoneChanged()
+    if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.enabled then
+        return
+    end
+
+    if not currentInstanceID or currentInstanceID == 0 then
+        return
+    end
+
+    local currentZone = TalentReminder.GetCurrentZone()
+
+    -- Only check if zone actually changed
+    if currentZone and currentZone ~= lastZone then
+        addonTable.Core.Log("TalentReminder", string.format("Zone changed: '%s' -> '%s'",
+            lastZone or "nil", currentZone), 0)
+        lastZone = currentZone
+
+        -- Check talents for new zone after a short delay
+        addonTable.Core.SafeAfter(0.5, function()
+            TalentReminder.CheckTalentsInInstance()
+        end)
     end
 end
 
 -- On entering world/instance
 function TalentReminder.OnEnteringWorld()
-    print("DEBUG OnEnteringWorld: Called")
-
-    -- Clear snooze list
-    snoozed = {}
-
     -- Update current instance info
     local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
     currentInstanceID = instanceID
     currentDifficultyID = difficultyID
 
-    print("DEBUG OnEnteringWorld: instanceID=" .. tostring(instanceID) ..
-        " difficultyID=" .. tostring(difficultyID) ..
-        " instanceType=" .. tostring(instanceType) ..
-        " name=" .. tostring(name))
+    -- Reset last zone when entering new world/instance
+    lastZone = nil
 
     -- Check if this is M+ and alert on entry
     if TalentReminder.IsMythicPlus() then
-        print("DEBUG OnEnteringWorld: Is M+, scheduling check")
         addonTable.Core.SafeAfter(3, function()
-            print("DEBUG: M+ check running after delay")
             TalentReminder.CheckTalentsOnMythicPlusEntry()
         end)
     else
-        print("DEBUG OnEnteringWorld: Not M+, scheduling check")
         -- For non-M+ instances, check talents after a short delay
         addonTable.Core.SafeAfter(3, function()
             -- Re-fetch instance info in case difficulty changed
             local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
             currentInstanceID = instanceID
             currentDifficultyID = difficultyID
-            print("DEBUG: Regular check running after delay, instanceID=" ..
-                tostring(currentInstanceID) .. " difficultyID=" .. tostring(currentDifficultyID))
             TalentReminder.CheckTalentsInInstance()
         end)
     end
@@ -102,65 +127,124 @@ function TalentReminder.OnEncounterStart(encounterID, encounterName, difficultyI
         return
     end
 
-    -- Check if snoozed
-    if snoozed[currentInstanceID] and snoozed[currentInstanceID][encounterID] then
-        return
-    end
+    -- Get current zone for zone-based detection
+    local currentZone = TalentReminder.GetCurrentZone()
+    local zoneKey = currentZone or "general"
 
-    -- Get reminder for this boss/instance
-    local reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, encounterID)
-    if not reminder then
-        -- Try general instance reminder
+    -- Debug logging
+    addonTable.Core.Log("TalentReminder",
+        string.format("OnEncounterStart: encounterID=%s, encounterName='%s', currentZone='%s', zoneKey='%s'",
+            tostring(encounterID), encounterName or "nil", currentZone or "nil", zoneKey), 0)
+
+    -- Get reminder for this zone/instance (prioritize zone-based detection)
+    local reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, zoneKey)
+    if not reminder and zoneKey ~= "general" then
+        addonTable.Core.Log("TalentReminder",
+            string.format("No zone-specific reminder for '%s', trying general", zoneKey), 0)
+        -- Try general instance reminder if zone-specific not found
         reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, "general")
+        zoneKey = "general"
     end
 
     if reminder then
+        addonTable.Core.Log("TalentReminder", string.format("Found reminder '%s' for zone '%s'", reminder.name, zoneKey),
+            0)
         local mismatches = TalentReminder.CompareTalents(reminder.talents)
         if #mismatches > 0 then
-            TalentReminder.ShowAlert(reminder, mismatches, encounterID)
+            addonTable.Core.Log("TalentReminder", string.format("Showing alert: %d talent mismatches", #mismatches), 0)
+            TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
+        else
+            addonTable.Core.Log("TalentReminder", "Talents match - no alert needed", 0)
         end
+    else
+        addonTable.Core.Log("TalentReminder", string.format("No reminder found for zone '%s'", zoneKey), 0)
     end
 end
 
 -- Check talents in instance (for talent changes)
 function TalentReminder.CheckTalentsInInstance()
-    print("DEBUG CheckTalentsInInstance: currentInstanceID=" ..
-        tostring(currentInstanceID) .. " currentDifficultyID=" .. tostring(currentDifficultyID))
-
     if not currentInstanceID or currentInstanceID == 0 then
-        print("DEBUG CheckTalentsInInstance: No instance or instanceID=0, returning")
         return
     end
 
     if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.enabled then
-        print("DEBUG CheckTalentsInInstance: Feature disabled, returning")
         return
     end
 
+    -- Get current class and spec
+    local _, _, classID = UnitClass("player")
+    local specIndex = GetSpecialization()
+    local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+
     -- Check if we should alert for current difficulty
     if not TalentReminder.ShouldAlertForDifficulty(currentDifficultyID) then
-        print("DEBUG CheckTalentsInInstance: Difficulty filter failed, returning")
         return
     end
 
     -- Get all reminders for this instance/difficulty
     local reminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID]
     if not reminders or not reminders[currentDifficultyID] then
-        print("DEBUG CheckTalentsInInstance: No reminders for this instance/difficulty, returning")
         return
     end
 
-    print("DEBUG CheckTalentsInInstance: Found reminders, checking...")
+    -- Detect current zone
+    local currentZone = TalentReminder.GetCurrentZone()
 
-    -- Check each reminder and show/hide alerts accordingly
+    -- Debug logging
+    addonTable.Core.Log("TalentReminder", string.format("CheckTalentsInInstance: Current zone = '%s'",
+        currentZone or "nil"), 0) -- DEBUG level
+
+    -- Build priority list: zone-specific first, then general
+    local priorityList = {}
+
+    -- If we have a detected zone, prioritize zone-specific reminder
+    if currentZone and currentZone ~= "" then
+        -- Check for exact zone match
+        if reminders[currentDifficultyID][currentZone] then
+            addonTable.Core.Log("TalentReminder", string.format("Found zone-specific reminder for '%s'", currentZone), 0)
+            table.insert(priorityList, {
+                zoneKey = currentZone,
+                reminder = reminders[currentDifficultyID][currentZone],
+                priority = 1
+            })
+        else
+            addonTable.Core.Log("TalentReminder", string.format("No zone-specific reminder for '%s'", currentZone), 0)
+            -- Debug: Show what zone keys exist
+            for zoneKey, _ in pairs(reminders[currentDifficultyID]) do
+                addonTable.Core.Log("TalentReminder", string.format("  Available zone key: '%s'", zoneKey), 0)
+            end
+        end
+    end
+
+    -- Add general reminder with lower priority
+    if reminders[currentDifficultyID]["general"] then
+        addonTable.Core.Log("TalentReminder", "Adding general reminder to priority list", 0)
+        table.insert(priorityList, {
+            zoneKey = "general",
+            reminder = reminders[currentDifficultyID]["general"],
+            priority = 2
+        })
+    end
+
+    -- Sort by priority (lower number = higher priority)
+    table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+
+    -- Check reminders in priority order
     local foundMismatch = false
-    for bossID, reminder in pairs(reminders[currentDifficultyID]) do
-        -- Skip if snoozed
-        if not (snoozed[currentInstanceID] and snoozed[currentInstanceID][bossID]) then
+    for _, entry in ipairs(priorityList) do
+        local zoneKey = entry.zoneKey
+        local reminder = entry.reminder
+
+        -- Skip if reminder doesn't match current class/spec
+        if reminder.classID and reminder.classID ~= classID then
+            -- Different class, skip
+        elseif reminder.specID and reminder.specID ~= specID then
+            -- Different spec, skip
+        else
             local mismatches = TalentReminder.CompareTalents(reminder.talents)
             if #mismatches > 0 then
                 -- Talents mismatch - show alert
-                TalentReminder.ShowAlert(reminder, mismatches, bossID)
+                TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
                 foundMismatch = true
                 break -- Only show one alert at a time
             end
@@ -179,6 +263,11 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
         return
     end
 
+    -- Get current class and spec
+    local _, _, classID = UnitClass("player")
+    local specIndex = GetSpecialization()
+    local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+
     if not TalentReminder.ShouldAlertForDifficulty(currentDifficultyID) then
         return
     end
@@ -189,12 +278,49 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
         return
     end
 
-    -- Gather all mismatches across all bosses
+    -- Detect current zone
+    local currentZone = TalentReminder.GetCurrentZone()
+
+    -- Build priority list: zone-specific first, then general
+    local priorityList = {}
+
+    -- If we have a detected zone, prioritize zone-specific reminder
+    if currentZone and currentZone ~= "" then
+        if reminders[currentDifficultyID][currentZone] then
+            table.insert(priorityList, {
+                zoneKey = currentZone,
+                reminder = reminders[currentDifficultyID][currentZone],
+                priority = 1
+            })
+        end
+    end
+
+    -- Add general reminder with lower priority
+    if reminders[currentDifficultyID]["general"] then
+        table.insert(priorityList, {
+            zoneKey = "general",
+            reminder = reminders[currentDifficultyID]["general"],
+            priority = 2
+        })
+    end
+
+    -- Sort by priority (lower number = higher priority)
+    table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+
+    -- Gather all mismatches from priority reminders
     local allMismatches = {}
     local reminderName = nil
 
-    for bossID, reminder in pairs(reminders[currentDifficultyID]) do
-        if not snoozed[currentInstanceID] or not snoozed[currentInstanceID][bossID] then
+    for _, entry in ipairs(priorityList) do
+        local zoneKey = entry.zoneKey
+        local reminder = entry.reminder
+
+        -- Skip if reminder doesn't match current class/spec
+        if reminder.classID and reminder.classID ~= classID then
+            -- Different class, skip
+        elseif reminder.specID and reminder.specID ~= specID then
+            -- Different spec, skip
+        else
             local mismatches = TalentReminder.CompareTalents(reminder.talents)
             if #mismatches > 0 then
                 reminderName = reminder.name
@@ -279,8 +405,6 @@ function TalentReminder.CompareTalents(savedTalents)
             if current then
                 currentInfo = "entryID=" .. tostring(current.entryID) .. " rank=" .. tostring(current.rank)
             end
-            print("DEBUG: Missing talent - " .. talentName .. " at nodeID=" .. tostring(nodeID) ..
-                " (savedEntryID=" .. tostring(savedData.entryID) .. ", current=" .. currentInfo .. ")")
             table.insert(mismatches, {
                 type = "missing",
                 nodeID = nodeID,
@@ -290,10 +414,6 @@ function TalentReminder.CompareTalents(savedTalents)
             })
         elseif current.entryID ~= savedData.entryID then
             -- Different talent selected in this node - need to remove current and add expected
-            print("DEBUG: Wrong talent choice at nodeID=" .. tostring(nodeID) ..
-                " (expected entryID=" .. tostring(savedData.entryID) ..
-                ", current entryID=" .. tostring(current.entryID) .. ")")
-
             -- Get info about the current (wrong) talent for "remove" section
             local currentTalentName = "Unknown Talent"
             local currentSpellID = nil
@@ -337,9 +457,6 @@ function TalentReminder.CompareTalents(savedTalents)
             })
         elseif current.rank < savedData.rank then
             -- Same talent but insufficient rank
-            print("DEBUG: Insufficient rank - " .. talentName .. " at nodeID=" .. tostring(nodeID) ..
-                " (expected rank=" .. tostring(savedData.rank) ..
-                ", current rank=" .. tostring(current.rank) .. ")")
             table.insert(mismatches, {
                 type = "wrong",
                 nodeID = nodeID,
@@ -352,14 +469,12 @@ function TalentReminder.CompareTalents(savedTalents)
     end
 
     -- Find extra talents (talents you have but aren't in the saved build)
-    print("DEBUG: Checking for extra talents")
     local extraCount = 0
     for nodeID, current in pairs(currentTalents) do
         if not savedTalents[nodeID] then
             -- Only count as extra if rank > 0
             if current.rank > 0 then
                 extraCount = extraCount + 1
-                print("DEBUG: Found extra talent at nodeID=" .. tostring(nodeID) .. " rank=" .. tostring(current.rank))
 
                 -- Get node info for the extra talent
                 local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
@@ -381,8 +496,6 @@ function TalentReminder.CompareTalents(savedTalents)
                     end
                 end
 
-                print("DEBUG: Extra talent name=" .. tostring(talentName) .. " spellID=" .. tostring(spellID))
-
                 table.insert(mismatches, {
                     type = "extra",
                     nodeID = nodeID,
@@ -397,9 +510,145 @@ function TalentReminder.CompareTalents(savedTalents)
             end
         end
     end
-    print("DEBUG: Found " .. extraCount .. " extra talents total")
 
     return mismatches
+end
+
+-- Validate that saved talents still exist in current talent tree
+-- Returns: isValid (boolean), invalidTalents (table)
+function TalentReminder.ValidateTalentBuild(savedTalents)
+    if not C_ClassTalents or not C_Traits then
+        return false, {}
+    end
+
+    local configID = C_ClassTalents.GetActiveConfigID()
+    if not configID then
+        return false, {}
+    end
+
+    local configInfo = C_Traits.GetConfigInfo(configID)
+    if not configInfo or not configInfo.treeIDs or #configInfo.treeIDs == 0 then
+        return false, {}
+    end
+
+    local treeID = configInfo.treeIDs[1]
+    local nodes = C_Traits.GetTreeNodes(treeID)
+
+    -- Build set of valid nodeIDs
+    local validNodes = {}
+    for _, nodeID in ipairs(nodes) do
+        validNodes[nodeID] = true
+    end
+
+    -- Check each saved talent
+    local invalidTalents = {}
+    for nodeID, savedData in pairs(savedTalents) do
+        -- Check if node still exists
+        if not validNodes[nodeID] then
+            table.insert(invalidTalents, {
+                nodeID = nodeID,
+                name = savedData.name,
+                reason = "Node no longer exists"
+            })
+        else
+            -- Check if entryID is still valid
+            local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            if nodeInfo then
+                local entryInfo = C_Traits.GetEntryInfo(configID, savedData.entryID)
+                if not entryInfo then
+                    table.insert(invalidTalents, {
+                        nodeID = nodeID,
+                        name = savedData.name,
+                        reason = "Talent no longer available"
+                    })
+                end
+            end
+        end
+    end
+
+    local isValid = #invalidTalents == 0
+    return isValid, invalidTalents
+end
+
+-- Get colored class/spec display string for reminder
+function TalentReminder.GetClassSpecString(reminder)
+    if not reminder.className or not reminder.specName then
+        return "|cFFAAAAAA[Unknown Class/Spec]|r"
+    end
+
+    -- Get class color
+    local classColor = "FFE6CC80" -- Default gold color
+    if reminder.className then
+        local classFile = reminder.className:upper():gsub(" ", "")
+        local colors = RAID_CLASS_COLORS[classFile]
+        if colors then
+            classColor = string.format("FF%02X%02X%02X",
+                colors.r * 255, colors.g * 255, colors.b * 255)
+        end
+    end
+
+    return string.format("|c%s%s|r - %s", classColor, reminder.specName, reminder.className)
+end
+
+-- Get current zone/subzone (used for boss area detection)
+function TalentReminder.GetCurrentZone()
+    local subZone = GetSubZoneText()
+    local minimapZone = GetMinimapZoneText()
+    local result = nil
+
+    if subZone and subZone ~= "" then
+        result = subZone
+    elseif minimapZone and minimapZone ~= "" then
+        result = minimapZone
+    end
+
+    -- Debug logging
+    addonTable.Core.Log("TalentReminder", string.format("GetCurrentZone: subZone='%s', minimapZone='%s', result='%s'",
+        subZone or "nil", minimapZone or "nil", result or "nil"), 0)
+
+    return result
+end
+
+-- No longer needed - we use zone text instead
+function TalentReminder.GetBossListForInstance(instanceID)
+    -- Boss areas are now entered manually or detected via zone text
+    -- No dropdown needed
+    return {}
+end
+
+-- Detect current boss from boss frames
+function TalentReminder.DetectCurrentBoss()
+    -- Check boss frames (boss1-boss5)
+    for i = 1, 5 do
+        local unitID = "boss" .. i
+        if UnitExists(unitID) then
+            local guid = UnitGUID(unitID)
+            if guid then
+                -- Extract creature ID from GUID
+                local _, _, _, _, _, creatureID = strsplit("-", guid)
+                if creatureID then
+                    local name = UnitName(unitID)
+                    return tonumber(creatureID), name
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+-- Called when boss frames are updated
+function TalentReminder.OnBossFrameUpdated()
+    local bossID, bossName = TalentReminder.DetectCurrentBoss()
+
+    if bossID and bossName then
+        -- Store detected boss for potential use
+        TalentReminder.currentBossID = bossID
+        TalentReminder.currentBossName = bossName
+
+        -- Check if we have a boss-specific reminder
+        TalentReminder.CheckTalentsInInstance()
+    end
 end
 
 -- Helper to resolve talent name from spellID
@@ -472,6 +721,14 @@ function TalentReminder.CreateSnapshot()
         return nil, "No active talent config"
     end
 
+    -- Capture current class and spec
+    local _, className, classID = UnitClass("player")
+    local specIndex = GetSpecialization()
+    local specID, specName = nil, nil
+    if specIndex then
+        specID, specName = GetSpecializationInfo(specIndex)
+    end
+
     local configInfo = C_Traits.GetConfigInfo(configID)
     if not configInfo or not configInfo.treeIDs or #configInfo.treeIDs == 0 then
         return nil, "No talent tree found"
@@ -519,8 +776,12 @@ function TalentReminder.CreateSnapshot()
         end
     end
 
-    print("DEBUG CreateSnapshot: Saved " .. count .. " talents, skipped " .. skippedCount .. " with rank=0")
-    return snapshot, nil, count
+    return snapshot, nil, count, {
+        classID = classID,
+        className = className,
+        specID = specID,
+        specName = specName
+    }
 end
 
 -- Get reminder for encounter
@@ -540,7 +801,7 @@ end
 
 -- Save reminder
 function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, instanceName, difficulty, note)
-    local snapshot, err, count = TalentReminder.CreateSnapshot()
+    local snapshot, err, count, classSpecInfo = TalentReminder.CreateSnapshot()
     if err then
         return false, err
     end
@@ -556,17 +817,21 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
         difficultyID = difficultyID,
         createdDate = date("%Y-%m-%d"),
         note = note or "",
-        talents = snapshot
+        talents = snapshot,
+        classID = classSpecInfo.classID,
+        className = classSpecInfo.className,
+        specID = classSpecInfo.specID,
+        specName = classSpecInfo.specName
     }
 
     return true, nil, count
 end
 
 -- Delete reminder
-function TalentReminder.DeleteReminder(instanceID, difficultyID, bossID)
+function TalentReminder.DeleteReminder(instanceID, difficultyID, zoneKey)
     if LunaUITweaks_TalentReminders.reminders[instanceID] and
         LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID] then
-        LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] = nil
+        LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][zoneKey] = nil
     end
 end
 
@@ -613,59 +878,75 @@ function TalentReminder.ShouldAlertForDifficulty(difficultyID)
 end
 
 -- Show alert
-function TalentReminder.ShowAlert(reminder, mismatches, bossID)
-    print("DEBUG ShowAlert: Called with " .. #mismatches .. " mismatches, alertFrame=" .. tostring(alertFrame))
+function TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
     if not alertFrame then
-        print("DEBUG ShowAlert: alertFrame is nil, returning")
         return
     end
 
     -- Play sound
-    print("DEBUG ShowAlert: Checking sound...")
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.playSound then
         PlaySound(8959) -- SOUNDKIT.RAID_WARNING
     end
-    print("DEBUG ShowAlert: Sound done")
 
-    -- TTS announcement (first missing talent)
-    print("DEBUG ShowAlert: Checking TTS...")
-    if UIThingsDB.talentReminders and UIThingsDB.talentReminders.useTTS then
-        for _, mismatch in ipairs(mismatches) do
-            if mismatch.type == "missing" then
-                PlaySound(8959) -- SOUNDKIT.RAID_WARNING
-                break
-            end
-        end
-    end
-    print("DEBUG ShowAlert: TTS done")
+    -- TTS announcement removed per user request
+    -- if UIThingsDB.talentReminders and UIThingsDB.talentReminders.useTTS then
+    --     for _, mismatch in ipairs(mismatches) do
+    --         if mismatch.type == "missing" then
+    --             PlaySound(8959) -- SOUNDKIT.RAID_WARNING
+    --             break
+    --         end
+    --     end
+    -- end
 
     -- Chat message
-    print("DEBUG ShowAlert: Checking chat message...")
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.showChatMessage then
-        local missingCount = 0
-        local wrongCount = 0
-        local extraCount = 0
+        -- Separate mismatches by type
+        local missing = {}
+        local wrong = {}
+        local extra = {}
+
         for _, m in ipairs(mismatches) do
             if m.type == "missing" then
-                missingCount = missingCount + 1
+                table.insert(missing, m)
             elseif m.type == "wrong" then
-                wrongCount = wrongCount + 1
+                table.insert(wrong, m)
             elseif m.type == "extra" then
-                extraCount = extraCount + 1
+                table.insert(extra, m)
             end
         end
-        print(string.format("|cFFFF0000[LunaUITweaks]|r ⚠️ Talent mismatch for %s: %d missing, %d incorrect, %d extra.",
-            reminder.name, missingCount, wrongCount, extraCount))
+
+        -- Header
+        print(string.format("|cFFFF0000[LunaUITweaks]|r Talent mismatch for %s:", reminder.name))
+
+        -- Missing talents
+        if #missing > 0 then
+            print("|cFFFF6B6B  Missing Talents:|r")
+            for _, m in ipairs(missing) do
+                print(string.format("    - %s", m.name))
+            end
+        end
+
+        -- Wrong talents (need different selection)
+        if #wrong > 0 then
+            print("|cFFFFAA00  Wrong Selection:|r")
+            for _, m in ipairs(wrong) do
+                print(string.format("    - Need %s (rank %d)", m.name, m.expected.rank))
+            end
+        end
+
+        -- Extra talents (to remove)
+        if #extra > 0 then
+            print("|cFFFF9900  Talents to Remove:|r")
+            for _, m in ipairs(extra) do
+                print(string.format("    - %s", m.name))
+            end
+        end
     end
-    print("DEBUG ShowAlert: Chat message done")
 
     -- Show popup
-    print("DEBUG ShowAlert: showPopup=" .. tostring(UIThingsDB.talentReminders and UIThingsDB.talentReminders.showPopup))
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.showPopup then
-        print("DEBUG ShowAlert: Calling UpdateAlertFrame and showing window")
-        TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
+        TalentReminder.UpdateAlertFrame(reminder, mismatches, zoneKey)
         alertFrame:Show()
-        print("DEBUG ShowAlert: Window shown, isShown=" .. tostring(alertFrame:IsShown()))
     end
 end
 
@@ -678,29 +959,47 @@ function TalentReminder.UpdateVisuals()
     local fontSize = UIThingsDB.talentReminders.alertFontSize or 12
     alertFrame.content:SetFont(font, fontSize)
 
+    -- Apply frame size
+    local width = UIThingsDB.talentReminders.frameWidth or 400
+    local height = UIThingsDB.talentReminders.frameHeight or 300
+    alertFrame:SetSize(width, height)
+
+    -- Adjust scroll frame size (width - 40 padding, height - 150 top/bottom space)
+    if alertFrame.scrollFrame then
+        alertFrame.scrollFrame:SetSize(width - 40, height - 150)
+        if alertFrame.scrollChild then
+            alertFrame.scrollChild:SetSize(width - 40, height - 150)
+        end
+        if alertFrame.content then
+            alertFrame.content:SetWidth(width - 60)
+        end
+    end
+
     -- Apply visual settings (Backdrop)
     local showBorder = UIThingsDB.talentReminders.showBorder
     local showBackground = UIThingsDB.talentReminders.showBackground
-    
+
     if showBorder or showBackground then
         alertFrame:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            tile = false, tileSize = 0, edgeSize = 1,
+            tile = false,
+            tileSize = 0,
+            edgeSize = 1,
             insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
-        
+
         -- Background
         if showBackground then
-            local c = UIThingsDB.talentReminders.backgroundColor or {r=0, g=0, b=0, a=0.8}
+            local c = UIThingsDB.talentReminders.backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
             alertFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
         else
             alertFrame:SetBackdropColor(0, 0, 0, 0)
         end
-        
+
         -- Border
         if showBorder then
-            local bc = UIThingsDB.talentReminders.borderColor or {r=1, g=1, b=1, a=1}
+            local bc = UIThingsDB.talentReminders.borderColor or { r = 1, g = 1, b = 1, a = 1 }
             alertFrame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
         else
             alertFrame:SetBackdropBorderColor(0, 0, 0, 0)
@@ -708,16 +1007,24 @@ function TalentReminder.UpdateVisuals()
     else
         alertFrame:SetBackdrop(nil)
     end
+
+    -- Always show dismiss button centered
+    if alertFrame.dismissBtn then
+        alertFrame.dismissBtn:Show()
+        alertFrame.dismissBtn:ClearAllPoints()
+        alertFrame.dismissBtn:SetPoint("BOTTOM", 0, 20)
+    end
 end
 
 -- Update alert frame content
-function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
+function TalentReminder.UpdateAlertFrame(reminder, mismatches, zoneKey)
     if not alertFrame then return end
 
     TalentReminder.UpdateVisuals()
 
-    alertFrame.title:SetText("⚠️ TALENT REMINDER")
+    alertFrame.title:SetText("TALENT REMINDER")
     alertFrame.bossName:SetText(reminder.name)
+    alertFrame.zoneKey = zoneKey -- Store zone key instead of bossID
 
     -- Build mismatch text
     local text = ""
@@ -736,7 +1043,6 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
     end
 
     if #missing > 0 then
-        print("DEBUG: Building missing section with " .. #missing .. " talents")
         text = text .. "|cFFFF6B6BMissing Talents:|r\n"
         for _, m in ipairs(missing) do
             -- Try to resolve name again if unknown
@@ -771,14 +1077,11 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
     end
 
     if #wrong > 0 then
-        print("DEBUG: Displaying " .. #wrong .. " wrong talents")
         text = text .. "\n|cFFFFAA00Wrong Selection:|r\n"
         for _, m in ipairs(wrong) do
             -- Try to resolve name again if unknown
             local name = m.name
             local spellID = m.expected and m.expected.spellID
-            print("DEBUG Wrong display: name=" ..
-                tostring(name) .. " spellID=" .. tostring(spellID) .. " row=" .. tostring(m.row))
 
             if (not name or name == "Unknown Talent") and m.expected then
                 -- Try spellID first (most reliable)
@@ -794,8 +1097,6 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
                 end
             end
 
-            print("DEBUG Wrong display after lookup: name=" .. tostring(name))
-
             -- Get spell icon
             local icon = ""
             if spellID then
@@ -804,17 +1105,14 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
                 if spellTexture then
                     icon = string.format("|T%s:%d:%d:0:0|t ", spellTexture, iconSize, iconSize)
                 end
-                print("DEBUG Wrong display icon: " .. tostring(icon))
             end
 
             local line = string.format("  • %sNeed %s (rank %d)\n", icon, name, m.expected.rank)
-            print("DEBUG Wrong display line: " .. line)
             text = text .. line
         end
     end
 
     if #extra > 0 then
-        print("DEBUG: Building extra section with " .. #extra .. " talents")
         text = text .. "\n|cFFFF9900Talents to Remove:|r\n"
         for _, m in ipairs(extra) do
             local name = m.name
@@ -838,10 +1136,7 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, bossID)
         text = text .. "\n|cFF00FF00Note:|r " .. reminder.note
     end
 
-    print("DEBUG: Final text length: " .. string.len(text))
-    print("DEBUG: Setting alert text...")
     alertFrame.content:SetText(text)
-    alertFrame.bossID = bossID
 end
 
 -- Create alert frame
@@ -852,12 +1147,14 @@ function TalentReminder.CreateAlertFrame()
     alertFrame:SetSize(400, 300)
     alertFrame:SetPoint("CENTER")
     alertFrame:SetFrameStrata("DIALOG")
-    
+
     -- Default Backdrop (will be updated by UpdateAlertFrame)
     alertFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false, tileSize = 0, edgeSize = 1,
+        tile = false,
+        tileSize = 0,
+        edgeSize = 1,
         insets = { left = 1, right = 1, top = 1, bottom = 1 }
     })
     alertFrame:EnableMouse(true)
@@ -880,10 +1177,12 @@ function TalentReminder.CreateAlertFrame()
     local scrollFrame = CreateFrame("ScrollFrame", nil, alertFrame, "UIPanelScrollFrameTemplate")
     scrollFrame:SetSize(360, 150)
     scrollFrame:SetPoint("TOP", 0, -70)
+    alertFrame.scrollFrame = scrollFrame
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetSize(360, 150)
     scrollFrame:SetScrollChild(scrollChild)
+    alertFrame.scrollChild = scrollChild
 
     alertFrame.content = scrollChild:CreateFontString(nil, "OVERLAY")
     alertFrame.content:SetPoint("TOPLEFT", 5, -5)
@@ -896,23 +1195,6 @@ function TalentReminder.CreateAlertFrame()
     local fontSize = UIThingsDB.talentReminders.alertFontSize or 12
     alertFrame.content:SetFont(font, fontSize)
 
-    -- Snooze button
-    local snoozeBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
-    snoozeBtn:SetSize(120, 25)
-    snoozeBtn:SetPoint("BOTTOMLEFT", 20, 20)
-    snoozeBtn:SetText("Snooze")
-    snoozeBtn:SetNormalFontObject("GameFontNormal")
-    snoozeBtn:SetHighlightFontObject("GameFontHighlight")
-    snoozeBtn:SetScript("OnClick", function(self)
-        local bossID = alertFrame.bossID
-        if bossID then
-            snoozed[currentInstanceID] = snoozed[currentInstanceID] or {}
-            snoozed[currentInstanceID][bossID] = true
-            addonTable.Core.Log("TalentReminder", "Snoozed reminder for boss " .. tostring(bossID))
-        end
-        alertFrame:Hide()
-    end)
-
     -- Dismiss button
     local dismissBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
     dismissBtn:SetSize(120, 25)
@@ -923,6 +1205,7 @@ function TalentReminder.CreateAlertFrame()
     dismissBtn:SetScript("OnClick", function(self)
         alertFrame:Hide()
     end)
+    alertFrame.dismissBtn = dismissBtn
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, alertFrame, "UIPanelCloseButton")
@@ -934,14 +1217,15 @@ function TalentReminder.GetCurrentLocation()
     local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
     local difficultyName = GetDifficultyInfo(difficultyID) or "Unknown"
 
+    -- Use zone/subzone text as the boss area identifier
+    local zoneName = TalentReminder.GetCurrentZone()
+
     return {
         instanceID = instanceID,
         instanceName = name,
         instanceType = instanceType,
         difficultyID = difficultyID,
         difficultyName = difficultyName,
-        -- Boss detection would go here if available
-        bossID = nil,
-        bossName = nil
+        zoneName = zoneName
     }
 end
