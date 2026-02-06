@@ -4,7 +4,8 @@
       "mcp__acp__Edit",
       "WebFetch(domain:)",
       "mcp__acp__Write",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "mcp__acp__Bash"
     ]
   }
 }

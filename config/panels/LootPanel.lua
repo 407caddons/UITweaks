@@ -1,0 +1,270 @@
+local addonName, addonTable = ...
+
+-- Create setup table if it doesn't exist
+addonTable.ConfigSetup = addonTable.ConfigSetup or {}
+
+-- Get helpers
+local Helpers = addonTable.ConfigHelpers
+
+-- Define the setup function for Loot panel
+function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
+    local fonts = Helpers.fonts
+
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("Loot Toasts")
+
+    -- Enable Checkbox
+    local enableCheckbox = CreateFrame("CheckButton", "UIThingsLootEnable", panel,
+        "ChatConfigCheckButtonTemplate")
+    enableCheckbox:SetPoint("TOPLEFT", 20, -50)
+    _G[enableCheckbox:GetName() .. "Text"]:SetText("Enable Loot Toasts")
+    enableCheckbox:SetChecked(UIThingsDB.loot.enabled)
+    enableCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.loot.enabled = self:GetChecked()
+        Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.loot.enabled)
+        addonTable.Loot.UpdateSettings()
+    end)
+    Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.loot.enabled)
+
+    -- Show All Checkbox
+    local showAllBtn = CreateFrame("CheckButton", "UIThingsLootShowAll", panel, "ChatConfigCheckButtonTemplate")
+    showAllBtn:SetPoint("TOPLEFT", 20, -75)
+    _G[showAllBtn:GetName() .. "Text"]:SetText("Show All Loot (Party/Raid)")
+    showAllBtn:SetChecked(UIThingsDB.loot.showAll)
+    showAllBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.showAll = self:GetChecked()
+    end)
+
+    -- Unlock Anchor Button
+    local unlockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    unlockBtn:SetSize(120, 24)
+    unlockBtn:SetPoint("TOPLEFT", 200, -50)
+    unlockBtn:SetText("Unlock Anchor")
+    unlockBtn:SetScript("OnShow", function(self)
+        self:SetText("Unlock Anchor")
+    end)
+    unlockBtn:SetScript("OnClick", function(self)
+        if addonTable.Loot and addonTable.Loot.ToggleAnchor then
+            local isUnlocked = addonTable.Loot.ToggleAnchor()
+            if isUnlocked then
+                self:SetText("Lock Anchor")
+            else
+                self:SetText("Unlock Anchor")
+            end
+        end
+    end)
+
+    -- Duration Slider
+    local durationSlider = CreateFrame("Slider", "UIThingsLootDuration", panel, "OptionsSliderTemplate")
+    durationSlider:SetPoint("TOPLEFT", 20, -125)
+    durationSlider:SetMinMaxValues(1, 10)
+    durationSlider:SetValueStep(0.5)
+    durationSlider:SetObeyStepOnDrag(true)
+    durationSlider:SetWidth(200)
+    _G[durationSlider:GetName() .. 'Text']:SetText("Duration: " .. UIThingsDB.loot.duration .. "s")
+    _G[durationSlider:GetName() .. 'Low']:SetText("1s")
+    _G[durationSlider:GetName() .. 'High']:SetText("10s")
+    durationSlider:SetValue(UIThingsDB.loot.duration)
+    durationSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * 10 + 0.5) / 10
+        UIThingsDB.loot.duration = value
+        _G[self:GetName() .. 'Text']:SetText("Duration: " .. value .. "s")
+    end)
+
+    -- Min Quality Dropdown
+    local qualityLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    qualityLabel:SetPoint("TOPLEFT", 20, -175)
+    qualityLabel:SetText("Minimum Quality:")
+
+    local qualityDropdown = CreateFrame("Frame", "UIThingsLootQualityDropdown", panel, "UIDropDownMenuTemplate")
+    qualityDropdown:SetPoint("TOPLEFT", 140, -165)
+    UIDropDownMenu_SetWidth(qualityDropdown, 120)
+
+    local qualities = {
+        { text = "|cff9d9d9dPoor|r",      value = 0 },
+        { text = "|cffffffffCommon|r",    value = 1 },
+        { text = "|cff1eff00Uncommon|r",  value = 2 },
+        { text = "|cff0070ddRare|r",      value = 3 },
+        { text = "|cffa335eeEpic|r",      value = 4 },
+        { text = "|cffff8000Legendary|r", value = 5 },
+    }
+
+    local function QualityOnClick(self)
+        UIDropDownMenu_SetSelectedValue(qualityDropdown, self.value)
+        UIThingsDB.loot.minQuality = self.value
+    end
+
+    UIDropDownMenu_Initialize(qualityDropdown, function()
+        for _, info in ipairs(qualities) do
+            local inf = UIDropDownMenu_CreateInfo()
+            inf.text = info.text
+            inf.value = info.value
+            inf.func = QualityOnClick
+            inf.checked = (info.value == UIThingsDB.loot.minQuality)
+            UIDropDownMenu_AddButton(inf)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(qualityDropdown, UIThingsDB.loot.minQuality)
+    for _, q in ipairs(qualities) do
+        if q.value == UIThingsDB.loot.minQuality then
+            UIDropDownMenu_SetText(qualityDropdown, q.text)
+            break
+        end
+    end
+
+    -- Font Dropdown
+    local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fontLabel:SetPoint("TOPLEFT", 20, -225)
+    fontLabel:SetText("Font:")
+
+    local fontDropdown = CreateFrame("Frame", "UIThingsLootFontDropdown", panel, "UIDropDownMenuTemplate")
+    fontDropdown:SetPoint("TOPLEFT", 60, -215)
+    UIDropDownMenu_SetWidth(fontDropdown, 120)
+
+    local function FontOnClick(self)
+        UIDropDownMenu_SetSelectedValue(fontDropdown, self.value)
+        UIThingsDB.loot.font = self.value
+        addonTable.Loot.UpdateSettings()
+    end
+
+    UIDropDownMenu_Initialize(fontDropdown, function()
+        for _, font in ipairs(fonts) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = font.name
+            info.value = font.path
+            info.func = FontOnClick
+            info.checked = (font.path == UIThingsDB.loot.font)
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(fontDropdown, UIThingsDB.loot.font)
+    for _, font in ipairs(fonts) do
+        if font.path == UIThingsDB.loot.font then
+            UIDropDownMenu_SetText(fontDropdown, font.name)
+            break
+        end
+    end
+
+    -- Font Size Slider
+    local fontSizeSlider = CreateFrame("Slider", "UIThingsLootFontSize", panel, "OptionsSliderTemplate")
+    fontSizeSlider:SetPoint("TOPLEFT", 250, -225)
+    fontSizeSlider:SetMinMaxValues(8, 32)
+    fontSizeSlider:SetValueStep(1)
+    fontSizeSlider:SetObeyStepOnDrag(true)
+    fontSizeSlider:SetWidth(150)
+    _G[fontSizeSlider:GetName() .. 'Text']:SetText("Font Size: " .. UIThingsDB.loot.fontSize)
+    _G[fontSizeSlider:GetName() .. 'Low']:SetText("8")
+    _G[fontSizeSlider:GetName() .. 'High']:SetText("32")
+    fontSizeSlider:SetValue(UIThingsDB.loot.fontSize)
+    fontSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.loot.fontSize = value
+        _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    -- Who Looted Font Size Slider
+    local whoLootedFontSizeSlider = CreateFrame("Slider", "UIThingsLootWhoLootedFontSize", panel,
+        "OptionsSliderTemplate")
+    whoLootedFontSizeSlider:SetPoint("TOPLEFT", 250, -265)
+    whoLootedFontSizeSlider:SetMinMaxValues(8, 32)
+    whoLootedFontSizeSlider:SetValueStep(1)
+    whoLootedFontSizeSlider:SetObeyStepOnDrag(true)
+    whoLootedFontSizeSlider:SetWidth(150)
+    _G[whoLootedFontSizeSlider:GetName() .. 'Text']:SetText("Who Looted Size: " ..
+        (UIThingsDB.loot.whoLootedFontSize or 12))
+    _G[whoLootedFontSizeSlider:GetName() .. 'Low']:SetText("8")
+    _G[whoLootedFontSizeSlider:GetName() .. 'High']:SetText("32")
+    whoLootedFontSizeSlider:SetValue(UIThingsDB.loot.whoLootedFontSize or 12)
+    whoLootedFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.loot.whoLootedFontSize = value
+        _G[self:GetName() .. 'Text']:SetText("Who Looted Size: " .. value)
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    -- Icon Size Slider
+    local iconSizeSlider = CreateFrame("Slider", "UIThingsLootIconSize", panel, "OptionsSliderTemplate")
+    iconSizeSlider:SetPoint("TOPLEFT", 20, -305)
+    iconSizeSlider:SetMinMaxValues(16, 64)
+    iconSizeSlider:SetValueStep(2)
+    iconSizeSlider:SetObeyStepOnDrag(true)
+    iconSizeSlider:SetWidth(200)
+    _G[iconSizeSlider:GetName() .. 'Text']:SetText("Icon Size: " .. UIThingsDB.loot.iconSize)
+    _G[iconSizeSlider:GetName() .. 'Low']:SetText("16")
+    _G[iconSizeSlider:GetName() .. 'High']:SetText("64")
+    iconSizeSlider:SetValue(UIThingsDB.loot.iconSize)
+    iconSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.loot.iconSize = value
+        _G[self:GetName() .. 'Text']:SetText("Icon Size: " .. value)
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    -- Grow Up Checkbox
+    local growBtn = CreateFrame("CheckButton", "UIThingsLootGrowCheck", panel, "ChatConfigCheckButtonTemplate")
+    growBtn:SetPoint("TOPLEFT", 20, -355)
+    _G[growBtn:GetName() .. "Text"]:SetText("Grow Upwards")
+    growBtn:SetChecked(UIThingsDB.loot.growUp)
+    growBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.growUp = self:GetChecked()
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    -- Faster Loot Checkbox
+    local fasterLootBtn = CreateFrame("CheckButton", "UIThingsLootFasterCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    fasterLootBtn:SetPoint("TOPLEFT", 20, -405)
+    _G[fasterLootBtn:GetName() .. "Text"]:SetText("Faster Loot")
+    fasterLootBtn:SetChecked(UIThingsDB.loot.fasterLoot)
+    fasterLootBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.fasterLoot = self:GetChecked()
+    end)
+
+    -- Faster Loot Delay Slider
+    local delaySlider = CreateFrame("Slider", "UIThingsLootDelaySlider", panel, "OptionsSliderTemplate")
+    delaySlider:SetPoint("TOPLEFT", 20, -455)
+    delaySlider:SetMinMaxValues(0, 1)
+    delaySlider:SetValueStep(0.1)
+    delaySlider:SetObeyStepOnDrag(true)
+    delaySlider:SetWidth(200)
+
+    local currentDelay = UIThingsDB.loot.fasterLootDelay
+    _G[delaySlider:GetName() .. 'Text']:SetText("Loot Delay: " .. currentDelay .. "s")
+    _G[delaySlider:GetName() .. 'Low']:SetText("0s")
+    _G[delaySlider:GetName() .. 'High']:SetText("1s")
+    delaySlider:SetValue(currentDelay)
+
+    -- EditBox for Delay
+    local delayEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    delayEdit:SetSize(40, 20)
+    delayEdit:SetPoint("LEFT", delaySlider, "RIGHT", 10, 0)
+    delayEdit:SetAutoFocus(false)
+    delayEdit:SetText(tostring(currentDelay))
+
+    delaySlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * 10 + 0.5) / 10
+        UIThingsDB.loot.fasterLootDelay = value
+        _G[self:GetName() .. 'Text']:SetText("Loot Delay: " .. value .. "s")
+        if not delayEdit:HasFocus() then
+            delayEdit:SetText(tostring(value))
+        end
+    end)
+
+    delayEdit:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val then
+            val = math.max(0, math.min(1, val))
+            val = math.floor(val * 10 + 0.5) / 10
+
+            UIThingsDB.loot.fasterLootDelay = val
+            delaySlider:SetValue(val)
+            self:SetText(tostring(val))
+            self:ClearFocus()
+        else
+            self:SetText(tostring(UIThingsDB.loot.fasterLootDelay))
+            self:ClearFocus()
+        end
+    end)
+end
