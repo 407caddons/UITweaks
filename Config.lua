@@ -2456,7 +2456,7 @@ function addonTable.Config.Initialize()
 
         -- Dungeons
         local dungeonLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        dungeonLabel:SetPoint("TOPLEFT", 20, -385)
+        dungeonLabel:SetPoint("TOPLEFT", 20, -363)
         dungeonLabel:SetText("Dungeons:")
 
         local dNormalCheck = CreateFrame("CheckButton", "UIThingsTalentDNormalCheck", talentPanel,
@@ -2500,7 +2500,7 @@ function addonTable.Config.Initialize()
 
         -- Raids
         local raidLabel = talentPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        raidLabel:SetPoint("TOPLEFT", 20, -415)
+        raidLabel:SetPoint("TOPLEFT", 20, -393)
         raidLabel:SetText("Raids:")
 
         local rLFRCheck = CreateFrame("CheckButton", "UIThingsTalentRLFRCheck", talentPanel,
