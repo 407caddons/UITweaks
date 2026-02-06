@@ -141,7 +141,8 @@ local function AcquireItem()
     itemBtn:SetSize(20, 20)
     itemBtn:SetPoint("RIGHT", -2, 0)
     itemBtn:Hide()
-    itemBtn:RegisterForClicks("LeftButtonUp")
+    itemBtn:RegisterForClicks("AnyUp", "AnyDown")
+    itemBtn:SetFrameLevel(btn:GetFrameLevel() + 2)
     itemBtn.iconTex = itemBtn:CreateTexture(nil, "ARTWORK")
     itemBtn.iconTex:SetAllPoints()
     itemBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
@@ -309,49 +310,24 @@ local function UpdateContent()
                 end
 
                 if questID then
-                    local isComplete = C_QuestLog.IsComplete(questID)
-                    local iconPath = "Interface\\GossipFrame\\AvailableQuestIcon"
-
-                    local tagInfo = C_QuestLog.GetQuestTagInfo(questID)
-                    local isDaily = false
-                    local isCampaign = false
-                    local isLegendary = false
-
-                    if tagInfo then
-                        if tagInfo.isDaily or tagInfo.frequency == Enum.QuestFrequency.Daily or tagInfo.frequency == Enum.QuestFrequency.Weekly then
-                            isDaily = true
-                        elseif tagInfo.tagID == 102 then
-                            isDaily = true
-                        elseif tagInfo.quality == Enum.QuestTagType.Campaign then
-                            isCampaign = true
-                        elseif tagInfo.quality == Enum.QuestTagType.Legendary then
-                            isLegendary = true
-                        end
+                    local iconAsset, isAtlas
+                    if QuestUtil and QuestUtil.GetQuestIconActiveForQuestID then
+                        iconAsset, isAtlas = QuestUtil.GetQuestIconActiveForQuestID(questID)
                     end
 
-                    if isComplete then
-                        if isDaily then
-                            iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon"
-                        elseif isCampaign then
-                            iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
-                        elseif isLegendary then
-                            iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
-                        else
-                            iconPath = "Interface\\GossipFrame\\ActiveQuestIcon"
-                        end
+                    btn.Icon:SetTexture(nil)
+                    if iconAsset and isAtlas then
+                        btn.Icon:SetAtlas(iconAsset, true)
+                    elseif iconAsset then
+                        btn.Icon:SetTexture(iconAsset)
                     else
-                        if isDaily then
-                            iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon"
-                        elseif isCampaign then
-                            iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
-                        elseif isLegendary then
-                            iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
+                        local isComplete = C_QuestLog.IsComplete(questID)
+                        if isComplete then
+                            btn.Icon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
                         else
-                            iconPath = "Interface\\GossipFrame\\AvailableQuestIcon"
+                            btn.Icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
                         end
                     end
-
-                    btn.Icon:SetTexture(iconPath)
                     btn.Icon:Show()
                     btn.Text:SetPoint("LEFT", btn.Icon, "RIGHT", 5, 0)
                     btn:EnableMouse(true)
@@ -684,6 +660,21 @@ local function UpdateContent()
     scrollChild:SetHeight(math.max(totalHeight, 50))
 end
 
+-- Aggressive Hide Hook for Blizzard tracker
+local blizzardTrackerHooked = false
+local function HookBlizzardTracker()
+    if blizzardTrackerHooked or not ObjectiveTrackerFrame then return end
+    blizzardTrackerHooked = true
+    hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
+        if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled then
+            ObjectiveTrackerFrame:Hide()
+        end
+    end)
+end
+
+-- Try hooking immediately if already available
+HookBlizzardTracker()
+
 local function SetupCustomTracker()
     if trackerFrame then return end
     local settings = UIThingsDB.tracker
@@ -793,7 +784,7 @@ local function SetupCustomTracker()
             end
         elseif event == "PLAYER_REGEN_ENABLED" then
             if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
-                self:Show()
+                UpdateContent()
             end
         elseif event == "CHALLENGE_MODE_START" then
             if UIThingsDB.tracker.hideInMPlus then
@@ -801,7 +792,7 @@ local function SetupCustomTracker()
             end
         elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
             if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) then
-                self:Show()
+                UpdateContent()
             end
         else
             UpdateContent()
@@ -814,6 +805,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
 
     -- Blizzard Tracker Logic
     if enabled then
+        HookBlizzardTracker()
         if ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:Hide()
             ObjectiveTrackerFrame:SetParent(UIThingsHiddenFrame or CreateFrame("Frame", "UIThingsHiddenFrame"))
@@ -924,14 +916,20 @@ f:SetScript("OnEvent", function(self, event)
 end)
 
 
--- Aggressive Hide Hook
-if ObjectiveTrackerFrame then
-    hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
-        if UIThingsDB.tracker.enabled then
+-- Deferred hook setup — the hookFrame below handles login/world entry
+local hookFrame = CreateFrame("Frame")
+hookFrame:RegisterEvent("PLAYER_LOGIN")
+hookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+hookFrame:SetScript("OnEvent", function(self, event)
+    HookBlizzardTracker()
+    if blizzardTrackerHooked then
+        -- Also force-hide the Blizzard tracker on world entry if our tracker is enabled
+        if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled and ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:Hide()
         end
-    end)
-end
+        self:UnregisterAllEvents()
+    end
+end)
 
 -- Auto Track Quests Feature
 local autoTrackFrame = CreateFrame("Frame")

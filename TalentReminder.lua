@@ -86,6 +86,11 @@ function TalentReminder.OnZoneChanged()
         addonTable.Core.SafeAfter(0.5, function()
             TalentReminder.CheckTalentsInInstance()
         end)
+
+        -- Refresh config list highlighting for the new zone
+        if addonTable.Config and addonTable.Config.RefreshTalentReminderList then
+            addonTable.Config.RefreshTalentReminderList()
+        end
     end
 end
 
@@ -114,6 +119,13 @@ function TalentReminder.OnEnteringWorld()
             TalentReminder.CheckTalentsInInstance()
         end)
     end
+
+    -- Refresh config list highlighting after entering world
+    addonTable.Core.SafeAfter(3.5, function()
+        if addonTable.Config and addonTable.Config.RefreshTalentReminderList then
+            addonTable.Config.RefreshTalentReminderList()
+        end
+    end)
 end
 
 -- On boss encounter start
@@ -138,7 +150,7 @@ function TalentReminder.OnEncounterStart(encounterID, encounterName, difficultyI
 
     -- Get reminder for this zone/instance (prioritize zone-based detection)
     local reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, zoneKey)
-    if not reminder and zoneKey ~= "general" then
+    if (not reminder or reminder.disabled) and zoneKey ~= "general" then
         addonTable.Core.Log("TalentReminder",
             string.format("No zone-specific reminder for '%s', trying general", zoneKey), 0)
         -- Try general instance reminder if zone-specific not found
@@ -146,7 +158,7 @@ function TalentReminder.OnEncounterStart(encounterID, encounterName, difficultyI
         zoneKey = "general"
     end
 
-    if reminder then
+    if reminder and not reminder.disabled then
         addonTable.Core.Log("TalentReminder", string.format("Found reminder '%s' for zone '%s'", reminder.name, zoneKey),
             0)
         local mismatches = TalentReminder.CompareTalents(reminder.talents)
@@ -200,11 +212,12 @@ function TalentReminder.CheckTalentsInInstance()
     -- If we have a detected zone, prioritize zone-specific reminder
     if currentZone and currentZone ~= "" then
         -- Check for exact zone match
-        if reminders[currentDifficultyID][currentZone] then
+        local zoneReminder = reminders[currentDifficultyID][currentZone]
+        if zoneReminder and not zoneReminder.disabled then
             addonTable.Core.Log("TalentReminder", string.format("Found zone-specific reminder for '%s'", currentZone), 0)
             table.insert(priorityList, {
                 zoneKey = currentZone,
-                reminder = reminders[currentDifficultyID][currentZone],
+                reminder = zoneReminder,
                 priority = 1
             })
         else
@@ -217,11 +230,12 @@ function TalentReminder.CheckTalentsInInstance()
     end
 
     -- Add general reminder with lower priority
-    if reminders[currentDifficultyID]["general"] then
+    local generalReminder = reminders[currentDifficultyID]["general"]
+    if generalReminder and not generalReminder.disabled then
         addonTable.Core.Log("TalentReminder", "Adding general reminder to priority list", 0)
         table.insert(priorityList, {
             zoneKey = "general",
-            reminder = reminders[currentDifficultyID]["general"],
+            reminder = generalReminder,
             priority = 2
         })
     end
@@ -286,20 +300,22 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
 
     -- If we have a detected zone, prioritize zone-specific reminder
     if currentZone and currentZone ~= "" then
-        if reminders[currentDifficultyID][currentZone] then
+        local zoneReminder = reminders[currentDifficultyID][currentZone]
+        if zoneReminder and not zoneReminder.disabled then
             table.insert(priorityList, {
                 zoneKey = currentZone,
-                reminder = reminders[currentDifficultyID][currentZone],
+                reminder = zoneReminder,
                 priority = 1
             })
         end
     end
 
     -- Add general reminder with lower priority
-    if reminders[currentDifficultyID]["general"] then
+    local generalReminder = reminders[currentDifficultyID]["general"]
+    if generalReminder and not generalReminder.disabled then
         table.insert(priorityList, {
             zoneKey = "general",
-            reminder = reminders[currentDifficultyID]["general"],
+            reminder = generalReminder,
             priority = 2
         })
     end

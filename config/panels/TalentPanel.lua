@@ -24,6 +24,16 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         UIThingsDB.talentReminders.enabled = not not self:GetChecked()
     end)
 
+    -- Help text
+    local enableText = _G[enableTalentBtn:GetName() .. "Text"]
+    local helpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    helpText:SetPoint("LEFT", enableText, "RIGHT", 10, 0)
+    helpText:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
+    helpText:SetJustifyH("LEFT")
+    helpText:SetTextColor(0.6, 0.6, 0.6)
+    helpText:SetText(
+        "Whenever you are in an instance or boss area you can snapshot your exact talent build, and when you enter that instance on that difficulty again it will highlight differences between your current build as a reminder.")
+
     -- Alert Settings Section
     Helpers.CreateSectionHeader(panel, "Alert Settings", -80)
 
@@ -161,14 +171,9 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         value = math.floor(value)
         UIThingsDB.talentReminders.alertFontSize = value
         fontSizeText:SetText(string.format("Font Size: %d", value))
-        print("Font size changed to:", value, "Icon size is:", UIThingsDB.talentReminders.alertIconSize)
         if addonTable.TalentReminder then
             if addonTable.TalentReminder.UpdateVisuals then
                 addonTable.TalentReminder.UpdateVisuals()
-            end
-            -- Refresh alert content if currently showing
-            if addonTable.TalentReminder.RefreshCurrentAlert then
-                addonTable.TalentReminder.RefreshCurrentAlert()
             end
         end
     end)
@@ -192,7 +197,6 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         value = math.floor(value / 2) * 2 -- Round to nearest even number
         UIThingsDB.talentReminders.alertIconSize = value
         iconSizeText:SetText(string.format("Icon Size: %d", value))
-        print("Icon size changed to:", value, "Font size is:", UIThingsDB.talentReminders.alertFontSize)
         if addonTable.TalentReminder then
             if addonTable.TalentReminder.UpdateVisuals then
                 addonTable.TalentReminder.UpdateVisuals()
@@ -610,7 +614,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             local row = reminderRows[rowIndex]
             if not row then
                 row = CreateFrame("Frame", nil, reminderContent)
-                row:SetSize(490, 50)
+                row:SetSize(490, 58)
 
                 -- Background for highlighting
                 row.bg = row:CreateTexture(nil, "BACKGROUND")
@@ -641,10 +645,16 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.validationLabel:SetWidth(100)
                 row.validationLabel:SetJustifyH("RIGHT")
 
-                -- Delete button
+                -- Enable/Disable button
+                row.enableBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                row.enableBtn:SetSize(60, 22)
+                row.enableBtn:SetPoint("TOPRIGHT", -10, -5)
+                row.enableBtn:SetNormalFontObject("GameFontNormalSmall")
+
+                -- Delete button (below enable button)
                 row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.deleteBtn:SetSize(60, 22)
-                row.deleteBtn:SetPoint("RIGHT", -10, 0)
+                row.deleteBtn:SetPoint("TOP", row.enableBtn, "BOTTOM", 0, -4)
                 row.deleteBtn:SetText("Delete")
                 row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
 
@@ -653,9 +663,9 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
             -- Position row
             row:ClearAllPoints()
-            row:SetSize(490, 50)
+            row:SetSize(490, 58)
             row:SetPoint("TOPLEFT", 0, yOffset)
-            yOffset = yOffset - 55
+            yOffset = yOffset - 63
 
             -- Ensure all labels exist
             if not row.bg then
@@ -689,10 +699,16 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.validationLabel:SetWidth(100)
                 row.validationLabel:SetJustifyH("RIGHT")
             end
+            if not row.enableBtn then
+                row.enableBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                row.enableBtn:SetSize(60, 22)
+                row.enableBtn:SetPoint("TOPRIGHT", -10, -5)
+                row.enableBtn:SetNormalFontObject("GameFontNormalSmall")
+            end
             if not row.deleteBtn then
                 row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.deleteBtn:SetSize(60, 22)
-                row.deleteBtn:SetPoint("RIGHT", -10, 0)
+                row.deleteBtn:SetPoint("TOP", row.enableBtn, "BOTTOM", 0, -4)
                 row.deleteBtn:SetText("Delete")
                 row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
             end
@@ -702,6 +718,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             row.classSpecLabel:Show()
             row.infoLabel:Show()
             row.validationLabel:Show()
+            row.enableBtn:Show()
             row.deleteBtn:Show()
 
             -- Hide message label if it exists
@@ -709,8 +726,14 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.messageLabel:Hide()
             end
 
-            -- Highlight current zone with green background
-            if isCurrentZone then
+            -- Check if build is disabled
+            local isDisabled = reminder.disabled
+
+            -- Highlight current zone with green background (only if enabled)
+            if isDisabled then
+                row.bg:SetColorTexture(0.2, 0.2, 0.2, 0.3)
+                row.nameLabel:SetText(string.format("|cFF666666%s (Disabled)|r", reminder.name))
+            elseif isCurrentZone then
                 row.bg:SetColorTexture(0, 0.3, 0, 0.3)
                 row.nameLabel:SetText(string.format("|cFF00FF00%s|r", reminder.name))
             else
@@ -751,6 +774,38 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             else
                 row.validationLabel:SetText("")
             end
+
+            -- Set enable/disable button state and action
+            row.enableBtn:SetText(isDisabled and "Enable" or "Disable")
+            row.enableBtn.instanceID = instanceID
+            row.enableBtn.zoneKey = zoneKey
+            row.enableBtn.difficulties = difficulties
+            row.enableBtn:SetScript("OnClick", function(self)
+                local newState = not isDisabled
+                for _, diff in ipairs(self.difficulties) do
+                    local r = LunaUITweaks_TalentReminders.reminders[self.instanceID]
+                        and LunaUITweaks_TalentReminders.reminders[self.instanceID][diff.diffID]
+                        and LunaUITweaks_TalentReminders.reminders[self.instanceID][diff.diffID][self.zoneKey]
+                    if r then
+                        r.disabled = newState or nil
+                    end
+                end
+                if newState then
+                    -- Disabled: hide the alert if it's showing
+                    local alertFrame = _G["LunaTalentReminderAlert"]
+                    if alertFrame and alertFrame:IsShown() then
+                        alertFrame:Hide()
+                    end
+                else
+                    -- Enabled: re-check talents in case this reminder is relevant now
+                    if addonTable.TalentReminder and addonTable.TalentReminder.CheckTalentsInInstance then
+                        addonTable.Core.SafeAfter(0.3, function()
+                            addonTable.TalentReminder.CheckTalentsInInstance()
+                        end)
+                    end
+                end
+                RefreshReminderList()
+            end)
 
             -- Set delete button action
             row.deleteBtn.instanceID = instanceID
@@ -793,6 +848,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             if row.nameLabel then row.nameLabel:Hide() end
             if row.infoLabel then row.infoLabel:Hide() end
             if row.validationLabel then row.validationLabel:Hide() end
+            if row.enableBtn then row.enableBtn:Hide() end
             if row.deleteBtn then row.deleteBtn:Hide() end
             if row.bg then row.bg:SetColorTexture(0, 0, 0, 0) end
 

@@ -136,7 +136,17 @@ local function OnEvent(self, event, ...)
                 fontSize = 18,
                 colorInCombat = { r = 1, g = 1, b = 1 },
                 colorOutCombat = { r = 0.5, g = 0.5, b = 0.5 },
-                pos = { point = "CENTER", x = 0, y = 0 }
+                pos = { point = "CENTER", x = 0, y = 0 },
+                combatLog = {
+                    dungeonNormal = false,
+                    dungeonHeroic = false,
+                    dungeonMythic = false,
+                    mythicPlus = false,
+                    raidLFR = false,
+                    raidNormal = false,
+                    raidHeroic = false,
+                    raidMythic = false,
+                }
             },
             frames = {
                 enabled = false,
