@@ -17,13 +17,15 @@ anchorFrame:SetScript("OnDragStart", anchorFrame.StartMoving)
 anchorFrame:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     local point, _, _, x, y = self:GetPoint()
-    UIThingsDB.loot.anchor = {point=point, x=x, y=y}
+    UIThingsDB.loot.anchor = { point = point, x = x, y = y }
 end)
 
 anchorFrame:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", 
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", 
-    tile = true, tileSize = 16, edgeSize = 16, 
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true,
+    tileSize = 16,
+    edgeSize = 16,
     insets = { left = 4, right = 4, top = 4, bottom = 4 }
 })
 anchorFrame:SetBackdropColor(0, 0, 0, 0.8)
@@ -54,20 +56,20 @@ local function AcquireToast()
     if not toast then
         toast = CreateFrame("Button", nil, UIParent) -- Button for tooltip support
         toast:SetFrameStrata("DIALOG")
-        
+
         toast.icon = toast:CreateTexture(nil, "ARTWORK")
         toast.icon:SetPoint("LEFT", 0, 0)
-        
+
         toast.text = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         toast.text:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 5, 0)
         toast.text:SetPoint("RIGHT", 0, 0)
         toast.text:SetJustifyH("LEFT")
-        
+
         toast.winner = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         toast.winner:SetPoint("BOTTOMLEFT", toast.icon, "BOTTOMRIGHT", 5, 0)
         toast.winner:SetPoint("RIGHT", 0, 0)
         toast.winner:SetJustifyH("LEFT")
-        
+
         -- Tooltip Scripts
         toast:SetScript("OnEnter", function(self)
             if self.itemLink then
@@ -80,12 +82,12 @@ local function AcquireToast()
         toast:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
         end)
-        
+
         -- OnUpdate for Timer
         toast:SetScript("OnUpdate", function(self, elapsed)
             self.timeParams.elapsed = self.timeParams.elapsed + elapsed
             local remaining = self.timeParams.duration - self.timeParams.elapsed
-            
+
             if remaining <= 0 then
                 Loot.RecycleToast(self)
             elseif remaining < 0.5 then
@@ -95,7 +97,7 @@ local function AcquireToast()
             end
         end)
     end
-    
+
     -- Apply Settings
     local settings = UIThingsDB.loot
     toast:SetSize(300, settings.iconSize)
@@ -103,7 +105,7 @@ local function AcquireToast()
     toast.text:SetFont(settings.font, settings.fontSize, "OUTLINE")
     -- Adjust winner font size relative to main font
     toast.winner:SetFont(settings.font, settings.whoLootedFontSize or 12, "OUTLINE")
-    
+
     return toast
 end
 
@@ -111,7 +113,7 @@ function Loot.RecycleToast(toast)
     toast:Hide()
     toast:SetScript("OnEnter", nil) -- Clear specific tooltip closure
     toast:SetScript("OnLeave", nil)
-    
+
     -- Remove from active list
     for i, t in ipairs(activeToasts) do
         if t == toast then
@@ -119,7 +121,7 @@ function Loot.RecycleToast(toast)
             break
         end
     end
-    
+
     table.insert(itemPool, toast)
     Loot.UpdateLayout()
 end
@@ -129,14 +131,14 @@ function Loot.UpdateLayout()
     -- Growing UP
     local settings = UIThingsDB.loot
     local spacing = 5
-    
+
     if not settings.anchor then return end
-    
+
     local prev = anchorFrame
-    
+
     for i, toast in ipairs(activeToasts) do
         toast:ClearAllPoints()
-        
+
         if settings.growUp then
             -- Grow Upwards
             if i == 1 then
@@ -159,20 +161,20 @@ end
 
 local function SpawnToast(itemLink, text, count, looterName, looterClass)
     local toast = AcquireToast()
-    
+
     -- Data
     toast.itemLink = itemLink
     local itemName, _, itemRarity, _, _, _, _, _, _, itemTexture = GetItemInfo(itemLink)
-    
-    if not itemName then 
+
+    if not itemName then
         itemName = text or "Unknown Item"
         itemTexture = 134400 -- ?
     end
-    
+
     if itemTexture then toast.icon:SetTexture(itemTexture) end
-    if itemName then 
+    if itemName then
         local countText = (count and count > 1) and (" x" .. count) or ""
-        toast.text:SetText(itemName .. countText) 
+        toast.text:SetText(itemName .. countText)
         -- Color name by rarity?
         if itemRarity then
             local r, g, b = GetItemQualityColor(itemRarity)
@@ -186,10 +188,10 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
     if looterName then
         local colorStr = "|cFFFFFFFF" -- Default white
         if looterClass then
-             local color = C_ClassColor.GetClassColor(looterClass)
-             if color then
-                 colorStr = color:GenerateHexColorMarkup()
-             end
+            local color = C_ClassColor.GetClassColor(looterClass)
+            if color then
+                colorStr = color:GenerateHexColorMarkup()
+            end
         end
         toast.winner:SetText("Won by: " .. colorStr .. looterName .. "|r")
         toast.winner:Show()
@@ -202,7 +204,7 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
         duration = UIThingsDB.loot.duration,
         elapsed = 0
     }
-    
+
     -- Re-bind scripts (since we clear them on recycle)
     toast:SetScript("OnEnter", function(self)
         if self.itemLink then
@@ -211,9 +213,9 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
             GameTooltip:Show()
         end
     end)
-    
+
     toast:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    
+
     toast:Show()
     table.insert(activeToasts, toast)
     Loot.UpdateLayout()
@@ -224,9 +226,10 @@ function Loot.UpdateSettings()
     local settings = UIThingsDB.loot
     if settings.anchor then
         anchorFrame:ClearAllPoints()
-        anchorFrame:SetPoint(settings.anchor.point, UIParent, settings.anchor.point, settings.anchor.x, settings.anchor.y)
+        anchorFrame:SetPoint(settings.anchor.point, UIParent, settings.anchor.point, settings.anchor.x, settings.anchor
+        .y)
     end
-    
+
     -- Update existing toasts visually
     for _, toast in ipairs(activeToasts) do
         toast:SetSize(300, settings.iconSize)
@@ -245,10 +248,11 @@ function Loot.ToggleBlizzardToasts(enable)
         AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
         AlertFrame:RegisterEvent("SHOW_RATING_BUST_TOAST")
     else
-        AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST")
-        AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE")
-        AlertFrame:UnregisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
-        AlertFrame:UnregisterEvent("SHOW_RATING_BUST_TOAST")
+        -- Use pcall to safely unregister events that may not be registered
+        pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST") end)
+        pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end)
+        pcall(function() AlertFrame:UnregisterEvent("SHOW_PVP_FACTION_LOOT_TOAST") end)
+        pcall(function() AlertFrame:UnregisterEvent("SHOW_RATING_BUST_TOAST") end)
     end
 end
 
@@ -265,14 +269,14 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
     end
 
     if not UIThingsDB.loot.enabled then return end
-    
+
     if event == "LOOT_READY" then
         if UIThingsDB.loot.fasterLoot and GetCVar("autoLootDefault") == "1" then
             local numItems = GetNumLootItems()
             if numItems == 0 then return end
-            
+
             local delay = UIThingsDB.loot.fasterLootDelay or 0.3
-            
+
             for i = numItems, 1, -1 do
                 if delay == 0 then
                     LootSlot(i)
@@ -286,19 +290,19 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
         end
         return
     end
-    
+
     if event == "CHAT_MSG_LOOT" then
         local itemLink = string.match(msg, "|Hitem:.-|h")
         if itemLink then
             -- Get Quality
             local _, _, quality = GetItemInfo(itemLink)
-            if not quality then return end 
-            
+            if not quality then return end
+
             if quality >= UIThingsDB.loot.minQuality then
                 -- Identify Looter
                 local looterName = nil
                 local looterClass = nil
-                
+
                 -- Check for "You receive..."
                 if string.find(msg, "^You receive") then
                     looterName = UnitName("player")
@@ -310,7 +314,7 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                         looterName = otherName
                         -- Try to find class from raid/party roster
                         if IsInRaid() then
-                            for i=1, 40 do
+                            for i = 1, 40 do
                                 local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
                                 if name == looterName then
                                     looterClass = classFileName
@@ -318,11 +322,15 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                                 end
                             end
                         elseif IsInGroup() then
-                             if UnitName("party1") == looterName then _, looterClass = UnitClass("party1")
-                             elseif UnitName("party2") == looterName then _, looterClass = UnitClass("party2")
-                             elseif UnitName("party3") == looterName then _, looterClass = UnitClass("party3")
-                             elseif UnitName("party4") == looterName then _, looterClass = UnitClass("party4")
-                             end
+                            if UnitName("party1") == looterName then
+                                _, looterClass = UnitClass("party1")
+                            elseif UnitName("party2") == looterName then
+                                _, looterClass = UnitClass("party2")
+                            elseif UnitName("party3") == looterName then
+                                _, looterClass = UnitClass("party3")
+                            elseif UnitName("party4") == looterName then
+                                _, looterClass = UnitClass("party4")
+                            end
                         end
                     end
                 end
@@ -331,12 +339,12 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                 if not UIThingsDB.loot.showAll then
                     if looterName ~= UnitName("player") then return end
                 end
-                
+
                 -- Parse count
                 local count = 1
                 local matchCount = string.match(msg, "x(%d+)")
                 if matchCount then count = tonumber(matchCount) end
-                
+
                 SpawnToast(itemLink, nil, count, looterName, looterClass)
             end
         end

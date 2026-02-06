@@ -48,14 +48,14 @@ addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.INFO
 function addonTable.Core.Log(module, msg, level)
     level = level or addonTable.Core.LogLevel.INFO
     if level < addonTable.Core.currentLogLevel then return end
-    
+
     local colors = {
         [0] = "888888", -- DEBUG (gray)
         [1] = "00FF00", -- INFO (green)
         [2] = "FFFF00", -- WARN (yellow)
         [3] = "FF0000"  -- ERROR (red)
     }
-    
+
     local prefix = string.format("|cFF%s[Luna %s]|r", colors[level] or "FFFFFF", module or "Core")
     print(prefix .. " " .. tostring(msg))
 end
@@ -67,7 +67,7 @@ end
 local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" and ... == addonName then
         UIThingsDB = UIThingsDB or {}
-        
+
         -- Default Settings Table
         local DEFAULTS = {
             tracker = {
@@ -127,7 +127,7 @@ local function OnEvent(self, event, ...)
                 fontSize = 14,
                 iconSize = 32,
                 whoLootedFontSize = 12,
-                anchor = {point="CENTER", x=0, y=200}
+                anchor = { point = "CENTER", x = 0, y = 200 }
             },
             combat = {
                 enabled = false,
@@ -171,20 +171,21 @@ local function OnEvent(self, event, ...)
                 showChatMessage = true,
                 alertFont = "Fonts\\FRIZQT__.TTF",
                 alertFontSize = 12,
-                alertIconSize = 16
+                alertIconSize = 16,
+                alertPos = { point = "CENTER", x = 0, y = 0 }
             }
         }
-        
+
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
-        
+
         self:UnregisterEvent("ADDON_LOADED")
-        
+
         -- Initialize Modules
         if addonTable.Config and addonTable.Config.Initialize then
             addonTable.Config.Initialize()
         end
-        
+
         if addonTable.Minimap and addonTable.Minimap.Initialize then
             addonTable.Minimap.Initialize()
         end
@@ -192,7 +193,7 @@ local function OnEvent(self, event, ...)
         if addonTable.Frames and addonTable.Frames.Initialize then
             addonTable.Frames.Initialize()
         end
-        
+
         if addonTable.TalentReminder and addonTable.TalentReminder.Initialize then
             addonTable.TalentReminder.Initialize()
         end
@@ -200,14 +201,14 @@ local function OnEvent(self, event, ...)
         -- Slash Commands
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"
-        
+
         -- Global function for Addon Compartment
         function LunaUITweaks_OpenConfig()
             if addonTable.Config and addonTable.Config.ToggleWindow then
                 addonTable.Config.ToggleWindow()
             end
         end
-        
+
         SlashCmdList["UITHINGS"] = function(msg)
             LunaUITweaks_OpenConfig()
         end

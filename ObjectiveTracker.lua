@@ -42,7 +42,7 @@ local function OnQuestClick(self, button)
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
-    
+
     -- Right-Click to Super Track (if enabled) - Toggle behavior
     if button == "RightButton" and self.questID and UIThingsDB.tracker.rightClickSuperTrack then
         if C_SuperTrack.GetSuperTrackedQuestID() == self.questID then
@@ -53,7 +53,7 @@ local function OnQuestClick(self, button)
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
-    
+
     if self.questID then
         -- Try modern Map/Quest Log
         if QuestMapFrame_OpenToQuestDetails then
@@ -71,7 +71,8 @@ local function OnAchieveClick(self)
     -- Shift-Click to Untrack (if enabled)
     if IsShiftKeyDown() and self.achieID and UIThingsDB.tracker.shiftClickUntrack then
         if C_ContentTracking and C_ContentTracking.StopTracking then
-            C_ContentTracking.StopTracking(Enum.ContentTrackingType.Achievement, self.achieID, Enum.ContentTrackingStopType.Manual)
+            C_ContentTracking.StopTracking(Enum.ContentTrackingType.Achievement, self.achieID,
+                Enum.ContentTrackingStopType.Manual)
         else
             RemoveTrackedAchievement(self.achieID)
         end
@@ -95,14 +96,14 @@ end
 local function CreateToggleButton(parent)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(30, 30)
-    
+
     local text = btn:CreateFontString(nil, "OVERLAY")
     text:SetFont("Fonts\\FRIZQT__.TTF", 25, "OUTLINE")
     text:SetPoint("CENTER", 0, 0)
     text:SetShadowOffset(1, -1)
     text:SetTextColor(1, 0.82, 0) -- Yellow
     btn.Text = text
-    
+
     return btn
 end
 
@@ -113,28 +114,39 @@ local function AcquireItem()
             return btn
         end
     end
-    
+
     local btn = CreateFrame("Button", nil, scrollChild)
     btn:SetHeight(20)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    
+
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(14, 14) -- Slightly smaller than text height
     icon:SetPoint("LEFT", 0, 0)
     btn.Icon = icon
-    
+
     local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     text:SetPoint("LEFT", icon, "RIGHT", 5, 0) -- Indent text
     text:SetPoint("RIGHT", 0, 0)
     text:SetJustifyH("LEFT")
     btn.Text = text
-    
+
     -- Toggle Button (Hidden by default)
     local toggleBtn = CreateToggleButton(btn)
     toggleBtn:SetPoint("LEFT", text, "RIGHT", 5, 0)
     toggleBtn:Hide()
     btn.ToggleBtn = toggleBtn
-    
+
+    -- Quest Item Button (Hidden by default)
+    local itemBtn = CreateFrame("Button", nil, btn, "SecureActionButtonTemplate")
+    itemBtn:SetSize(20, 20)
+    itemBtn:SetPoint("RIGHT", -2, 0)
+    itemBtn:Hide()
+    itemBtn:RegisterForClicks("LeftButtonUp")
+    itemBtn.iconTex = itemBtn:CreateTexture(nil, "ARTWORK")
+    itemBtn.iconTex:SetAllPoints()
+    itemBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    btn.ItemBtn = itemBtn
+
     table.insert(itemPool, btn)
     return btn
 end
@@ -146,12 +158,17 @@ local function ReleaseItems()
         btn.Icon:Hide()
         btn.Text:ClearAllPoints() -- Reset points to ensure clean state
         if btn.ToggleBtn then btn.ToggleBtn:Hide() end
+        if btn.ItemBtn then
+            btn.ItemBtn:Hide()
+            btn.ItemBtn:SetAttribute("type", nil)
+            btn.ItemBtn:SetAttribute("item", nil)
+        end
     end
 end
 
 local function UpdateContent()
     if not trackerFrame then return end
-    
+
     -- Check Counts for Auto-Hide (validate achievements have valid data)
     local numQuests = C_QuestLog.GetNumQuestWatches()
     local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
@@ -162,7 +179,7 @@ local function UpdateContent()
             validAchievementCount = validAchievementCount + 1
         end
     end
-    
+
     -- Count world quests
     local worldQuestCount = 0
     local mapID = C_Map.GetBestMapForUnit("player")
@@ -184,126 +201,126 @@ local function UpdateContent()
             end
         end
     end
-    
+
     local total = numQuests + validAchievementCount + worldQuestCount
-    
+
     if total == 0 and UIThingsDB.tracker.locked then
         trackerFrame:Hide()
         return
     end
-    
+
     -- If we have items (or are unlocked), ensure shown (unless blocked)
     if not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
         trackerFrame:Show()
     end
-    
+
     ReleaseItems()
-    
+
     -- Base font (for section headers like "Quests")
     local baseFont = UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
     local baseSize = UIThingsDB.tracker.fontSize or 12
-    
+
     -- Specific fonts (Quest Name and Detail)
-    local questNameFont = UIThingsDB.tracker.headerFont or "Fonts\\FRIZQT__.TTF" 
+    local questNameFont = UIThingsDB.tracker.headerFont or "Fonts\\FRIZQT__.TTF"
     local questNameSize = UIThingsDB.tracker.headerFontSize or 14
     local detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
     local detailSize = UIThingsDB.tracker.detailFontSize or 12
     local questPadding = UIThingsDB.tracker.questPadding or 2
-    
+
     -- Ensure Collapsed State
     UIThingsDB.tracker.collapsed = UIThingsDB.tracker.collapsed or {}
-    
+
     local yOffset = -5
     local width = scrollChild:GetWidth()
-    
+
     -- Helper to add lines
     -- questID is repurposed as sectionKey if isHeader is true
     local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
         local btn = AcquireItem()
         btn:Show()
-        
+
         -- Store IDs for Click Handlers
         btn.questID = questID
         btn.achieID = achieID
-        
+
         btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
-        
+
         btn:SetWidth(width)
         btn:SetPoint("TOPLEFT", 0, yOffset)
-        
+
         if isHeader then
             -- Section Header (e.g. "Quests") - Use Base Font
             btn.Text:SetFont(baseFont, baseSize + 2, "OUTLINE") -- Slightly larger than base
             btn.Text:SetText(text)
-            btn.Text:SetTextColor(1, 0.82, 0) -- Gold
+            btn.Text:SetTextColor(1, 0.82, 0)                   -- Gold
             btn.Icon:Hide()
             btn.Text:SetPoint("LEFT", 0, 0)
-            
+
             -- Toggle Button Logic
             if questID then -- sectionKey
                 local section = questID
                 local isCollapsed = UIThingsDB.tracker.collapsed[section]
-                
+
                 btn.ToggleBtn:Show()
                 btn.ToggleBtn:SetScript("OnClick", function()
                     UIThingsDB.tracker.collapsed[section] = not isCollapsed
                     UpdateContent()
                 end)
-                
+
                 if isCollapsed then
                     btn.ToggleBtn.Text:SetText("+")
                 else
                     btn.ToggleBtn.Text:SetText("-")
                 end
-                
+
                 -- Position to right of text
                 local textWidth = btn.Text:GetStringWidth()
                 btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
             else
-                 btn.ToggleBtn:Hide()
+                btn.ToggleBtn:Hide()
             end
-            
+
             yOffset = yOffset - (baseSize + 8)
         else
             -- Content Line
             if isObjective then
-                 -- Objective / Detail
-                 local currentSize = detailSize
-                 
-                 btn.Text:SetFont(detailFont, currentSize, "OUTLINE")
-                 btn.Text:SetText(text)
-                 btn.Text:SetTextColor(0.8, 0.8, 0.8)
-                 btn.Icon:Hide()
-                 btn.Text:SetPoint("LEFT", 19, 0)
-                 btn:EnableMouse(false)
-                 yOffset = yOffset - (currentSize + questPadding)
+                -- Objective / Detail
+                local currentSize = detailSize
+
+                btn.Text:SetFont(detailFont, currentSize, "OUTLINE")
+                btn.Text:SetText(text)
+                btn.Text:SetTextColor(0.8, 0.8, 0.8)
+                btn.Icon:Hide()
+                btn.Text:SetPoint("LEFT", 19, 0)
+                btn:EnableMouse(false)
+                yOffset = yOffset - (currentSize + questPadding)
             else
-                 -- Quest Name / Achievement Title
-                 -- Use "Quest Name" font settings (formerly headerFont)
-                 local currentSize = questNameSize
-                 
-                 btn.Text:SetFont(questNameFont, currentSize, "OUTLINE")
-                 btn.Text:SetText(text)
-                 
-                 if overrideColor then
-                     btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
-                 else
-                     btn.Text:SetTextColor(1, 1, 1)
-                 end
-                 
-                 if questID then
+                -- Quest Name / Achievement Title
+                -- Use "Quest Name" font settings (formerly headerFont)
+                local currentSize = questNameSize
+
+                btn.Text:SetFont(questNameFont, currentSize, "OUTLINE")
+                btn.Text:SetText(text)
+
+                if overrideColor then
+                    btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
+                else
+                    btn.Text:SetTextColor(1, 1, 1)
+                end
+
+                if questID then
                     local isComplete = C_QuestLog.IsComplete(questID)
                     local iconPath = "Interface\\GossipFrame\\AvailableQuestIcon"
-                    
+
                     local tagInfo = C_QuestLog.GetQuestTagInfo(questID)
                     local isDaily = false
                     local isCampaign = false
                     local isLegendary = false
-                    
+
                     if tagInfo then
                         if tagInfo.isDaily or tagInfo.frequency == Enum.QuestFrequency.Daily or tagInfo.frequency == Enum.QuestFrequency.Weekly then
                             isDaily = true
-                        elseif tagInfo.tagID == 102 then 
+                        elseif tagInfo.tagID == 102 then
                             isDaily = true
                         elseif tagInfo.quality == Enum.QuestTagType.Campaign then
                             isCampaign = true
@@ -311,38 +328,65 @@ local function UpdateContent()
                             isLegendary = true
                         end
                     end
-                    
+
                     if isComplete then
-                        if isDaily then iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon"
-                        elseif isCampaign then iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
-                        elseif isLegendary then iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
-                        else iconPath = "Interface\\GossipFrame\\ActiveQuestIcon" end
+                        if isDaily then
+                            iconPath = "Interface\\GossipFrame\\DailyActiveQuestIcon"
+                        elseif isCampaign then
+                            iconPath = "Interface\\GossipFrame\\CampaignActiveQuestIcon"
+                        elseif isLegendary then
+                            iconPath = "Interface\\GossipFrame\\ActiveLegendaryQuestIcon"
+                        else
+                            iconPath = "Interface\\GossipFrame\\ActiveQuestIcon"
+                        end
                     else
-                        if isDaily then iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon"
-                        elseif isCampaign then iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
-                        elseif isLegendary then iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
-                        else iconPath = "Interface\\GossipFrame\\AvailableQuestIcon" end
+                        if isDaily then
+                            iconPath = "Interface\\GossipFrame\\DailyAvailableQuestIcon"
+                        elseif isCampaign then
+                            iconPath = "Interface\\GossipFrame\\CampaignAvailableQuestIcon"
+                        elseif isLegendary then
+                            iconPath = "Interface\\GossipFrame\\AvailableLegendaryQuestIcon"
+                        else
+                            iconPath = "Interface\\GossipFrame\\AvailableQuestIcon"
+                        end
                     end
-                    
+
                     btn.Icon:SetTexture(iconPath)
                     btn.Icon:Show()
                     btn.Text:SetPoint("LEFT", btn.Icon, "RIGHT", 5, 0)
                     btn:EnableMouse(true)
-                 else
+
+                    -- Check for quest item
+                    local questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+                    if questLogIndex then
+                        local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(questLogIndex)
+                        if questItemLink and questItemIcon then
+                            btn.ItemBtn.iconTex:SetTexture(questItemIcon)
+                            btn.ItemBtn:SetAttribute("type", "item")
+                            btn.ItemBtn:SetAttribute("item", questItemLink)
+                            btn.ItemBtn:Show()
+                        else
+                            btn.ItemBtn:Hide()
+                        end
+                    else
+                        btn.ItemBtn:Hide()
+                    end
+                else
                     -- Achievement
                     btn.Icon:Hide()
                     btn.Text:SetPoint("LEFT", 19, 0)
                     if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
-                 end
-                 
-                 yOffset = yOffset - (currentSize + 4)
+                    if btn.ItemBtn then btn.ItemBtn:Hide() end
+                end
+
+                yOffset = yOffset - (currentSize + 4)
             end
         end
     end
-    
+
     -- Track displayed IDs to prevent duplicates
     local displayedIDs = {}
-    
+
     --- Formats time remaining for World Quests
     -- @param questID number The quest ID
     -- @return string Formatted time string (e.g., " (2d 3h)")
@@ -352,9 +396,9 @@ local function UpdateContent()
             local days = math.floor(timeLeftMinutes / MINUTES_PER_DAY)
             local hours = math.floor((timeLeftMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR)
             local minutes = timeLeftMinutes % 60
-            
+
             if days > 0 then
-                return string.format(" (%dd %dh)", days, hours) 
+                return string.format(" (%dd %dh)", days, hours)
             elseif hours > 0 then
                 return string.format(" (%dh %dm)", hours, minutes)
             else
@@ -363,26 +407,26 @@ local function UpdateContent()
         end
         return ""
     end
-    
+
     --- Renders a single World Quest entry
     -- @param questID number The quest ID to render
     -- @param superTrackedQuestID number The currently super tracked quest ID
     local function RenderSingleWQ(questID, superTrackedQuestID)
-         if not displayedIDs[questID] then
-             local title = C_QuestLog.GetTitleForQuestID(questID)
-             if title then
+        if not displayedIDs[questID] then
+            local title = C_QuestLog.GetTitleForQuestID(questID)
+            if title then
                 if UIThingsDB.tracker.showWorldQuestTimer then
                     title = title .. GetTimeLeftString(questID)
                 end
-                
+
                 local color = nil
                 if questID == superTrackedQuestID then
                     color = UIThingsDB.tracker.activeQuestColor
                 end
-                
+
                 AddLine(title, false, questID, nil, false, color)
                 displayedIDs[questID] = true
-                
+
                 local objectives = C_QuestLog.GetQuestObjectives(questID)
                 if objectives then
                     for _, obj in pairs(objectives) do
@@ -394,34 +438,34 @@ local function UpdateContent()
                     end
                 end
                 yOffset = yOffset - ITEM_SPACING
-             end
-         end
+            end
+        end
     end
-    
+
     --- Renders all World Quests for the current map
     local function RenderWorldQuests()
         local mapID = C_Map.GetBestMapForUnit("player")
         if not mapID then return end
-        
+
         local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
-        local activeWQs = {}       -- Specifically the one(s) the player is doing now
-        local otherWQs = {}        -- All other available ones
+        local activeWQs = {} -- Specifically the one(s) the player is doing now
+        local otherWQs = {}  -- All other available ones
         local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
-        
+
         -- Get Super Tracked ID
         local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
-        
+
         local validWQs = {}
-        
+
         if tasks then
             for _, info in ipairs(tasks) do
                 local questID = info.questID
                 -- Check availability
                 if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
                     validWQs[questID] = true
-                    
+
                     local isActive = C_QuestLog.IsOnQuest(questID)
-                    
+
                     if onlyActive then
                         if isActive then
                             table.insert(activeWQs, questID)
@@ -437,44 +481,43 @@ local function UpdateContent()
                 end
             end
         end
-        
+
         local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
-        
+
         if hasWQs then
             AddLine("World Quests", true, "worldQuests")
-            
+
             if UIThingsDB.tracker.collapsed["worldQuests"] then
-                 yOffset = yOffset - ITEM_SPACING
-                 return
+                yOffset = yOffset - ITEM_SPACING
+                return
             end
-            
+
             -- 1. Render Super Tracked First (if it matches a valid WQ on this map)
             if superTrackedQuestID and validWQs[superTrackedQuestID] then
                 RenderSingleWQ(superTrackedQuestID, superTrackedQuestID)
             end
-            
+
             -- 2. Render Active Ones
             for _, questID in ipairs(activeWQs) do
                 RenderSingleWQ(questID, superTrackedQuestID)
             end
-            
+
             -- 3. Render Others
             for _, questID in ipairs(otherWQs) do
                 RenderSingleWQ(questID, superTrackedQuestID)
             end
-            
+
             yOffset = yOffset - SECTION_SPACING
         end
     end
-    
+
     local function RenderQuests()
         local numQuests = C_QuestLog.GetNumQuestWatches()
         if numQuests > 0 then
-            
             -- Identify Super Tracked Quest
             local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
             local superTrackedIndex = nil
-            
+
             -- Filter out ones already displayed (e.g. if a WQ was also watched)
             local filteredIndices = {}
             for i = 1, numQuests do
@@ -487,20 +530,20 @@ local function UpdateContent()
                     end
                 end
             end
-            
+
             -- Insert Super Tracked at the TOP of the list
             if superTrackedIndex then
                 table.insert(filteredIndices, 1, superTrackedIndex)
             end
-            
+
             if #filteredIndices > 0 then
                 AddLine("Quests", true, "quests")
-                
+
                 if UIThingsDB.tracker.collapsed["quests"] then
-                     yOffset = yOffset - 5
-                     return
+                    yOffset = yOffset - 5
+                    return
                 end
-                    for _, i in ipairs(filteredIndices) do
+                for _, i in ipairs(filteredIndices) do
                     local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
                     local title = C_QuestLog.GetTitleForQuestID(questID)
                     if title then
@@ -509,10 +552,10 @@ local function UpdateContent()
                         if questID == superTrackedQuestID then
                             color = UIThingsDB.tracker.activeQuestColor
                         end
-                        
+
                         AddLine(title, false, questID, nil, false, color)
                         displayedIDs[questID] = true
-                        
+
                         local objectives = C_QuestLog.GetQuestObjectives(questID)
                         if objectives then
                             for _, obj in pairs(objectives) do
@@ -525,15 +568,62 @@ local function UpdateContent()
                         end
                         yOffset = yOffset - 5
                     end
-                    end
+                end
                 yOffset = yOffset - 10
             end
         end
     end
-    
+
+    --- Renders Scenarios and Bonus Objectives
+    local function RenderScenarios()
+        if not C_ScenarioInfo then return end
+
+        -- Try to get scenario info - returns a table with scenario data
+        local scenarioInfo = C_ScenarioInfo.GetScenarioInfo()
+        if not scenarioInfo or not scenarioInfo.name or scenarioInfo.name == "" then return end
+
+        AddLine("Scenario: " .. scenarioInfo.name, true, "scenario")
+
+        if UIThingsDB.tracker.collapsed["scenario"] then
+            yOffset = yOffset - ITEM_SPACING
+            return
+        end
+
+        -- Try to get criteria using safe iteration
+        if C_ScenarioInfo.GetCriteriaInfo then
+            local criteriaIndex = 1
+            while true do
+                local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
+                if not criteriaInfo then break end
+
+                local text = criteriaInfo.description or ""
+                if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+                    text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
+                end
+                if criteriaInfo.completed then
+                    text = "|cFF00FF00" .. text .. "|r"
+                end
+
+                -- Check if this is a bonus objective
+                local isBonus = criteriaInfo.isWeightedProgress or false
+                if isBonus then
+                    text = "|cFF00FFFF[Bonus] " .. text .. "|r"
+                end
+
+                AddLine(text, false, nil, nil, true)
+                criteriaIndex = criteriaIndex + 1
+
+                -- Safety limit
+                if criteriaIndex > 50 then break end
+            end
+        end
+
+        yOffset = yOffset - SECTION_SPACING
+    end
+
     local function RenderAchievements()
         local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-        
+
         -- Filter to only achievements with valid names
         local validAchievements = {}
         for _, achID in ipairs(trackedAchievements) do
@@ -542,10 +632,10 @@ local function UpdateContent()
                 table.insert(validAchievements, achID)
             end
         end
-        
+
         if #validAchievements > 0 then
             AddLine("Achievements", true, "achievements")
-            
+
             if UIThingsDB.tracker.collapsed["achievements"] then
                 yOffset = yOffset - 5
                 return
@@ -571,24 +661,24 @@ local function UpdateContent()
             yOffset = yOffset - 10
         end
     end
-    
-    -- Order Logic
+
+    -- Order Logic (Scenarios always render first when active)
     local orderMap = {
-        [1] = {RenderWorldQuests, RenderQuests, RenderAchievements},
-        [2] = {RenderWorldQuests, RenderAchievements, RenderQuests},
-        [3] = {RenderQuests, RenderWorldQuests, RenderAchievements},
-        [4] = {RenderQuests, RenderAchievements, RenderWorldQuests},
-        [5] = {RenderAchievements, RenderWorldQuests, RenderQuests},
-        [6] = {RenderAchievements, RenderQuests, RenderWorldQuests},
+        [1] = { RenderScenarios, RenderWorldQuests, RenderQuests, RenderAchievements },
+        [2] = { RenderScenarios, RenderWorldQuests, RenderAchievements, RenderQuests },
+        [3] = { RenderScenarios, RenderQuests, RenderWorldQuests, RenderAchievements },
+        [4] = { RenderScenarios, RenderQuests, RenderAchievements, RenderWorldQuests },
+        [5] = { RenderScenarios, RenderAchievements, RenderWorldQuests, RenderQuests },
+        [6] = { RenderScenarios, RenderAchievements, RenderQuests, RenderWorldQuests },
     }
-    
+
     local selectedOrder = UIThingsDB.tracker.sectionOrder or 1
     local pipeline = orderMap[selectedOrder] or orderMap[1]
-    
+
     for _, renderer in ipairs(pipeline) do
         renderer()
     end
-    
+
     -- Resize Scroll Child
     local totalHeight = math.abs(yOffset)
     scrollChild:SetHeight(math.max(totalHeight, 50))
@@ -597,40 +687,43 @@ end
 local function SetupCustomTracker()
     if trackerFrame then return end
     local settings = UIThingsDB.tracker
-    
+
     -- Main Container
     trackerFrame = CreateFrame("Frame", "UIThingsCustomTracker", UIParent, "BackdropTemplate")
-    trackerFrame:SetPoint(settings.point or "TOPRIGHT", UIParent, settings.point or "TOPRIGHT", settings.x or -20, settings.y or -250)
+    trackerFrame:SetPoint(settings.point or "TOPRIGHT", UIParent, settings.point or "TOPRIGHT", settings.x or -20,
+        settings.y or -250)
     trackerFrame:SetSize(settings.width, settings.height)
-    
+
     trackerFrame:SetMovable(true)
     trackerFrame:SetResizable(true)
     trackerFrame:SetClampedToScreen(true)
     trackerFrame:SetResizeBounds(150, 150, 600, 1000)
-    
+
     -- Background for Unlocked state
     trackerFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
     trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
-    
+
     -- Header ("OBJECTIVES") - Fixed at top
     headerFrame = CreateFrame("Frame", nil, trackerFrame)
     headerFrame:SetPoint("TOPLEFT")
     headerFrame:SetPoint("TOPRIGHT")
     headerFrame:SetHeight(30)
-    
+
     local headerText = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     headerText:SetPoint("CENTER")
     headerText:SetText("OBJECTIVES")
-    
+
     -- Drag Logic
     trackerFrame:EnableMouse(true)
     trackerFrame:RegisterForDrag("LeftButton")
-    trackerFrame:SetScript("OnDragStart", function(self)    
+    trackerFrame:SetScript("OnDragStart", function(self)
         if not UIThingsDB.tracker.locked then self:StartMoving() end
     end)
     trackerFrame:SetScript("OnDragStop", function(self)
@@ -641,21 +734,21 @@ local function SetupCustomTracker()
         y = math.floor(y + 0.5)
         self:ClearAllPoints()
         self:SetPoint(point, UIParent, relativePoint, x, y)
-        
+
         UIThingsDB.tracker.point = point
         UIThingsDB.tracker.x = x
         UIThingsDB.tracker.y = y
     end)
-    
+
     -- Scroll Frame
     scrollFrame = CreateFrame("ScrollFrame", "UIThingsTrackerScroll", trackerFrame, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", headerFrame, "BOTTOMLEFT", 10, -5) -- Below header
     scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
-    
+
     scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(settings.width - 40, 500) 
+    scrollChild:SetSize(settings.width - 40, 500)
     scrollFrame:SetScrollChild(scrollChild)
-    
+
     -- Resize Handle
     local resizeHandle = CreateFrame("Frame", nil, trackerFrame)
     resizeHandle:SetSize(16, 16)
@@ -664,7 +757,7 @@ local function SetupCustomTracker()
     rTex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
     rTex:SetAllPoints()
     resizeHandle:EnableMouse(true)
-    resizeHandle:SetScript("OnMouseDown", function() 
+    resizeHandle:SetScript("OnMouseDown", function()
         if not UIThingsDB.tracker.locked then trackerFrame:StartSizing("BOTTOMRIGHT") end
     end)
     resizeHandle:SetScript("OnMouseUp", function()
@@ -674,12 +767,12 @@ local function SetupCustomTracker()
         UIThingsDB.tracker.height = h
         UpdateContent() -- Re-layout items
     end)
-    
+
     -- Event Registry
     trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
     trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED") -- Legacy?
-    trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE") -- Modern
-    trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE") -- Modern
+    trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE")          -- Modern
+    trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE")     -- Modern
     trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
     trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -690,7 +783,7 @@ local function SetupCustomTracker()
     trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
     trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     trackerFrame:RegisterEvent("ZONE_CHANGED")
-    
+
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
             C_Timer.After(2, UpdateContent)
@@ -718,7 +811,7 @@ end
 
 function addonTable.ObjectiveTracker.UpdateSettings()
     local enabled = UIThingsDB.tracker.enabled
-    
+
     -- Blizzard Tracker Logic
     if enabled then
         if ObjectiveTrackerFrame then
@@ -729,15 +822,15 @@ function addonTable.ObjectiveTracker.UpdateSettings()
             end
         end
     else
-        if ObjectiveTrackerFrame then 
+        if ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetParent(UIParent)
             ObjectiveTrackerFrame:Show()
             if ObjectiveTrackerFrame.RegisterEvent then
-                 -- We might need to re-register events if we unregistered them.
-                 -- Ideally, a /reload is best for restoring completely, but let's try basic restoration
-                 ObjectiveTrackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-                 ObjectiveTrackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
-                 ObjectiveTrackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
+                -- We might need to re-register events if we unregistered them.
+                -- Ideally, a /reload is best for restoring completely, but let's try basic restoration
+                ObjectiveTrackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+                ObjectiveTrackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
+                ObjectiveTrackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
             end
         end
         if trackerFrame then trackerFrame:Hide() end
@@ -746,48 +839,50 @@ function addonTable.ObjectiveTracker.UpdateSettings()
 
     -- Custom Tracker Logic
     SetupCustomTracker()
-    
+
     -- Check visibility
-    local shouldHide = (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) or 
-                       (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
+    local shouldHide = (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) or
+        (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
 
     if shouldHide then
         trackerFrame:Hide()
     else
         trackerFrame:Show()
     end
-    
+
     -- Geometry
     trackerFrame:SetSize(UIThingsDB.tracker.width, UIThingsDB.tracker.height)
     trackerFrame:SetFrameStrata(UIThingsDB.tracker.strata or "LOW")
     scrollChild:SetWidth(UIThingsDB.tracker.width - 40)
-    
+
     -- Lock/Unlock & Border State
     if UIThingsDB.tracker.locked then
         trackerFrame:EnableMouse(false)
-        
+
         local showBorder = UIThingsDB.tracker.showBorder
         local showBackground = UIThingsDB.tracker.showBackground
-        
+
         if showBorder or showBackground then
             trackerFrame:SetBackdrop({
                 bgFile = "Interface\\Buttons\\WHITE8X8",
                 edgeFile = "Interface\\Buttons\\WHITE8X8",
-                tile = false, tileSize = 0, edgeSize = 1,
+                tile = false,
+                tileSize = 0,
+                edgeSize = 1,
                 insets = { left = 1, right = 1, top = 1, bottom = 1 }
             })
-            
+
             -- Background
             if showBackground then
-                local c = UIThingsDB.tracker.backgroundColor or {r=0, g=0, b=0, a=0.5}
+                local c = UIThingsDB.tracker.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
                 trackerFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
             else
                 trackerFrame:SetBackdropColor(0, 0, 0, 0)
             end
-            
+
             -- Border
             if showBorder then
-                local bc = UIThingsDB.tracker.borderColor or {r=0, g=0, b=0, a=1}
+                local bc = UIThingsDB.tracker.borderColor or { r = 0, g = 0, b = 0, a = 1 }
                 trackerFrame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
             else
                 trackerFrame:SetBackdropBorderColor(0, 0, 0, 0)
@@ -801,13 +896,15 @@ function addonTable.ObjectiveTracker.UpdateSettings()
         trackerFrame:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 16,
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
         })
         trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
         trackerFrame:SetBackdropBorderColor(1, 1, 1, 1)
     end
-    
+
     UpdateContent()
 end
 

@@ -950,6 +950,181 @@ function TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
     end
 end
 
+-- Apply talents from saved build
+function TalentReminder.ApplyTalents(reminder)
+    if not C_ClassTalents or not C_Traits then
+        print("|cFFFF0000[LunaUITweaks]|r Talent API not available")
+        return false
+    end
+
+    local configID = C_ClassTalents.GetActiveConfigID()
+    if not configID then
+        print("|cFFFF0000[LunaUITweaks]|r No active talent config")
+        return false
+    end
+
+    -- Check if in combat
+    if InCombatLockdown() then
+        print("|cFFFF0000[LunaUITweaks]|r Cannot change talents while in combat")
+        return false
+    end
+
+    local savedTalents = reminder.talents
+    if not savedTalents then
+        print("|cFFFF0000[LunaUITweaks]|r No saved talents found")
+        return false
+    end
+
+    -- Get current talents for comparison
+    local configInfo = C_Traits.GetConfigInfo(configID)
+    if not configInfo or not configInfo.treeIDs or #configInfo.treeIDs == 0 then
+        print("|cFFFF0000[LunaUITweaks]|r No talent tree found")
+        return false
+    end
+
+    local treeID = configInfo.treeIDs[1]
+    local nodes = C_Traits.GetTreeNodes(treeID)
+
+    -- Build current talent map
+    local currentTalents = {}
+    for _, nodeID in ipairs(nodes) do
+        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+        if nodeInfo and nodeInfo.activeEntry then
+            currentTalents[nodeID] = {
+                entryID = nodeInfo.activeEntry.entryID,
+                rank = nodeInfo.currentRank or 0
+            }
+        end
+    end
+
+    print("|cFF00FF00[LunaUITweaks]|r Applying talent build: " .. reminder.name)
+
+    local changes = 0
+    local errors = 0
+
+    -- Step 1: Remove all talents that shouldn't be there
+    for nodeID, current in pairs(currentTalents) do
+        if not savedTalents[nodeID] and current.rank > 0 then
+            -- This talent should not be selected - remove it
+            local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            if nodeInfo then
+                for i = 1, current.rank do
+                    local success = C_Traits.RefundRank(configID, nodeID)
+                    if success then
+                        changes = changes + 1
+                    else
+                        errors = errors + 1
+                        addonTable.Core.Log("TalentReminder", string.format("Failed to refund node %d", nodeID), 2)
+                    end
+                end
+            end
+        elseif savedTalents[nodeID] and current.entryID ~= savedTalents[nodeID].entryID then
+            -- Wrong choice selected - need to refund before changing
+            local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            if nodeInfo then
+                for i = 1, current.rank do
+                    local success = C_Traits.RefundRank(configID, nodeID)
+                    if success then
+                        changes = changes + 1
+                    else
+                        errors = errors + 1
+                        addonTable.Core.Log("TalentReminder",
+                            string.format("Failed to refund node %d for re-selection", nodeID), 2)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Step 2: Apply all saved talents
+    for nodeID, savedData in pairs(savedTalents) do
+        local current = currentTalents[nodeID]
+        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+
+        if not nodeInfo then
+            addonTable.Core.Log("TalentReminder", string.format("Node %d no longer exists", nodeID), 2)
+            errors = errors + 1
+        else
+            -- Check if this is a choice node (has multiple entries)
+            if nodeInfo.type == 2 then -- TYPE_CHOICE
+                -- Use SetSelection for choice nodes
+                if not current or current.entryID ~= savedData.entryID or current.rank == 0 then
+                    local success = C_Traits.SetSelection(configID, nodeID, savedData.entryID)
+                    if success then
+                        changes = changes + 1
+                    else
+                        errors = errors + 1
+                        addonTable.Core.Log("TalentReminder",
+                            string.format("Failed to set selection for node %d", nodeID), 2)
+                    end
+                end
+
+                -- After setting selection, purchase ranks if needed
+                local currentRank = current and current.rank or 0
+                for i = currentRank + 1, savedData.rank do
+                    local success = C_Traits.PurchaseRank(configID, nodeID)
+                    if success then
+                        changes = changes + 1
+                    else
+                        errors = errors + 1
+                        addonTable.Core.Log("TalentReminder",
+                            string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
+                    end
+                end
+            else
+                -- Regular node - just purchase ranks
+                local currentRank = current and current.rank or 0
+                for i = currentRank + 1, savedData.rank do
+                    local success = C_Traits.PurchaseRank(configID, nodeID)
+                    if success then
+                        changes = changes + 1
+                    else
+                        errors = errors + 1
+                        addonTable.Core.Log("TalentReminder",
+                            string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Step 3: Commit the changes
+    if changes > 0 then
+        local result = C_ClassTalents.CommitConfig(configID)
+        -- CommitConfig returns true on success, false or nil on failure
+        if result then
+            print("|cFF00FF00[LunaUITweaks]|r Talents applied successfully (" .. changes .. " changes)")
+            -- Hide the alert frame
+            if alertFrame then
+                alertFrame:Hide()
+            end
+            return true
+        else
+            print("|cFFFF0000[LunaUITweaks]|r Failed to commit talent changes (error code: " .. tostring(result) .. ")")
+            print("|cFFFFAA00[LunaUITweaks]|r You may need to manually apply the changes in the talent UI")
+            return false
+        end
+    elseif errors > 0 then
+        print("|cFFFF0000[LunaUITweaks]|r Encountered " .. errors .. " errors while applying talents")
+        return false
+    else
+        print("|cFF00FF00[LunaUITweaks]|r Talents already match the saved build")
+        if alertFrame then
+            alertFrame:Hide()
+        end
+        return true
+    end
+end
+
+-- Refresh current alert content (if showing)
+function TalentReminder.RefreshCurrentAlert()
+    if not alertFrame or not alertFrame:IsShown() then return end
+    if not alertFrame.currentReminder or not alertFrame.currentMismatches then return end
+
+    -- Re-render the alert with current data
+    TalentReminder.UpdateAlertFrame(alertFrame.currentReminder, alertFrame.currentMismatches, alertFrame.zoneKey)
+end
+
 -- Update visual appearance only
 function TalentReminder.UpdateVisuals()
     if not alertFrame then return end
@@ -1008,11 +1183,23 @@ function TalentReminder.UpdateVisuals()
         alertFrame:SetBackdrop(nil)
     end
 
-    -- Always show dismiss button centered
+    -- Always show all three buttons
+    if alertFrame.applyTalentsBtn then
+        alertFrame.applyTalentsBtn:Show()
+        alertFrame.applyTalentsBtn:ClearAllPoints()
+        alertFrame.applyTalentsBtn:SetPoint("BOTTOM", -130, 20)
+    end
+
+    if alertFrame.openTalentsBtn then
+        alertFrame.openTalentsBtn:Show()
+        alertFrame.openTalentsBtn:ClearAllPoints()
+        alertFrame.openTalentsBtn:SetPoint("BOTTOM", 0, 20)
+    end
+
     if alertFrame.dismissBtn then
         alertFrame.dismissBtn:Show()
         alertFrame.dismissBtn:ClearAllPoints()
-        alertFrame.dismissBtn:SetPoint("BOTTOM", 0, 20)
+        alertFrame.dismissBtn:SetPoint("BOTTOM", 130, 20)
     end
 end
 
@@ -1024,7 +1211,9 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, zoneKey)
 
     alertFrame.title:SetText("TALENT REMINDER")
     alertFrame.bossName:SetText(reminder.name)
-    alertFrame.zoneKey = zoneKey -- Store zone key instead of bossID
+    alertFrame.zoneKey = zoneKey              -- Store zone key instead of bossID
+    alertFrame.currentReminder = reminder     -- Store reminder for Apply button
+    alertFrame.currentMismatches = mismatches -- Store mismatches for refresh
 
     -- Build mismatch text
     local text = ""
@@ -1145,7 +1334,11 @@ function TalentReminder.CreateAlertFrame()
 
     alertFrame = CreateFrame("Frame", "LunaTalentReminderAlert", UIParent, "BackdropTemplate")
     alertFrame:SetSize(400, 300)
-    alertFrame:SetPoint("CENTER")
+
+    -- Restore saved position
+    local pos = UIThingsDB.talentReminders.alertPos or { point = "CENTER", x = 0, y = 0 }
+    alertFrame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
+
     alertFrame:SetFrameStrata("DIALOG")
 
     -- Default Backdrop (will be updated by UpdateAlertFrame)
@@ -1161,7 +1354,16 @@ function TalentReminder.CreateAlertFrame()
     alertFrame:SetMovable(true)
     alertFrame:RegisterForDrag("LeftButton")
     alertFrame:SetScript("OnDragStart", alertFrame.StartMoving)
-    alertFrame:SetScript("OnDragStop", alertFrame.StopMovingOrSizing)
+    alertFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save position
+        local point, _, relativePoint, x, y = self:GetPoint()
+        UIThingsDB.talentReminders.alertPos = {
+            point = point,
+            x = x,
+            y = y
+        }
+    end)
     alertFrame:Hide()
 
     -- Title
@@ -1195,10 +1397,48 @@ function TalentReminder.CreateAlertFrame()
     local fontSize = UIThingsDB.talentReminders.alertFontSize or 12
     alertFrame.content:SetFont(font, fontSize)
 
+    -- Apply Talents button
+    local applyTalentsBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
+    applyTalentsBtn:SetSize(120, 25)
+    applyTalentsBtn:SetPoint("BOTTOM", -130, 20)
+    applyTalentsBtn:SetText("Apply Talents")
+    applyTalentsBtn:SetNormalFontObject("GameFontNormal")
+    applyTalentsBtn:SetHighlightFontObject("GameFontHighlight")
+    applyTalentsBtn:SetScript("OnClick", function(self)
+        if alertFrame.currentReminder then
+            TalentReminder.ApplyTalents(alertFrame.currentReminder)
+        else
+            print("|cFFFF0000[LunaUITweaks]|r No reminder data available")
+        end
+    end)
+    alertFrame.applyTalentsBtn = applyTalentsBtn
+
+    -- Open Talents button
+    local openTalentsBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
+    openTalentsBtn:SetSize(120, 25)
+    openTalentsBtn:SetPoint("BOTTOM", 0, 20)
+    openTalentsBtn:SetText("Open Talents")
+    openTalentsBtn:SetNormalFontObject("GameFontNormal")
+    openTalentsBtn:SetHighlightFontObject("GameFontHighlight")
+    openTalentsBtn:SetScript("OnClick", function(self)
+        -- Open talent frame
+        if PlayerSpellsUtil and PlayerSpellsUtil.ToggleTalentFrame then
+            PlayerSpellsUtil.ToggleTalentFrame()
+        elseif PlayerSpellsFrame then
+            -- Fallback for older API
+            if PlayerSpellsFrame:IsShown() then
+                HideUIPanel(PlayerSpellsFrame)
+            else
+                ShowUIPanel(PlayerSpellsFrame)
+            end
+        end
+    end)
+    alertFrame.openTalentsBtn = openTalentsBtn
+
     -- Dismiss button
     local dismissBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
     dismissBtn:SetSize(120, 25)
-    dismissBtn:SetPoint("BOTTOM", 0, 20)
+    dismissBtn:SetPoint("BOTTOM", 130, 20)
     dismissBtn:SetText("Dismiss")
     dismissBtn:SetNormalFontObject("GameFontNormal")
     dismissBtn:SetHighlightFontObject("GameFontHighlight")
