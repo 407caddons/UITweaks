@@ -414,12 +414,11 @@ local function UpdateReminderFrame()
         return
     end
 
-    -- Hide while mounted
-    if IsMounted() then
-        HidePetIcons()
-        reminderFrame:Hide()
-        return
-    end
+    -- Guard: Never update content in combat to avoid taint
+    if InCombatLockdown() then return end
+
+    -- Hide while mounted check is now handled by StateDriver, but keep here just in case config changed
+    -- Note: We rely on StateDriver for the actual hiding while mounted/in combat
 
     -- Build list of missing items only, packed from the top
     local missing = {}
@@ -443,6 +442,7 @@ local function UpdateReminderFrame()
 
     if #missing == 0 then
         HidePetIcons()
+        UnregisterStateDriver(reminderFrame, "visibility")
         reminderFrame:Hide()
         return
     end
@@ -490,12 +490,27 @@ local function UpdateReminderFrame()
     end
 
     reminderFrame:SetHeight(contentHeight + petIconHeight + padding)
-    reminderFrame:Show()
+    
+    -- Use State Driver for Visibility
+    -- Default behavior: [combat] hide; [mounted] hide; show
+    -- If hideInCombat is false: [mounted] hide; show
+    local driverStr = "[mounted] hide; show"
+    -- Default to true if nil to match legacy behavior
+    local doHideInCombat = settings.hideInCombat
+    if doHideInCombat == nil then doHideInCombat = true end
+    
+    if doHideInCombat then
+        driverStr = "[combat] hide; " .. driverStr
+    end
+    
+    RegisterStateDriver(reminderFrame, "visibility", driverStr)
+    
     ApplyReminderLock()
 end
 
 local function InitReminders()
-    reminderFrame = CreateFrame("Frame", "LunaCombatReminders", UIParent, "BackdropTemplate")
+    -- Must be SecureFrame for StateDriver
+    reminderFrame = CreateFrame("Frame", "LunaCombatReminders", UIParent, "SecureHandlerStateTemplate, BackdropTemplate")
     reminderFrame:SetSize(160, 100)
     reminderFrame:SetFrameStrata("MEDIUM")
     reminderFrame:SetMovable(true)

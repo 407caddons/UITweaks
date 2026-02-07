@@ -205,13 +205,25 @@ local function UpdateContent()
 
     local total = numQuests + validAchievementCount + worldQuestCount
 
-    if total == 0 and UIThingsDB.tracker.locked then
+    -- Guard against combat execution (prevents taint on secure items)
+    if InCombatLockdown() then return end
+
+    -- Check if disabled or should forcefully hide (M+ or Empty)
+    local enabled = UIThingsDB.tracker.enabled
+    local shouldHideMPlus = enabled and (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
+    local shouldHideEmpty = enabled and (total == 0 and UIThingsDB.tracker.locked)
+
+    if not enabled or shouldHideMPlus or shouldHideEmpty then
+        UnregisterStateDriver(trackerFrame, "visibility")
         trackerFrame:Hide()
         return
     end
 
-    -- If we have items (or are unlocked), ensure shown (unless blocked)
-    if not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
+    -- Handle Combat Visibility securely via State Driver
+    if UIThingsDB.tracker.hideInCombat then
+        RegisterStateDriver(trackerFrame, "visibility", "[combat] hide; show")
+    else
+        UnregisterStateDriver(trackerFrame, "visibility")
         trackerFrame:Show()
     end
 
@@ -779,21 +791,7 @@ local function SetupCustomTracker()
         if event == "PLAYER_ENTERING_WORLD" then
             C_Timer.After(2, UpdateContent)
         elseif event == "PLAYER_REGEN_DISABLED" then
-            if UIThingsDB.tracker.hideInCombat then
-                self:Hide()
-            end
-        elseif event == "PLAYER_REGEN_ENABLED" then
-            if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive()) then
-                UpdateContent()
-            end
-        elseif event == "CHALLENGE_MODE_START" then
-            if UIThingsDB.tracker.hideInMPlus then
-                self:Hide()
-            end
-        elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
-            if UIThingsDB.tracker.enabled and not (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) then
-                UpdateContent()
-            end
+            -- Handled by StateDriver
         else
             UpdateContent()
         end

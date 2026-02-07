@@ -438,4 +438,20 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UIThingsDB.combat.reminders.pet = not not self:GetChecked()
         UpdateReminders()
     end)
+
+    -- Hide in Combat Check
+    local combatHideCheck = CreateFrame("CheckButton", "UIThingsReminderHideCombatCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    combatHideCheck:SetPoint("LEFT", petCheck, "RIGHT", 70, 0)
+    combatHideCheck:SetHitRectInsets(0, -100, 0, 0)
+    _G[combatHideCheck:GetName() .. "Text"]:SetText("Hide in Combat")
+    -- Default to true if nil
+    local currentHide = UIThingsDB.combat.reminders.hideInCombat
+    if currentHide == nil then currentHide = true end
+    combatHideCheck:SetChecked(currentHide)
+    
+    combatHideCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.hideInCombat = not not self:GetChecked()
+        UpdateReminders()
+    end)
 end

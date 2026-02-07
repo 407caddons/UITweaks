@@ -130,6 +130,7 @@ The `CompareTalents()` function returns mismatches categorized as:
 - The addon targets WoW API for Interface version 120000 (The War Within, 12.0). All API calls are Blizzard's standard Lua API (C_Timer, C_TradeSkillUI, C_QuestLog, etc.).
 - No external library dependencies (no Ace3, LibDBIcon, etc.) — everything is self-contained.
 - `issecureval()` is a real WoW API function — it detects "secure" values that cannot be used in calculations during combat (due to Blizzard's combat lockdown restrictions). Not currently used in this addon but may appear in related projects.
+- Showing and hiding frames in combat should be done with UnregisterStateDriver and RegisterStateDriver. RegisterStateDriver is used to show/hide frames in combat, while UnregisterStateDriver is used to unregister the driver when the frame is no longer needed.
 
 ## API Documentation
 
