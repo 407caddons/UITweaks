@@ -1052,18 +1052,28 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     clearBtn:SetNormalFontObject("GameFontNormal")
     clearBtn:SetHighlightFontObject("GameFontHighlight")
     clearBtn:SetScript("OnClick", function(self)
-        local _, _, classID = UnitClass("player")
-        local specIndex = GetSpecialization()
-        local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
-        local _, specName = specIndex and GetSpecializationInfo(specIndex) or nil, nil
+        local isShiftHeld = IsShiftKeyDown()
 
-        StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM", specName or "Unknown Spec", nil, {
-            classID = classID,
-            specID = specID
-        })
+        if isShiftHeld then
+            -- Shift-click: clear ALL reminders for ALL classes/specs
+            StaticPopup_Show("LUNA_TALENT_CLEAR_ALL_CONFIRM")
+        else
+            -- Normal click: clear only current class/spec
+            local _, _, classID = UnitClass("player")
+            local specIndex = GetSpecialization()
+            local specID, specName
+            if specIndex then
+                specID, specName = GetSpecializationInfo(specIndex)
+            end
+
+            StaticPopup_Show("LUNA_TALENT_CLEAR_CONFIRM", specName or "Unknown Spec", nil, {
+                classID = classID,
+                specID = specID
+            })
+        end
     end)
 
-    -- Confirmation dialog for clear all
+    -- Confirmation dialog for clearing current spec
     StaticPopupDialogs["LUNA_TALENT_CLEAR_CONFIRM"] = {
         text = "Are you sure you want to delete ALL talent reminders for %s?",
         button1 = "Yes",
@@ -1092,6 +1102,28 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 if addonTable.Config.RefreshTalentReminderList then
                     addonTable.Config.RefreshTalentReminderList()
                 end
+            end
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+
+    -- Confirmation dialog for clearing ALL reminders (shift-click)
+    StaticPopupDialogs["LUNA_TALENT_CLEAR_ALL_CONFIRM"] = {
+        text =
+        "Are you sure you want to delete ALL talent reminders for ALL classes and specs?\n\n|cFFFF0000This cannot be undone!|r",
+        button1 = "Delete All",
+        button2 = "Cancel",
+        OnAccept = function(self)
+            if LunaUITweaks_TalentReminders then
+                LunaUITweaks_TalentReminders.reminders = {}
+
+                if addonTable.Config.RefreshTalentReminderList then
+                    addonTable.Config.RefreshTalentReminderList()
+                end
+
+                print("|cFFFFD100LunaUITweaks:|r All talent reminders deleted.")
             end
         end,
         timeout = 0,
