@@ -139,6 +139,9 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             info.func = function(btn)
                 UIThingsDB.talentReminders.alertFont = btn.value
                 UIDropDownMenu_SetText(fontDropdown, btn:GetText())
+                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                    addonTable.TalentReminder.UpdateVisuals()
+                end
             end
             info.checked = (UIThingsDB.talentReminders.alertFont == option.value)
             UIDropDownMenu_AddButton(info, level)

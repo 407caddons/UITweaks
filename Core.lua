@@ -146,6 +146,17 @@ local function OnEvent(self, event, ...)
                     raidNormal = false,
                     raidHeroic = false,
                     raidMythic = false,
+                },
+                reminders = {
+                    locked = true,
+                    flask = true,
+                    food = true,
+                    weaponBuff = true,
+                    pet = true,
+                    font = "Fonts\\FRIZQT__.TTF",
+                    fontSize = 12,
+                    iconSize = 24,
+                    pos = { point = "TOP", x = 0, y = -100 },
                 }
             },
             frames = {

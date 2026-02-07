@@ -83,7 +83,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     -- Enable Combat Timer Checkbox
     local combatTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     combatTitle:SetPoint("TOPLEFT", 16, -16)
-    combatTitle:SetText("Combat Timer")
+    combatTitle:SetText("Combat")
 
     local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", panel,
         "ChatConfigCheckButtonTemplate")
@@ -300,5 +300,142 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         if addonTable.Combat and addonTable.Combat.CheckCombatLogging then
             addonTable.Combat.CheckCombatLogging()
         end
+    end)
+
+    -- Combat Reminders Section
+    Helpers.CreateSectionHeader(panel, "Combat Reminders", -395)
+
+    local reminderDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    reminderDesc:SetPoint("TOPLEFT", 20, -418)
+    reminderDesc:SetText("Show a reminder frame when loading in without these buffs:")
+
+    local function UpdateReminders()
+        if addonTable.Combat and addonTable.Combat.UpdateReminders then
+            addonTable.Combat.UpdateReminders()
+        end
+    end
+
+    local reminderLockBtn = CreateFrame("CheckButton", "UIThingsReminderLockCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    reminderLockBtn:SetPoint("TOPLEFT", 20, -438)
+    _G[reminderLockBtn:GetName() .. "Text"]:SetText("Lock Reminder Frame")
+    reminderLockBtn:SetChecked(UIThingsDB.combat.reminders.locked)
+    reminderLockBtn:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.locked = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
+    -- Reminder Font Selector
+    local reminderFontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    reminderFontLabel:SetPoint("TOPLEFT", 20, -468)
+    reminderFontLabel:SetText("Reminder Font:")
+
+    local reminderFontDropdown = CreateFrame("Frame", "UIThingsReminderFontDropdown", panel, "UIDropDownMenuTemplate")
+    reminderFontDropdown:SetPoint("TOPLEFT", reminderFontLabel, "BOTTOMLEFT", -15, -4)
+
+    local function ReminderFontOnClick(self)
+        UIDropDownMenu_SetSelectedID(reminderFontDropdown, self:GetID())
+        UIThingsDB.combat.reminders.font = self.value
+        UpdateReminders()
+    end
+
+    local function ReminderFontInitialize(self, level)
+        for k, v in pairs(fonts) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = v.name
+            info.value = v.path
+            info.func = ReminderFontOnClick
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(reminderFontDropdown, ReminderFontInitialize)
+    UIDropDownMenu_SetText(reminderFontDropdown, "Select Font")
+    for i, f in ipairs(fonts) do
+        if f.path == UIThingsDB.combat.reminders.font then
+            UIDropDownMenu_SetText(reminderFontDropdown, f.name)
+        end
+    end
+
+    -- Reminder Font Size Slider
+    local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", panel, "OptionsSliderTemplate")
+    reminderFontSizeSlider:SetPoint("TOPLEFT", 20, -530)
+    reminderFontSizeSlider:SetMinMaxValues(8, 24)
+    reminderFontSizeSlider:SetValueStep(1)
+    reminderFontSizeSlider:SetObeyStepOnDrag(true)
+    reminderFontSizeSlider:SetWidth(150)
+    _G[reminderFontSizeSlider:GetName() .. 'Text']:SetText(string.format("Size: %d", UIThingsDB.combat.reminders
+        .fontSize))
+    _G[reminderFontSizeSlider:GetName() .. 'Low']:SetText("8")
+    _G[reminderFontSizeSlider:GetName() .. 'High']:SetText("24")
+    reminderFontSizeSlider:SetValue(UIThingsDB.combat.reminders.fontSize)
+    reminderFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.combat.reminders.fontSize = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Size: %d", value))
+        UpdateReminders()
+    end)
+
+    -- Reminder Icon Size Slider
+    local reminderIconSizeSlider = CreateFrame("Slider", "UIThingsReminderIconSizeSlider", panel, "OptionsSliderTemplate")
+    reminderIconSizeSlider:SetPoint("TOPLEFT", 20, -565)
+    reminderIconSizeSlider:SetMinMaxValues(16, 48)
+    reminderIconSizeSlider:SetValueStep(1)
+    reminderIconSizeSlider:SetObeyStepOnDrag(true)
+    reminderIconSizeSlider:SetWidth(150)
+    _G[reminderIconSizeSlider:GetName() .. 'Text']:SetText(string.format("Icon Size: %d",
+        UIThingsDB.combat.reminders.iconSize))
+    _G[reminderIconSizeSlider:GetName() .. 'Low']:SetText("16")
+    _G[reminderIconSizeSlider:GetName() .. 'High']:SetText("48")
+    reminderIconSizeSlider:SetValue(UIThingsDB.combat.reminders.iconSize)
+    reminderIconSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.combat.reminders.iconSize = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Icon Size: %d", value))
+        UpdateReminders()
+    end)
+
+    local flaskCheck = CreateFrame("CheckButton", "UIThingsReminderFlaskCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    flaskCheck:SetPoint("TOPLEFT", 20, -595)
+    flaskCheck:SetHitRectInsets(0, -60, 0, 0)
+    _G[flaskCheck:GetName() .. "Text"]:SetText("Flask")
+    flaskCheck:SetChecked(UIThingsDB.combat.reminders.flask)
+    flaskCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.flask = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
+    local foodCheck = CreateFrame("CheckButton", "UIThingsReminderFoodCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    foodCheck:SetPoint("LEFT", flaskCheck, "RIGHT", 70, 0)
+    foodCheck:SetHitRectInsets(0, -60, 0, 0)
+    _G[foodCheck:GetName() .. "Text"]:SetText("Food")
+    foodCheck:SetChecked(UIThingsDB.combat.reminders.food)
+    foodCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.food = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
+    local weaponCheck = CreateFrame("CheckButton", "UIThingsReminderWeaponCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    weaponCheck:SetPoint("LEFT", foodCheck, "RIGHT", 70, 0)
+    weaponCheck:SetHitRectInsets(0, -100, 0, 0)
+    _G[weaponCheck:GetName() .. "Text"]:SetText("Weapon Buff")
+    weaponCheck:SetChecked(UIThingsDB.combat.reminders.weaponBuff)
+    weaponCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.weaponBuff = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
+    local petCheck = CreateFrame("CheckButton", "UIThingsReminderPetCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    petCheck:SetPoint("LEFT", weaponCheck, "RIGHT", 100, 0)
+    petCheck:SetHitRectInsets(0, -40, 0, 0)
+    _G[petCheck:GetName() .. "Text"]:SetText("Pet")
+    petCheck:SetChecked(UIThingsDB.combat.reminders.pet)
+    petCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.pet = not not self:GetChecked()
+        UpdateReminders()
     end)
 end

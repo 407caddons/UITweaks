@@ -1,15 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "mcp__acp__Edit",
-      "WebFetch(domain:)",
-      "mcp__acp__Write",
-      "WebFetch(domain:github.com)",
-      "mcp__acp__Bash",
-      "WebFetch(domain:warcraft.wiki.gg)",
-      "WebFetch(domain:wowpedia.fandom.com)",
-      "WebFetch(domain:wowwiki-archive.fandom.com)",
-      "WebFetch(domain:git.tukui.org)"
-    ]
+    "allow": ["mcp__acp__Edit", "mcp__acp__Write", "mcp__acp__Bash"]
   }
 }

@@ -40,7 +40,7 @@ ObjectiveTracker.lua
 MinimapButton.lua
 Vendor.lua
 Loot.lua
-CombatTimer.lua
+Combat.lua
 Misc.lua
 Frames.lua
 TalentReminder.lua
