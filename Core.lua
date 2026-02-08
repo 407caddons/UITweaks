@@ -82,7 +82,13 @@ local function OnEvent(self, event, ...)
                 detailFont = "Fonts\\FRIZQT__.TTF",
                 detailFontSize = 12,
                 questPadding = 2,
-                sectionOrder = 1, -- 1=WQ/Quests/Ach, 2=Quests/WQ/Ach, etc
+                sectionOrderList = {
+                    "scenarios",
+                    "tempObjectives",
+                    "worldQuests",
+                    "quests",
+                    "achievements"
+                },
                 onlyActiveWorldQuests = false,
                 activeQuestColor = { r = 0, g = 1, b = 0, a = 1 },
                 x = -20,
@@ -174,7 +180,7 @@ local function OnEvent(self, event, ...)
                 alertColor = { r = 1, g = 0, b = 0, a = 1 }
             },
             talentReminders = {
-                enabled = true,
+                enabled = false,
                 alertOnDifficulties = {
                     dungeonNormal = false,
                     dungeonHeroic = false,

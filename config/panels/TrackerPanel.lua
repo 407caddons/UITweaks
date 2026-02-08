@@ -40,7 +40,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Enable Tracker Checkbox
     local enableTrackerBtn = CreateFrame("CheckButton", "UIThingsTrackerEnableCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    enableTrackerBtn:SetPoint("TOPLEFT", 20, -70)
+    enableTrackerBtn:SetPoint("TOPLEFT", 20, -40)
     _G[enableTrackerBtn:GetName() .. "Text"]:SetText("Enable Objective Tracker Tweaks")
     enableTrackerBtn:SetChecked(UIThingsDB.tracker.enabled)
     enableTrackerBtn:SetScript("OnClick", function(self)
@@ -53,7 +53,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     -- Lock Checkbox
     local lockBtn = CreateFrame("CheckButton", "UIThingsLockCheck", panel, "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 250, -70)
+    lockBtn:SetPoint("TOPLEFT", 250, -40)
     _G[lockBtn:GetName() .. "Text"]:SetText("Lock Position")
     lockBtn:SetChecked(UIThingsDB.tracker.locked)
     lockBtn:SetScript("OnClick", function(self)
@@ -65,11 +65,11 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -------------------------------------------------------------
     -- SECTION: Size & Position
     -------------------------------------------------------------
-    Helpers.CreateSectionHeader(panel, "Size & Position", -100)
+    Helpers.CreateSectionHeader(panel, "Size & Position", -70)
 
     -- Width Slider
     local widthSlider = CreateFrame("Slider", "UIThingsWidthSlider", panel, "OptionsSliderTemplate")
-    widthSlider:SetPoint("TOPLEFT", 20, -135)
+    widthSlider:SetPoint("TOPLEFT", 20, -105)
     widthSlider:SetMinMaxValues(100, 600)
     widthSlider:SetValueStep(10)
     widthSlider:SetObeyStepOnDrag(true)
@@ -87,7 +87,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     -- Height Slider
     local heightSlider = CreateFrame("Slider", "UIThingsHeightSlider", panel, "OptionsSliderTemplate")
-    heightSlider:SetPoint("TOPLEFT", 230, -135)
+    heightSlider:SetPoint("TOPLEFT", 230, -105)
     heightSlider:SetMinMaxValues(100, 1000)
     heightSlider:SetValueStep(10)
     heightSlider:SetObeyStepOnDrag(true)
@@ -105,7 +105,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     -- Quest Padding Slider
     local paddingSlider = CreateFrame("Slider", "UIThingsTrackerPaddingSlider", panel, "OptionsSliderTemplate")
-    paddingSlider:SetPoint("TOPLEFT", 440, -135)
+    paddingSlider:SetPoint("TOPLEFT", 440, -105)
     paddingSlider:SetMinMaxValues(0, 20)
     paddingSlider:SetValueStep(1)
     paddingSlider:SetObeyStepOnDrag(true)
@@ -123,7 +123,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     -- Strata Dropdown
     local trackerStrataLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    trackerStrataLabel:SetPoint("TOPLEFT", 20, -170)
+    trackerStrataLabel:SetPoint("TOPLEFT", 20, -140)
     trackerStrataLabel:SetText("Strata:")
 
     local trackerStrataDropdown = CreateFrame("Frame", "UIThingsTrackerStrataDropdown", panel,
@@ -153,7 +153,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -------------------------------------------------------------
     -- SECTION: Fonts
     -------------------------------------------------------------
-    Helpers.CreateSectionHeader(panel, "Fonts", -225)
+    Helpers.CreateSectionHeader(panel, "Fonts", -195)
 
     -- Quest Name Font
     Helpers.CreateFontDropdown(
@@ -166,13 +166,13 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
             UpdateTracker()
         end,
         20,
-        -250
+        -220
     )
 
     -- Quest Name Size (under font dropdown)
     local headerSizeSlider = CreateFrame("Slider", "UIThingsTrackerHeaderSizeSlider", panel,
         "OptionsSliderTemplate")
-    headerSizeSlider:SetPoint("TOPLEFT", 20, -315)
+    headerSizeSlider:SetPoint("TOPLEFT", 20, -285)
     headerSizeSlider:SetMinMaxValues(8, 32)
     headerSizeSlider:SetValueStep(1)
     headerSizeSlider:SetObeyStepOnDrag(true)
@@ -199,13 +199,13 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
             UpdateTracker()
         end,
         250,
-        -250
+        -220
     )
 
     -- Quest Detail Size (under font dropdown)
     local detailSizeSlider = CreateFrame("Slider", "UIThingsTrackerDetailSizeSlider", panel,
         "OptionsSliderTemplate")
-    detailSizeSlider:SetPoint("TOPLEFT", 250, -315)
+    detailSizeSlider:SetPoint("TOPLEFT", 250, -285)
     detailSizeSlider:SetMinMaxValues(8, 32)
     detailSizeSlider:SetValueStep(1)
     detailSizeSlider:SetObeyStepOnDrag(true)
@@ -224,11 +224,11 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -------------------------------------------------------------
     -- SECTION: Content
     -------------------------------------------------------------
-    Helpers.CreateSectionHeader(panel, "Content", -355)
+    Helpers.CreateSectionHeader(panel, "Content", -325)
 
     -- Section Order - Reorderable List
     local orderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    orderLabel:SetPoint("TOPLEFT", 20, -380)
+    orderLabel:SetPoint("TOPLEFT", 20, -350)
     orderLabel:SetText("Section Order: (top to bottom)")
 
     -- Initialize default order if not exists
@@ -251,7 +251,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     }
 
     local orderItems = {}
-    local yPos = -405
+    local yPos = -375
 
     local function UpdateOrderDisplay()
         for i, sectionKey in ipairs(UIThingsDB.tracker.sectionOrderList) do
@@ -307,7 +307,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Only Show Active World Quests Checkbox
     local wqActiveCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQActiveCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    wqActiveCheckbox:SetPoint("TOPLEFT", 300, -380)
+    wqActiveCheckbox:SetPoint("TOPLEFT", 300, -350)
     wqActiveCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[wqActiveCheckbox:GetName() .. "Text"]:SetText("Only Active World Quests")
     wqActiveCheckbox:SetChecked(UIThingsDB.tracker.onlyActiveWorldQuests)
@@ -319,7 +319,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Show World Quest Timer Checkbox
     local wqTimerCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQTimerCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    wqTimerCheckbox:SetPoint("TOPLEFT", 300, -405)
+    wqTimerCheckbox:SetPoint("TOPLEFT", 300, -375)
     wqTimerCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[wqTimerCheckbox:GetName() .. "Text"]:SetText("Show World Quest Timer")
     wqTimerCheckbox:SetChecked(UIThingsDB.tracker.showWorldQuestTimer)
@@ -331,12 +331,12 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -------------------------------------------------------------
     -- SECTION: Behavior
     -------------------------------------------------------------
-    Helpers.CreateSectionHeader(panel, "Behavior", -545)
+    Helpers.CreateSectionHeader(panel, "Behavior", -515)
 
     -- Auto Track Quests Checkbox
     local autoTrackCheckbox = CreateFrame("CheckButton", "UIThingsTrackerAutoTrackCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    autoTrackCheckbox:SetPoint("TOPLEFT", 20, -570)
+    autoTrackCheckbox:SetPoint("TOPLEFT", 20, -540)
     autoTrackCheckbox:SetHitRectInsets(0, -110, 0, 0)
     _G[autoTrackCheckbox:GetName() .. "Text"]:SetText("Auto Track Quests")
     autoTrackCheckbox:SetChecked(UIThingsDB.tracker.autoTrackQuests)
@@ -347,7 +347,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Right-Click Active Quest Checkbox
     local rightClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerRightClickCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    rightClickCheckbox:SetPoint("TOPLEFT", 180, -570)
+    rightClickCheckbox:SetPoint("TOPLEFT", 180, -540)
     rightClickCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[rightClickCheckbox:GetName() .. "Text"]:SetText("Right-Click: Active Quest")
     rightClickCheckbox:SetChecked(UIThingsDB.tracker.rightClickSuperTrack)
@@ -358,7 +358,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Shift-Click Untrack Checkbox
     local shiftClickCheckbox = CreateFrame("CheckButton", "UIThingsTrackerShiftClickCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    shiftClickCheckbox:SetPoint("TOPLEFT", 380, -570)
+    shiftClickCheckbox:SetPoint("TOPLEFT", 380, -540)
     shiftClickCheckbox:SetHitRectInsets(0, -110, 0, 0)
     _G[shiftClickCheckbox:GetName() .. "Text"]:SetText("Shift-Click: Untrack")
     shiftClickCheckbox:SetChecked(UIThingsDB.tracker.shiftClickUntrack)
@@ -369,7 +369,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Hide In Combat Checkbox
     local combatHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCombatHideCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    combatHideCheckbox:SetPoint("TOPLEFT", 20, -595)
+    combatHideCheckbox:SetPoint("TOPLEFT", 20, -565)
     combatHideCheckbox:SetHitRectInsets(0, -90, 0, 0)
     _G[combatHideCheckbox:GetName() .. "Text"]:SetText("Hide in Combat")
     combatHideCheckbox:SetChecked(UIThingsDB.tracker.hideInCombat)
@@ -381,7 +381,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Hide In M+ Checkbox
     local mplusHideCheckbox = CreateFrame("CheckButton", "UIThingsTrackerMPlusHideCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    mplusHideCheckbox:SetPoint("TOPLEFT", 180, -595)
+    mplusHideCheckbox:SetPoint("TOPLEFT", 180, -565)
     mplusHideCheckbox:SetHitRectInsets(0, -70, 0, 0)
     _G[mplusHideCheckbox:GetName() .. "Text"]:SetText("Hide in M+")
     mplusHideCheckbox:SetChecked(UIThingsDB.tracker.hideInMPlus)
@@ -393,12 +393,12 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -------------------------------------------------------------
     -- SECTION: Appearance
     -------------------------------------------------------------
-    Helpers.CreateSectionHeader(panel, "Appearance", -630)
+    Helpers.CreateSectionHeader(panel, "Appearance", -600)
 
     -- Row 1: Border
     local borderCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBorderCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    borderCheckbox:SetPoint("TOPLEFT", 20, -655)
+    borderCheckbox:SetPoint("TOPLEFT", 20, -625)
     borderCheckbox:SetHitRectInsets(0, -80, 0, 0)
     _G[borderCheckbox:GetName() .. "Text"]:SetText("Show Border")
     borderCheckbox:SetChecked(UIThingsDB.tracker.showBorder)
@@ -408,7 +408,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     end)
 
     local borderColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    borderColorLabel:SetPoint("TOPLEFT", 140, -658)
+    borderColorLabel:SetPoint("TOPLEFT", 140, -628)
     borderColorLabel:SetText("Color:")
 
     local borderColorSwatch = CreateFrame("Button", nil, panel)
@@ -458,7 +458,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     -- Row 2: Background
     local bgCheckbox = CreateFrame("CheckButton", "UIThingsTrackerBgCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    bgCheckbox:SetPoint("TOPLEFT", 20, -680)
+    bgCheckbox:SetPoint("TOPLEFT", 20, -650)
     bgCheckbox:SetHitRectInsets(0, -110, 0, 0)
     _G[bgCheckbox:GetName() .. "Text"]:SetText("Show Background")
     bgCheckbox:SetChecked(UIThingsDB.tracker.showBackground)
@@ -468,7 +468,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     end)
 
     local bgColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    bgColorLabel:SetPoint("TOPLEFT", 165, -683)
+    bgColorLabel:SetPoint("TOPLEFT", 165, -653)
     bgColorLabel:SetText("Color:")
 
     local bgColorSwatch = CreateFrame("Button", nil, panel)
@@ -518,7 +518,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     -- Row 3: Active Quest Color
     local activeColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    activeColorLabel:SetPoint("TOPLEFT", 20, -708)
+    activeColorLabel:SetPoint("TOPLEFT", 20, -678)
     activeColorLabel:SetText("Active Quest:")
 
     local activeColorSwatch = CreateFrame("Button", nil, panel)
