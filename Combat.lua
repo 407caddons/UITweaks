@@ -177,34 +177,41 @@ local reminderTitle
 local reminderTitleLine
 local reminderLines = {}
 
--- Flask buff detection via aura scanning
--- Flasks in TWW apply "Flask" or "Phial" buffs. We detect by checking
--- for common flask/phial spell IDs or by the "flask" keyword in the aura name.
-local function HasFlaskBuff()
+-- Combined flask + food buff detection in a single aura scan
+local hasFlaskCache, hasFoodCache = false, false
+local lastAuraScanTime = 0
+
+local function ScanConsumableBuffs()
+    -- Cache results within the same frame to avoid redundant scans
+    local now = GetTime()
+    if now == lastAuraScanTime then return end
+    lastAuraScanTime = now
+
+    hasFlaskCache = false
+    hasFoodCache = false
+
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
         if not auraData then break end
-        local name = auraData.name or ""
-        local lowerName = name:lower()
-        if lowerName:find("flask") or lowerName:find("phial") then
-            return true
+        local lowerName = (auraData.name or ""):lower()
+        if not hasFlaskCache and (lowerName:find("flask") or lowerName:find("phial")) then
+            hasFlaskCache = true
         end
+        if not hasFoodCache and (lowerName:find("well fed") or lowerName:find("food")) then
+            hasFoodCache = true
+        end
+        if hasFlaskCache and hasFoodCache then break end
     end
-    return false
 end
 
--- Food buff detection - "Well Fed" or food-related buff names
+local function HasFlaskBuff()
+    ScanConsumableBuffs()
+    return hasFlaskCache
+end
+
 local function HasFoodBuff()
-    for i = 1, 40 do
-        local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
-        if not auraData then break end
-        local name = auraData.name or ""
-        local lowerName = name:lower()
-        if lowerName:find("well fed") or lowerName:find("food") then
-            return true
-        end
-    end
-    return false
+    ScanConsumableBuffs()
+    return hasFoodCache
 end
 
 -- Weapon enchant detection via GetWeaponEnchantInfo()
@@ -417,8 +424,13 @@ local function UpdateReminderFrame()
     -- Guard: Never update content in combat to avoid taint
     if InCombatLockdown() then return end
 
-    -- Hide while mounted check is now handled by StateDriver, but keep here just in case config changed
-    -- Note: We rely on StateDriver for the actual hiding while mounted/in combat
+    -- Guard: Disable in Mythic+ (difficultyID 8)
+    local _, _, difficultyID = GetInstanceInfo()
+    if difficultyID == 8 then
+        reminderFrame:Hide()
+        UnregisterStateDriver(reminderFrame, "visibility")
+        return
+    end
 
     -- Build list of missing items only, packed from the top
     local missing = {}
@@ -490,7 +502,7 @@ local function UpdateReminderFrame()
     end
 
     reminderFrame:SetHeight(contentHeight + petIconHeight + padding)
-    
+
     -- Use State Driver for Visibility
     -- Default behavior: [combat] hide; [mounted] hide; show
     -- If hideInCombat is false: [mounted] hide; show
@@ -498,13 +510,16 @@ local function UpdateReminderFrame()
     -- Default to true if nil to match legacy behavior
     local doHideInCombat = settings.hideInCombat
     if doHideInCombat == nil then doHideInCombat = true end
-    
+
     if doHideInCombat then
         driverStr = "[combat] hide; " .. driverStr
     end
-    
+
+
+
+    reminderFrame:Show()
     RegisterStateDriver(reminderFrame, "visibility", driverStr)
-    
+
     ApplyReminderLock()
 end
 
@@ -568,18 +583,19 @@ local function InitReminders()
     eventFrame:RegisterEvent("UNIT_AURA")
     eventFrame:RegisterEvent("UNIT_PET")
     eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
     eventFrame:SetScript("OnEvent", function(self, event, arg1)
         if event == "UNIT_AURA" and arg1 ~= "player" then return end
         if event == "PLAYER_ENTERING_WORLD" then
-            C_Timer.After(3, UpdateReminderFrame)
+            C_Timer.After(1, UpdateReminderFrame)
         else
             UpdateReminderFrame()
         end
     end)
 
     -- Run initial check now (covers /reload where PLAYER_ENTERING_WORLD already fired)
-    C_Timer.After(1, UpdateReminderFrame)
+    C_Timer.After(0.1, UpdateReminderFrame)
 end
 
 function addonTable.Combat.UpdateReminders()

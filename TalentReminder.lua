@@ -38,6 +38,37 @@ function TalentReminder.Initialize()
     frame:SetScript("OnEvent", TalentReminder.OnEvent)
 
     addonTable.Core.Log("TalentReminder", "Initialized")
+
+    -- Clean up legacy data
+    TalentReminder.CleanupSavedVariables()
+end
+
+-- Cleanup legacy fields from saved variables
+function TalentReminder.CleanupSavedVariables()
+    if not LunaUITweaks_TalentReminders or not LunaUITweaks_TalentReminders.reminders then return end
+    
+    local count = 0
+    for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
+        for difficultyID, difficulties in pairs(reminders) do
+            for bossID, reminder in pairs(difficulties) do
+                -- Remove unused top-level fields
+                if reminder.instanceName then reminder.instanceName = nil count = count + 1 end
+                if reminder.difficulty then reminder.difficulty = nil count = count + 1 end
+                if reminder.minKeystoneLevel then reminder.minKeystoneLevel = nil count = count + 1 end
+                
+                -- Remove 'row' from talents
+                if reminder.talents then
+                    for _, talent in pairs(reminder.talents) do
+                        if talent.row then talent.row = nil count = count + 1 end
+                    end
+                end
+            end
+        end
+    end
+    
+    if count > 0 then
+        addonTable.Core.Log("TalentReminder", "Cleaned up " .. count .. " unused fields from saved variables", 0)
+    end
 end
 
 -- Event handler
@@ -425,7 +456,6 @@ function TalentReminder.CompareTalents(savedTalents)
                 type = "missing",
                 nodeID = nodeID,
                 name = talentName,
-                row = savedData.row,
                 expected = savedData
             })
         elseif current.entryID ~= savedData.entryID then
@@ -454,30 +484,16 @@ function TalentReminder.CompareTalents(savedTalents)
                 type = "wrong",
                 nodeID = nodeID,
                 name = talentName,
-                row = savedData.row,
                 expected = savedData,
                 current = current
             })
 
-            -- Add to "extra" (have wrong talent to remove)
-            table.insert(mismatches, {
-                type = "extra",
-                nodeID = nodeID,
-                name = currentTalentName,
-                row = savedData.row,
-                current = {
-                    entryID = current.entryID,
-                    rank = current.rank,
-                    spellID = currentSpellID
-                }
-            })
         elseif current.rank < savedData.rank then
             -- Same talent but insufficient rank
             table.insert(mismatches, {
                 type = "wrong",
                 nodeID = nodeID,
                 name = talentName,
-                row = savedData.row,
                 expected = savedData,
                 current = current
             })
@@ -516,7 +532,6 @@ function TalentReminder.CompareTalents(savedTalents)
                     type = "extra",
                     nodeID = nodeID,
                     name = talentName,
-                    row = nodeInfo and nodeInfo.posY or 0,
                     current = {
                         entryID = current.entryID,
                         rank = current.rank,
@@ -782,7 +797,6 @@ function TalentReminder.CreateSnapshot()
                     name = talentName,
                     entryID = nodeInfo.activeEntry.entryID,
                     rank = rank,
-                    row = nodeInfo.posY or 0,
                     spellID = spellID
                 }
                 count = count + 1
@@ -828,8 +842,7 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
 
     LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] = {
         name = name,
-        instanceName = instanceName,
-        difficulty = difficulty,
+        name = name,
         difficultyID = difficultyID,
         createdDate = date("%Y-%m-%d"),
         note = note or "",

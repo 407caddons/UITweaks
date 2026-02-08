@@ -167,7 +167,22 @@ local function ReleaseItems()
     end
 end
 
-local function UpdateContent()
+local UpdateContent -- forward declaration for ScheduleUpdateContent
+
+-- Throttle wrapper to coalesce rapid-fire events into a single update
+local updatePending = false
+local function ScheduleUpdateContent()
+    if updatePending then return end
+    updatePending = true
+    C_Timer.After(UPDATE_THROTTLE_DELAY, function()
+        updatePending = false
+        if trackerFrame then
+            UpdateContent()
+        end
+    end)
+end
+
+UpdateContent = function()
     if not trackerFrame then return end
 
     -- Check Counts for Auto-Hide (validate achievements have valid data)
@@ -793,7 +808,7 @@ local function SetupCustomTracker()
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- Handled by StateDriver
         else
-            UpdateContent()
+            ScheduleUpdateContent()
         end
     end)
 end

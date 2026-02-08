@@ -21,8 +21,11 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     _G[enableTalentBtn:GetName() .. "Text"]:SetText("Enable Talent Reminders")
     enableTalentBtn:SetChecked(UIThingsDB.talentReminders.enabled)
     enableTalentBtn:SetScript("OnClick", function(self)
-        UIThingsDB.talentReminders.enabled = not not self:GetChecked()
+        local enabled = not not self:GetChecked()
+        UIThingsDB.talentReminders.enabled = enabled
+        Helpers.UpdateModuleVisuals(panel, tab, enabled)
     end)
+    Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.talentReminders.enabled)
 
     -- Help text
     local enableText = _G[enableTalentBtn:GetName() .. "Text"]
