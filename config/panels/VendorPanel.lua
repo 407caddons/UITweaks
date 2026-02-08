@@ -92,37 +92,18 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     end)
 
     -- Vendor Font Selector
-    local vendorFontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    vendorFontLabel:SetPoint("TOPLEFT", 20, -250)
-    vendorFontLabel:SetText("Alert Font:")
-
-    local vendorFontDropdown = CreateFrame("Frame", "UIThingsVendorFontDropdown", panel,
-        "UIDropDownMenuTemplate")
-    vendorFontDropdown:SetPoint("TOPLEFT", vendorFontLabel, "BOTTOMLEFT", -15, -10)
-
-    local function VendorFontOnClick(self)
-        UIDropDownMenu_SetSelectedID(vendorFontDropdown, self:GetID())
-        UIThingsDB.vendor.font = self.value
-        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
-    end
-
-    local function VendorFontInit(self, level)
-        for k, v in pairs(fonts) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = v.name
-            info.value = v.path
-            info.func = VendorFontOnClick
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_Initialize(vendorFontDropdown, VendorFontInit)
-    UIDropDownMenu_SetText(vendorFontDropdown, "Select Font")
-    for i, f in ipairs(fonts) do
-        if f.path == UIThingsDB.vendor.font then
-            UIDropDownMenu_SetText(vendorFontDropdown, f.name)
-        end
-    end
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsVendorFontDropdown",
+        "Alert Font:",
+        UIThingsDB.vendor.font,
+        function(fontPath, fontName)
+            UIThingsDB.vendor.font = fontPath
+            if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+        end,
+        20,
+        -250
+    )
 
     -- Vendor Font Size Slider
     local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", panel,

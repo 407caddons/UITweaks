@@ -114,37 +114,18 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end
 
     -- Font Dropdown
-    local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    fontLabel:SetPoint("TOPLEFT", 20, -225)
-    fontLabel:SetText("Font:")
-
-    local fontDropdown = CreateFrame("Frame", "UIThingsLootFontDropdown", panel, "UIDropDownMenuTemplate")
-    fontDropdown:SetPoint("TOPLEFT", 60, -215)
-    UIDropDownMenu_SetWidth(fontDropdown, 120)
-
-    local function FontOnClick(self)
-        UIDropDownMenu_SetSelectedValue(fontDropdown, self.value)
-        UIThingsDB.loot.font = self.value
-        addonTable.Loot.UpdateSettings()
-    end
-
-    UIDropDownMenu_Initialize(fontDropdown, function()
-        for _, font in ipairs(fonts) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = font.name
-            info.value = font.path
-            info.func = FontOnClick
-            info.checked = (font.path == UIThingsDB.loot.font)
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-    UIDropDownMenu_SetSelectedValue(fontDropdown, UIThingsDB.loot.font)
-    for _, font in ipairs(fonts) do
-        if font.path == UIThingsDB.loot.font then
-            UIDropDownMenu_SetText(fontDropdown, font.name)
-            break
-        end
-    end
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsLootFontDropdown",
+        "Font:",
+        UIThingsDB.loot.font,
+        function(fontPath, fontName)
+            UIThingsDB.loot.font = fontPath
+            addonTable.Loot.UpdateSettings()
+        end,
+        20,
+        -225
+    )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsLootFontSize", panel, "OptionsSliderTemplate")

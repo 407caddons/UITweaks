@@ -3,13 +3,80 @@ addonTable.ConfigHelpers = {}
 
 local Helpers = addonTable.ConfigHelpers
 
--- Shared font list
-Helpers.fonts = {
-    { name = "Friz Quadrata", path = "Fonts\\FRIZQT__.TTF" },
-    { name = "Arial Narrow",  path = "Fonts\\ARIALN.TTF" },
-    { name = "Skurri",        path = "Fonts\\skurri.ttf" },
-    { name = "Morpheus",      path = "Fonts\\MORPHEUS.TTF" }
-}
+--- Build comprehensive font list
+-- Combines known default fonts with dynamically discovered fonts from GetFonts()
+-- @return table Array of {name, path} tables
+local function BuildFontList()
+    local fonts = {}
+
+    -- Known WoW fonts with friendly names
+    local knownFonts = {
+        { name = "Friz Quadrata",            path = "Fonts\\FRIZQT__.TTF" },
+        { name = "Arial Narrow",             path = "Fonts\\ARIALN.TTF" },
+        { name = "Skurri",                   path = "Fonts\\skurri.ttf" },
+        { name = "Morpheus",                 path = "Fonts\\MORPHEUS.TTF" },
+        { name = "Friz Quadrata (Cyrillic)", path = "Fonts\\FRIZQT___CYR.TTF" },
+        { name = "Morpheus (Cyrillic)",      path = "Fonts\\MORPHEUS_CYR.TTF" },
+        { name = "Skurri (Cyrillic)",        path = "Fonts\\SKURRI_CYR.TTF" },
+        { name = "K Damage",                 path = "Fonts\\K_Damage.TTF" },
+        { name = "K Pagetext",               path = "Fonts\\K_Pagetext.TTF" },
+        { name = "2002",                     path = "Fonts\\2002.ttf" },
+        { name = "2002 Bold",                path = "Fonts\\2002B.ttf" },
+        { name = "AR Hei",                   path = "Fonts\\ARHei.ttf" },
+        { name = "AR Kai (Complex)",         path = "Fonts\\ARKai_C.ttf" },
+        { name = "AR Kai (Traditional)",     path = "Fonts\\ARKai_T.ttf" },
+        { name = "bHEI 00M",                 path = "Fonts\\bHEI00M.ttf" },
+        { name = "bHEI 01B",                 path = "Fonts\\bHEI01B.ttf" },
+        { name = "bKAI 00M",                 path = "Fonts\\bKAI00M.ttf" },
+        { name = "bLEI 00D",                 path = "Fonts\\bLEI00D.ttf" },
+        { name = "NIM",                      path = "Fonts\\NIM_____.ttf" },
+    }
+
+    -- Add all known fonts
+    for _, font in ipairs(knownFonts) do
+        table.insert(fonts, font)
+    end
+
+    -- Try to get additional fonts using GetFonts() API
+    -- This returns font object names, not file paths
+    local success, dynamicFonts = pcall(GetFonts)
+    if success and dynamicFonts then
+        local knownPaths = {}
+        -- Build lookup of already-added paths
+        for _, font in ipairs(fonts) do
+            knownPaths[font.path:upper()] = true
+        end
+
+        -- GetFonts() returns font object names - try to extract their file paths
+        for _, fontObjectName in ipairs(dynamicFonts) do
+            -- Try to get the global font object by name
+            local fontObj = _G[fontObjectName]
+            if fontObj and type(fontObj) == "table" and fontObj.GetFont then
+                -- Extract the font file path using FontInstance:GetFont()
+                local successGet, fontPath, height, flags = pcall(fontObj.GetFont, fontObj)
+                if successGet and fontPath and type(fontPath) == "string" and fontPath ~= "" then
+                    -- Check if we already have this font path
+                    if not knownPaths[fontPath:upper()] then
+                        -- Add this newly discovered font
+                        table.insert(fonts, {
+                            name = fontObjectName, -- Use the object name as the display name
+                            path = fontPath
+                        })
+                        knownPaths[fontPath:upper()] = true
+                    end
+                end
+            end
+        end
+    end
+
+    -- Sort alphabetically by name
+    table.sort(fonts, function(a, b) return a.name < b.name end)
+
+    return fonts
+end
+
+-- Shared font list (built once on load)
+Helpers.fonts = BuildFontList()
 
 --- Helper: Update Visuals based on enabled state
 -- @param panel frame The panel frame
@@ -136,4 +203,67 @@ function Helpers.CreateColorPicker(parent, name, label, getFunc, setFunc, yOffse
     end)
 
     return button
+end
+
+--- Helper: Create Font Dropdown with visual font preview
+-- @param parent frame Parent frame
+-- @param name string Unique name for the dropdown
+-- @param labelText string Label text above dropdown
+-- @param currentFontPath string Currently selected font path
+-- @param onSelectFunc function Callback when font is selected, receives (fontPath, fontName)
+-- @param xOffset number X offset from TOPLEFT (default 20)
+-- @param yOffset number Y offset from TOPLEFT
+-- @return frame The dropdown frame
+function Helpers.CreateFontDropdown(parent, name, labelText, currentFontPath, onSelectFunc, xOffset, yOffset)
+    xOffset = xOffset or 20
+
+    -- Label
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", xOffset, yOffset)
+    label:SetText(labelText)
+
+    -- Dropdown
+    local dropdown = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -15, -10)
+
+    local function OnClick(self)
+        UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
+        if onSelectFunc then
+            onSelectFunc(self.value, self.fontName)
+        end
+    end
+
+    local function Initialize(self, level)
+        for i, fontData in ipairs(Helpers.fonts) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = fontData.name
+            info.value = fontData.path
+            info.fontName = fontData.name
+            info.func = OnClick
+
+            -- Set the font for this menu item to display in its own typeface
+            -- Use pcall to safely set the font in case it doesn't exist
+            local fontObj = CreateFont(name .. "Font" .. i)
+            local success = pcall(fontObj.SetFont, fontObj, fontData.path, 12, "")
+            if success then
+                info.fontObject = fontObj
+            end
+
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(dropdown, Initialize)
+
+    -- Set initial selected font
+    local selectedName = "Select Font"
+    for i, f in ipairs(Helpers.fonts) do
+        if f.path == currentFontPath then
+            selectedName = f.name
+            break
+        end
+    end
+    UIDropDownMenu_SetText(dropdown, selectedName)
+
+    return dropdown
 end

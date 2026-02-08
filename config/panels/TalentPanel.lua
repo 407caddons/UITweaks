@@ -118,45 +118,20 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Font Dropdown
-    local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    fontLabel:SetPoint("TOPLEFT", 380, -183)
-    fontLabel:SetText("Font:")
-
-    local fontDropdown = CreateFrame("Frame", "UIThingsTalentFontDropdown", panel, "UIDropDownMenuTemplate")
-    fontDropdown:SetPoint("LEFT", fontLabel, "RIGHT", -15, -3)
-
-    local fontOptions = {
-        { text = "Friz Quadrata (Default)", value = "Fonts\\FRIZQT__.TTF" },
-        { text = "Arial",                   value = "Fonts\\ARIALN.TTF" },
-        { text = "Skurri",                  value = "Fonts\\skurri.ttf" },
-        { text = "Morpheus",                value = "Fonts\\MORPHEUS.TTF" },
-        { text = "Friends",                 value = "Interface\\AddOns\\LunaUITweaks\\Fonts\\Friends.ttf" }
-    }
-
-    UIDropDownMenu_SetWidth(fontDropdown, 130)
-    UIDropDownMenu_Initialize(fontDropdown, function(self, level)
-        for _, option in ipairs(fontOptions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = option.text
-            info.value = option.value
-            info.func = function(btn)
-                UIThingsDB.talentReminders.alertFont = btn.value
-                UIDropDownMenu_SetText(fontDropdown, btn:GetText())
-                if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                    addonTable.TalentReminder.UpdateVisuals()
-                end
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsTalentFontDropdown",
+        "Font:",
+        UIThingsDB.talentReminders.alertFont,
+        function(fontPath, fontName)
+            UIThingsDB.talentReminders.alertFont = fontPath
+            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
+                addonTable.TalentReminder.UpdateVisuals()
             end
-            info.checked = (UIThingsDB.talentReminders.alertFont == option.value)
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
-    -- Set initial text
-    for _, option in ipairs(fontOptions) do
-        if UIThingsDB.talentReminders.alertFont == option.value then
-            UIDropDownMenu_SetText(fontDropdown, option.text)
-            break
-        end
-    end
+        end,
+        380,
+        -183
+    )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsTalentAlertFontSizeSlider", panel,

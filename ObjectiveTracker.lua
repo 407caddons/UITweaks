@@ -196,7 +196,7 @@ UpdateContent = function()
         end
     end
 
-    -- Count world quests
+    -- Count world quests and task quests
     local worldQuestCount = 0
     local mapID = C_Map.GetBestMapForUnit("player")
     if mapID then
@@ -205,13 +205,24 @@ UpdateContent = function()
         if tasks then
             for _, info in ipairs(tasks) do
                 local questID = info.questID
-                if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
-                    if onlyActive then
-                        if C_QuestLog.IsOnQuest(questID) then
+                if questID and C_TaskQuest.IsActive(questID) then
+                    local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
+                    local isTaskQuest = C_QuestLog.IsQuestTask(questID)
+
+                    if isWorldQuest or isTaskQuest then
+                        -- Task quests (bonus objectives/temporary quests) always show when active
+                        -- World quests respect the onlyActive filter
+                        if isTaskQuest and not isWorldQuest then
                             worldQuestCount = worldQuestCount + 1
+                        elseif isWorldQuest then
+                            if onlyActive then
+                                if C_QuestLog.IsOnQuest(questID) then
+                                    worldQuestCount = worldQuestCount + 1
+                                end
+                            else
+                                worldQuestCount = worldQuestCount + 1
+                            end
                         end
-                    else
-                        worldQuestCount = worldQuestCount + 1
                     end
                 end
             end
@@ -450,7 +461,14 @@ UpdateContent = function()
         local mapID = C_Map.GetBestMapForUnit("player")
         if not mapID then return end
 
+        -- Get both regular tasks and threat quests (temporary objectives)
         local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
+        local threatQuests = C_TaskQuest.GetThreatQuests()
+
+        -- Debug threat quests (disabled - too spammy)
+        -- if threatQuests and #threatQuests > 0 then
+        --     print(string.format("[LunaUITweaks] Found %d threat quests", #threatQuests))
+        -- end
         local activeWQs = {} -- Specifically the one(s) the player is doing now
         local otherWQs = {}  -- All other available ones
         local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
@@ -460,25 +478,54 @@ UpdateContent = function()
 
         local validWQs = {}
 
+        -- Debug disabled (too spammy)
+
         if tasks then
             for _, info in ipairs(tasks) do
                 local questID = info.questID
                 -- Check availability
-                if questID and C_TaskQuest.IsActive(questID) and (C_QuestLog.IsWorldQuest(questID) or C_QuestLog.IsQuestTask(questID)) then
-                    validWQs[questID] = true
+                if questID and C_TaskQuest.IsActive(questID) then
+                    local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
+                    local isTaskQuest = C_QuestLog.IsQuestTask(questID)
+                    local questTitle = C_QuestLog.GetTitleForQuestID(questID)
+                    local isOnQuest = C_QuestLog.IsOnQuest(questID)
 
-                    local isActive = C_QuestLog.IsOnQuest(questID)
+                    -- Debug: Log specific quest 86696
+                    if questID == 86696 then
+                        print(string.format(
+                            "[LunaUITweaks] Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | IsOn: %s | IsActive: %s",
+                            tostring(isWorldQuest),
+                            tostring(isTaskQuest),
+                            tostring(isOnQuest),
+                            tostring(C_TaskQuest.IsActive(questID))))
+                    end
 
-                    if onlyActive then
-                        if isActive then
-                            table.insert(activeWQs, questID)
-                        end
-                    else
-                        -- Show All
-                        if isActive then
-                            table.insert(activeWQs, questID)
-                        else
-                            table.insert(otherWQs, questID)
+                    if isWorldQuest or isTaskQuest then
+                        validWQs[questID] = true
+
+                        local isActive = C_QuestLog.IsOnQuest(questID)
+
+                        -- Task quests (bonus objectives/temporary quests) always show when active
+                        -- World quests respect the onlyActive filter
+                        if isTaskQuest and not isWorldQuest then
+                            -- Always show task quests when active
+                            if isActive then
+                                table.insert(activeWQs, questID)
+                            end
+                        elseif isWorldQuest then
+                            -- World quests respect the filter setting
+                            if onlyActive then
+                                if isActive then
+                                    table.insert(activeWQs, questID)
+                                end
+                            else
+                                -- Show All
+                                if isActive then
+                                    table.insert(activeWQs, questID)
+                                else
+                                    table.insert(otherWQs, questID)
+                                end
+                            end
                         end
                     end
                 end
@@ -515,21 +562,88 @@ UpdateContent = function()
     end
 
     local function RenderQuests()
+        -- First, find and render hidden task quests (temporary objectives like Devourer attacks)
+        -- These are isHidden=true, isTask=true, isOnMap=true quests that aren't in the watch list
+        local numQuestLogEntries = C_QuestLog.GetNumQuestLogEntries()
+        local hiddenTaskQuests = {}
+
+        for i = 1, numQuestLogEntries do
+            local info = C_QuestLog.GetInfo(i)
+            if info and not info.isHeader and info.isHidden and info.isTask and info.isOnMap and info.questID then
+                -- This is a temporary objective like Devourer Attack
+                if not displayedIDs[info.questID] then
+                    table.insert(hiddenTaskQuests, info.questID)
+                end
+            end
+        end
+
+        -- Render hidden task quests if any
+        if #hiddenTaskQuests > 0 then
+            AddLine("Temporary Objectives", true, "tempObjectives")
+
+            if not UIThingsDB.tracker.collapsed["tempObjectives"] then
+                for _, questID in ipairs(hiddenTaskQuests) do
+                    local title = C_QuestLog.GetTitleForQuestID(questID)
+                    if title then
+                        AddLine(title, false, questID, nil, false)
+                        displayedIDs[questID] = true
+
+                        local objectives = C_QuestLog.GetQuestObjectives(questID)
+                        if objectives then
+                            for _, obj in pairs(objectives) do
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
+                                end
+                            end
+                        end
+                        yOffset = yOffset - 5
+                    end
+                end
+                yOffset = yOffset - 10
+            else
+                yOffset = yOffset - 5
+            end
+        end
+
         local numQuests = C_QuestLog.GetNumQuestWatches()
+        -- Debug disabled (too spammy)
+        -- print(string.format("[LunaUITweaks] Watch list has %d quests", numQuests))
         if numQuests > 0 then
             -- Identify Super Tracked Quest
             local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
             local superTrackedIndex = nil
 
             -- Filter out ones already displayed (e.g. if a WQ was also watched)
+            -- BUT include task quests that weren't shown in world quests (like temporary objectives)
             local filteredIndices = {}
             for i = 1, numQuests do
                 local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-                if qID and not displayedIDs[qID] then
-                    if qID == superTrackedQuestID then
-                        superTrackedIndex = i
-                    else
-                        table.insert(filteredIndices, i)
+                if qID then
+                    -- Debug: Log ALL quests in watch list
+                    local isTaskQuest = C_QuestLog.IsQuestTask(qID)
+                    local isWorldQuest = C_QuestLog.IsWorldQuest(qID)
+                    local questTitle = C_QuestLog.GetTitleForQuestID(qID)
+
+                    -- Debug specific quest 86696
+                    if qID == 86696 then
+                        print(string.format(
+                            "[LunaUITweaks] Watch[%d]: Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | Displayed: %s",
+                            i,
+                            tostring(isWorldQuest),
+                            tostring(isTaskQuest),
+                            tostring(displayedIDs[qID] ~= nil)))
+                    end
+
+                    if not displayedIDs[qID] then
+                        -- Always include this quest, even if it's a task quest
+                        -- Task quests not on the map (like temporary objectives) need to show here
+                        if qID == superTrackedQuestID then
+                            superTrackedIndex = i
+                        else
+                            table.insert(filteredIndices, i)
+                        end
                     end
                 end
             end
@@ -583,6 +697,9 @@ UpdateContent = function()
 
         -- Try to get scenario info - returns a table with scenario data
         local scenarioInfo = C_ScenarioInfo.GetScenarioInfo()
+
+        -- Debug disabled (too spammy)
+
         if not scenarioInfo or not scenarioInfo.name or scenarioInfo.name == "" then return end
 
         AddLine("Scenario: " .. scenarioInfo.name, true, "scenario")
@@ -665,21 +782,42 @@ UpdateContent = function()
         end
     end
 
-    -- Order Logic (Scenarios always render first when active)
-    local orderMap = {
-        [1] = { RenderScenarios, RenderWorldQuests, RenderQuests, RenderAchievements },
-        [2] = { RenderScenarios, RenderWorldQuests, RenderAchievements, RenderQuests },
-        [3] = { RenderScenarios, RenderQuests, RenderWorldQuests, RenderAchievements },
-        [4] = { RenderScenarios, RenderQuests, RenderAchievements, RenderWorldQuests },
-        [5] = { RenderScenarios, RenderAchievements, RenderWorldQuests, RenderQuests },
-        [6] = { RenderScenarios, RenderAchievements, RenderQuests, RenderWorldQuests },
+    -- Render sections in user-defined order
+    local sectionRenderers = {
+        scenarios = RenderScenarios,
+        tempObjectives = function()
+            -- Temp objectives are rendered within RenderQuests, so this is a no-op
+            -- They're already handled above
+        end,
+        worldQuests = RenderWorldQuests,
+        quests = RenderQuests,
+        achievements = RenderAchievements,
     }
 
-    local selectedOrder = UIThingsDB.tracker.sectionOrder or 1
-    local pipeline = orderMap[selectedOrder] or orderMap[1]
+    -- Use new list-based order if available, otherwise fall back to old dropdown
+    local orderList = UIThingsDB.tracker.sectionOrderList
+    if not orderList then
+        -- Migrate from old system
+        local oldOrder = UIThingsDB.tracker.sectionOrder or 1
+        local oldOrderMap = {
+            [1] = { "scenarios", "worldQuests", "quests", "achievements" },
+            [2] = { "scenarios", "worldQuests", "achievements", "quests" },
+            [3] = { "scenarios", "quests", "worldQuests", "achievements" },
+            [4] = { "scenarios", "quests", "achievements", "worldQuests" },
+            [5] = { "scenarios", "achievements", "worldQuests", "quests" },
+            [6] = { "scenarios", "achievements", "quests", "worldQuests" },
+        }
+        orderList = oldOrderMap[oldOrder] or oldOrderMap[1]
+        -- Insert tempObjectives after scenarios
+        table.insert(orderList, 2, "tempObjectives")
+        UIThingsDB.tracker.sectionOrderList = orderList
+    end
 
-    for _, renderer in ipairs(pipeline) do
-        renderer()
+    for _, sectionKey in ipairs(orderList) do
+        local renderer = sectionRenderers[sectionKey]
+        if renderer then
+            renderer()
+        end
     end
 
     -- Resize Scroll Child
@@ -801,6 +939,9 @@ local function SetupCustomTracker()
     trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
     trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     trackerFrame:RegisterEvent("ZONE_CHANGED")
+    trackerFrame:RegisterEvent("TASK_PROGRESS_UPDATE") -- For bonus objectives/task quests
+    trackerFrame:RegisterEvent("QUEST_ACCEPTED")       -- When task quests are picked up
+    trackerFrame:RegisterEvent("QUEST_REMOVED")        -- When task quests are removed
 
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then

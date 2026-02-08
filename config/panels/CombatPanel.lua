@@ -111,36 +111,18 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Font Selector (Simple Dropdown)
-    local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    fontLabel:SetPoint("TOPLEFT", 20, -110)
-    fontLabel:SetText("Font:")
-
-    local fontDropdown = CreateFrame("Frame", "UIThingsFontDropdown", panel, "UIDropDownMenuTemplate")
-    fontDropdown:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -15, -10)
-
-    local function OnClick(self)
-        UIDropDownMenu_SetSelectedID(fontDropdown, self:GetID())
-        UIThingsDB.combat.font = self.value
-        UpdateCombat()
-    end
-
-    local function Initialize(self, level)
-        for k, v in pairs(fonts) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = v.name
-            info.value = v.path
-            info.func = OnClick
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_Initialize(fontDropdown, Initialize)
-    UIDropDownMenu_SetText(fontDropdown, "Select Font")
-    for i, f in ipairs(fonts) do
-        if f.path == UIThingsDB.combat.font then
-            UIDropDownMenu_SetText(fontDropdown, f.name)
-        end
-    end
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsFontDropdown",
+        "Font:",
+        UIThingsDB.combat.font,
+        function(fontPath, fontName)
+            UIThingsDB.combat.font = fontPath
+            UpdateCombat()
+        end,
+        20,
+        -110
+    )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsFontSizeSlider", panel, "OptionsSliderTemplate")
@@ -326,36 +308,18 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Reminder Font Selector
-    local reminderFontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    reminderFontLabel:SetPoint("TOPLEFT", 20, -468)
-    reminderFontLabel:SetText("Reminder Font:")
-
-    local reminderFontDropdown = CreateFrame("Frame", "UIThingsReminderFontDropdown", panel, "UIDropDownMenuTemplate")
-    reminderFontDropdown:SetPoint("TOPLEFT", reminderFontLabel, "BOTTOMLEFT", -15, -4)
-
-    local function ReminderFontOnClick(self)
-        UIDropDownMenu_SetSelectedID(reminderFontDropdown, self:GetID())
-        UIThingsDB.combat.reminders.font = self.value
-        UpdateReminders()
-    end
-
-    local function ReminderFontInitialize(self, level)
-        for k, v in pairs(fonts) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = v.name
-            info.value = v.path
-            info.func = ReminderFontOnClick
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_Initialize(reminderFontDropdown, ReminderFontInitialize)
-    UIDropDownMenu_SetText(reminderFontDropdown, "Select Font")
-    for i, f in ipairs(fonts) do
-        if f.path == UIThingsDB.combat.reminders.font then
-            UIDropDownMenu_SetText(reminderFontDropdown, f.name)
-        end
-    end
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsReminderFontDropdown",
+        "Reminder Font:",
+        UIThingsDB.combat.reminders.font,
+        function(fontPath, fontName)
+            UIThingsDB.combat.reminders.font = fontPath
+            UpdateReminders()
+        end,
+        20,
+        -468
+    )
 
     -- Reminder Font Size Slider
     local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", panel, "OptionsSliderTemplate")
@@ -449,7 +413,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     local currentHide = UIThingsDB.combat.reminders.hideInCombat
     if currentHide == nil then currentHide = true end
     combatHideCheck:SetChecked(currentHide)
-    
+
     combatHideCheck:SetScript("OnClick", function(self)
         UIThingsDB.combat.reminders.hideInCombat = not not self:GetChecked()
         UpdateReminders()
