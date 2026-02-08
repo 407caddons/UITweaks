@@ -205,6 +205,70 @@ function Helpers.CreateColorPicker(parent, name, label, getFunc, setFunc, yOffse
     return button
 end
 
+--- Helper: Create Color Swatch with Opacity support
+-- Creates a color picker button that works with color tables {r, g, b, a}
+-- @param parent frame Parent frame
+-- @param labelText string Label text
+-- @param colorTable table Color table with r, g, b, a fields
+-- @param onChangeFunc function Callback when color changes (optional)
+-- @param xOffset number X offset from TOPLEFT
+-- @param yOffset number Y offset from TOPLEFT
+-- @param hasOpacity boolean Whether to show opacity slider (default true)
+-- @return button, label The color swatch button and label
+function Helpers.CreateColorSwatch(parent, labelText, colorTable, onChangeFunc, xOffset, yOffset, hasOpacity)
+    if hasOpacity == nil then hasOpacity = true end
+
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", xOffset, yOffset)
+    label:SetText(labelText)
+
+    local swatch = CreateFrame("Button", nil, parent)
+    swatch:SetSize(20, 20)
+    swatch:SetPoint("LEFT", label, "RIGHT", 5, 0)
+
+    swatch.tex = swatch:CreateTexture(nil, "OVERLAY")
+    swatch.tex:SetAllPoints()
+    swatch.tex:SetColorTexture(colorTable.r, colorTable.g, colorTable.b, colorTable.a or 1)
+
+    Mixin(swatch, BackdropTemplateMixin)
+    swatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    swatch:SetBackdropBorderColor(1, 1, 1)
+
+    swatch:SetScript("OnClick", function(self)
+        local prevR, prevG, prevB, prevA = colorTable.r, colorTable.g, colorTable.b, colorTable.a or 1
+
+        local info = {}
+        info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
+        info.hasOpacity = hasOpacity
+
+        info.opacityFunc = function()
+            local r, g, b = ColorPickerFrame:GetColorRGB()
+            local a = hasOpacity and ColorPickerFrame:GetColorAlpha() or 1
+            colorTable.r, colorTable.g, colorTable.b, colorTable.a = r, g, b, a
+            swatch.tex:SetColorTexture(r, g, b, a)
+            if onChangeFunc then onChangeFunc() end
+        end
+
+        info.swatchFunc = function()
+            local r, g, b = ColorPickerFrame:GetColorRGB()
+            local a = hasOpacity and ColorPickerFrame:GetColorAlpha() or 1
+            colorTable.r, colorTable.g, colorTable.b, colorTable.a = r, g, b, a
+            swatch.tex:SetColorTexture(r, g, b, a)
+            if onChangeFunc then onChangeFunc() end
+        end
+
+        info.cancelFunc = function()
+            colorTable.r, colorTable.g, colorTable.b, colorTable.a = prevR, prevG, prevB, prevA
+            swatch.tex:SetColorTexture(prevR, prevG, prevB, prevA)
+            if onChangeFunc then onChangeFunc() end
+        end
+
+        ColorPickerFrame:SetupColorPickerAndShow(info)
+    end)
+
+    return swatch, label
+end
+
 --- Helper: Create Font Dropdown with visual font preview
 -- @param parent frame Parent frame
 -- @param name string Unique name for the dropdown

@@ -227,7 +227,7 @@ function Loot.UpdateSettings()
     if settings.anchor then
         anchorFrame:ClearAllPoints()
         anchorFrame:SetPoint(settings.anchor.point, UIParent, settings.anchor.point, settings.anchor.x, settings.anchor
-        .y)
+            .y)
     end
 
     -- Update existing toasts visually
@@ -312,24 +312,34 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                     local otherName = string.match(msg, "^([^%s]+) receive")
                     if otherName then
                         looterName = otherName
+                        -- Strip server name if present (e.g., "Player-ServerName" -> "Player")
+                        local shortName = string.match(looterName, "^([^%-]+)")
+                        if shortName then looterName = shortName end
+
                         -- Try to find class from raid/party roster
                         if IsInRaid() then
                             for i = 1, 40 do
                                 local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
-                                if name == looterName then
-                                    looterClass = classFileName
-                                    break
+                                if name then
+                                    local shortRaidName = string.match(name, "^([^%-]+)") or name
+                                    if shortRaidName == looterName then
+                                        looterClass = classFileName
+                                        break
+                                    end
                                 end
                             end
                         elseif IsInGroup() then
-                            if UnitName("party1") == looterName then
-                                _, looterClass = UnitClass("party1")
-                            elseif UnitName("party2") == looterName then
-                                _, looterClass = UnitClass("party2")
-                            elseif UnitName("party3") == looterName then
-                                _, looterClass = UnitClass("party3")
-                            elseif UnitName("party4") == looterName then
-                                _, looterClass = UnitClass("party4")
+                            -- Check party members using UnitName comparison
+                            for i = 1, 4 do
+                                local unitID = "party" .. i
+                                local partyName = UnitName(unitID)
+                                if partyName then
+                                    local shortPartyName = string.match(partyName, "^([^%-]+)") or partyName
+                                    if shortPartyName == looterName then
+                                        _, looterClass = UnitClass(unitID)
+                                        break
+                                    end
+                                end
                             end
                         end
                     end
