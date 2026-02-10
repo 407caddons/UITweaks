@@ -796,8 +796,8 @@ UpdateReminderFrame = function()
         return
     end
 
-    -- Guard: Only in Group check
-    if settings.onlyInGroup and not IsInGroup() then
+    -- Guard: Only in Group check (allow if unlocked for positioning)
+    if settings.onlyInGroup and not IsInGroup() and settings.locked then
         reminderFrame:Hide()
         UnregisterStateDriver(reminderFrame, "visibility")
         return
@@ -865,6 +865,12 @@ UpdateReminderFrame = function()
     HidePetIcons()
     HideClassBuffIcon()
 
+    if #missing == 0 and settings.locked then
+        reminderFrame:Hide()
+        UnregisterStateDriver(reminderFrame, "visibility")
+        return
+    end
+
     if #missing == 0 then
         -- Anchor Mode (unlocked with no missing items)
         reminderTitle:SetText("|cFF00FF00Consumable Tracker Anchor|r")
@@ -913,6 +919,7 @@ UpdateReminderFrame = function()
     end
 
     ApplyReminderFont()
+    ApplyReminderLock()
 
     reminderFrame:SetHeight(math.abs(currentY) + padding + 4)
 
@@ -924,14 +931,9 @@ UpdateReminderFrame = function()
         driverStr = "[combat] hide; " .. driverStr
     end
 
-    -- Override visibility if unlocked
-    if not settings.locked then
-        UnregisterStateDriver(reminderFrame, "visibility")
-        reminderFrame:Show()
-    else
         reminderFrame:Show()
         RegisterStateDriver(reminderFrame, "visibility", driverStr)
-    end
+    ApplyReminderLock()
 end
 
 local function InitReminders()
