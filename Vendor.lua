@@ -125,6 +125,7 @@ local function CheckDurability()
     end
     
     if lowest < threshold then
+        warningText:SetText(string.format("Repair your gear (%d%%)", math.floor(lowest)))
         warningFrame:Show()
     else
         warningFrame:Hide()
