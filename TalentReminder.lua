@@ -37,7 +37,9 @@ function TalentReminder.Initialize()
     frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     frame:SetScript("OnEvent", TalentReminder.OnEvent)
 
-    addonTable.Core.Log("TalentReminder", "Initialized")
+    if UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
+        addonTable.Core.Log("TalentReminder", "Initialized")
+    end
 
     -- Clean up legacy data
     TalentReminder.CleanupSavedVariables()

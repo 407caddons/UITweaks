@@ -247,13 +247,13 @@ function Loot.ToggleBlizzardToasts(enable)
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST")
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
         AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
-        AlertFrame:RegisterEvent("SHOW_RATING_BUST_TOAST")
+
     else
         -- Use pcall to safely unregister events that may not be registered
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST") end)
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end)
         pcall(function() AlertFrame:UnregisterEvent("SHOW_PVP_FACTION_LOOT_TOAST") end)
-        pcall(function() AlertFrame:UnregisterEvent("SHOW_RATING_BUST_TOAST") end)
+
     end
 end
 
