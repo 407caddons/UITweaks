@@ -120,16 +120,47 @@ local function ApplyAHFilter()
     end
 end
 
+-- == UI SCALING ==
+
+local function ApplyUIScale()
+    if not UIThingsDB.misc.uiScaleEnabled then return end
+
+    local scale = UIThingsDB.misc.uiScale or 0.711
+    -- Round to 3 decimal places to avoid precision issues with CVars
+    scale = tonumber(string.format("%.3f", scale))
+    
+    SetCVar("useUiScale", "1")
+    SetCVar("uiScale", tostring(scale))
+    
+    -- Force UIParent scale to bypass internal 0.64 floor in TWW
+    UIParent:SetScale(scale)
+end
+
+-- Expose ApplyUIScale
+function Misc.ApplyUIScale()
+    ApplyUIScale()
+end
+
 -- == EVENTS ==
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("AUCTION_HOUSE_SHOW")
-frame:RegisterEvent("CHAT_MSG_SYSTEM")
+-- Slash command for /rl
+SLASH_LUNAUIRELOAD1 = "/rl"
+SlashCmdList["LUNAUIRELOAD"] = function()
+    if UIThingsDB.misc.enabled and UIThingsDB.misc.allowRL then
+        ReloadUI()
+    else
+        -- If LunaUI isn't handling it, pass it to standard /reload or just do nothing
+        -- This ensures we don't block other addons if our feature is disabled
+        StaticPopup_Show("RELOAD_UI")
+    end
+end
 
-frame:SetScript("OnEvent", function(self, event, msg, ...)
+local function OnEvent(self, event, ...)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
 
-    if event == "AUCTION_HOUSE_SHOW" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        ApplyUIScale()
+    elseif event == "AUCTION_HOUSE_SHOW" then
         -- Apply once initially
         local SafeAfter = function(delay, func)
             if addonTable.Core and addonTable.Core.SafeAfter then
@@ -140,10 +171,91 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
         end
         SafeAfter(0.5, ApplyAHFilter)
     elseif event == "CHAT_MSG_SYSTEM" then
+        local msg = ...
         -- Parse for "Personal Work Order" or similar text
-        -- "You have received a new Personal Crafting Order." or similar
         if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
             ShowAlert()
         end
+    elseif event == "PARTY_INVITE_REQUEST" then
+        local name, guid = ...
+        local settings = UIThingsDB.misc
+
+        if settings.autoAcceptEveryone then
+            AcceptGroup()
+            StaticPopup_Hide("PARTY_INVITE")
+            return
+        end
+
+        local isFriend = false
+        if settings.autoAcceptFriends then
+            if guid and C_FriendList.IsFriend(guid) then
+                isFriend = true
+            else
+                -- Check BNet Friends
+                local numBNet = BNGetNumFriends()
+                for i = 1, numBNet do
+                    local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
+                    if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.playerGuid == guid then
+                        isFriend = true
+                        break
+                    end
+                end
+            end
+        end
+
+        local isGuildMember = false
+        if settings.autoAcceptGuild then
+            if guid and IsGuildMember(guid) then
+                isGuildMember = true
+            end
+        end
+
+        if isFriend or isGuildMember then
+            AcceptGroup()
+            StaticPopup_Hide("PARTY_INVITE")
+        end
+    elseif event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
+        local settings = UIThingsDB.misc
+        if not settings.autoInviteEnabled or not settings.autoInviteKeywords or settings.autoInviteKeywords == "" then return end
+
+        local msg, sender = ...
+        if event == "CHAT_MSG_BN_WHISPER" then
+            -- For BN whispers, sender is the presenceID, we need to get the character name/presence
+            -- However, C_PartyInfo.InviteUnit usually wants a name-realm or UnitTag.
+            -- BN whispers are tricky for auto-invites unless we resolve the character.
+            -- For now, let's focus on character whispers first as they are more common for group formation.
+            return 
+        end
+
+        -- Split keywords and check
+        local keywords = {}
+        for kw in string.gmatch(settings.autoInviteKeywords, "([^,]+)") do
+            table.insert(keywords, kw:trim():lower())
+        end
+
+        local lowerMsg = msg:trim():lower()
+        local match = false
+        for _, kw in ipairs(keywords) do
+            if lowerMsg == kw then
+                match = true
+                break
+            end
+        end
+
+        if match then
+            -- Can we invite? (Must be leader or not in group)
+            if not IsInGroup() or UnitIsGroupLeader("player") then
+                C_PartyInfo.InviteUnit(sender)
+            end
+        end
     end
-end)
+end
+
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+frame:RegisterEvent("CHAT_MSG_SYSTEM")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("PARTY_INVITE_REQUEST")
+frame:RegisterEvent("CHAT_MSG_WHISPER")
+frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
+frame:SetScript("OnEvent", OnEvent)

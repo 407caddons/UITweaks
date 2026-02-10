@@ -10,13 +10,23 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     local fonts = Helpers.fonts
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Miscellaneous")
+    -- Create scroll frame for the settings
+    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 10, -45)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(560, 700) -- Matches content height (last element at -650) plus padding
+    scrollFrame:SetScrollChild(scrollChild)
+
+    -- Update panel reference to scrollChild for all child elements
+    panel = scrollChild
+
+    Helpers.CreateSectionHeader(panel, "Miscellaneous", -10)
 
     -- Enable Checkbox
     local enableBtn = CreateFrame("CheckButton", "UIThingsMiscEnable", panel, "ChatConfigCheckButtonTemplate")
-    enableBtn:SetPoint("TOPLEFT", 20, -50)
+    enableBtn:SetPoint("TOPLEFT", 20, -40)
     _G[enableBtn:GetName() .. "Text"]:SetText("Enable Misc Module")
     enableBtn:SetChecked(UIThingsDB.misc.enabled)
     enableBtn:SetScript("OnClick", function(self)
@@ -27,7 +37,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- AH Filter Checkbox
     local ahBtn = CreateFrame("CheckButton", "UIThingsMiscAHFilter", panel, "ChatConfigCheckButtonTemplate")
-    ahBtn:SetPoint("TOPLEFT", 20, -100)
+    ahBtn:SetPoint("TOPLEFT", 20, -70)
     _G[ahBtn:GetName() .. "Text"]:SetText("Auction Current Expansion Only")
     ahBtn:SetChecked(UIThingsDB.misc.ahFilter)
     ahBtn:SetScript("OnClick", function(self)
@@ -35,14 +45,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     -- Personal Orders Header
-    local header = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 20, -150)
-    header:SetText("Personal Orders")
+    Helpers.CreateSectionHeader(panel, "Personal Orders", -110)
 
     -- Personal Orders Checkbox
     local ordersBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    ordersBtn:SetPoint("TOPLEFT", 20, -180)
+    ordersBtn:SetPoint("TOPLEFT", 20, -140)
     _G[ordersBtn:GetName() .. "Text"]:SetText("Enable Personal Order Detection")
     ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
     ordersBtn:SetScript("OnClick", function(self)
@@ -51,7 +59,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Alert Duration Slider
     local durSlider = CreateFrame("Slider", "UIThingsMiscAlertDur", panel, "OptionsSliderTemplate")
-    durSlider:SetPoint("TOPLEFT", 40, -220)
+    durSlider:SetPoint("TOPLEFT", 40, -180)
     durSlider:SetMinMaxValues(1, 10)
     durSlider:SetValueStep(1)
     durSlider:SetObeyStepOnDrag(true)
@@ -68,7 +76,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Alert Color Picker
     local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    colorLabel:SetPoint("TOPLEFT", 40, -260)
+    colorLabel:SetPoint("TOPLEFT", 40, -220)
     colorLabel:SetText("Alert Color:")
 
     local colorSwatch = CreateFrame("Button", nil, panel)
@@ -130,15 +138,10 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
 
-    -- TTS Section Header
-    local ttsHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    ttsHeader:SetPoint("TOPLEFT", 20, -310)
-    ttsHeader:SetText("Text-To-Speech")
-
     -- TTS Enable Checkbox
     local ttsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscTTSEnable", panel,
         "ChatConfigCheckButtonTemplate")
-    ttsEnableBtn:SetPoint("TOPLEFT", 20, -340)
+    ttsEnableBtn:SetPoint("TOPLEFT", 20, -260)
     _G[ttsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
     ttsEnableBtn:SetChecked(UIThingsDB.misc.ttsEnabled)
     ttsEnableBtn:SetScript("OnClick", function(self)
@@ -147,7 +150,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- TTS Message
     local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    ttsLabel:SetPoint("TOPLEFT", 40, -380)
+    ttsLabel:SetPoint("TOPLEFT", 40, -300)
     ttsLabel:SetText("TTS Message:")
 
     local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
@@ -176,7 +179,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- TTS Voice Dropdown
     local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    voiceLabel:SetPoint("TOPLEFT", 40, -420)
+    voiceLabel:SetPoint("TOPLEFT", 40, -340)
     voiceLabel:SetText("Voice Type:")
 
     local voiceDropdown = CreateFrame("Frame", "UIThingsMiscVoiceDropdown", panel, "UIDropDownMenuTemplate")
@@ -202,4 +205,153 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
     UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
+
+    -- General UI Section Header
+    Helpers.CreateSectionHeader(panel, "General UI", -390)
+
+    -- UI Scale Enable Checkbox
+    local uiScaleBtn = CreateFrame("CheckButton", "UIThingsMiscUIScaleEnable", panel,
+        "ChatConfigCheckButtonTemplate")
+    uiScaleBtn:SetPoint("TOPLEFT", 20, -420)
+    _G[uiScaleBtn:GetName() .. "Text"]:SetText("Enable UI Scaling")
+    uiScaleBtn:SetChecked(UIThingsDB.misc.uiScaleEnabled)
+    uiScaleBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.uiScaleEnabled = self:GetChecked()
+        if UIThingsDB.misc.uiScaleEnabled and addonTable.Misc and addonTable.Misc.ApplyUIScale then
+            addonTable.Misc.ApplyUIScale()
+        end
+    end)
+
+    -- UI Scale Slider
+    local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
+    local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
+    
+    scaleSlider:SetPoint("TOPLEFT", 40, -460)
+    scaleSlider:SetMinMaxValues(0.4, 1.25)
+    scaleSlider:SetValueStep(0.001)
+    scaleSlider:SetObeyStepOnDrag(true)
+    scaleSlider:SetWidth(200)
+    _G[scaleSlider:GetName() .. 'Text']:SetText("UI Scale: " .. string.format("%.3f", UIThingsDB.misc.uiScale))
+    _G[scaleSlider:GetName() .. 'Low']:SetText("0.4")
+    _G[scaleSlider:GetName() .. 'High']:SetText("1.25")
+    scaleSlider:SetValue(UIThingsDB.misc.uiScale)
+    
+    -- UI Scale EditBox
+    scaleEdit:SetSize(60, 20)
+    scaleEdit:SetPoint("LEFT", scaleSlider, "RIGHT", 15, 0)
+    scaleEdit:SetAutoFocus(false)
+    scaleEdit:SetText(string.format("%.3f", UIThingsDB.misc.uiScale))
+    
+    local function UpdateScaleUI(value, skipSlider)
+        value = tonumber(string.format("%.3f", value))
+        UIThingsDB.misc.uiScale = value
+        _G[scaleSlider:GetName() .. 'Text']:SetText("UI Scale: " .. string.format("%.3f", value))
+        scaleEdit:SetText(string.format("%.3f", value))
+        if not skipSlider then
+            scaleSlider:SetValue(value)
+        end
+        if UIThingsDB.misc.uiScaleEnabled and addonTable.Misc and addonTable.Misc.ApplyUIScale then
+            addonTable.Misc.ApplyUIScale()
+        end
+    end
+
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        -- Only update if the value actually changed (to prevent potential loops)
+        local rounded = tonumber(string.format("%.3f", value))
+        if UIThingsDB.misc.uiScale ~= rounded then
+            UpdateScaleUI(value, true)
+        end
+    end)
+
+    scaleEdit:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val then
+            val = math.min(1.25, math.max(0.4, val))
+            UpdateScaleUI(val)
+        else
+            self:SetText(string.format("%.3f", UIThingsDB.misc.uiScale))
+        end
+        self:ClearFocus()
+    end)
+
+    -- Resolution Presets
+    local btn1440 = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    btn1440:SetSize(60, 22)
+    btn1440:SetPoint("LEFT", scaleEdit, "RIGHT", 10, 0)
+    btn1440:SetText("1440p")
+    btn1440:SetScript("OnClick", function()
+        UpdateScaleUI(0.533)
+    end)
+
+    local btn1080 = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    btn1080:SetSize(60, 22)
+    btn1080:SetPoint("LEFT", btn1440, "RIGHT", 5, 0)
+    btn1080:SetText("1080p")
+    btn1080:SetScript("OnClick", function()
+        UpdateScaleUI(0.711)
+    end)
+
+    -- Invite Automation
+    local inviteHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    inviteHeader:SetPoint("TOPLEFT", 20, -510)
+    inviteHeader:SetText("Invite Automation:")
+
+    local friendsBtn = CreateFrame("CheckButton", "UIThingsMiscAutoFriends", panel, "ChatConfigCheckButtonTemplate")
+    friendsBtn:SetPoint("TOPLEFT", 20, -535)
+    _G[friendsBtn:GetName() .. "Text"]:SetText("Auto-Accept: Friends")
+    friendsBtn:SetChecked(UIThingsDB.misc.autoAcceptFriends)
+    friendsBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.autoAcceptFriends = self:GetChecked()
+    end)
+
+    local guildBtn = CreateFrame("CheckButton", "UIThingsMiscAutoGuild", panel, "ChatConfigCheckButtonTemplate")
+    guildBtn:SetPoint("TOPLEFT", 180, -535)
+    _G[guildBtn:GetName() .. "Text"]:SetText("Auto-Accept: Guild")
+    guildBtn:SetChecked(UIThingsDB.misc.autoAcceptGuild)
+    guildBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.autoAcceptGuild = self:GetChecked()
+    end)
+
+    local everyoneBtn = CreateFrame("CheckButton", "UIThingsMiscAutoEveryone", panel, "ChatConfigCheckButtonTemplate")
+    everyoneBtn:SetPoint("TOPLEFT", 340, -535)
+    _G[everyoneBtn:GetName() .. "Text"]:SetText("Auto-Accept: Everyone")
+    everyoneBtn:SetChecked(UIThingsDB.misc.autoAcceptEveryone)
+    everyoneBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.autoAcceptEveryone = self:GetChecked()
+    end)
+
+    -- Invite by Whisper
+    local whisperBtn = CreateFrame("CheckButton", "UIThingsMiscAutoInvite", panel, "ChatConfigCheckButtonTemplate")
+    whisperBtn:SetPoint("TOPLEFT", 20, -570)
+    _G[whisperBtn:GetName() .. "Text"]:SetText("Enable Invite by Whisper")
+    whisperBtn:SetChecked(UIThingsDB.misc.autoInviteEnabled)
+    whisperBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.autoInviteEnabled = self:GetChecked()
+    end)
+
+    local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    kwLabel:SetPoint("TOPLEFT", 40, -600)
+    kwLabel:SetText("Keywords (comma separated):")
+
+    local kwEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    kwEdit:SetSize(200, 20)
+    kwEdit:SetPoint("TOPLEFT", 40, -615)
+    kwEdit:SetText(UIThingsDB.misc.autoInviteKeywords or "inv,invite")
+    kwEdit:SetAutoFocus(false)
+    kwEdit:SetScript("OnEnterPressed", function(self)
+        UIThingsDB.misc.autoInviteKeywords = self:GetText()
+        self:ClearFocus()
+    end)
+    kwEdit:SetScript("OnEditFocusLost", function(self)
+        UIThingsDB.misc.autoInviteKeywords = self:GetText()
+    end)
+
+    -- Reload UI Checkbox
+    local rlBtn = CreateFrame("CheckButton", "UIThingsMiscAllowRL", panel, "ChatConfigCheckButtonTemplate")
+    rlBtn:SetPoint("TOPLEFT", 20, -650)
+    _G[rlBtn:GetName() .. "Text"]:SetText("Allow /rl to Reload UI")
+    rlBtn:SetChecked(UIThingsDB.misc.allowRL)
+    rlBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.allowRL = self:GetChecked()
+    end)
 end

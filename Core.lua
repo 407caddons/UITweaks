@@ -189,7 +189,15 @@ local function OnEvent(self, event, ...)
                 ttsMessage = "Personal order arrived",
                 ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
                 alertDuration = 5,
-                alertColor = { r = 1, g = 0, b = 0, a = 1 }
+                alertColor = { r = 1, g = 0, b = 0, a = 1 },
+                uiScaleEnabled = false,
+                uiScale = 0.711,
+                autoAcceptFriends = false,
+                autoAcceptGuild = false,
+                autoAcceptEveryone = false,
+                allowRL = true,
+                autoInviteEnabled = false,
+                autoInviteKeywords = "inv,invite",
             },
             talentReminders = {
                 enabled = false,

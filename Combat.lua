@@ -470,6 +470,10 @@ end
 
 local function TrackConsumableUsage(itemID)
     if not itemID then return end
+
+    -- Exclude toys
+    if C_ToyBox and C_ToyBox.GetToyInfo(itemID) then return end
+
     local itemName = GetItemInfo(itemID)
     if not itemName then
         C_Item.RequestLoadItemDataByID(itemID)
@@ -486,8 +490,17 @@ local function TrackConsumableUsage(itemID)
     local category = nil
     local lowerName = itemName:lower()
 
-    -- Ignore known non-stat foods
-    if lowerName:find("conjured mana bun") then return end
+    -- Ignore known non-stat items and engineering utilities
+    local ignoreList = {
+        "conjured mana bun",
+        "jeeves",
+        "auto-hammer",
+        "thermal anvil",
+        "moll-e"
+    }
+    for _, ignore in ipairs(ignoreList) do
+        if lowerName:find(ignore) then return end
+    end
 
     -- Categorize based on item info and name
     -- Class 0 is Consumable
@@ -839,20 +852,6 @@ UpdateReminderFrame = function()
         petMissing = true
     end
 
-    if #missing == 0 then
-        HidePetIcons()
-        HideClassBuffIcon()
-        for cat, btns in pairs(consumableIconFrames) do
-            for _, b in ipairs(btns) do b:Hide() end
-        end
-        for cat, btns in pairs(consumableIconFrames) do
-            for _, b in ipairs(btns) do b:Hide() end
-        end
-        UnregisterStateDriver(reminderFrame, "visibility")
-        reminderFrame:Hide()
-        return
-    end
-
     -- Stack missing items from top
     local fontSize = settings.fontSize or 12
     local lineHeight = fontSize + 8
@@ -866,39 +865,51 @@ UpdateReminderFrame = function()
     HidePetIcons()
     HideClassBuffIcon()
 
-    for i, data in ipairs(missing) do
-        local line = reminderLines[i]
-        if line then
-            currentY = currentY - lineHeight
-            line:ClearAllPoints()
-            line:SetPoint("TOPLEFT", 12, currentY)
-            line:SetText(data.type and data.text or data)
-            line:Show()
+    if #missing == 0 then
+        -- Anchor Mode (unlocked with no missing items)
+        reminderTitle:SetText("|cFF00FF00Consumable Tracker Anchor|r")
+        reminderTitleLine:Show()
+        for i = 1, 5 do
+            if reminderLines[i] then reminderLines[i]:Hide() end
+        end
+        currentY = -lineHeight - 12
+    else
+        reminderTitle:SetText("|cFFFFD100Missing Buffs|r")
+        reminderTitleLine:Show()
+        for i, data in ipairs(missing) do
+            local line = reminderLines[i]
+            if line then
+                currentY = currentY - lineHeight
+                line:ClearAllPoints()
+                line:SetPoint("TOPLEFT", 12, currentY)
+                line:SetText(data.type and data.text or data)
+                line:Show()
 
-            -- Show icons for this category if missing
-            if data.type == "classBuff" and classBuffMissing then
-                local added = ShowClassBuffIcon(currentY - lineHeight + 4)
-                if added > 0 then currentY = currentY - added end
-            elseif data.type == "flask" and flaskMissing then
-                local added = ShowConsumableIcons("flask", currentY - lineHeight + 4)
-                if added > 0 then currentY = currentY - added end
-            elseif data.type == "food" and foodMissing then
-                local added = ShowConsumableIcons("food", currentY - lineHeight + 4)
-                if added > 0 then currentY = currentY - added end
-            elseif data.type == "weapon" and weaponMissing then
-                -- Pass MH/OH status to icon display
-                local added = ShowConsumableIcons("weapon", currentY - lineHeight + 4, data.mh, data.oh)
-                if added > 0 then currentY = currentY - added end
-            elseif data.type == "pet" and petMissing then
-                local added = ShowPetIcons(currentY - lineHeight + 4)
-                if added > 0 then currentY = currentY - added end
+                -- Show icons for this category if missing
+                if data.type == "classBuff" and classBuffMissing then
+                    local added = ShowClassBuffIcon(currentY - lineHeight + 4)
+                    if added > 0 then currentY = currentY - added end
+                elseif data.type == "flask" and flaskMissing then
+                    local added = ShowConsumableIcons("flask", currentY - lineHeight + 4)
+                    if added > 0 then currentY = currentY - added end
+                elseif data.type == "food" and foodMissing then
+                    local added = ShowConsumableIcons("food", currentY - lineHeight + 4)
+                    if added > 0 then currentY = currentY - added end
+                elseif data.type == "weapon" and weaponMissing then
+                    -- Pass MH/OH status to icon display
+                    local added = ShowConsumableIcons("weapon", currentY - lineHeight + 4, data.mh, data.oh)
+                    if added > 0 then currentY = currentY - added end
+                elseif data.type == "pet" and petMissing then
+                    local added = ShowPetIcons(currentY - lineHeight + 4)
+                    if added > 0 then currentY = currentY - added end
+                end
             end
         end
-    end
 
-    -- Hide extra lines
-    for i = #missing + 1, 5 do
-        if reminderLines[i] then reminderLines[i]:Hide() end
+        -- Hide extra lines
+        for i = #missing + 1, 5 do
+            if reminderLines[i] then reminderLines[i]:Hide() end
+        end
     end
 
     ApplyReminderFont()
@@ -913,9 +924,14 @@ UpdateReminderFrame = function()
         driverStr = "[combat] hide; " .. driverStr
     end
 
-    reminderFrame:Show()
-    RegisterStateDriver(reminderFrame, "visibility", driverStr)
-    ApplyReminderLock()
+    -- Override visibility if unlocked
+    if not settings.locked then
+        UnregisterStateDriver(reminderFrame, "visibility")
+        reminderFrame:Show()
+    else
+        reminderFrame:Show()
+        RegisterStateDriver(reminderFrame, "visibility", driverStr)
+    end
 end
 
 local function InitReminders()
