@@ -516,22 +516,33 @@ local function TrackConsumableUsage(itemID)
 
     if category then
         local usage = UIThingsDB.combat.reminders.consumableUsage[category]
-        local exists = false
+        local foundIndex = nil
+
+        -- Check if item is already tracked
         for i, item in ipairs(usage) do
             if item.name == itemName then
-                -- Update existing entry to move to top (or just ensure ID is current)
-                table.remove(usage, i)
-                exists = false -- Set false to re-insert at top
+                foundIndex = i
                 break
             end
         end
 
-        if not exists then
-            table.insert(usage, { id = itemID, name = itemName, icon = itemIcon })
-            if #usage > 5 then
-                table.remove(usage, 1)
-            end
-            UpdateReminderFrame()
+        -- If found, remove it so we can re-add it at the end (most recent)
+        if foundIndex then
+            table.remove(usage, foundIndex)
+        end
+
+        -- Add to end of list
+        table.insert(usage, { id = itemID, name = itemName, icon = itemIcon })
+
+        -- Trim older items if list is too long
+        if #usage > 5 then
+            table.remove(usage, 1)
+        end
+        
+        UpdateReminderFrame()
+
+        -- Only announce if it's a new item
+        if not foundIndex then
             if addonTable.Core and addonTable.Core.Log then
                 addonTable.Core.Log("Combat", "Added consumable to tracker: " .. itemName, 1)
             end
