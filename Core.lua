@@ -159,10 +159,22 @@ local function OnEvent(self, event, ...)
                     food = true,
                     weaponBuff = true,
                     pet = true,
+                    classBuff = true,
                     font = "Fonts\\FRIZQT__.TTF",
                     fontSize = 12,
                     iconSize = 24,
                     pos = { point = "TOP", x = 0, y = -100 },
+                    onlyInGroup = true,
+                    consumableUsage = {
+                        flask = {},
+                        food = {},
+                        weapon = {}
+                    }
+                },
+                consumableUsage = {
+                    flask = {},
+                    food = {},
+                    weapon = {}
                 }
             },
             frames = {

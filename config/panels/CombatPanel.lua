@@ -307,6 +307,32 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
+    local reminderGroupCheck = CreateFrame("CheckButton", "UIThingsReminderGroupCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    reminderGroupCheck:SetPoint("TOPLEFT", 180, -438) -- Right of Lock
+    _G[reminderGroupCheck:GetName() .. "Text"]:SetText("Only in Group")
+    reminderGroupCheck:SetChecked(UIThingsDB.combat.reminders.onlyInGroup)
+    reminderGroupCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.onlyInGroup = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
+    -- Hide in Combat Check (Moved)
+    local combatHideCheck = CreateFrame("CheckButton", "UIThingsReminderHideCombatCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    combatHideCheck:SetPoint("LEFT", reminderGroupCheck, "RIGHT", 110, 0)
+    combatHideCheck:SetHitRectInsets(0, -100, 0, 0)
+    _G[combatHideCheck:GetName() .. "Text"]:SetText("Hide in Combat")
+    -- Default to true if nil
+    local currentHide = UIThingsDB.combat.reminders.hideInCombat
+    if currentHide == nil then currentHide = true end
+    combatHideCheck:SetChecked(currentHide)
+
+    combatHideCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.hideInCombat = not not self:GetChecked()
+        UpdateReminders()
+    end)
+
     -- Reminder Font Selector
     Helpers.CreateFontDropdown(
         panel,
@@ -403,19 +429,26 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    -- Hide in Combat Check
-    local combatHideCheck = CreateFrame("CheckButton", "UIThingsReminderHideCombatCheck", panel,
+    local classBuffCheck = CreateFrame("CheckButton", "UIThingsReminderClassBuffCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    combatHideCheck:SetPoint("LEFT", petCheck, "RIGHT", 70, 0)
-    combatHideCheck:SetHitRectInsets(0, -100, 0, 0)
-    _G[combatHideCheck:GetName() .. "Text"]:SetText("Hide in Combat")
-    -- Default to true if nil
-    local currentHide = UIThingsDB.combat.reminders.hideInCombat
-    if currentHide == nil then currentHide = true end
-    combatHideCheck:SetChecked(currentHide)
-
-    combatHideCheck:SetScript("OnClick", function(self)
-        UIThingsDB.combat.reminders.hideInCombat = not not self:GetChecked()
+    classBuffCheck:SetPoint("LEFT", petCheck, "RIGHT", 70, 0)
+    classBuffCheck:SetHitRectInsets(0, -100, 0, 0)
+    _G[classBuffCheck:GetName() .. "Text"]:SetText("Class Buff")
+    classBuffCheck:SetChecked(UIThingsDB.combat.reminders.classBuff)
+    classBuffCheck:SetScript("OnClick", function(self)
+        UIThingsDB.combat.reminders.classBuff = not not self:GetChecked()
         UpdateReminders()
+    end)
+
+    -- Clear Consumable Usage Button
+    local clearUsageBtn = CreateFrame("Button", "UIThingsClearUsageBtn", panel, "UIPanelButtonTemplate")
+    clearUsageBtn:SetSize(180, 24)
+    clearUsageBtn:SetPoint("TOPLEFT", 20, -625)
+    clearUsageBtn:SetText("Clear Consumable Usage")
+    clearUsageBtn:SetScript("OnClick", function()
+        if addonTable.Combat and addonTable.Combat.ClearConsumableUsage then
+            addonTable.Combat.ClearConsumableUsage()
+            addonTable.Core.Log("Combat", "Consumable usage history cleared", 1)
+        end
     end)
 end

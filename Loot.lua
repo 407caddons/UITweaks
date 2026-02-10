@@ -64,6 +64,7 @@ local function AcquireToast()
         toast.text:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 5, 0)
         toast.text:SetPoint("RIGHT", 0, 0)
         toast.text:SetJustifyH("LEFT")
+        toast.text:SetWordWrap(false)
 
         toast.winner = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         toast.winner:SetPoint("BOTTOMLEFT", toast.icon, "BOTTOMRIGHT", 5, 0)
