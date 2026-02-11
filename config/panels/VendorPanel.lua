@@ -60,9 +60,20 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
         UIThingsDB.vendor.sellGreys = val
     end)
 
+    -- Only Check OOC
+    local oocBtn = CreateFrame("CheckButton", "UIThingsVendorOOCCheck", panel, "ChatConfigCheckButtonTemplate")
+    oocBtn:SetPoint("TOPLEFT", 20, -160)
+    _G[oocBtn:GetName() .. "Text"]:SetText("Only Check Durability Out of Combat")
+    oocBtn.tooltip = "If enabled, durability checks will not run during combat."
+    oocBtn:SetChecked(UIThingsDB.vendor.onlyCheckDurabilityOOC)
+    oocBtn:SetScript("OnClick", function(self)
+        local val = not not self:GetChecked()
+        UIThingsDB.vendor.onlyCheckDurabilityOOC = val
+    end)
+
     -- Durability Threshold Slider
     local thresholdSlider = CreateFrame("Slider", "UIThingsThresholdSlider", panel, "OptionsSliderTemplate")
-    thresholdSlider:SetPoint("TOPLEFT", 20, -170)
+    thresholdSlider:SetPoint("TOPLEFT", 20, -200)
     thresholdSlider:SetMinMaxValues(0, 100)
     thresholdSlider:SetValueStep(1)
     thresholdSlider:SetObeyStepOnDrag(true)
@@ -82,7 +93,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     -- Lock Alert Checkbox
     local vendorLockBtn = CreateFrame("CheckButton", "UIThingsVendorLockCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    vendorLockBtn:SetPoint("TOPLEFT", 20, -210)
+    vendorLockBtn:SetPoint("TOPLEFT", 20, -240)
     _G[vendorLockBtn:GetName() .. "Text"]:SetText("Lock Repair Alert")
     vendorLockBtn:SetChecked(UIThingsDB.vendor.warningLocked)
     vendorLockBtn:SetScript("OnClick", function(self)
@@ -101,14 +112,15 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
             UIThingsDB.vendor.font = fontPath
             if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
         end,
+
         20,
-        -250
+        -280
     )
 
     -- Vendor Font Size Slider
     local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", panel,
         "OptionsSliderTemplate")
-    vendorFontSizeSlider:SetPoint("TOPLEFT", 20, -320)
+    vendorFontSizeSlider:SetPoint("TOPLEFT", 20, -350)
     vendorFontSizeSlider:SetMinMaxValues(10, 64)
     vendorFontSizeSlider:SetValueStep(1)
     vendorFontSizeSlider:SetObeyStepOnDrag(true)

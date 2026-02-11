@@ -103,7 +103,8 @@ local function CheckDurability()
         return 
     end
 
-    if InCombatLockdown() then return end -- Don't show/update in combat
+    -- Check combat restriction
+    if UIThingsDB.vendor.onlyCheckDurabilityOOC and InCombatLockdown() then return end
     if MerchantFrame:IsShown() then 
         warningFrame:Hide()
         return 
@@ -132,7 +133,20 @@ local function CheckDurability()
     end
 end
 
--- Use centralized SafeAfter from Core
+-- Debounce Timer
+local durabilityTimer = nil
+
+local function StartDurabilityCheck(delay)
+    if durabilityTimer then
+        durabilityTimer:Cancel()
+    end
+    durabilityTimer = C_Timer.NewTimer(delay, function()
+        durabilityTimer = nil
+        CheckDurability()
+    end)
+end
+
+-- Use centralized SafeAfter from Core (for non-debounced calls)
 local SafeAfter = function(delay, func)
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(delay, func)
@@ -174,7 +188,8 @@ function addonTable.Vendor.UpdateSettings()
         end
         
         -- ALWAYS re-check durability logic to ensure correct visibility
-        SafeAfter(0.5, CheckDurability)
+        -- ALWAYS re-check durability logic to ensure correct visibility
+        StartDurabilityCheck(0.5)
     else
         -- Unlocked -> Show frame + Backdrop
         warningFrame:EnableMouse(true)
@@ -194,7 +209,8 @@ frame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         addonTable.Vendor.UpdateSettings()
         -- Also check durability on login after a slight delay
-        SafeAfter(1, CheckDurability)
+        -- Also check durability on login after a slight delay
+        StartDurabilityCheck(1)
         return
     end
 
@@ -213,7 +229,7 @@ frame:SetScript("OnEvent", function(self, event)
         end)
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" or event == "MERCHANT_CLOSED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "PLAYER_UNGHOST" then
         -- Run check slightly delayed to ensure info is ready/state is consistent
-        SafeAfter(1, CheckDurability)
+        StartDurabilityCheck(1)
     elseif event == "PLAYER_REGEN_DISABLED" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
         warningFrame:Hide() -- Hide in combat

@@ -187,6 +187,27 @@ local function ApplyMinimapShape(shape)
         end
     end
 
+    -- Relocate Icons for Square Map
+    if shape == "SQUARE" then
+        if MinimapCluster and MinimapCluster.InstanceDifficulty then
+            MinimapCluster.InstanceDifficulty:ClearAllPoints()
+            MinimapCluster.InstanceDifficulty:SetPoint("TOPLEFT", Minimap, "TOPLEFT", -2, 2)
+            MinimapCluster.InstanceDifficulty:SetParent(Minimap)
+        end
+        if QueueStatusButton then
+            QueueStatusButton:ClearAllPoints()
+            QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
+            QueueStatusButton:SetParent(Minimap)
+        end
+    else
+        -- Restore defaults (approximate, relying on ReloadUI for full reset usually)
+        if MinimapCluster and MinimapCluster.InstanceDifficulty then
+            MinimapCluster.InstanceDifficulty:ClearAllPoints()
+            MinimapCluster.InstanceDifficulty:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, 0)
+        end
+        -- QueueStatusButton default is tricky, usually controlled by LFGFrame
+    end
+
     -- Expose shape for other addons that call GetMinimapShape()
     if shape == "SQUARE" then
         function GetMinimapShape() return "SQUARE" end
@@ -676,6 +697,21 @@ SlashCmdList["LUNAUIRELOAD"] = function()
     end
 end
 
+local keywordCache = {}
+
+function Misc.UpdateAutoInviteKeywords()
+    table.wipe(keywordCache)
+    local settings = UIThingsDB.misc
+    -- Safety check for settings availability
+    if not settings then return end
+    
+    if not settings.autoInviteEnabled or not settings.autoInviteKeywords or settings.autoInviteKeywords == "" then return end
+
+    for kw in string.gmatch(settings.autoInviteKeywords, "([^,]+)") do
+        table.insert(keywordCache, kw:trim():lower())
+    end
+end
+
 local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" then
         local addon = ...
@@ -693,6 +729,7 @@ local function OnEvent(self, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
         ApplyUIScale()
         SetupMinimap()
+        Misc.UpdateAutoInviteKeywords()
     elseif event == "AUCTION_HOUSE_SHOW" then
         -- Apply once initially
         local SafeAfter = function(delay, func)
@@ -704,6 +741,7 @@ local function OnEvent(self, event, ...)
         end
         SafeAfter(0.5, ApplyAHFilter)
     elseif event == "CHAT_MSG_SYSTEM" then
+        if not UIThingsDB.misc.personalOrders then return end
         local msg = ...
         -- Parse for "Personal Work Order" or similar text
         if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
@@ -749,7 +787,7 @@ local function OnEvent(self, event, ...)
         end
     elseif event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
         local settings = UIThingsDB.misc
-        if not settings.autoInviteEnabled or not settings.autoInviteKeywords or settings.autoInviteKeywords == "" then return end
+        if not settings.autoInviteEnabled or not keywordCache or #keywordCache == 0 then return end
 
         local msg, sender = ...
         if event == "CHAT_MSG_BN_WHISPER" then
@@ -760,15 +798,9 @@ local function OnEvent(self, event, ...)
             return 
         end
 
-        -- Split keywords and check
-        local keywords = {}
-        for kw in string.gmatch(settings.autoInviteKeywords, "([^,]+)") do
-            table.insert(keywords, kw:trim():lower())
-        end
-
         local lowerMsg = msg:trim():lower()
         local match = false
-        for _, kw in ipairs(keywords) do
+        for _, kw in ipairs(keywordCache) do
             if lowerMsg == kw then
                 match = true
                 break

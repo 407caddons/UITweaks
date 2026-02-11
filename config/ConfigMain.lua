@@ -41,6 +41,14 @@ function addonTable.Config.Initialize()
             if addonTable.Loot and addonTable.Loot.LockAnchor then
                 addonTable.Loot.LockAnchor()
             end
+
+            -- Auto-lock Widgets
+            if UIThingsDB.widgets then
+                UIThingsDB.widgets.locked = true
+                if addonTable.Widgets and addonTable.Widgets.UpdateVisuals then
+                    addonTable.Widgets.UpdateVisuals()
+                end
+            end
         end)
         configWindow:Hide()
 
@@ -74,6 +82,10 @@ function addonTable.Config.Initialize()
         talentPanel:SetAllPoints()
         talentPanel:Hide()
 
+        local widgetsPanel = CreateFrame("Frame", nil, configWindow)
+        widgetsPanel:SetAllPoints()
+        widgetsPanel:Hide()
+
         -- Store panels for access by setup functions
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -82,6 +94,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.loot = lootPanel
         addonTable.ConfigPanels.misc = miscPanel
         addonTable.ConfigPanels.talent = talentPanel
+        addonTable.ConfigPanels.widgets = widgetsPanel
 
         -- Tab Buttons
         local tab1 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
@@ -119,11 +132,16 @@ function addonTable.Config.Initialize()
         tab7:SetText("Talents")
         tab7:SetID(7)
 
+        local tab8 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
+        tab8:SetPoint("LEFT", tab7, "RIGHT", 5, 0)
+        tab8:SetText("Widgets")
+        tab8:SetID(8)
+
         -- Store tabs
-        configWindow.Tabs = { tab1, tab2, tab3, tab4, tab5, tab6, tab7 }
+        configWindow.Tabs = { tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 }
         addonTable.ConfigTabs = configWindow.Tabs
 
-        PanelTemplates_SetNumTabs(configWindow, 7)
+        PanelTemplates_SetNumTabs(configWindow, 8)
         PanelTemplates_SetTab(configWindow, 1)
 
         -- Tab click handler
@@ -136,6 +154,7 @@ function addonTable.Config.Initialize()
             lootPanel:Hide()
             miscPanel:Hide()
             talentPanel:Hide()
+            widgetsPanel:Hide()
 
             local id = self:GetID()
             if id == 1 then
@@ -156,6 +175,8 @@ function addonTable.Config.Initialize()
                 if addonTable.Config.RefreshTalentReminderList then
                     addonTable.Config.RefreshTalentReminderList()
                 end
+            elseif id == 8 then
+                widgetsPanel:Show()
             end
         end
 
@@ -166,6 +187,7 @@ function addonTable.Config.Initialize()
         tab5:SetScript("OnClick", TabOnClick)
         tab6:SetScript("OnClick", TabOnClick)
         tab7:SetScript("OnClick", TabOnClick)
+        tab8:SetScript("OnClick", TabOnClick)
 
         -- Now that the window and panels are created, call setup functions from panel files
         -- Panel files are loaded by the TOC file before ConfigMain
@@ -191,6 +213,9 @@ function addonTable.Config.Initialize()
             end
             if addonTable.ConfigSetup.Talent then
                 addonTable.ConfigSetup.Talent(talentPanel, tab7, configWindow)
+            end
+            if addonTable.ConfigSetup.Widgets then
+                addonTable.ConfigSetup.Widgets(widgetsPanel, tab8, configWindow)
             end
         end
     end

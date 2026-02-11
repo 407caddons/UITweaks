@@ -244,16 +244,64 @@ end
 
 function Loot.ToggleBlizzardToasts(enable)
     if enable then
+        if LootWonAlertSystem then LootWonAlertSystem:RegisterEvent("SHOW_LOOT_TOAST") end
+        if LootUpgradeAlertSystem then LootUpgradeAlertSystem:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE") end
+        
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST")
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
         AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
-
     else
+        -- Unregister from specific alert systems
+        if LootWonAlertSystem and LootWonAlertSystem.UnregisterEvent then LootWonAlertSystem:UnregisterEvent("SHOW_LOOT_TOAST") end
+        if LootUpgradeAlertSystem and LootUpgradeAlertSystem.UnregisterEvent then LootUpgradeAlertSystem:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end
+        
         -- Use pcall to safely unregister events that may not be registered
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST") end)
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end)
         pcall(function() AlertFrame:UnregisterEvent("SHOW_PVP_FACTION_LOOT_TOAST") end)
+    end
+end
 
+-- Roster Cache for optimized lookups
+local rosterCache = {}
+
+local function UpdateRosterCache()
+    table.wipe(rosterCache)
+    
+    -- Always cache player
+    local playerName = UnitName("player")
+    local _, playerClass = UnitClass("player")
+    if playerName and playerClass then
+        rosterCache[playerName] = playerClass
+    end
+
+    if IsInRaid() then
+        for i = 1, 40 do
+            local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
+            if name and classFileName then
+                -- Cache full name
+                rosterCache[name] = classFileName
+                -- Cache short name
+                local shortName = name:match("^([^%-]+)")
+                if shortName and shortName ~= name then
+                    rosterCache[shortName] = classFileName
+                end
+            end
+        end
+    elseif IsInGroup() then
+        for i = 1, 4 do
+            local unit = "party"..i
+            local name = UnitName(unit)
+            local _, classFileName = UnitClass(unit)
+            if name and classFileName then
+                rosterCache[name] = classFileName
+                -- UnitName usually returns what's expected, but just in case
+                local shortName = name:match("^([^%-]+)")
+                if shortName and shortName ~= name then
+                    rosterCache[shortName] = classFileName
+                end
+            end
+        end
     end
 end
 
@@ -262,10 +310,17 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("CHAT_MSG_LOOT")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("LOOT_READY")
+frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 frame:SetScript("OnEvent", function(self, event, msg, ...)
     if event == "PLAYER_LOGIN" then
         addonTable.Loot.UpdateSettings()
+        UpdateRosterCache()
+        return
+    end
+
+    if event == "GROUP_ROSTER_UPDATE" then
+        UpdateRosterCache()
         return
     end
 
@@ -307,7 +362,7 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                 -- Check for "You receive..."
                 if string.find(msg, "^You receive") then
                     looterName = UnitName("player")
-                    _, looterClass = UnitClass("player")
+                    looterClass = rosterCache[looterName]
                 else
                     -- Check for "X receives..."
                     local otherName = string.match(msg, "^([^%s]+) receive")
@@ -317,32 +372,8 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
                         local shortName = string.match(looterName, "^([^%-]+)")
                         if shortName then looterName = shortName end
 
-                        -- Try to find class from raid/party roster
-                        if IsInRaid() then
-                            for i = 1, 40 do
-                                local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
-                                if name then
-                                    local shortRaidName = string.match(name, "^([^%-]+)") or name
-                                    if shortRaidName == looterName then
-                                        looterClass = classFileName
-                                        break
-                                    end
-                                end
-                            end
-                        elseif IsInGroup() then
-                            -- Check party members using UnitName comparison
-                            for i = 1, 4 do
-                                local unitID = "party" .. i
-                                local partyName = UnitName(unitID)
-                                if partyName then
-                                    local shortPartyName = string.match(partyName, "^([^%-]+)") or partyName
-                                    if shortPartyName == looterName then
-                                        _, looterClass = UnitClass(unitID)
-                                        break
-                                    end
-                                end
-                            end
-                        end
+                        -- Optimized Lookup
+                        looterClass = rosterCache[looterName]
                     end
                 end
 

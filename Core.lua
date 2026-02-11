@@ -116,6 +116,7 @@ local function OnEvent(self, event, ...)
                 useGuildRepair = false,
                 sellGreys = true,
                 repairThreshold = 20,
+                onlyCheckDurabilityOOC = true,
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 24,
                 warningLocked = true,
@@ -241,6 +242,26 @@ local function OnEvent(self, event, ...)
                 alertFontSize = 12,
                 alertIconSize = 16,
                 alertPos = { point = "CENTER", x = 0, y = 0 }
+            },
+            widgets = {
+                enabled = false,
+                locked = true,
+                showWoWOnly = false,
+                showAddonMemory = true,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 12,
+                strata = "LOW",
+                fontColor = { r = 1, g = 1, b = 1, a = 1 },
+                time = { enabled = false, point = "CENTER", x = 0, y = 0 },
+                fps = { enabled = false, point = "CENTER", x = 0, y = -20 },
+                bags = { enabled = false, point = "CENTER", x = 0, y = -40 },
+                spec = { enabled = false, point = "CENTER", x = 0, y = -60 },
+                durability = { enabled = false, point = "CENTER", x = 0, y = -80 },
+                combat = { enabled = false, point = "CENTER", x = 0, y = -100 },
+                friends = { enabled = false, point = "CENTER", x = 0, y = -120 },
+                guild = { enabled = false, point = "CENTER", x = 0, y = -140 },
+                group = { enabled = false, point = "CENTER", x = 0, y = -160 },
+                teleports = { enabled = false, point = "CENTER", x = 0, y = -180 }
             }
         }
 
@@ -264,6 +285,10 @@ local function OnEvent(self, event, ...)
 
         if addonTable.TalentReminder and addonTable.TalentReminder.Initialize then
             addonTable.TalentReminder.Initialize()
+        end
+
+        if addonTable.Widgets and addonTable.Widgets.Initialize then
+            addonTable.Widgets.Initialize()
         end
 
         -- Slash Commands

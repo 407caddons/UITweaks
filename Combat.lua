@@ -182,6 +182,11 @@ local UpdateReminderFrame -- Forward declaration
 local hasFlaskCache, hasFoodCache = false, false
 local lastAuraScanTime = 0
 
+-- Case-insensitive patterns to avoid string.lower() allocations
+local PATTERN_FLASK = "[Ff][Ll][Aa][Ss][Kk]"
+local PATTERN_PHIAL = "[Pp][Hh][Ii][Aa][Ll]"
+local PATTERN_WELL_FED = "[Ww][Ee][Ll][Ll]%s-[Ff][Ee][Dd]"
+
 local function ScanConsumableBuffs()
     -- Cache results within the same frame to avoid redundant scans
     local now = GetTime()
@@ -194,15 +199,18 @@ local function ScanConsumableBuffs()
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
         if not auraData then break end
-        local lowerName = (auraData.name or ""):lower()
-        if not hasFlaskCache and (lowerName:find("flask") or lowerName:find("phial")) then
-            hasFlaskCache = true
+        
+        local name = auraData.name
+        if name then
+            if not hasFlaskCache and (string.find(name, PATTERN_FLASK) or string.find(name, PATTERN_PHIAL)) then
+                hasFlaskCache = true
+            end
+            if not hasFoodCache and string.find(name, PATTERN_WELL_FED) then
+                -- Exclude "Food" (regen) and "Drink" (mana) but allow "Well Fed"
+                hasFoodCache = true
+            end
+            if hasFlaskCache and hasFoodCache then break end
         end
-        if not hasFoodCache and lowerName:find("well fed") then
-            -- Exclude "Food" (regen) and "Drink" (mana) but allow "Well Fed"
-            hasFoodCache = true
-        end
-        if hasFlaskCache and hasFoodCache then break end
     end
 end
 

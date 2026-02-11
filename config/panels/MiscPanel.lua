@@ -331,6 +331,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     whisperBtn:SetChecked(UIThingsDB.misc.autoInviteEnabled)
     whisperBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.autoInviteEnabled = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.UpdateAutoInviteKeywords then addonTable.Misc.UpdateAutoInviteKeywords() end
     end)
 
     local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -344,10 +345,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     kwEdit:SetAutoFocus(false)
     kwEdit:SetScript("OnEnterPressed", function(self)
         UIThingsDB.misc.autoInviteKeywords = self:GetText()
+        if addonTable.Misc and addonTable.Misc.UpdateAutoInviteKeywords then addonTable.Misc.UpdateAutoInviteKeywords() end
         self:ClearFocus()
     end)
     kwEdit:SetScript("OnEditFocusLost", function(self)
         UIThingsDB.misc.autoInviteKeywords = self:GetText()
+        if addonTable.Misc and addonTable.Misc.UpdateAutoInviteKeywords then addonTable.Misc.UpdateAutoInviteKeywords() end
     end)
 
     -- Reload UI Checkbox

@@ -27,8 +27,6 @@ function TalentReminder.Initialize()
 
     local frame = CreateFrame("Frame")
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    frame:RegisterEvent("ENCOUNTER_START")
-    frame:RegisterEvent("ENCOUNTER_END")
     frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
     frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
@@ -74,11 +72,6 @@ function TalentReminder.OnEvent(self, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
         local isInitialLogin, isReloadingUi = ...
         TalentReminder.OnEnteringWorld()
-    elseif event == "ENCOUNTER_START" then
-        local encounterID, encounterName, difficultyID, groupSize = ...
-        TalentReminder.OnEncounterStart(encounterID, encounterName, difficultyID)
-    elseif event == "ENCOUNTER_END" then
-        -- Optional: future functionality
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
         -- Re-check talents if in instance with reminders
         addonTable.Core.SafeAfter(0.5, function()
@@ -158,52 +151,11 @@ function TalentReminder.OnEnteringWorld()
 end
 
 -- On boss encounter start
-function TalentReminder.OnEncounterStart(encounterID, encounterName, difficultyID)
-    if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.enabled then
-        return
-    end
-
-    -- Check if we should alert for this difficulty
-    if not TalentReminder.ShouldAlertForDifficulty(difficultyID) then
-        return
-    end
-
-    -- Get current zone for zone-based detection
-    local currentZone = TalentReminder.GetCurrentZone()
-    local zoneKey = currentZone or "general"
-
-    -- Debug logging
-    addonTable.Core.Log("TalentReminder",
-        string.format("OnEncounterStart: encounterID=%s, encounterName='%s', currentZone='%s', zoneKey='%s'",
-            tostring(encounterID), encounterName or "nil", currentZone or "nil", zoneKey), 0)
-
-    -- Get reminder for this zone/instance (prioritize zone-based detection)
-    local reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, zoneKey)
-    if (not reminder or reminder.disabled) and zoneKey ~= "general" then
-        addonTable.Core.Log("TalentReminder",
-            string.format("No zone-specific reminder for '%s', trying general", zoneKey), 0)
-        -- Try general instance reminder if zone-specific not found
-        reminder = TalentReminder.GetReminderForEncounter(currentInstanceID, difficultyID, "general")
-        zoneKey = "general"
-    end
-
-    if reminder and not reminder.disabled then
-        addonTable.Core.Log("TalentReminder", string.format("Found reminder '%s' for zone '%s'", reminder.name, zoneKey),
-            0)
-        local mismatches = TalentReminder.CompareTalents(reminder.talents)
-        if #mismatches > 0 then
-            addonTable.Core.Log("TalentReminder", string.format("Showing alert: %d talent mismatches", #mismatches), 0)
-            TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
-        else
-            addonTable.Core.Log("TalentReminder", "Talents match - no alert needed", 0)
-        end
-    else
-        addonTable.Core.Log("TalentReminder", string.format("No reminder found for zone '%s'", zoneKey), 0)
-    end
-end
+-- On boss encounter start - REMOVED (Combat restriction)
 
 -- Check talents in instance (for talent changes)
 function TalentReminder.CheckTalentsInInstance()
+    if InCombatLockdown() then return end
     if not currentInstanceID or currentInstanceID == 0 then
         return
     end
@@ -668,6 +620,7 @@ end
 
 -- Called when boss frames are updated
 function TalentReminder.OnBossFrameUpdated()
+    if InCombatLockdown() then return end
     local bossID, bossName = TalentReminder.DetectCurrentBoss()
 
     if bossID and bossName then

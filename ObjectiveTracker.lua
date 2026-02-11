@@ -36,6 +36,9 @@ end
 
 
 local function OnQuestClick(self, button)
+    -- Disable left-click in combat
+    if InCombatLockdown() and button == "LeftButton" then return end
+    
     -- Shift-Click to Untrack (if enabled)
     if IsShiftKeyDown() and self.questID and UIThingsDB.tracker.shiftClickUntrack then
         C_QuestLog.RemoveQuestWatch(self.questID)
@@ -67,7 +70,10 @@ local function OnQuestClick(self, button)
     end
 end
 
-local function OnAchieveClick(self)
+local function OnAchieveClick(self, button)
+    -- Disable left-click in combat
+    if InCombatLockdown() and button == "LeftButton" then return end
+
     -- Shift-Click to Untrack (if enabled)
     if IsShiftKeyDown() and self.achieID and UIThingsDB.tracker.shiftClickUntrack then
         if C_ContentTracking and C_ContentTracking.StopTracking then
@@ -301,7 +307,8 @@ UpdateContent = function()
                 local isCollapsed = UIThingsDB.tracker.collapsed[section]
 
                 btn.ToggleBtn:Show()
-                btn.ToggleBtn:SetScript("OnClick", function()
+                btn.ToggleBtn:SetScript("OnClick", function(self, button)
+                    if InCombatLockdown() and button == "LeftButton" then return end
                     UIThingsDB.tracker.collapsed[section] = not isCollapsed
                     UpdateContent()
                 end)
