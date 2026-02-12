@@ -328,6 +328,30 @@ function Kick.UpdatePartyLayout()
     end
 end
 
+-- == UPDATE LOOP ==
+
+local updateFrame = CreateFrame("Frame")
+local elapsed = 0
+
+local function OnUpdateHandler(self, delta)
+    elapsed = elapsed + delta
+    if elapsed >= 0.1 then
+        elapsed = 0
+        for guid, _ in pairs(partyFrames) do
+            Kick.UpdatePartyFrame(guid)
+        end
+    end
+end
+
+local function StartUpdateLoop()
+    elapsed = 0
+    updateFrame:SetScript("OnUpdate", OnUpdateHandler)
+end
+
+local function StopUpdateLoop()
+    updateFrame:SetScript("OnUpdate", nil)
+end
+
 function Kick.RebuildPartyFrames()
     -- Clear existing frames
     for guid, frame in pairs(partyFrames) do
@@ -338,6 +362,7 @@ function Kick.RebuildPartyFrames()
     wipe(interruptCooldowns)
 
     if not UIThingsDB.kick.enabled then
+        StopUpdateLoop()
         if partyContainer then
             partyContainer:Hide()
         end
@@ -364,6 +389,13 @@ function Kick.RebuildPartyFrames()
     end
 
     Kick.UpdatePartyLayout()
+
+    -- Only run the update loop when there are frames to update
+    if next(partyFrames) then
+        StartUpdateLoop()
+    else
+        StopUpdateLoop()
+    end
 end
 
 function Kick.UpdateSettings()
@@ -385,24 +417,6 @@ function Kick.UpdateSettings()
 
     Kick.RebuildPartyFrames()
 end
-
--- == UPDATE LOOP ==
-
-local updateFrame = CreateFrame("Frame")
-local elapsed = 0
-
-updateFrame:SetScript("OnUpdate", function(self, delta)
-    if not UIThingsDB.kick.enabled then return end
-
-    elapsed = elapsed + delta
-    if elapsed >= 0.1 then -- Update 10 times per second
-        elapsed = 0
-
-        for guid, _ in pairs(partyFrames) do
-            Kick.UpdatePartyFrame(guid)
-        end
-    end
-end)
 
 -- == EVENT HANDLING ==
 

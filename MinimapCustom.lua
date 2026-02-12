@@ -881,6 +881,11 @@ local function LayoutDrawerButtons()
 
     UpdateToggleButton()
     if drawerToggleBtn then drawerToggleBtn:Show() end
+
+    -- Re-apply borders after resize (size changed, borders need to match)
+    if not drawerCollapsed then
+        ApplyDrawerLockVisuals()
+    end
 end
 
 local function CollectMinimapButtons()

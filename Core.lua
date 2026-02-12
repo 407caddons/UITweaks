@@ -266,7 +266,7 @@ local function OnEvent(self, event, ...)
                 fontColor = { r = 1, g = 1, b = 1, a = 1 },
                 time = { enabled = false, point = "CENTER", x = 0, y = 0 },
                 fps = { enabled = false, point = "CENTER", x = 0, y = -20 },
-                bags = { enabled = false, point = "CENTER", x = 0, y = -40 },
+                bags = { enabled = false, point = "CENTER", x = 0, y = -40, goldData = {} },
                 spec = { enabled = false, point = "CENTER", x = 0, y = -60 },
                 durability = { enabled = false, point = "CENTER", x = 0, y = -80 },
                 combat = { enabled = false, point = "CENTER", x = 0, y = -100 },
@@ -281,6 +281,20 @@ local function OnEvent(self, event, ...)
                 enabled = false,
                 locked = true,
                 pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 }
+            },
+            chatSkin = {
+                enabled = false,
+                borderColor = { r = 0, g = 0, b = 0, a = 1 },
+                borderSize = 2,
+                bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.7 },
+                activeTabColor = { r = 0, g = 0.8, b = 0.4, a = 1 },
+                inactiveTabColor = { r = 0.3, g = 0.3, b = 0.3, a = 0.8 },
+                tabBgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
+                hideButtons = true,
+                locked = true,
+                chatWidth = 430,
+                chatHeight = 200,
+                pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
             }
         }
 
@@ -308,6 +322,10 @@ local function OnEvent(self, event, ...)
 
         if addonTable.Widgets and addonTable.Widgets.Initialize then
             addonTable.Widgets.Initialize()
+        end
+
+        if addonTable.ChatSkin and addonTable.ChatSkin.Initialize then
+            addonTable.ChatSkin.Initialize()
         end
 
         -- Slash Commands

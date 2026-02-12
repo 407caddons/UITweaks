@@ -42,7 +42,7 @@ local function OnQuestClick(self, button)
     -- Right-Click to Super Track (if enabled) - Toggle behavior
     if button == "RightButton" and self.questID and UIThingsDB.tracker.rightClickSuperTrack then
         if C_SuperTrack.GetSuperTrackedQuestID() == self.questID then
-            C_SuperTrack.SetSuperTrackedQuestID(0) -- Clear super tracking
+            C_SuperTrack.ClearAllSuperTracked() -- Clear super tracking
         else
             C_SuperTrack.SetSuperTrackedQuestID(self.questID)
         end
@@ -382,15 +382,6 @@ local function RenderWorldQuests()
                 local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
                 local isTaskQuest = C_QuestLog.IsQuestTask(questID)
 
-                if questID == 86696 then
-                    print(string.format(
-                        "[LunaUITweaks] Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | IsOn: %s | IsActive: %s",
-                        tostring(isWorldQuest),
-                        tostring(isTaskQuest),
-                        tostring(C_QuestLog.IsOnQuest(questID)),
-                        tostring(C_TaskQuest.IsActive(questID))))
-                end
-
                 if isWorldQuest or isTaskQuest then
                     validWQs[questID] = true
 
@@ -499,15 +490,6 @@ local function RenderQuests()
             if qID then
                 local isTaskQuest = C_QuestLog.IsQuestTask(qID)
                 local isWorldQuest = C_QuestLog.IsWorldQuest(qID)
-
-                if qID == 86696 then
-                    print(string.format(
-                        "[LunaUITweaks] Watch[%d]: Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | Displayed: %s",
-                        i,
-                        tostring(isWorldQuest),
-                        tostring(isTaskQuest),
-                        tostring(displayedIDs[qID] ~= nil)))
-                end
 
                 if not displayedIDs[qID] then
                     if qID == superTrackedQuestID then

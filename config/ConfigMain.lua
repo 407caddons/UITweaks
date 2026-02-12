@@ -78,16 +78,17 @@ function addonTable.Config.Initialize()
 
         -- List of Modules
         local modules = {
-            { id = 1,  name = "Tracker",      key = "tracker", icon = "Interface\\Icons\\Inv_Misc_Book_09" },
-            { id = 2,  name = "Vendor",       key = "vendor",  icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
-            { id = 3,  name = "Combat",       key = "combat",  icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
-            { id = 4,  name = "Frames",       key = "frames",  icon = "Interface\\Icons\\Inv_Box_01" },
-            { id = 5,  name = "Loot",         key = "loot",    icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 6,  name = "Misc",         key = "misc",    icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 7,  name = "Minimap",      key = "minimap", icon = "Interface\\Icons\\Inv_Misc_Map02" },
-            { id = 8,  name = "Talents",      key = "talent",  icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 9,  name = "Widgets",      key = "widgets", icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 10, name = "Experimental", key = "kick",    icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 1,  name = "Tracker",      key = "tracker",  icon = "Interface\\Icons\\Inv_Misc_Book_09" },
+            { id = 2,  name = "Vendor",       key = "vendor",   icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 3,  name = "Combat",       key = "combat",   icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
+            { id = 4,  name = "Frames",       key = "frames",   icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 5,  name = "Loot",         key = "loot",     icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 6,  name = "Misc",         key = "misc",     icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 7,  name = "Minimap",      key = "minimap",  icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 8,  name = "Talents",      key = "talent",   icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 9,  name = "Widgets",      key = "widgets",  icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 10, name = "Chat",         key = "chatSkin", icon = "Interface\\Icons\\INV_Misc_Note_06" },
+            { id = 11, name = "Experimental", key = "kick",     icon = "Interface\\Icons\\Ability_Kick" },
         }
 
         local navButtons = {}
@@ -140,6 +141,10 @@ function addonTable.Config.Initialize()
         kickPanel:SetAllPoints()
         kickPanel:Hide()
 
+        local chatSkinPanel = CreateFrame("Frame", nil, contentContainer)
+        chatSkinPanel:SetAllPoints()
+        chatSkinPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -151,6 +156,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.talent = talentPanel
         addonTable.ConfigPanels.widgets = widgetsPanel
         addonTable.ConfigPanels.kick = kickPanel
+        addonTable.ConfigPanels.chatSkin = chatSkinPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -163,7 +169,8 @@ function addonTable.Config.Initialize()
             [7] = minimapPanel,
             [8] = talentPanel,
             [9] = widgetsPanel,
-            [10] = kickPanel,
+            [10] = chatSkinPanel,
+            [11] = kickPanel,
         }
 
         ----------------------------------------------------
@@ -274,8 +281,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Widgets then
                 addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[9], configWindow)
             end
+            if addonTable.ConfigSetup.ChatSkin then
+                addonTable.ConfigSetup.ChatSkin(chatSkinPanel, navButtons[10], configWindow)
+            end
             if addonTable.ConfigSetup.Kick then
-                addonTable.ConfigSetup.Kick(kickPanel, navButtons[10], configWindow)
+                addonTable.ConfigSetup.Kick(kickPanel, navButtons[11], configWindow)
             end
         end
     end

@@ -1,11 +1,45 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 
+local function GetCharacterKey()
+    local name = UnitName("player")
+    local realm = GetRealmName()
+    return name .. " - " .. realm
+end
 
+local function SaveCurrentGold()
+    local key = GetCharacterKey()
+    local gold = GetMoney()
+    if not UIThingsDB.widgets.bags.goldData then
+        UIThingsDB.widgets.bags.goldData = {}
+    end
+    UIThingsDB.widgets.bags.goldData[key] = gold
+end
 
 table.insert(Widgets.moduleInits, function()
     local bagFrame = Widgets.CreateWidgetFrame("Bags", "bags")
-    bagFrame:SetScript("OnClick", function() ToggleAllBags() end)
+    bagFrame:RegisterForClicks("AnyUp")
+
+    -- Save gold on load and when it changes
+    local goldTracker = CreateFrame("Frame")
+    goldTracker:RegisterEvent("PLAYER_MONEY")
+    goldTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
+    goldTracker:SetScript("OnEvent", function()
+        if UIThingsDB.widgets.bags.enabled then
+            SaveCurrentGold()
+        end
+    end)
+
+    bagFrame:SetScript("OnClick", function(self, button)
+        if button == "RightButton" and IsShiftKeyDown() then
+            UIThingsDB.widgets.bags.goldData = {}
+            SaveCurrentGold()
+            addonTable.Core.Log("Bags", "All character gold data cleared", addonTable.Core.LogLevel.INFO)
+            GameTooltip:Hide()
+            return
+        end
+        ToggleAllBags()
+    end)
 
     bagFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.bags.enabled then return end
@@ -13,10 +47,47 @@ table.insert(Widgets.moduleInits, function()
         Widgets.SmartAnchorTooltip(self)
         GameTooltip:SetText("Bags & Currency", 1, 1, 1)
 
-        -- Show gold
-        local gold = GetMoney()
-        local goldText = GetCoinTextureString(gold)
+        -- Show current toon gold
+        local currentGold = GetMoney()
+        local goldText = GetCoinTextureString(currentGold)
+        local currentKey = GetCharacterKey()
         GameTooltip:AddLine("Gold: " .. goldText, 1, 1, 1)
+
+        -- Show other toons' gold (sorted descending)
+        local goldData = UIThingsDB.widgets.bags.goldData or {}
+        local otherToons = {}
+        for name, gold in pairs(goldData) do
+            if name ~= currentKey then
+                table.insert(otherToons, { name = name, gold = gold })
+            end
+        end
+        table.sort(otherToons, function(a, b) return a.gold > b.gold end)
+
+        if #otherToons > 0 then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Other Characters:", 1, 0.82, 0)
+            for _, toon in ipairs(otherToons) do
+                GameTooltip:AddDoubleLine(toon.name, GetCoinTextureString(toon.gold), 1, 1, 1, 1, 1, 1)
+            end
+        end
+
+        -- Warband bank
+        local warbandGold = 0
+        if C_Bank and C_Bank.FetchDepositedMoney then
+            warbandGold = C_Bank.FetchDepositedMoney(Enum.BankType.Account) or 0
+        end
+
+        -- Total
+        local total = currentGold + warbandGold
+        for _, toon in ipairs(otherToons) do
+            total = total + toon.gold
+        end
+
+        GameTooltip:AddLine(" ")
+        if warbandGold > 0 then
+            GameTooltip:AddDoubleLine("Warband Bank:", GetCoinTextureString(warbandGold), 0.4, 0.78, 1, 1, 1, 1)
+        end
+        GameTooltip:AddDoubleLine("Total:", GetCoinTextureString(total), 0, 1, 0, 1, 1, 1)
 
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Currencies:", 1, 0.82, 0)
@@ -42,6 +113,7 @@ table.insert(Widgets.moduleInits, function()
 
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Click to open bags", 0.5, 0.5, 1)
+        GameTooltip:AddLine("Shift-Right-Click to clear data", 0.5, 0.5, 0.5)
         GameTooltip:Show()
     end)
 

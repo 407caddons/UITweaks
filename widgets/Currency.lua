@@ -49,6 +49,44 @@ table.insert(Widgets.moduleInits, function()
     scrollChild:SetSize(260, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
+    -- Frame pool for currency rows to avoid leaking frames
+    local rowPool = {}
+    local activeRows = {}
+
+    local function AcquireRow()
+        local row = table.remove(rowPool)
+        if not row then
+            row = CreateFrame("Frame", nil, scrollChild)
+            row:SetSize(260, 40)
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(32, 32)
+            row.icon:SetPoint("LEFT", 5, 0)
+            row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            row.nameText:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 5, -2)
+            row.nameText:SetJustifyH("LEFT")
+            row.nameText:SetWidth(200)
+            row.qtyText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            row.qtyText:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 5, 2)
+            row.qtyText:SetJustifyH("LEFT")
+            row.weeklyText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            row.weeklyText:SetPoint("TOPRIGHT", -5, -2)
+            row.weeklyText:SetTextColor(0.7, 0.7, 1)
+        end
+        row:Show()
+        table.insert(activeRows, row)
+        return row
+    end
+
+    local function ReleaseAllRows()
+        for _, row in ipairs(activeRows) do
+            row:Hide()
+            row:ClearAllPoints()
+            row.weeklyText:SetText("")
+            table.insert(rowPool, row)
+        end
+        wipe(activeRows)
+    end
+
     -- Dismiss frame
     local dismissFrame = CreateFrame("Button", nil, UIParent)
     dismissFrame:SetFrameStrata("DIALOG")
@@ -84,53 +122,37 @@ table.insert(Widgets.moduleInits, function()
         }
     end
 
+    -- "No data" label (created once, reused)
+    local noDataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    noDataLabel:SetPoint("TOPLEFT", 10, -10)
+    noDataLabel:SetText("No tracked currencies found")
+    noDataLabel:Hide()
+
     -- Update detailed currency panel
     local function UpdateCurrencyPanel()
-        -- Clear existing content
-        for _, child in ipairs({ scrollChild:GetChildren() }) do
-            child:Hide()
-            child:SetParent(nil)
-        end
+        ReleaseAllRows()
+        noDataLabel:Hide()
 
         local yOffset = 0
 
         for _, currencyID in ipairs(DEFAULT_CURRENCIES) do
             local data = GetCurrencyData(currencyID)
             if data and data.discovered then
-                local frame = CreateFrame("Frame", nil, scrollChild)
-                frame:SetSize(260, 40)
-                frame:SetPoint("TOPLEFT", 0, yOffset)
+                local row = AcquireRow()
+                row:SetPoint("TOPLEFT", 0, yOffset)
 
-                -- Icon
-                local icon = frame:CreateTexture(nil, "ARTWORK")
-                icon:SetSize(32, 32)
-                icon:SetPoint("LEFT", 5, 0)
-                icon:SetTexture(data.iconFileID)
-
-                -- Name and quantity
-                local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 5, -2)
-                nameText:SetText(data.name)
-                nameText:SetJustifyH("LEFT")
-                nameText:SetWidth(200)
-
-                local qtyText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                qtyText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 5, 2)
-                qtyText:SetJustifyH("LEFT")
+                row.icon:SetTexture(data.iconFileID)
+                row.nameText:SetText(data.name)
 
                 if data.maxQuantity and data.maxQuantity > 0 then
-                    qtyText:SetText(string.format("%s / %s", BreakUpLargeNumbers(data.quantity),
+                    row.qtyText:SetText(string.format("%s / %s", BreakUpLargeNumbers(data.quantity),
                         BreakUpLargeNumbers(data.maxQuantity)))
                 else
-                    qtyText:SetText(BreakUpLargeNumbers(data.quantity))
+                    row.qtyText:SetText(BreakUpLargeNumbers(data.quantity))
                 end
 
-                -- Weekly cap if applicable
                 if data.maxWeeklyQuantity and data.maxWeeklyQuantity > 0 then
-                    local weeklyText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                    weeklyText:SetPoint("TOPRIGHT", -5, -2)
-                    weeklyText:SetTextColor(0.7, 0.7, 1)
-                    weeklyText:SetText(string.format("Weekly: %d/%d", data.quantityEarnedThisWeek or 0,
+                    row.weeklyText:SetText(string.format("Weekly: %d/%d", data.quantityEarnedThisWeek or 0,
                         data.maxWeeklyQuantity))
                 end
 
@@ -139,9 +161,7 @@ table.insert(Widgets.moduleInits, function()
         end
 
         if yOffset == 0 then
-            local noData = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-            noData:SetPoint("TOPLEFT", 10, -10)
-            noData:SetText("No tracked currencies found")
+            noDataLabel:Show()
         end
 
         scrollChild:SetHeight(math.abs(yOffset) + 20)

@@ -29,7 +29,6 @@ function TalentReminder.Initialize()
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
-    frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
     frame:RegisterEvent("ZONE_CHANGED")
     frame:RegisterEvent("ZONE_CHANGED_INDOORS")
     frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -85,13 +84,15 @@ function TalentReminder.OnEvent(self, event, ...)
         local isInitialLogin, isReloadingUi = ...
         TalentReminder.OnEnteringWorld()
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
-        -- Re-check talents if in instance with reminders
-        addonTable.Core.SafeAfter(0.5, function()
+        -- Re-check talents after a delay to let talent data update
+        addonTable.Core.SafeAfter(1.0, function()
+            -- Update instance info in case it changed
+            local _, _, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
+            currentInstanceID = instanceID
+            currentDifficultyID = difficultyID
+            lastZone = nil -- Force zone re-evaluation
             TalentReminder.CheckTalentsInInstance()
         end)
-    elseif event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
-        -- Boss frame appeared - check for boss-specific reminders
-        TalentReminder.OnBossFrameUpdated()
     elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
         -- Zone changed - check if we need to show an alert
         TalentReminder.OnZoneChanged()
@@ -138,6 +139,12 @@ function TalentReminder.OnEnteringWorld()
     -- Reset last zone when entering new world/instance
     lastZone = nil
 
+    -- Hide alert when not in a dungeon/raid instance
+    if instanceType == "none" and alertFrame and alertFrame:IsShown() then
+        alertFrame:Hide()
+        return
+    end
+
     -- Check if this is M+ and alert on entry
     if TalentReminder.IsMythicPlus() then
         addonTable.Core.SafeAfter(3, function()
@@ -167,7 +174,6 @@ end
 
 -- Check talents in instance (for talent changes)
 function TalentReminder.CheckTalentsInInstance()
-    if InCombatLockdown() then return end
     if not currentInstanceID or currentInstanceID == 0 then
         return
     end
@@ -608,45 +614,6 @@ function TalentReminder.GetBossListForInstance(instanceID)
     return {}
 end
 
--- Detect current boss from boss frames
-function TalentReminder.DetectCurrentBoss()
-    -- Check boss frames (boss1-boss5)
-    for i = 1, 5 do
-        if InCombatLockdown() then return nil, nil end
-        local unitID = "boss" .. i
-        if UnitExists(unitID) then
-            local guid = UnitGUID(unitID)
-            if guid and not issecretvalue(guid) then
-                -- Extract creature ID from GUID
-                local _, _, _, _, _, creatureID = strsplit("-", guid)
-                if creatureID and not issecretvalue(creatureID) then
-                    local name = UnitName(unitID)
-                    if name and not issecretvalue(name) then
-                        return tonumber(creatureID), name
-                    end
-                end
-            end
-        end
-    end
-
-    return nil, nil
-end
-
--- Called when boss frames are updated
-function TalentReminder.OnBossFrameUpdated()
-    if InCombatLockdown() then return end
-    local bossID, bossName = TalentReminder.DetectCurrentBoss()
-
-    if bossID and bossName then
-        -- Store detected boss for potential use
-        TalentReminder.currentBossID = bossID
-        TalentReminder.currentBossName = bossName
-
-        -- Check if we have a boss-specific reminder
-        TalentReminder.CheckTalentsInInstance()
-    end
-end
-
 -- Helper to resolve talent name from spellID
 function TalentReminder.GetSpellNameFromID(spellID)
     if not spellID then return nil end
@@ -807,7 +774,8 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
 
     LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] = {
         name = name,
-        name = name,
+        instanceName = instanceName,
+        difficulty = difficulty,
         difficultyID = difficultyID,
         createdDate = date("%Y-%m-%d"),
         note = note or "",
@@ -817,6 +785,42 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
         specID = classSpecInfo.specID,
         specName = classSpecInfo.specName
     }
+
+    -- Auto-enable the difficulty filter for the saved difficulty
+    if UIThingsDB.talentReminders and UIThingsDB.talentReminders.alertOnDifficulties then
+        local filters = UIThingsDB.talentReminders.alertOnDifficulties
+        local diffMap = {
+            [1] = "dungeonNormal",
+            [2] = "dungeonHeroic",
+            [23] = "dungeonMythic",
+            [8] = "mythicPlus",
+            [17] = "raidLFR",
+            [14] = "raidNormal",
+            [15] = "raidHeroic",
+            [16] = "raidMythic",
+        }
+        local filterKey = diffMap[difficultyID]
+        if filterKey and not filters[filterKey] then
+            filters[filterKey] = true
+            -- Update the UI checkbox if the config panel is open
+            local checkboxMap = {
+                dungeonNormal = "UIThingsTalentDNormalCheck",
+                dungeonHeroic = "UIThingsTalentDHeroicCheck",
+                dungeonMythic = "UIThingsTalentDMythicCheck",
+                mythicPlus = "UIThingsTalentMPlusCheck",
+                raidLFR = "UIThingsTalentRLFRCheck",
+                raidNormal = "UIThingsTalentRNormalCheck",
+                raidHeroic = "UIThingsTalentRHeroicCheck",
+                raidMythic = "UIThingsTalentRMythicCheck",
+            }
+            local checkboxName = checkboxMap[filterKey]
+            if checkboxName and _G[checkboxName] then
+                _G[checkboxName]:SetChecked(true)
+            end
+            addonTable.Core.Log("TalentReminder",
+                "Auto-enabled difficulty filter: " .. filterKey, addonTable.Core.LogLevel.INFO)
+        end
+    end
 
     return true, nil, count
 end

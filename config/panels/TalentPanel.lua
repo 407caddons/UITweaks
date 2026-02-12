@@ -455,11 +455,44 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Reminders Section
     Helpers.CreateSectionHeader(panel, "Saved Builds", -420)
 
-    -- Reminder List (Scroll Frame)
+    -- Declare buttons upfront so they exist before the list
+    local snapshotBtn, testBtn, clearBtn
+
+    -- Function to check if player is in an instance
+    local function IsInInstance()
+        local _, instanceType = GetInstanceInfo()
+        return instanceType ~= "none"
+    end
+
+    -- Snapshot Button
+    snapshotBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
+    snapshotBtn:SetSize(200, 25)
+    snapshotBtn:SetPoint("TOPLEFT", 20, -445)
+    snapshotBtn:SetText("Snapshot Current Talents")
+    snapshotBtn:SetNormalFontObject("GameFontNormal")
+    snapshotBtn:SetHighlightFontObject("GameFontHighlight")
+
+    -- Test Button
+    testBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
+    testBtn:SetSize(120, 25)
+    testBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
+    testBtn:SetText("Test")
+    testBtn:SetNormalFontObject("GameFontNormal")
+    testBtn:SetHighlightFontObject("GameFontHighlight")
+
+    -- Clear All Button
+    clearBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
+    clearBtn:SetSize(120, 25)
+    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
+    clearBtn:SetText("Clear All")
+    clearBtn:SetNormalFontObject("GameFontNormal")
+    clearBtn:SetHighlightFontObject("GameFontHighlight")
+
+    -- Reminder List (Scroll Frame) - fills remaining space below buttons
     local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", panel,
         "UIPanelScrollFrameTemplate")
-    reminderScrollFrame:SetSize(520, 180) -- 215
-    reminderScrollFrame:SetPoint("TOPLEFT", 20, -445)
+    reminderScrollFrame:SetPoint("TOPLEFT", 20, -475)
+    reminderScrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
 
     local reminderContent = CreateFrame("Frame", nil, reminderScrollFrame)
     reminderContent:SetSize(500, 1)
@@ -850,17 +883,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Store in addonTable.Config for access from ConfigMain tab click handler
     addonTable.Config.RefreshTalentReminderList = RefreshReminderList
 
-    -- Function to check if player is in an instance
-    local function IsInInstance()
-        local _, instanceType = GetInstanceInfo()
-        return instanceType ~= "none"
-    end
-
     RefreshReminderList()
-
-    -- Declare buttons upfront
-    local snapshotBtn
-    local testBtn
 
     -- Function to update button states based on instance status
     local function UpdateButtonStates()
@@ -885,13 +908,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         end
     end
 
-    -- Snapshot Button
-    snapshotBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
-    snapshotBtn:SetSize(200, 30)
-    snapshotBtn:SetPoint("BOTTOMLEFT", 20, 10)
-    snapshotBtn:SetText("Snapshot Current Talents")
-    snapshotBtn:SetNormalFontObject("GameFontNormal")
-    snapshotBtn:SetHighlightFontObject("GameFontHighlight")
+    -- Snapshot Button OnClick
     snapshotBtn:SetScript("OnClick", function(self)
         if not addonTable.TalentReminder then
             return
@@ -926,13 +943,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         end
     end)
 
-    -- Test Button
-    testBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
-    testBtn:SetSize(120, 30)
-    testBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
-    testBtn:SetText("Test")
-    testBtn:SetNormalFontObject("GameFontNormal")
-    testBtn:SetHighlightFontObject("GameFontHighlight")
+    -- Test Button OnClick
     testBtn:SetScript("OnClick", function(self)
         if not addonTable.TalentReminder then
             return
@@ -1022,13 +1033,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         end
     end)
 
-    -- Clear All Button
-    local clearBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
-    clearBtn:SetSize(120, 30)
-    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
-    clearBtn:SetText("Clear All")
-    clearBtn:SetNormalFontObject("GameFontNormal")
-    clearBtn:SetHighlightFontObject("GameFontHighlight")
+    -- Clear All Button OnClick
     clearBtn:SetScript("OnClick", function(self)
         local isShiftHeld = IsShiftKeyDown()
 
