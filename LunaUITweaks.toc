@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
@@ -32,6 +32,7 @@ config\panels\CombatPanel.lua
 config\panels\FramesPanel.lua
 config\panels\LootPanel.lua
 config\panels\MiscPanel.lua
+config\panels\MinimapPanel.lua
 config\panels\TalentPanel.lua
 config\panels\WidgetsPanel.lua
 config\ConfigMain.lua
@@ -43,9 +44,20 @@ Vendor.lua
 Loot.lua
 Combat.lua
 Misc.lua
+MinimapCustom.lua
 Frames.lua
 TalentReminder.lua
-Widgets.lua
+widgets\Widgets.lua
+widgets\Time.lua
+widgets\FPS.lua
+widgets\Bags.lua
+widgets\Spec.lua
+widgets\Durability.lua
+widgets\Combat.lua
+widgets\Friends.lua
+widgets\Guild.lua
+widgets\Group.lua
+widgets\Teleports.lua
 
 # Config entry point (now just a stub)
 Config.lua

@@ -112,8 +112,6 @@ end
 
 function Loot.RecycleToast(toast)
     toast:Hide()
-    toast:SetScript("OnEnter", nil) -- Clear specific tooltip closure
-    toast:SetScript("OnLeave", nil)
 
     -- Remove from active list
     for i, t in ipairs(activeToasts) do
@@ -206,17 +204,6 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
         elapsed = 0
     }
 
-    -- Re-bind scripts (since we clear them on recycle)
-    toast:SetScript("OnEnter", function(self)
-        if self.itemLink then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetHyperlink(self.itemLink)
-            GameTooltip:Show()
-        end
-    end)
-
-    toast:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
     toast:Show()
     table.insert(activeToasts, toast)
     Loot.UpdateLayout()
@@ -246,15 +233,21 @@ function Loot.ToggleBlizzardToasts(enable)
     if enable then
         if LootWonAlertSystem then LootWonAlertSystem:RegisterEvent("SHOW_LOOT_TOAST") end
         if LootUpgradeAlertSystem then LootUpgradeAlertSystem:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE") end
-        
+
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST")
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
         AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")
     else
         -- Unregister from specific alert systems
-        if LootWonAlertSystem and LootWonAlertSystem.UnregisterEvent then LootWonAlertSystem:UnregisterEvent("SHOW_LOOT_TOAST") end
-        if LootUpgradeAlertSystem and LootUpgradeAlertSystem.UnregisterEvent then LootUpgradeAlertSystem:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end
-        
+        if LootWonAlertSystem and LootWonAlertSystem.UnregisterEvent then
+            LootWonAlertSystem:UnregisterEvent(
+                "SHOW_LOOT_TOAST")
+        end
+        if LootUpgradeAlertSystem and LootUpgradeAlertSystem.UnregisterEvent then
+            LootUpgradeAlertSystem:UnregisterEvent(
+                "SHOW_LOOT_TOAST_UPGRADE")
+        end
+
         -- Use pcall to safely unregister events that may not be registered
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST") end)
         pcall(function() AlertFrame:UnregisterEvent("SHOW_LOOT_TOAST_UPGRADE") end)
@@ -267,7 +260,7 @@ local rosterCache = {}
 
 local function UpdateRosterCache()
     table.wipe(rosterCache)
-    
+
     -- Always cache player
     local playerName = UnitName("player")
     local _, playerClass = UnitClass("player")
@@ -290,7 +283,7 @@ local function UpdateRosterCache()
         end
     elseif IsInGroup() then
         for i = 1, 4 do
-            local unit = "party"..i
+            local unit = "party" .. i
             local name = UnitName(unit)
             local _, classFileName = UnitClass(unit)
             if name and classFileName then

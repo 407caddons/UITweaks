@@ -78,23 +78,17 @@ end
 -- Shared font list (built once on load)
 Helpers.fonts = BuildFontList()
 
+-- Cached font objects for dropdown preview (keyed by font path)
+local fontObjectCache = {}
+
 --- Helper: Update Visuals based on enabled state
 -- @param panel frame The panel frame
 -- @param tab frame The tab button
 -- @param enabled boolean Whether module is enabled
 function Helpers.UpdateModuleVisuals(panel, tab, enabled)
-    if not enabled then
-        -- Transparent Dark Red
-        if not panel.bg then
-            panel.bg = panel:CreateTexture(nil, "BACKGROUND")
-            -- Inset to avoid covering the border
-            panel.bg:SetPoint("TOPLEFT", 4, -28)
-            panel.bg:SetPoint("BOTTOMRIGHT", -4, 4)
-            panel.bg:SetColorTexture(0.3, 0, 0, 0.5)
-        else
-            panel.bg:Show()
-        end
+    tab.isDisabled = not enabled
 
+    if not enabled then
         -- Tint Tab Text Red
         if tab.Text then
             tab.Text:SetTextColor(1, 0.2, 0.2)
@@ -102,8 +96,7 @@ function Helpers.UpdateModuleVisuals(panel, tab, enabled)
             tab:GetFontString():SetTextColor(1, 0.2, 0.2)
         end
     else
-        if panel.bg then panel.bg:Hide() end
-        -- Reset Tab Text (Normal Color)
+        -- Reset Tab Text (Normal Color / White if selected handled by ConfigMain)
         if tab.Text then
             tab.Text:SetTextColor(1, 0.82, 0) -- GameFontNormal Color approx
         elseif tab:GetFontString() then
@@ -305,11 +298,18 @@ function Helpers.CreateFontDropdown(parent, name, labelText, currentFontPath, on
             info.fontName = fontData.name
             info.func = OnClick
 
-            -- Set the font for this menu item to display in its own typeface
-            -- Use pcall to safely set the font in case it doesn't exist
-            local fontObj = CreateFont(name .. "Font" .. i)
-            local success = pcall(fontObj.SetFont, fontObj, fontData.path, 12, "")
-            if success then
+            -- Reuse cached font objects for dropdown preview
+            local fontObj = fontObjectCache[fontData.path]
+            if not fontObj then
+                fontObj = CreateFont("LunaFontPreview_" .. i)
+                local success = pcall(fontObj.SetFont, fontObj, fontData.path, 12, "")
+                if success then
+                    fontObjectCache[fontData.path] = fontObj
+                else
+                    fontObj = nil
+                end
+            end
+            if fontObj then
                 info.fontObject = fontObj
             end
 

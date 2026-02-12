@@ -28,7 +28,7 @@ local function AutoRepair()
     if not canRepair or repairCost <= 0 then return end
 
     local costStr = GetCoinTextureString(repairCost)
-    
+
     -- Try Guild Repair
     if UIThingsDB.vendor.useGuildRepair and CanGuildBankRepair() then
         local guildMoney = GetGuildBankMoney()
@@ -81,7 +81,7 @@ warningFrame:SetScript("OnDragStart", warningFrame.StartMoving)
 warningFrame:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     local point, _, _, x, y = self:GetPoint()
-    UIThingsDB.vendor.warningPos = {point=point, x=x, y=y}
+    UIThingsDB.vendor.warningPos = { point = point, x = x, y = y }
 end)
 warningFrame:Hide()
 
@@ -96,25 +96,25 @@ warningText:SetTextColor(1, 0, 0) -- Red
 
 local function CheckDurability()
     if not UIThingsDB.vendor.enabled then return end
-    
+
     -- If unlocked, keeps showing
-    if not UIThingsDB.vendor.warningLocked then 
+    if not UIThingsDB.vendor.warningLocked then
         warningFrame:Show()
-        return 
+        return
     end
 
     -- Check combat restriction
     if UIThingsDB.vendor.onlyCheckDurabilityOOC and InCombatLockdown() then return end
-    if MerchantFrame:IsShown() then 
+    if MerchantFrame:IsShown() then
         warningFrame:Hide()
-        return 
-    end 
-    
+        return
+    end
+
     local threshold = UIThingsDB.vendor.repairThreshold or 0
     if threshold == 0 then return end -- Feature disabled if 0
-    
+
     local lowest = 100
-    
+
     for i = 1, EQUIPMENT_SLOT_COUNT do
         local current, max = GetInventoryItemDurability(i)
         if current and max and max > 0 then
@@ -124,7 +124,7 @@ local function CheckDurability()
             end
         end
     end
-    
+
     if lowest < threshold then
         warningText:SetText(string.format("Repair your gear (%d%%)", math.floor(lowest)))
         warningFrame:Show()
@@ -146,31 +146,25 @@ local function StartDurabilityCheck(delay)
     end)
 end
 
--- Use centralized SafeAfter from Core (for non-debounced calls)
-local SafeAfter = function(delay, func)
-    if addonTable.Core and addonTable.Core.SafeAfter then
-        addonTable.Core.SafeAfter(delay, func)
-    elseif C_Timer and C_Timer.After then
-        C_Timer.After(delay, func)
-    end
-end
+local SafeAfter = addonTable.Core.SafeAfter
 
 function addonTable.Vendor.UpdateSettings()
     local settings = UIThingsDB.vendor
-    
+
     -- Font
     if settings.font and settings.fontSize then
         warningText:SetFont(settings.font, settings.fontSize, "OUTLINE")
     end
-    
+
     -- Position
     warningFrame:ClearAllPoints()
     if settings.warningPos then
-        warningFrame:SetPoint(settings.warningPos.point, UIParent, settings.warningPos.point, settings.warningPos.x, settings.warningPos.y)
+        warningFrame:SetPoint(settings.warningPos.point, UIParent, settings.warningPos.point, settings.warningPos.x,
+            settings.warningPos.y)
     else
         warningFrame:SetPoint("TOP", 0, -150)
     end
-    
+
     if not settings.enabled then
         warningFrame:Hide()
         return
@@ -180,13 +174,13 @@ function addonTable.Vendor.UpdateSettings()
     if settings.warningLocked then
         warningFrame:EnableMouse(false)
         warningFrame:SetBackdrop(nil)
-        
+
         -- If we were unlocking, hide the backdrop frame
         if warningFrame.isUnlocking then
-             warningFrame:Hide()
-             warningFrame.isUnlocking = false
+            warningFrame:Hide()
+            warningFrame.isUnlocking = false
         end
-        
+
         -- ALWAYS re-check durability logic to ensure correct visibility
         -- ALWAYS re-check durability logic to ensure correct visibility
         StartDurabilityCheck(0.5)
@@ -196,7 +190,9 @@ function addonTable.Vendor.UpdateSettings()
         warningFrame:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 16,
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
         })
         warningFrame:SetBackdropColor(0, 0, 0, 0.5)
@@ -214,14 +210,14 @@ frame:SetScript("OnEvent", function(self, event)
         return
     end
 
-    if not UIThingsDB.vendor.enabled then 
+    if not UIThingsDB.vendor.enabled then
         warningFrame:Hide()
-        return 
+        return
     end
-    
+
     if event == "MERCHANT_SHOW" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
-        warningFrame:Hide() -- Hide when at vendor
+        warningFrame:Hide()                                    -- Hide when at vendor
         -- Run slightly delayed to ensure merchant interaction is fully ready
         SafeAfter(0.1, function()
             AutoRepair()
@@ -232,6 +228,6 @@ frame:SetScript("OnEvent", function(self, event)
         StartDurabilityCheck(1)
     elseif event == "PLAYER_REGEN_DISABLED" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
-        warningFrame:Hide() -- Hide in combat
+        warningFrame:Hide()                                    -- Hide in combat
     end
 end)

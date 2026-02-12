@@ -7,10 +7,10 @@ local startTime = 0
 local inCombat = false
 local timeElapsed = 0
 
-local function FormatTime(seconds)
+local function SetFormattedTime(fontString, seconds)
     local m = math.floor(seconds / 60)
     local s = math.floor(seconds % 60)
-    return string.format("%02d:%02d", m, s)
+    fontString:SetFormattedText("%02d:%02d", m, s)
 end
 
 function addonTable.Combat.UpdateSettings()
@@ -94,7 +94,7 @@ local function Init()
             -- Final update
             if startTime > 0 then
                 timeElapsed = GetTime() - startTime
-                timerText:SetText(FormatTime(timeElapsed))
+                SetFormattedTime(timerText, timeElapsed)
             end
             addonTable.Combat.UpdateSettings() -- Update color
         end
@@ -110,7 +110,7 @@ local function Init()
             if updateTimer >= 1.0 then
                 updateTimer = 0
                 timeElapsed = GetTime() - startTime
-                timerText:SetText(FormatTime(timeElapsed))
+                SetFormattedTime(timerText, timeElapsed)
             end
         end
     end)
@@ -178,6 +178,37 @@ local reminderTitleLine
 local reminderLines = {}
 local UpdateReminderFrame -- Forward declaration
 
+-- Weapon buff polling (only thing that needs a ticker — no event for enchant expiration)
+local weaponBuffTicker = nil
+local lastWeaponBuffState = nil -- cached to avoid redundant full updates
+
+local function StopWeaponBuffTicker()
+    if weaponBuffTicker then
+        weaponBuffTicker:Cancel()
+        weaponBuffTicker = nil
+    end
+    lastWeaponBuffState = nil
+end
+
+local function StartWeaponBuffTicker()
+    if weaponBuffTicker then return end -- already running
+    weaponBuffTicker = C_Timer.NewTicker(10, function()
+        if InCombatLockdown() then return end
+        local settings = UIThingsDB.combat.reminders
+        if not settings or not settings.weaponBuff then
+            StopWeaponBuffTicker()
+            return
+        end
+        -- Only trigger a full update when the weapon buff state actually changes
+        local hasMainHandEnchant, _, _, _, hasOffHandEnchant = GetWeaponEnchantInfo()
+        local currentState = tostring(hasMainHandEnchant) .. ":" .. tostring(hasOffHandEnchant)
+        if currentState ~= lastWeaponBuffState then
+            lastWeaponBuffState = currentState
+            UpdateReminderFrame()
+        end
+    end)
+end
+
 -- Combined flask + food buff detection in a single aura scan
 local hasFlaskCache, hasFoodCache = false, false
 local lastAuraScanTime = 0
@@ -199,7 +230,7 @@ local function ScanConsumableBuffs()
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
         if not auraData then break end
-        
+
         local name = auraData.name
         if name then
             if not hasFlaskCache and (string.find(name, PATTERN_FLASK) or string.find(name, PATTERN_PHIAL)) then
@@ -476,6 +507,15 @@ local function ShowPetIcons(yOffset)
     return iconSize + 8 -- extra height used by icon row
 end
 
+-- Known non-stat items and engineering utilities to ignore for consumable tracking
+local consumableIgnoreSet = {
+    ["conjured mana bun"] = true,
+    ["jeeves"] = true,
+    ["auto-hammer"] = true,
+    ["thermal anvil"] = true,
+    ["moll-e"] = true,
+}
+
 local function TrackConsumableUsage(itemID)
     if not itemID then return end
 
@@ -493,22 +533,10 @@ local function TrackConsumableUsage(itemID)
     if not itemName then return end
 
     local category = nil
-
-    local category = nil
-    local category = nil
     local lowerName = itemName:lower()
 
     -- Ignore known non-stat items and engineering utilities
-    local ignoreList = {
-        "conjured mana bun",
-        "jeeves",
-        "auto-hammer",
-        "thermal anvil",
-        "moll-e"
-    }
-    for _, ignore in ipairs(ignoreList) do
-        if lowerName:find(ignore) then return end
-    end
+    if consumableIgnoreSet[lowerName] then return end
 
     -- Categorize based on item info and name
     -- Class 0 is Consumable
@@ -546,7 +574,7 @@ local function TrackConsumableUsage(itemID)
         if #usage > 5 then
             table.remove(usage, 1)
         end
-        
+
         UpdateReminderFrame()
 
         -- Only announce if it's a new item
@@ -801,6 +829,7 @@ UpdateReminderFrame = function()
     local settings = UIThingsDB.combat.reminders
     if not settings then
         reminderFrame:Hide()
+        StopWeaponBuffTicker()
         return
     end
 
@@ -812,6 +841,7 @@ UpdateReminderFrame = function()
     if difficultyID == 8 then
         reminderFrame:Hide()
         UnregisterStateDriver(reminderFrame, "visibility")
+        StopWeaponBuffTicker()
         return
     end
 
@@ -819,6 +849,7 @@ UpdateReminderFrame = function()
     if settings.onlyInGroup and not IsInGroup() and settings.locked then
         reminderFrame:Hide()
         UnregisterStateDriver(reminderFrame, "visibility")
+        StopWeaponBuffTicker()
         return
     end
 
@@ -887,6 +918,7 @@ UpdateReminderFrame = function()
     if #missing == 0 and settings.locked then
         reminderFrame:Hide()
         UnregisterStateDriver(reminderFrame, "visibility")
+        StopWeaponBuffTicker()
         return
     end
 
@@ -950,8 +982,16 @@ UpdateReminderFrame = function()
         driverStr = "[combat] hide; " .. driverStr
     end
 
-        reminderFrame:Show()
-        RegisterStateDriver(reminderFrame, "visibility", driverStr)
+    reminderFrame:Show()
+    RegisterStateDriver(reminderFrame, "visibility", driverStr)
+
+    -- Start/stop weapon buff ticker based on whether weapon buff tracking is active
+    if settings.weaponBuff then
+        StartWeaponBuffTicker()
+    else
+        StopWeaponBuffTicker()
+    end
+
     ApplyReminderLock()
 end
 
@@ -1058,9 +1098,6 @@ local function InitReminders()
 
     -- Run initial check now (covers /reload where PLAYER_ENTERING_WORLD already fired)
     C_Timer.After(0.1, UpdateReminderFrame)
-
-    -- Poll every 2 seconds to catch weapon buff expiration (no event fired)
-    C_Timer.NewTicker(2, UpdateReminderFrame)
 end
 
 function addonTable.Combat.UpdateReminders()

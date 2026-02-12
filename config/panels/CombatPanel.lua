@@ -6,73 +6,23 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 -- Get helpers
 local Helpers = addonTable.ConfigHelpers
 
--- Helper: Create Color Picker
-local function CreateColorPicker(parent, name, label, getFunc, setFunc, yOffset)
-    local button = CreateFrame("Button", name, parent)
-    button:SetSize(200, 24)
-    button:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
-    button:EnableMouse(true)
-    button:RegisterForClicks("AnyUp")
-
-    button.bg = button:CreateTexture(nil, "BACKGROUND")
-    button.bg:SetSize(24, 24)
-    button.bg:SetPoint("LEFT")
-    button.bg:SetColorTexture(1, 1, 1)
-
-    button.color = button:CreateTexture(nil, "OVERLAY")
-    button.color:SetPoint("LEFT", button.bg, "LEFT", 2, 0)
-    button.color:SetSize(20, 20)
-
-    local r, g, b = getFunc()
-    button.color:SetColorTexture(r, g, b)
-
-    button.text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    button.text:SetPoint("LEFT", button.bg, "RIGHT", 10, 0)
-    button.text:SetText(label)
-
-    button:SetScript("OnClick", function(self)
-        local r, g, b = getFunc()
-
-        local function SwatchFunc()
-            local newR, newG, newB = ColorPickerFrame:GetColorRGB()
-            setFunc(newR, newG, newB)
-            button.color:SetColorTexture(newR, newG, newB)
-        end
-
-        local function CancelFunc(previousValues)
-            local newR, newG, newB
-            if previousValues then
-                newR, newG, newB = previousValues.r, previousValues.g, previousValues.b
-            else
-                newR, newG, newB = r, g, b
-            end
-            setFunc(newR, newG, newB)
-            button.color:SetColorTexture(newR, newG, newB)
-        end
-
-        if ColorPickerFrame.SetupColorPickerAndShow then
-            local info = {
-                swatchFunc = SwatchFunc,
-                cancelFunc = CancelFunc,
-                r = r,
-                g = g,
-                b = b,
-                hasOpacity = false,
-            }
-            ColorPickerFrame:SetupColorPickerAndShow(info)
-        else
-            ColorPickerFrame.func = SwatchFunc
-            ColorPickerFrame.hasOpacity = false
-            ColorPickerFrame.cancelFunc = CancelFunc
-            ColorPickerFrame:SetColorRGB(r, g, b)
-            ColorPickerFrame:Show()
-        end
-    end)
-end
-
 -- Define the setup function for Combat panel
 function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     local fonts = Helpers.fonts
+
+    -- Create ScrollFrame
+    local scrollFrame = CreateFrame("ScrollFrame", "UIThingsCombatScroll", panel, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, 0)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
+
+    local child = CreateFrame("Frame", nil, scrollFrame)
+    child:SetSize(600, 700) -- Width will be adjusted, Height enough for content
+    scrollFrame:SetScrollChild(child)
+
+    -- Auto-adjust width
+    scrollFrame:SetScript("OnShow", function()
+        child:SetWidth(scrollFrame:GetWidth())
+    end)
 
     local function UpdateCombat()
         if addonTable.Combat and addonTable.Combat.UpdateSettings then
@@ -81,11 +31,11 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end
 
     -- Enable Combat Timer Checkbox
-    local combatTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local combatTitle = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     combatTitle:SetPoint("TOPLEFT", 16, -16)
     combatTitle:SetText("Combat")
 
-    local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", panel,
+    local enableCombatBtn = CreateFrame("CheckButton", "UIThingsCombatEnableCheck", child,
         "ChatConfigCheckButtonTemplate")
     enableCombatBtn:SetPoint("TOPLEFT", 20, -50)
     _G[enableCombatBtn:GetName() .. "Text"]:SetText("Enable Combat Timer")
@@ -99,7 +49,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.combat.enabled)
 
     -- Lock Timer
-    local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", panel,
+    local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", child,
         "ChatConfigCheckButtonTemplate")
     combatLockBtn:SetPoint("TOPLEFT", 20, -70)
     _G[combatLockBtn:GetName() .. "Text"]:SetText("Lock Combat Timer")
@@ -112,7 +62,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     -- Font Selector (Simple Dropdown)
     Helpers.CreateFontDropdown(
-        panel,
+        child,
         "UIThingsFontDropdown",
         "Font:",
         UIThingsDB.combat.font,
@@ -125,7 +75,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     )
 
     -- Font Size Slider
-    local fontSizeSlider = CreateFrame("Slider", "UIThingsFontSizeSlider", panel, "OptionsSliderTemplate")
+    local fontSizeSlider = CreateFrame("Slider", "UIThingsFontSizeSlider", child, "OptionsSliderTemplate")
     fontSizeSlider:SetPoint("TOPLEFT", 20, -180)
     fontSizeSlider:SetMinMaxValues(10, 32)
     fontSizeSlider:SetValueStep(1)
@@ -143,7 +93,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Color Pickers
-    CreateColorPicker(panel, "UIThingsCombatColorIn", "In Combat Color",
+    Helpers.CreateColorPicker(child, "UIThingsCombatColorIn", "In Combat Color",
         function()
             return UIThingsDB.combat.colorInCombat.r, UIThingsDB.combat.colorInCombat.g,
                 UIThingsDB.combat.colorInCombat.b
@@ -155,7 +105,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         -230
     )
 
-    CreateColorPicker(panel, "UIThingsCombatColorOut", "Out Combat Color",
+    Helpers.CreateColorPicker(child, "UIThingsCombatColorOut", "Out Combat Color",
         function()
             return UIThingsDB.combat.colorOutCombat.r, UIThingsDB.combat.colorOutCombat.g,
                 UIThingsDB.combat.colorOutCombat.b
@@ -168,14 +118,14 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     )
 
     -- Auto Combat Logging Section
-    Helpers.CreateSectionHeader(panel, "Auto Combat Logging", -295)
+    Helpers.CreateSectionHeader(child, "Auto Combat Logging", -295)
 
     -- Dungeons
-    local clDungeonLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local clDungeonLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     clDungeonLabel:SetPoint("TOPLEFT", 20, -323)
     clDungeonLabel:SetText("Dungeons:")
 
-    local clDNormalCheck = CreateFrame("CheckButton", "UIThingsCLDNormalCheck", panel,
+    local clDNormalCheck = CreateFrame("CheckButton", "UIThingsCLDNormalCheck", child,
         "ChatConfigCheckButtonTemplate")
     clDNormalCheck:SetPoint("TOPLEFT", 100, -320)
     clDNormalCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -188,7 +138,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clDHeroicCheck = CreateFrame("CheckButton", "UIThingsCLDHeroicCheck", panel,
+    local clDHeroicCheck = CreateFrame("CheckButton", "UIThingsCLDHeroicCheck", child,
         "ChatConfigCheckButtonTemplate")
     clDHeroicCheck:SetPoint("LEFT", clDNormalCheck, "RIGHT", 70, 0)
     clDHeroicCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -201,7 +151,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clDMythicCheck = CreateFrame("CheckButton", "UIThingsCLDMythicCheck", panel,
+    local clDMythicCheck = CreateFrame("CheckButton", "UIThingsCLDMythicCheck", child,
         "ChatConfigCheckButtonTemplate")
     clDMythicCheck:SetPoint("LEFT", clDHeroicCheck, "RIGHT", 70, 0)
     clDMythicCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -214,7 +164,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clDMPlusCheck = CreateFrame("CheckButton", "UIThingsCLDMPlusCheck", panel,
+    local clDMPlusCheck = CreateFrame("CheckButton", "UIThingsCLDMPlusCheck", child,
         "ChatConfigCheckButtonTemplate")
     clDMPlusCheck:SetPoint("LEFT", clDMythicCheck, "RIGHT", 70, 0)
     clDMPlusCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -228,11 +178,11 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Raids
-    local clRaidLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local clRaidLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     clRaidLabel:SetPoint("TOPLEFT", 20, -353)
     clRaidLabel:SetText("Raids:")
 
-    local clRLFRCheck = CreateFrame("CheckButton", "UIThingsCLRLFRCheck", panel,
+    local clRLFRCheck = CreateFrame("CheckButton", "UIThingsCLRLFRCheck", child,
         "ChatConfigCheckButtonTemplate")
     clRLFRCheck:SetPoint("TOPLEFT", 100, -350)
     clRLFRCheck:SetHitRectInsets(0, -40, 0, 0)
@@ -245,7 +195,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clRNormalCheck = CreateFrame("CheckButton", "UIThingsCLRNormalCheck", panel,
+    local clRNormalCheck = CreateFrame("CheckButton", "UIThingsCLRNormalCheck", child,
         "ChatConfigCheckButtonTemplate")
     clRNormalCheck:SetPoint("LEFT", clRLFRCheck, "RIGHT", 50, 0)
     clRNormalCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -258,7 +208,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clRHeroicCheck = CreateFrame("CheckButton", "UIThingsCLRHeroicCheck", panel,
+    local clRHeroicCheck = CreateFrame("CheckButton", "UIThingsCLRHeroicCheck", child,
         "ChatConfigCheckButtonTemplate")
     clRHeroicCheck:SetPoint("LEFT", clRNormalCheck, "RIGHT", 70, 0)
     clRHeroicCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -271,7 +221,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end)
 
-    local clRMythicCheck = CreateFrame("CheckButton", "UIThingsCLRMythicCheck", panel,
+    local clRMythicCheck = CreateFrame("CheckButton", "UIThingsCLRMythicCheck", child,
         "ChatConfigCheckButtonTemplate")
     clRMythicCheck:SetPoint("LEFT", clRHeroicCheck, "RIGHT", 70, 0)
     clRMythicCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -285,9 +235,9 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Combat Reminders Section
-    Helpers.CreateSectionHeader(panel, "Combat Reminders", -395)
+    Helpers.CreateSectionHeader(child, "Combat Reminders", -395)
 
-    local reminderDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local reminderDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     reminderDesc:SetPoint("TOPLEFT", 20, -418)
     reminderDesc:SetText("Show a reminder frame when loading in without these buffs:")
 
@@ -297,7 +247,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end
 
-    local reminderLockBtn = CreateFrame("CheckButton", "UIThingsReminderLockCheck", panel,
+    local reminderLockBtn = CreateFrame("CheckButton", "UIThingsReminderLockCheck", child,
         "ChatConfigCheckButtonTemplate")
     reminderLockBtn:SetPoint("TOPLEFT", 20, -438)
     _G[reminderLockBtn:GetName() .. "Text"]:SetText("Lock Reminder Frame")
@@ -307,7 +257,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local reminderGroupCheck = CreateFrame("CheckButton", "UIThingsReminderGroupCheck", panel,
+    local reminderGroupCheck = CreateFrame("CheckButton", "UIThingsReminderGroupCheck", child,
         "ChatConfigCheckButtonTemplate")
     reminderGroupCheck:SetPoint("TOPLEFT", 180, -438) -- Right of Lock
     _G[reminderGroupCheck:GetName() .. "Text"]:SetText("Only in Group")
@@ -318,7 +268,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Hide in Combat Check (Moved)
-    local combatHideCheck = CreateFrame("CheckButton", "UIThingsReminderHideCombatCheck", panel,
+    local combatHideCheck = CreateFrame("CheckButton", "UIThingsReminderHideCombatCheck", child,
         "ChatConfigCheckButtonTemplate")
     combatHideCheck:SetPoint("LEFT", reminderGroupCheck, "RIGHT", 110, 0)
     combatHideCheck:SetHitRectInsets(0, -100, 0, 0)
@@ -335,7 +285,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     -- Reminder Font Selector
     Helpers.CreateFontDropdown(
-        panel,
+        child,
         "UIThingsReminderFontDropdown",
         "Reminder Font:",
         UIThingsDB.combat.reminders.font,
@@ -348,7 +298,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     )
 
     -- Reminder Font Size Slider
-    local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", panel, "OptionsSliderTemplate")
+    local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", child, "OptionsSliderTemplate")
     reminderFontSizeSlider:SetPoint("TOPLEFT", 20, -530)
     reminderFontSizeSlider:SetMinMaxValues(8, 24)
     reminderFontSizeSlider:SetValueStep(1)
@@ -367,7 +317,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Reminder Icon Size Slider
-    local reminderIconSizeSlider = CreateFrame("Slider", "UIThingsReminderIconSizeSlider", panel, "OptionsSliderTemplate")
+    local reminderIconSizeSlider = CreateFrame("Slider", "UIThingsReminderIconSizeSlider", child, "OptionsSliderTemplate")
     reminderIconSizeSlider:SetPoint("TOPLEFT", 20, -565)
     reminderIconSizeSlider:SetMinMaxValues(16, 48)
     reminderIconSizeSlider:SetValueStep(1)
@@ -385,7 +335,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local flaskCheck = CreateFrame("CheckButton", "UIThingsReminderFlaskCheck", panel,
+    local flaskCheck = CreateFrame("CheckButton", "UIThingsReminderFlaskCheck", child,
         "ChatConfigCheckButtonTemplate")
     flaskCheck:SetPoint("TOPLEFT", 20, -595)
     flaskCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -396,7 +346,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local foodCheck = CreateFrame("CheckButton", "UIThingsReminderFoodCheck", panel,
+    local foodCheck = CreateFrame("CheckButton", "UIThingsReminderFoodCheck", child,
         "ChatConfigCheckButtonTemplate")
     foodCheck:SetPoint("LEFT", flaskCheck, "RIGHT", 70, 0)
     foodCheck:SetHitRectInsets(0, -60, 0, 0)
@@ -407,7 +357,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local weaponCheck = CreateFrame("CheckButton", "UIThingsReminderWeaponCheck", panel,
+    local weaponCheck = CreateFrame("CheckButton", "UIThingsReminderWeaponCheck", child,
         "ChatConfigCheckButtonTemplate")
     weaponCheck:SetPoint("LEFT", foodCheck, "RIGHT", 70, 0)
     weaponCheck:SetHitRectInsets(0, -100, 0, 0)
@@ -418,7 +368,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local petCheck = CreateFrame("CheckButton", "UIThingsReminderPetCheck", panel,
+    local petCheck = CreateFrame("CheckButton", "UIThingsReminderPetCheck", child,
         "ChatConfigCheckButtonTemplate")
     petCheck:SetPoint("LEFT", weaponCheck, "RIGHT", 100, 0)
     petCheck:SetHitRectInsets(0, -40, 0, 0)
@@ -429,7 +379,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateReminders()
     end)
 
-    local classBuffCheck = CreateFrame("CheckButton", "UIThingsReminderClassBuffCheck", panel,
+    local classBuffCheck = CreateFrame("CheckButton", "UIThingsReminderClassBuffCheck", child,
         "ChatConfigCheckButtonTemplate")
     classBuffCheck:SetPoint("LEFT", petCheck, "RIGHT", 70, 0)
     classBuffCheck:SetHitRectInsets(0, -100, 0, 0)
@@ -441,7 +391,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Clear Consumable Usage Button
-    local clearUsageBtn = CreateFrame("Button", "UIThingsClearUsageBtn", panel, "UIPanelButtonTemplate")
+    local clearUsageBtn = CreateFrame("Button", "UIThingsClearUsageBtn", child, "UIPanelButtonTemplate")
     clearUsageBtn:SetSize(180, 24)
     clearUsageBtn:SetPoint("TOPLEFT", 20, -625)
     clearUsageBtn:SetText("Clear Consumable Usage")

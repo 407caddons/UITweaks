@@ -16,7 +16,7 @@ function addonTable.Config.Initialize()
     -- Initialize the window if it doesn't exist
     if not configWindow then
         configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent, "BasicFrameTemplateWithInset")
-        configWindow:SetSize(600, 670)
+        configWindow:SetSize(850, 670) -- Increased width for sidebar
         configWindow:SetPoint("CENTER")
         configWindow:SetMovable(true)
         configWindow:EnableMouse(true)
@@ -54,168 +54,217 @@ function addonTable.Config.Initialize()
 
         configWindow.TitleText:SetText("Luna's UI Tweaks Config")
 
-        -- Create Sub-Panels
-        local trackerPanel = CreateFrame("Frame", nil, configWindow)
-        trackerPanel:SetAllPoints()
+        ----------------------------------------------------
+        -- Sidebar & Navigation
+        ----------------------------------------------------
+        local SIDEBAR_WIDTH = 180
+        
+        -- Vertical Divider Line
+        local divider = configWindow:CreateTexture(nil, "ARTWORK")
+        divider:SetPoint("TOPLEFT", configWindow, "TOPLEFT", SIDEBAR_WIDTH, -25)
+        divider:SetPoint("BOTTOMLEFT", configWindow, "BOTTOMLEFT", SIDEBAR_WIDTH, 5)
+        divider:SetWidth(1)
+        divider:SetColorTexture(0.3, 0.3, 0.3, 1)
 
-        local vendorPanel = CreateFrame("Frame", nil, configWindow)
+        -- ScrollFrame for Navigation List
+        local navScrollFrame = CreateFrame("ScrollFrame", "UIThingsConfigNavScroll", configWindow, "UIPanelScrollFrameTemplate")
+        navScrollFrame:SetPoint("TOPLEFT", configWindow, "TOPLEFT", 10, -30)
+        navScrollFrame:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMLEFT", SIDEBAR_WIDTH - 25, 10)
+
+        local navScrollChild = CreateFrame("Frame", nil, navScrollFrame)
+        navScrollChild:SetSize(SIDEBAR_WIDTH - 25, 500) -- Height will auto-expand if needed
+        navScrollFrame:SetScrollChild(navScrollChild)
+
+        -- List of Modules
+        local modules = {
+            { id = 1, name = "Tracker",      key = "tracker", icon = "Interface\\Icons\\Inv_Misc_Book_09" },
+            { id = 2, name = "Vendor",       key = "vendor",  icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 3, name = "Combat",       key = "combat",  icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
+            { id = 4, name = "Frames",       key = "frames",  icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 5, name = "Loot",         key = "loot",    icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 6, name = "Misc",         key = "misc",    icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 7, name = "Minimap",      key = "minimap", icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 8, name = "Talents",      key = "talent",  icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 9, name = "Widgets",      key = "widgets", icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+        }
+
+        local navButtons = {}
+        local currentPanel = nil
+
+        -- Content Container (Right Side)
+        local contentContainer = CreateFrame("Frame", nil, configWindow)
+        contentContainer:SetPoint("TOPLEFT", configWindow, "TOPLEFT", SIDEBAR_WIDTH + 10, -30)
+        contentContainer:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMRIGHT", -10, 10)
+
+        ----------------------------------------------------
+        -- Create Sub-Panels (parented to contentContainer)
+        ----------------------------------------------------
+        local trackerPanel = CreateFrame("Frame", nil, contentContainer)
+        trackerPanel:SetAllPoints()
+        
+        local vendorPanel = CreateFrame("Frame", nil, contentContainer)
         vendorPanel:SetAllPoints()
         vendorPanel:Hide()
 
-        local combatPanel = CreateFrame("Frame", nil, configWindow)
+        local combatPanel = CreateFrame("Frame", nil, contentContainer)
         combatPanel:SetAllPoints()
         combatPanel:Hide()
 
-        local framesPanel = CreateFrame("Frame", nil, configWindow)
+        local framesPanel = CreateFrame("Frame", nil, contentContainer)
         framesPanel:SetAllPoints()
         framesPanel:Hide()
 
-        local lootPanel = CreateFrame("Frame", nil, configWindow)
+        local lootPanel = CreateFrame("Frame", nil, contentContainer)
         lootPanel:SetAllPoints()
         lootPanel:Hide()
 
-        local miscPanel = CreateFrame("Frame", nil, configWindow)
+        local miscPanel = CreateFrame("Frame", nil, contentContainer)
         miscPanel:SetAllPoints()
         miscPanel:Hide()
 
-        local talentPanel = CreateFrame("Frame", nil, configWindow)
+        local minimapPanel = CreateFrame("Frame", nil, contentContainer)
+        minimapPanel:SetAllPoints()
+        minimapPanel:Hide()
+
+        local talentPanel = CreateFrame("Frame", nil, contentContainer)
         talentPanel:SetAllPoints()
         talentPanel:Hide()
 
-        local widgetsPanel = CreateFrame("Frame", nil, configWindow)
+        local widgetsPanel = CreateFrame("Frame", nil, contentContainer)
         widgetsPanel:SetAllPoints()
         widgetsPanel:Hide()
 
-        -- Store panels for access by setup functions
+        -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
         addonTable.ConfigPanels.combat = combatPanel
         addonTable.ConfigPanels.frames = framesPanel
         addonTable.ConfigPanels.loot = lootPanel
         addonTable.ConfigPanels.misc = miscPanel
+        addonTable.ConfigPanels.minimap = minimapPanel
         addonTable.ConfigPanels.talent = talentPanel
         addonTable.ConfigPanels.widgets = widgetsPanel
 
-        -- Tab Buttons
-        local tab1 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab1:SetPoint("BOTTOMLEFT", configWindow, "BOTTOMLEFT", 10, -30)
-        tab1:SetText("Tracker")
-        tab1:SetID(1)
+        -- Map IDs to Panels
+        local idToPanel = {
+            [1] = trackerPanel,
+            [2] = vendorPanel,
+            [3] = combatPanel,
+            [4] = framesPanel,
+            [5] = lootPanel,
+            [6] = miscPanel,
+            [7] = minimapPanel,
+            [8] = talentPanel,
+            [9] = widgetsPanel,
+        }
 
-        local tab2 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab2:SetPoint("LEFT", tab1, "RIGHT", 5, 0)
-        tab2:SetText("Vendor")
-        tab2:SetID(2)
+        ----------------------------------------------------
+        -- Navigation Logic
+        ----------------------------------------------------
+        local function SelectModule(id)
+            -- Hide all panels
+            for _, p in pairs(idToPanel) do p:Hide() end
+            
+            -- Show selected panel
+            if idToPanel[id] then
+                idToPanel[id]:Show()
+            end
 
-        local tab3 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab3:SetPoint("LEFT", tab2, "RIGHT", 5, 0)
-        tab3:SetText("Combat")
-        tab3:SetID(3)
-
-        local tab4 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab4:SetPoint("LEFT", tab3, "RIGHT", 5, 0)
-        tab4:SetText("Frames")
-        tab4:SetID(4)
-
-        local tab5 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab5:SetPoint("LEFT", tab4, "RIGHT", 5, 0)
-        tab5:SetText("Loot")
-        tab5:SetID(5)
-
-        local tab6 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab6:SetPoint("LEFT", tab5, "RIGHT", 5, 0)
-        tab6:SetText("Misc")
-        tab6:SetID(6)
-
-        local tab7 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab7:SetPoint("LEFT", tab6, "RIGHT", 5, 0)
-        tab7:SetText("Talents")
-        tab7:SetID(7)
-
-        local tab8 = CreateFrame("Button", nil, configWindow, "PanelTabButtonTemplate")
-        tab8:SetPoint("LEFT", tab7, "RIGHT", 5, 0)
-        tab8:SetText("Widgets")
-        tab8:SetID(8)
-
-        -- Store tabs
-        configWindow.Tabs = { tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 }
-        addonTable.ConfigTabs = configWindow.Tabs
-
-        PanelTemplates_SetNumTabs(configWindow, 8)
-        PanelTemplates_SetTab(configWindow, 1)
-
-        -- Tab click handler
-        local function TabOnClick(self)
-            PanelTemplates_SetTab(configWindow, self:GetID())
-            trackerPanel:Hide()
-            vendorPanel:Hide()
-            combatPanel:Hide()
-            framesPanel:Hide()
-            lootPanel:Hide()
-            miscPanel:Hide()
-            talentPanel:Hide()
-            widgetsPanel:Hide()
-
-            local id = self:GetID()
-            if id == 1 then
-                trackerPanel:Show()
-            elseif id == 2 then
-                vendorPanel:Show()
-            elseif id == 3 then
-                combatPanel:Show()
-            elseif id == 4 then
-                framesPanel:Show()
-            elseif id == 5 then
-                lootPanel:Show()
-            elseif id == 6 then
-                miscPanel:Show()
-            elseif id == 7 then
-                talentPanel:Show()
-                -- Refresh talent reminder list when showing
-                if addonTable.Config.RefreshTalentReminderList then
-                    addonTable.Config.RefreshTalentReminderList()
+            -- Update button visuals
+            for i, btn in ipairs(navButtons) do
+                if i == id then
+                    btn:LockHighlight()
+                    if btn.isDisabled then
+                        btn.text:SetTextColor(1, 0.5, 0.5) -- Light Red if selected but disabled
+                    else
+                        btn.text:SetTextColor(1, 1, 1) -- White
+                    end
+                else
+                    btn:UnlockHighlight()
+                    if btn.isDisabled then
+                        btn.text:SetTextColor(1, 0.2, 0.2) -- Red if disabled
+                    else
+                        btn.text:SetTextColor(1, 0.82, 0) -- Gold
+                    end
                 end
-            elseif id == 8 then
-                widgetsPanel:Show()
+            end
+
+            -- Special OnShow logic (e.g., refreshing lists)
+            if id == 8 and addonTable.Config.RefreshTalentReminderList then
+                addonTable.Config.RefreshTalentReminderList()
             end
         end
 
-        tab1:SetScript("OnClick", TabOnClick)
-        tab2:SetScript("OnClick", TabOnClick)
-        tab3:SetScript("OnClick", TabOnClick)
-        tab4:SetScript("OnClick", TabOnClick)
-        tab5:SetScript("OnClick", TabOnClick)
-        tab6:SetScript("OnClick", TabOnClick)
-        tab7:SetScript("OnClick", TabOnClick)
-        tab8:SetScript("OnClick", TabOnClick)
+        ----------------------------------------------------
+        -- Create Sidebar Buttons
+        ----------------------------------------------------
+        local BUTTON_HEIGHT = 30
+        for i, mod in ipairs(modules) do
+            local btn = CreateFrame("Button", nil, navScrollChild)
+            btn:SetSize(SIDEBAR_WIDTH - 25, BUTTON_HEIGHT)
+            btn:SetPoint("TOPLEFT", 0, -((i-1) * BUTTON_HEIGHT))
+            
+            -- Visuals
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            btn.Text = btn.text -- Compatibility with Helpers.UpdateModuleVisuals
+            btn.text:SetPoint("LEFT", 6, 0)
+            btn.text:SetText(mod.name)
+            
+            -- Highlight texture
+            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+            
+            btn:SetScript("OnClick", function()
+                SelectModule(i)
+            end)
+            
+            navButtons[i] = btn
+            
+            -- Store as tab-like object for compatibility with Helpers.UpdateModuleVisuals
+            -- because existing panel setups expect a "tab" to tint red if disabled
+            -- so we add a dummy "tab" object or just use the button itself?
+            -- Helpers.UpdateModuleVisuals looks for tab.Text or tab:GetFontString()
+            -- Button has btn.text, so it should work if we pass btn as 'tab'
+        end
+        
+        -- Store buttons as "Tabs" for compatibility with setup functions
+        -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
+        addonTable.ConfigTabs = navButtons
 
-        -- Now that the window and panels are created, call setup functions from panel files
-        -- Panel files are loaded by the TOC file before ConfigMain
+        -- Select first module by default
+        SelectModule(1)
+
+        ----------------------------------------------------
+        -- Init Setup Functions
+        ----------------------------------------------------
         if addonTable.ConfigSetup then
             -- Setup all panels
+            -- Pass 'navButtons[i]' as the 'tab' argument for visual compatibility
             if addonTable.ConfigSetup.Tracker then
-                addonTable.ConfigSetup.Tracker(trackerPanel, tab1, configWindow)
+                addonTable.ConfigSetup.Tracker(trackerPanel, navButtons[1], configWindow)
             end
             if addonTable.ConfigSetup.Vendor then
-                addonTable.ConfigSetup.Vendor(vendorPanel, tab2, configWindow)
+                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[2], configWindow)
             end
             if addonTable.ConfigSetup.Combat then
-                addonTable.ConfigSetup.Combat(combatPanel, tab3, configWindow)
+                addonTable.ConfigSetup.Combat(combatPanel, navButtons[3], configWindow)
             end
             if addonTable.ConfigSetup.Frames then
-                addonTable.ConfigSetup.Frames(framesPanel, tab4, configWindow)
+                addonTable.ConfigSetup.Frames(framesPanel, navButtons[4], configWindow)
             end
             if addonTable.ConfigSetup.Loot then
-                addonTable.ConfigSetup.Loot(lootPanel, tab5, configWindow)
+                addonTable.ConfigSetup.Loot(lootPanel, navButtons[5], configWindow)
             end
             if addonTable.ConfigSetup.Misc then
-                addonTable.ConfigSetup.Misc(miscPanel, tab6, configWindow)
+                addonTable.ConfigSetup.Misc(miscPanel, navButtons[6], configWindow)
+            end
+            if addonTable.ConfigSetup.Minimap then
+                addonTable.ConfigSetup.Minimap(minimapPanel, navButtons[7], configWindow)
             end
             if addonTable.ConfigSetup.Talent then
-                addonTable.ConfigSetup.Talent(talentPanel, tab7, configWindow)
+                addonTable.ConfigSetup.Talent(talentPanel, navButtons[8], configWindow)
             end
             if addonTable.ConfigSetup.Widgets then
-                addonTable.ConfigSetup.Widgets(widgetsPanel, tab8, configWindow)
+                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[9], configWindow)
             end
         end
     end

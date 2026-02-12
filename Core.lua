@@ -199,6 +199,7 @@ local function OnEvent(self, event, ...)
                 allowRL = true,
                 autoInviteEnabled = false,
                 autoInviteKeywords = "inv,invite",
+                quickDestroy = false,
                 minimapEnabled = false,
                 minimapShape = "ROUND",
                 minimapPos = { point = "TOPRIGHT", relPoint = "TOPRIGHT", x = -7, y = -7 },
@@ -295,13 +296,7 @@ local function OnEvent(self, event, ...)
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"
 
-        -- Global function for Addon Compartment
-        function LunaUITweaks_OpenConfig()
-            if addonTable.Config and addonTable.Config.ToggleWindow then
-                addonTable.Config.ToggleWindow()
-            end
-        end
-
+        -- LunaUITweaks_OpenConfig is defined in ConfigMain.lua (used by Addon Compartment)
         SlashCmdList["UITHINGS"] = function(msg)
             LunaUITweaks_OpenConfig()
         end

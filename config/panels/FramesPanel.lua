@@ -250,6 +250,19 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
         end
     end)
 
+    -- Anchor Checkbox
+    local anchorFrameBtn = CreateFrame("CheckButton", nil, frameControls, "ChatConfigCheckButtonTemplate")
+    anchorFrameBtn:SetPoint("TOPLEFT", 140, -30) -- Next to Lock
+    local anchorText = anchorFrameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    anchorText:SetPoint("LEFT", anchorFrameBtn, "RIGHT", 5, 0)
+    anchorText:SetText("Is Widget Anchor")
+    anchorFrameBtn:SetScript("OnClick", function(self)
+        if selectedFrameIndex then
+            UIThingsDB.frames.list[selectedFrameIndex].isAnchor = self:GetChecked()
+            UpdateFrames()
+        end
+    end)
+
     -- Helper to create input box
     local function CreateValueEditBox(slider, key)
         local edit = CreateFrame("EditBox", nil, slider:GetParent(), "InputBoxTemplate")
@@ -527,6 +540,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
 
             nameEdit:SetText(f.name or "")
             lockFrameBtn:SetChecked(f.locked)
+            anchorFrameBtn:SetChecked(f.isAnchor)
 
             widthSlider:SetValue(f.width)
             _G[widthSlider:GetName() .. 'Text']:SetText("Width")

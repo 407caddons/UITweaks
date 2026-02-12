@@ -24,21 +24,14 @@ local Log = function(msg, level)
     end
 end
 
--- Use centralized SafeAfter from Core
-local SafeAfter = function(delay, func)
-    if addonTable.Core and addonTable.Core.SafeAfter then
-        addonTable.Core.SafeAfter(delay, func)
-    elseif C_Timer and C_Timer.After then
-        C_Timer.After(delay, func)
-    end
-end
+local SafeAfter = addonTable.Core.SafeAfter
 
 
 
 local function OnQuestClick(self, button)
     -- Disable left-click in combat
     if InCombatLockdown() and button == "LeftButton" then return end
-    
+
     -- Shift-Click to Untrack (if enabled)
     if IsShiftKeyDown() and self.questID and UIThingsDB.tracker.shiftClickUntrack then
         C_QuestLog.RemoveQuestWatch(self.questID)
@@ -173,7 +166,488 @@ local function ReleaseItems()
     end
 end
 
+-- Shared state for UpdateContent and its helper functions (avoids per-call closure/table allocation)
+local ucState = {
+    yOffset = 0,
+    width = 0,
+    baseFont = "",
+    baseSize = 12,
+    questNameFont = "",
+    questNameSize = 14,
+    detailFont = "",
+    detailSize = 12,
+    questPadding = 2,
+    cachedMapID = nil,
+    cachedTasks = nil,
+}
+
+-- Reusable scratch tables (wiped each UpdateContent call)
+local displayedIDs = {}
+local activeWQs = {}
+local otherWQs = {}
+local validWQs = {}
+local hiddenTaskQuests = {}
+local filteredIndices = {}
+local validAchievements = {}
+
 local UpdateContent -- forward declaration for ScheduleUpdateContent
+
+-- Helper to add lines (hoisted from UpdateContent)
+local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
+    local btn = AcquireItem()
+    btn:Show()
+
+    btn.questID = questID
+    btn.achieID = achieID
+
+    btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
+
+    btn:SetWidth(ucState.width)
+    btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
+
+    if isHeader then
+        btn.Text:SetFont(ucState.baseFont, ucState.baseSize + 2, "OUTLINE")
+        btn.Text:SetText(text)
+        btn.Text:SetTextColor(1, 0.82, 0)
+        btn.Icon:Hide()
+        btn.Text:SetPoint("LEFT", 0, 0)
+
+        if questID then
+            local section = questID
+            local isCollapsed = UIThingsDB.tracker.collapsed[section]
+
+            btn.ToggleBtn:Show()
+            btn.ToggleBtn:SetScript("OnClick", function(self, button)
+                if InCombatLockdown() and button == "LeftButton" then return end
+                UIThingsDB.tracker.collapsed[section] = not isCollapsed
+                UpdateContent()
+            end)
+
+            if isCollapsed then
+                btn.ToggleBtn.Text:SetText("+")
+            else
+                btn.ToggleBtn.Text:SetText("-")
+            end
+
+            local textWidth = btn.Text:GetStringWidth()
+            btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
+        else
+            btn.ToggleBtn:Hide()
+        end
+
+        ucState.yOffset = ucState.yOffset - (ucState.baseSize + 8)
+    else
+        if isObjective then
+            local currentSize = ucState.detailSize
+
+            btn.Text:SetFont(ucState.detailFont, currentSize, "OUTLINE")
+            btn.Text:SetText(text)
+            btn.Text:SetTextColor(0.8, 0.8, 0.8)
+            btn.Icon:Hide()
+            btn.Text:SetPoint("LEFT", 19, 0)
+            btn:EnableMouse(false)
+            ucState.yOffset = ucState.yOffset - (currentSize + ucState.questPadding)
+        else
+            local currentSize = ucState.questNameSize
+
+            btn.Text:SetFont(ucState.questNameFont, currentSize, "OUTLINE")
+            btn.Text:SetText(text)
+
+            if overrideColor then
+                btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
+            else
+                btn.Text:SetTextColor(1, 1, 1)
+            end
+
+            if questID then
+                local iconAsset, isAtlas
+                if QuestUtil and QuestUtil.GetQuestIconActiveForQuestID then
+                    iconAsset, isAtlas = QuestUtil.GetQuestIconActiveForQuestID(questID)
+                end
+
+                btn.Icon:SetTexture(nil)
+                if iconAsset and isAtlas then
+                    btn.Icon:SetAtlas(iconAsset, true)
+                elseif iconAsset then
+                    btn.Icon:SetTexture(iconAsset)
+                else
+                    local isComplete = C_QuestLog.IsComplete(questID)
+                    if isComplete then
+                        btn.Icon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
+                    else
+                        btn.Icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+                    end
+                end
+                btn.Icon:Show()
+                btn.Text:SetPoint("LEFT", btn.Icon, "RIGHT", 5, 0)
+                btn:EnableMouse(true)
+
+                local questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+                if questLogIndex then
+                    local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(questLogIndex)
+                    if questItemLink and questItemIcon then
+                        btn.ItemBtn.iconTex:SetTexture(questItemIcon)
+                        btn.ItemBtn:SetAttribute("type", "item")
+                        btn.ItemBtn:SetAttribute("item", questItemLink)
+                        btn.ItemBtn:Show()
+                    else
+                        btn.ItemBtn:Hide()
+                    end
+                else
+                    btn.ItemBtn:Hide()
+                end
+            else
+                btn.Icon:Hide()
+                btn.Text:SetPoint("LEFT", 19, 0)
+                if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
+                if btn.ItemBtn then btn.ItemBtn:Hide() end
+            end
+
+            ucState.yOffset = ucState.yOffset - (currentSize + 4)
+        end
+    end
+end
+
+--- Formats time remaining for World Quests
+local function GetTimeLeftString(questID)
+    local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
+    if timeLeftMinutes and timeLeftMinutes > 0 then
+        local days = math.floor(timeLeftMinutes / MINUTES_PER_DAY)
+        local hours = math.floor((timeLeftMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR)
+        local minutes = timeLeftMinutes % 60
+
+        if days > 0 then
+            return string.format(" (%dd %dh)", days, hours)
+        elseif hours > 0 then
+            return string.format(" (%dh %dm)", hours, minutes)
+        else
+            return string.format(" (%dm)", minutes)
+        end
+    end
+    return ""
+end
+
+--- Renders a single World Quest entry
+local function RenderSingleWQ(questID, superTrackedQuestID)
+    if not displayedIDs[questID] then
+        local title = C_QuestLog.GetTitleForQuestID(questID)
+        if title then
+            if UIThingsDB.tracker.showWorldQuestTimer then
+                title = title .. GetTimeLeftString(questID)
+            end
+
+            local color = nil
+            if questID == superTrackedQuestID then
+                color = UIThingsDB.tracker.activeQuestColor
+            end
+
+            AddLine(title, false, questID, nil, false, color)
+            displayedIDs[questID] = true
+
+            local objectives = C_QuestLog.GetQuestObjectives(questID)
+            if objectives then
+                for _, obj in pairs(objectives) do
+                    local objText = obj.text
+                    if objText and objText ~= "" then
+                        if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                        AddLine(objText, false, nil, nil, true)
+                    end
+                end
+            end
+            ucState.yOffset = ucState.yOffset - ITEM_SPACING
+        end
+    end
+end
+
+--- Renders all World Quests for the current map
+local function RenderWorldQuests()
+    if not ucState.cachedMapID then return end
+
+    local tasks = ucState.cachedTasks
+    local threatQuests = C_TaskQuest.GetThreatQuests()
+
+    wipe(activeWQs)
+    wipe(otherWQs)
+    wipe(validWQs)
+    local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
+
+    local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+
+    if tasks then
+        for _, info in ipairs(tasks) do
+            local questID = info.questID
+            if questID and C_TaskQuest.IsActive(questID) then
+                local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
+                local isTaskQuest = C_QuestLog.IsQuestTask(questID)
+
+                if questID == 86696 then
+                    print(string.format(
+                        "[LunaUITweaks] Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | IsOn: %s | IsActive: %s",
+                        tostring(isWorldQuest),
+                        tostring(isTaskQuest),
+                        tostring(C_QuestLog.IsOnQuest(questID)),
+                        tostring(C_TaskQuest.IsActive(questID))))
+                end
+
+                if isWorldQuest or isTaskQuest then
+                    validWQs[questID] = true
+
+                    local isActive = C_QuestLog.IsOnQuest(questID)
+
+                    if isTaskQuest and not isWorldQuest then
+                        if isActive then
+                            table.insert(activeWQs, questID)
+                        end
+                    elseif isWorldQuest then
+                        if onlyActive then
+                            if isActive then
+                                table.insert(activeWQs, questID)
+                            end
+                        else
+                            if isActive then
+                                table.insert(activeWQs, questID)
+                            else
+                                table.insert(otherWQs, questID)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
+
+    if hasWQs then
+        AddLine("World Quests", true, "worldQuests")
+
+        if UIThingsDB.tracker.collapsed["worldQuests"] then
+            ucState.yOffset = ucState.yOffset - ITEM_SPACING
+            return
+        end
+
+        if superTrackedQuestID and validWQs[superTrackedQuestID] then
+            RenderSingleWQ(superTrackedQuestID, superTrackedQuestID)
+        end
+
+        for _, questID in ipairs(activeWQs) do
+            RenderSingleWQ(questID, superTrackedQuestID)
+        end
+
+        for _, questID in ipairs(otherWQs) do
+            RenderSingleWQ(questID, superTrackedQuestID)
+        end
+
+        ucState.yOffset = ucState.yOffset - SECTION_SPACING
+    end
+end
+
+local function RenderQuests()
+    local numQuestLogEntries = C_QuestLog.GetNumQuestLogEntries()
+    wipe(hiddenTaskQuests)
+
+    for i = 1, numQuestLogEntries do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader and info.isHidden and info.isTask and info.isOnMap and info.questID then
+            if not displayedIDs[info.questID] then
+                table.insert(hiddenTaskQuests, info.questID)
+            end
+        end
+    end
+
+    if #hiddenTaskQuests > 0 then
+        AddLine("Temporary Objectives", true, "tempObjectives")
+
+        if not UIThingsDB.tracker.collapsed["tempObjectives"] then
+            for _, questID in ipairs(hiddenTaskQuests) do
+                local title = C_QuestLog.GetTitleForQuestID(questID)
+                if title then
+                    AddLine(title, false, questID, nil, false)
+                    displayedIDs[questID] = true
+
+                    local objectives = C_QuestLog.GetQuestObjectives(questID)
+                    if objectives then
+                        for _, obj in pairs(objectives) do
+                            local objText = obj.text
+                            if objText and objText ~= "" then
+                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                AddLine(objText, false, nil, nil, true)
+                            end
+                        end
+                    end
+                    ucState.yOffset = ucState.yOffset - 5
+                end
+            end
+            ucState.yOffset = ucState.yOffset - 10
+        else
+            ucState.yOffset = ucState.yOffset - 5
+        end
+    end
+
+    local numQuests = C_QuestLog.GetNumQuestWatches()
+    if numQuests > 0 then
+        local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+        local superTrackedIndex = nil
+
+        wipe(filteredIndices)
+        for i = 1, numQuests do
+            local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+            if qID then
+                local isTaskQuest = C_QuestLog.IsQuestTask(qID)
+                local isWorldQuest = C_QuestLog.IsWorldQuest(qID)
+
+                if qID == 86696 then
+                    print(string.format(
+                        "[LunaUITweaks] Watch[%d]: Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | Displayed: %s",
+                        i,
+                        tostring(isWorldQuest),
+                        tostring(isTaskQuest),
+                        tostring(displayedIDs[qID] ~= nil)))
+                end
+
+                if not displayedIDs[qID] then
+                    if qID == superTrackedQuestID then
+                        superTrackedIndex = i
+                    else
+                        table.insert(filteredIndices, i)
+                    end
+                end
+            end
+        end
+
+        if superTrackedIndex then
+            table.insert(filteredIndices, 1, superTrackedIndex)
+        end
+
+        if #filteredIndices > 0 then
+            AddLine("Quests", true, "quests")
+
+            if UIThingsDB.tracker.collapsed["quests"] then
+                ucState.yOffset = ucState.yOffset - 5
+                return
+            end
+            for _, i in ipairs(filteredIndices) do
+                local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                local title = C_QuestLog.GetTitleForQuestID(questID)
+                if title then
+                    local color = nil
+                    if questID == superTrackedQuestID then
+                        color = UIThingsDB.tracker.activeQuestColor
+                    end
+
+                    AddLine(title, false, questID, nil, false, color)
+                    displayedIDs[questID] = true
+
+                    local objectives = C_QuestLog.GetQuestObjectives(questID)
+                    if objectives then
+                        for _, obj in pairs(objectives) do
+                            local objText = obj.text
+                            if objText and objText ~= "" then
+                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                AddLine(objText, false, nil, nil, true)
+                            end
+                        end
+                    end
+                    ucState.yOffset = ucState.yOffset - 5
+                end
+            end
+            ucState.yOffset = ucState.yOffset - 10
+        end
+    end
+end
+
+--- Renders Scenarios and Bonus Objectives
+local function RenderScenarios()
+    if not C_ScenarioInfo then return end
+
+    local scenarioInfo = C_ScenarioInfo.GetScenarioInfo()
+
+    if not scenarioInfo or not scenarioInfo.name or scenarioInfo.name == "" then return end
+
+    AddLine("Scenario: " .. scenarioInfo.name, true, "scenario")
+
+    if UIThingsDB.tracker.collapsed["scenario"] then
+        ucState.yOffset = ucState.yOffset - ITEM_SPACING
+        return
+    end
+
+    if C_ScenarioInfo.GetCriteriaInfo then
+        local criteriaIndex = 1
+        while true do
+            local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
+            if not criteriaInfo then break end
+
+            local text = criteriaInfo.description or ""
+            if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+                text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
+            end
+            if criteriaInfo.completed then
+                text = "|cFF00FF00" .. text .. "|r"
+            end
+
+            local isBonus = criteriaInfo.isWeightedProgress or false
+            if isBonus then
+                text = "|cFF00FFFF[Bonus] " .. text .. "|r"
+            end
+
+            AddLine(text, false, nil, nil, true)
+            criteriaIndex = criteriaIndex + 1
+
+            if criteriaIndex > 50 then break end
+        end
+    end
+
+    ucState.yOffset = ucState.yOffset - SECTION_SPACING
+end
+
+local function RenderAchievements()
+    local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
+
+    wipe(validAchievements)
+    for _, achID in ipairs(trackedAchievements) do
+        local _, name = GetAchievementInfo(achID)
+        if name then
+            table.insert(validAchievements, achID)
+        end
+    end
+
+    if #validAchievements > 0 then
+        AddLine("Achievements", true, "achievements")
+
+        if UIThingsDB.tracker.collapsed["achievements"] then
+            ucState.yOffset = ucState.yOffset - 5
+            return
+        end
+
+        for _, achID in ipairs(validAchievements) do
+            local _, name = GetAchievementInfo(achID)
+            AddLine(name, false, nil, achID)
+            local numCriteria = GetAchievementNumCriteria(achID)
+            for j = 1, numCriteria do
+                local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
+                if criteriaString then
+                    local text = criteriaString
+                    if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
+                        text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
+                    end
+                    if completed then text = "|cFF00FF00" .. text .. "|r" end
+                    AddLine(text, false, nil, nil, true)
+                end
+            end
+            ucState.yOffset = ucState.yOffset - 5
+        end
+        ucState.yOffset = ucState.yOffset - 10
+    end
+end
+
+-- Section renderer lookup (hoisted, reuses the static functions above)
+local sectionRenderers = {
+    scenarios = RenderScenarios,
+    tempObjectives = function() end, -- handled within RenderQuests
+    worldQuests = RenderWorldQuests,
+    quests = RenderQuests,
+    achievements = RenderAchievements,
+}
 
 -- Throttle wrapper to coalesce rapid-fire events into a single update
 local updatePending = false
@@ -202,32 +676,30 @@ UpdateContent = function()
         end
     end
 
-    -- Count world quests and task quests
+    -- Count world quests and task quests (cache mapID/tasks for RenderWorldQuests)
     local worldQuestCount = 0
-    local mapID = C_Map.GetBestMapForUnit("player")
-    if mapID then
-        local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
+    local cachedMapID = C_Map.GetBestMapForUnit("player")
+    local cachedTasks = cachedMapID and C_TaskQuest.GetQuestsOnMap(cachedMapID) or nil
+    if cachedTasks then
         local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
-        if tasks then
-            for _, info in ipairs(tasks) do
-                local questID = info.questID
-                if questID and C_TaskQuest.IsActive(questID) then
-                    local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
-                    local isTaskQuest = C_QuestLog.IsQuestTask(questID)
+        for _, info in ipairs(cachedTasks) do
+            local questID = info.questID
+            if questID and C_TaskQuest.IsActive(questID) then
+                local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
+                local isTaskQuest = C_QuestLog.IsQuestTask(questID)
 
-                    if isWorldQuest or isTaskQuest then
-                        -- Task quests (bonus objectives/temporary quests) always show when active
-                        -- World quests respect the onlyActive filter
-                        if isTaskQuest and not isWorldQuest then
-                            worldQuestCount = worldQuestCount + 1
-                        elseif isWorldQuest then
-                            if onlyActive then
-                                if C_QuestLog.IsOnQuest(questID) then
-                                    worldQuestCount = worldQuestCount + 1
-                                end
-                            else
+                if isWorldQuest or isTaskQuest then
+                    -- Task quests (bonus objectives/temporary quests) always show when active
+                    -- World quests respect the onlyActive filter
+                    if isTaskQuest and not isWorldQuest then
+                        worldQuestCount = worldQuestCount + 1
+                    elseif isWorldQuest then
+                        if onlyActive then
+                            if C_QuestLog.IsOnQuest(questID) then
                                 worldQuestCount = worldQuestCount + 1
                             end
+                        else
+                            worldQuestCount = worldQuestCount + 1
                         end
                     end
                 end
@@ -261,550 +733,27 @@ UpdateContent = function()
 
     ReleaseItems()
 
-    -- Base font (for section headers like "Quests")
-    local baseFont = UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
-    local baseSize = UIThingsDB.tracker.fontSize or 12
+    -- Populate shared state for hoisted helper functions
+    ucState.baseFont = UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
+    ucState.baseSize = UIThingsDB.tracker.fontSize or 12
+    ucState.questNameFont = UIThingsDB.tracker.headerFont or "Fonts\\FRIZQT__.TTF"
+    ucState.questNameSize = UIThingsDB.tracker.headerFontSize or 14
+    ucState.detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
+    ucState.detailSize = UIThingsDB.tracker.detailFontSize or 12
+    ucState.questPadding = UIThingsDB.tracker.questPadding or 2
+    ucState.yOffset = -5
+    ucState.width = scrollChild:GetWidth()
+    ucState.cachedMapID = cachedMapID
+    ucState.cachedTasks = cachedTasks
 
-    -- Specific fonts (Quest Name and Detail)
-    local questNameFont = UIThingsDB.tracker.headerFont or "Fonts\\FRIZQT__.TTF"
-    local questNameSize = UIThingsDB.tracker.headerFontSize or 14
-    local detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
-    local detailSize = UIThingsDB.tracker.detailFontSize or 12
-    local questPadding = UIThingsDB.tracker.questPadding or 2
-
-    -- Ensure Collapsed State
     UIThingsDB.tracker.collapsed = UIThingsDB.tracker.collapsed or {}
 
-    local yOffset = -5
-    local width = scrollChild:GetWidth()
-
-    -- Helper to add lines
-    -- questID is repurposed as sectionKey if isHeader is true
-    local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
-        local btn = AcquireItem()
-        btn:Show()
-
-        -- Store IDs for Click Handlers
-        btn.questID = questID
-        btn.achieID = achieID
-
-        btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
-
-        btn:SetWidth(width)
-        btn:SetPoint("TOPLEFT", 0, yOffset)
-
-        if isHeader then
-            -- Section Header (e.g. "Quests") - Use Base Font
-            btn.Text:SetFont(baseFont, baseSize + 2, "OUTLINE") -- Slightly larger than base
-            btn.Text:SetText(text)
-            btn.Text:SetTextColor(1, 0.82, 0)                   -- Gold
-            btn.Icon:Hide()
-            btn.Text:SetPoint("LEFT", 0, 0)
-
-            -- Toggle Button Logic
-            if questID then -- sectionKey
-                local section = questID
-                local isCollapsed = UIThingsDB.tracker.collapsed[section]
-
-                btn.ToggleBtn:Show()
-                btn.ToggleBtn:SetScript("OnClick", function(self, button)
-                    if InCombatLockdown() and button == "LeftButton" then return end
-                    UIThingsDB.tracker.collapsed[section] = not isCollapsed
-                    UpdateContent()
-                end)
-
-                if isCollapsed then
-                    btn.ToggleBtn.Text:SetText("+")
-                else
-                    btn.ToggleBtn.Text:SetText("-")
-                end
-
-                -- Position to right of text
-                local textWidth = btn.Text:GetStringWidth()
-                btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
-            else
-                btn.ToggleBtn:Hide()
-            end
-
-            yOffset = yOffset - (baseSize + 8)
-        else
-            -- Content Line
-            if isObjective then
-                -- Objective / Detail
-                local currentSize = detailSize
-
-                btn.Text:SetFont(detailFont, currentSize, "OUTLINE")
-                btn.Text:SetText(text)
-                btn.Text:SetTextColor(0.8, 0.8, 0.8)
-                btn.Icon:Hide()
-                btn.Text:SetPoint("LEFT", 19, 0)
-                btn:EnableMouse(false)
-                yOffset = yOffset - (currentSize + questPadding)
-            else
-                -- Quest Name / Achievement Title
-                -- Use "Quest Name" font settings (formerly headerFont)
-                local currentSize = questNameSize
-
-                btn.Text:SetFont(questNameFont, currentSize, "OUTLINE")
-                btn.Text:SetText(text)
-
-                if overrideColor then
-                    btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
-                else
-                    btn.Text:SetTextColor(1, 1, 1)
-                end
-
-                if questID then
-                    local iconAsset, isAtlas
-                    if QuestUtil and QuestUtil.GetQuestIconActiveForQuestID then
-                        iconAsset, isAtlas = QuestUtil.GetQuestIconActiveForQuestID(questID)
-                    end
-
-                    btn.Icon:SetTexture(nil)
-                    if iconAsset and isAtlas then
-                        btn.Icon:SetAtlas(iconAsset, true)
-                    elseif iconAsset then
-                        btn.Icon:SetTexture(iconAsset)
-                    else
-                        local isComplete = C_QuestLog.IsComplete(questID)
-                        if isComplete then
-                            btn.Icon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
-                        else
-                            btn.Icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
-                        end
-                    end
-                    btn.Icon:Show()
-                    btn.Text:SetPoint("LEFT", btn.Icon, "RIGHT", 5, 0)
-                    btn:EnableMouse(true)
-
-                    -- Check for quest item
-                    local questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID)
-                    if questLogIndex then
-                        local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(questLogIndex)
-                        if questItemLink and questItemIcon then
-                            btn.ItemBtn.iconTex:SetTexture(questItemIcon)
-                            btn.ItemBtn:SetAttribute("type", "item")
-                            btn.ItemBtn:SetAttribute("item", questItemLink)
-                            btn.ItemBtn:Show()
-                        else
-                            btn.ItemBtn:Hide()
-                        end
-                    else
-                        btn.ItemBtn:Hide()
-                    end
-                else
-                    -- Achievement
-                    btn.Icon:Hide()
-                    btn.Text:SetPoint("LEFT", 19, 0)
-                    if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
-                    if btn.ItemBtn then btn.ItemBtn:Hide() end
-                end
-
-                yOffset = yOffset - (currentSize + 4)
-            end
-        end
-    end
-
-    -- Track displayed IDs to prevent duplicates
-    local displayedIDs = {}
-
-    --- Formats time remaining for World Quests
-    -- @param questID number The quest ID
-    -- @return string Formatted time string (e.g., " (2d 3h)")
-    local function GetTimeLeftString(questID)
-        local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
-        if timeLeftMinutes and timeLeftMinutes > 0 then
-            local days = math.floor(timeLeftMinutes / MINUTES_PER_DAY)
-            local hours = math.floor((timeLeftMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR)
-            local minutes = timeLeftMinutes % 60
-
-            if days > 0 then
-                return string.format(" (%dd %dh)", days, hours)
-            elseif hours > 0 then
-                return string.format(" (%dh %dm)", hours, minutes)
-            else
-                return string.format(" (%dm)", minutes)
-            end
-        end
-        return ""
-    end
-
-    --- Renders a single World Quest entry
-    -- @param questID number The quest ID to render
-    -- @param superTrackedQuestID number The currently super tracked quest ID
-    local function RenderSingleWQ(questID, superTrackedQuestID)
-        if not displayedIDs[questID] then
-            local title = C_QuestLog.GetTitleForQuestID(questID)
-            if title then
-                if UIThingsDB.tracker.showWorldQuestTimer then
-                    title = title .. GetTimeLeftString(questID)
-                end
-
-                local color = nil
-                if questID == superTrackedQuestID then
-                    color = UIThingsDB.tracker.activeQuestColor
-                end
-
-                AddLine(title, false, questID, nil, false, color)
-                displayedIDs[questID] = true
-
-                local objectives = C_QuestLog.GetQuestObjectives(questID)
-                if objectives then
-                    for _, obj in pairs(objectives) do
-                        local objText = obj.text
-                        if objText and objText ~= "" then
-                            if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                            AddLine(objText, false, nil, nil, true)
-                        end
-                    end
-                end
-                yOffset = yOffset - ITEM_SPACING
-            end
-        end
-    end
-
-    --- Renders all World Quests for the current map
-    local function RenderWorldQuests()
-        local mapID = C_Map.GetBestMapForUnit("player")
-        if not mapID then return end
-
-        -- Get both regular tasks and threat quests (temporary objectives)
-        local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
-        local threatQuests = C_TaskQuest.GetThreatQuests()
-
-        -- Debug threat quests (disabled - too spammy)
-        -- if threatQuests and #threatQuests > 0 then
-        --     print(string.format("[LunaUITweaks] Found %d threat quests", #threatQuests))
-        -- end
-        local activeWQs = {} -- Specifically the one(s) the player is doing now
-        local otherWQs = {}  -- All other available ones
-        local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
-
-        -- Get Super Tracked ID
-        local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
-
-        local validWQs = {}
-
-        -- Debug disabled (too spammy)
-
-        if tasks then
-            for _, info in ipairs(tasks) do
-                local questID = info.questID
-                -- Check availability
-                if questID and C_TaskQuest.IsActive(questID) then
-                    local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
-                    local isTaskQuest = C_QuestLog.IsQuestTask(questID)
-                    local questTitle = C_QuestLog.GetTitleForQuestID(questID)
-                    local isOnQuest = C_QuestLog.IsOnQuest(questID)
-
-                    -- Debug: Log specific quest 86696
-                    if questID == 86696 then
-                        print(string.format(
-                            "[LunaUITweaks] Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | IsOn: %s | IsActive: %s",
-                            tostring(isWorldQuest),
-                            tostring(isTaskQuest),
-                            tostring(isOnQuest),
-                            tostring(C_TaskQuest.IsActive(questID))))
-                    end
-
-                    if isWorldQuest or isTaskQuest then
-                        validWQs[questID] = true
-
-                        local isActive = C_QuestLog.IsOnQuest(questID)
-
-                        -- Task quests (bonus objectives/temporary quests) always show when active
-                        -- World quests respect the onlyActive filter
-                        if isTaskQuest and not isWorldQuest then
-                            -- Always show task quests when active
-                            if isActive then
-                                table.insert(activeWQs, questID)
-                            end
-                        elseif isWorldQuest then
-                            -- World quests respect the filter setting
-                            if onlyActive then
-                                if isActive then
-                                    table.insert(activeWQs, questID)
-                                end
-                            else
-                                -- Show All
-                                if isActive then
-                                    table.insert(activeWQs, questID)
-                                else
-                                    table.insert(otherWQs, questID)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
-
-        if hasWQs then
-            AddLine("World Quests", true, "worldQuests")
-
-            if UIThingsDB.tracker.collapsed["worldQuests"] then
-                yOffset = yOffset - ITEM_SPACING
-                return
-            end
-
-            -- 1. Render Super Tracked First (if it matches a valid WQ on this map)
-            if superTrackedQuestID and validWQs[superTrackedQuestID] then
-                RenderSingleWQ(superTrackedQuestID, superTrackedQuestID)
-            end
-
-            -- 2. Render Active Ones
-            for _, questID in ipairs(activeWQs) do
-                RenderSingleWQ(questID, superTrackedQuestID)
-            end
-
-            -- 3. Render Others
-            for _, questID in ipairs(otherWQs) do
-                RenderSingleWQ(questID, superTrackedQuestID)
-            end
-
-            yOffset = yOffset - SECTION_SPACING
-        end
-    end
-
-    local function RenderQuests()
-        -- First, find and render hidden task quests (temporary objectives like Devourer attacks)
-        -- These are isHidden=true, isTask=true, isOnMap=true quests that aren't in the watch list
-        local numQuestLogEntries = C_QuestLog.GetNumQuestLogEntries()
-        local hiddenTaskQuests = {}
-
-        for i = 1, numQuestLogEntries do
-            local info = C_QuestLog.GetInfo(i)
-            if info and not info.isHeader and info.isHidden and info.isTask and info.isOnMap and info.questID then
-                -- This is a temporary objective like Devourer Attack
-                if not displayedIDs[info.questID] then
-                    table.insert(hiddenTaskQuests, info.questID)
-                end
-            end
-        end
-
-        -- Render hidden task quests if any
-        if #hiddenTaskQuests > 0 then
-            AddLine("Temporary Objectives", true, "tempObjectives")
-
-            if not UIThingsDB.tracker.collapsed["tempObjectives"] then
-                for _, questID in ipairs(hiddenTaskQuests) do
-                    local title = C_QuestLog.GetTitleForQuestID(questID)
-                    if title then
-                        AddLine(title, false, questID, nil, false)
-                        displayedIDs[questID] = true
-
-                        local objectives = C_QuestLog.GetQuestObjectives(questID)
-                        if objectives then
-                            for _, obj in pairs(objectives) do
-                                local objText = obj.text
-                                if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                    AddLine(objText, false, nil, nil, true)
-                                end
-                            end
-                        end
-                        yOffset = yOffset - 5
-                    end
-                end
-                yOffset = yOffset - 10
-            else
-                yOffset = yOffset - 5
-            end
-        end
-
-        local numQuests = C_QuestLog.GetNumQuestWatches()
-        -- Debug disabled (too spammy)
-        -- print(string.format("[LunaUITweaks] Watch list has %d quests", numQuests))
-        if numQuests > 0 then
-            -- Identify Super Tracked Quest
-            local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
-            local superTrackedIndex = nil
-
-            -- Filter out ones already displayed (e.g. if a WQ was also watched)
-            -- BUT include task quests that weren't shown in world quests (like temporary objectives)
-            local filteredIndices = {}
-            for i = 1, numQuests do
-                local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-                if qID then
-                    -- Debug: Log ALL quests in watch list
-                    local isTaskQuest = C_QuestLog.IsQuestTask(qID)
-                    local isWorldQuest = C_QuestLog.IsWorldQuest(qID)
-                    local questTitle = C_QuestLog.GetTitleForQuestID(qID)
-
-                    -- Debug specific quest 86696
-                    if qID == 86696 then
-                        print(string.format(
-                            "[LunaUITweaks] Watch[%d]: Quest 86696 'Shadow Re-Disruption' | IsWQ: %s | IsTask: %s | Displayed: %s",
-                            i,
-                            tostring(isWorldQuest),
-                            tostring(isTaskQuest),
-                            tostring(displayedIDs[qID] ~= nil)))
-                    end
-
-                    if not displayedIDs[qID] then
-                        -- Always include this quest, even if it's a task quest
-                        -- Task quests not on the map (like temporary objectives) need to show here
-                        if qID == superTrackedQuestID then
-                            superTrackedIndex = i
-                        else
-                            table.insert(filteredIndices, i)
-                        end
-                    end
-                end
-            end
-
-            -- Insert Super Tracked at the TOP of the list
-            if superTrackedIndex then
-                table.insert(filteredIndices, 1, superTrackedIndex)
-            end
-
-            if #filteredIndices > 0 then
-                AddLine("Quests", true, "quests")
-
-                if UIThingsDB.tracker.collapsed["quests"] then
-                    yOffset = yOffset - 5
-                    return
-                end
-                for _, i in ipairs(filteredIndices) do
-                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-                    local title = C_QuestLog.GetTitleForQuestID(questID)
-                    if title then
-                        -- Check if this is the super tracked one to apply color
-                        local color = nil
-                        if questID == superTrackedQuestID then
-                            color = UIThingsDB.tracker.activeQuestColor
-                        end
-
-                        AddLine(title, false, questID, nil, false, color)
-                        displayedIDs[questID] = true
-
-                        local objectives = C_QuestLog.GetQuestObjectives(questID)
-                        if objectives then
-                            for _, obj in pairs(objectives) do
-                                local objText = obj.text
-                                if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                    AddLine(objText, false, nil, nil, true)
-                                end
-                            end
-                        end
-                        yOffset = yOffset - 5
-                    end
-                end
-                yOffset = yOffset - 10
-            end
-        end
-    end
-
-    --- Renders Scenarios and Bonus Objectives
-    local function RenderScenarios()
-        if not C_ScenarioInfo then return end
-
-        -- Try to get scenario info - returns a table with scenario data
-        local scenarioInfo = C_ScenarioInfo.GetScenarioInfo()
-
-        -- Debug disabled (too spammy)
-
-        if not scenarioInfo or not scenarioInfo.name or scenarioInfo.name == "" then return end
-
-        AddLine("Scenario: " .. scenarioInfo.name, true, "scenario")
-
-        if UIThingsDB.tracker.collapsed["scenario"] then
-            yOffset = yOffset - ITEM_SPACING
-            return
-        end
-
-        -- Try to get criteria using safe iteration
-        if C_ScenarioInfo.GetCriteriaInfo then
-            local criteriaIndex = 1
-            while true do
-                local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
-                if not criteriaInfo then break end
-
-                local text = criteriaInfo.description or ""
-                if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
-                    text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
-                end
-                if criteriaInfo.completed then
-                    text = "|cFF00FF00" .. text .. "|r"
-                end
-
-                -- Check if this is a bonus objective
-                local isBonus = criteriaInfo.isWeightedProgress or false
-                if isBonus then
-                    text = "|cFF00FFFF[Bonus] " .. text .. "|r"
-                end
-
-                AddLine(text, false, nil, nil, true)
-                criteriaIndex = criteriaIndex + 1
-
-                -- Safety limit
-                if criteriaIndex > 50 then break end
-            end
-        end
-
-        yOffset = yOffset - SECTION_SPACING
-    end
-
-    local function RenderAchievements()
-        local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-
-        -- Filter to only achievements with valid names
-        local validAchievements = {}
-        for _, achID in ipairs(trackedAchievements) do
-            local _, name = GetAchievementInfo(achID)
-            if name then
-                table.insert(validAchievements, achID)
-            end
-        end
-
-        if #validAchievements > 0 then
-            AddLine("Achievements", true, "achievements")
-
-            if UIThingsDB.tracker.collapsed["achievements"] then
-                yOffset = yOffset - 5
-                return
-            end
-
-            for _, achID in ipairs(validAchievements) do
-                local _, name = GetAchievementInfo(achID)
-                AddLine(name, false, nil, achID)
-                local numCriteria = GetAchievementNumCriteria(achID)
-                for j = 1, numCriteria do
-                    local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
-                    if criteriaString then
-                        local text = criteriaString
-                        if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
-                            text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
-                        end
-                        if completed then text = "|cFF00FF00" .. text .. "|r" end
-                        AddLine(text, false, nil, nil, true)
-                    end
-                end
-                yOffset = yOffset - 5
-            end
-            yOffset = yOffset - 10
-        end
-    end
-
-    -- Render sections in user-defined order
-    local sectionRenderers = {
-        scenarios = RenderScenarios,
-        tempObjectives = function()
-            -- Temp objectives are rendered within RenderQuests, so this is a no-op
-            -- They're already handled above
-        end,
-        worldQuests = RenderWorldQuests,
-        quests = RenderQuests,
-        achievements = RenderAchievements,
-    }
+    -- Wipe reusable scratch tables
+    wipe(displayedIDs)
 
     -- Use new list-based order if available, otherwise fall back to old dropdown
     local orderList = UIThingsDB.tracker.sectionOrderList
     if not orderList then
-        -- Migrate from old system
         local oldOrder = UIThingsDB.tracker.sectionOrder or 1
         local oldOrderMap = {
             [1] = { "scenarios", "worldQuests", "quests", "achievements" },
@@ -815,7 +764,6 @@ UpdateContent = function()
             [6] = { "scenarios", "achievements", "quests", "worldQuests" },
         }
         orderList = oldOrderMap[oldOrder] or oldOrderMap[1]
-        -- Insert tempObjectives after scenarios
         table.insert(orderList, 2, "tempObjectives")
         UIThingsDB.tracker.sectionOrderList = orderList
     end
@@ -828,7 +776,7 @@ UpdateContent = function()
     end
 
     -- Resize Scroll Child
-    local totalHeight = math.abs(yOffset)
+    local totalHeight = math.abs(ucState.yOffset)
     scrollChild:SetHeight(math.max(totalHeight, 50))
 end
 
