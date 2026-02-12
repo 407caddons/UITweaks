@@ -105,6 +105,7 @@ local function OnEvent(self, event, ...)
                 backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 strata = "LOW",
                 showWorldQuestTimer = true,
+                hideCompletedSubtasks = false,
                 collapsed = {}
             },
             minimap = {
@@ -221,6 +222,15 @@ local function OnEvent(self, event, ...)
                 minimapShowTracking = false,
                 minimapShowAddonCompartment = false,
                 minimapShowCraftingOrder = false,
+                minimapDrawerEnabled = false,
+                minimapDrawerLocked = true,
+                minimapDrawerPos = { point = "TOPRIGHT", relPoint = "TOPRIGHT", x = -200, y = -7 },
+                minimapDrawerButtonSize = 32,
+                minimapDrawerPadding = 4,
+                minimapDrawerColumns = 6,
+                minimapDrawerBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                minimapDrawerBorderSize = 2,
+                minimapDrawerBgColor = { r = 0, g = 0, b = 0, a = 0.7 },
             },
             talentReminders = {
                 enabled = false,

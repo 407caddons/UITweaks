@@ -125,6 +125,7 @@ end
 local function UpdateAnchoredLayouts()
     local db = UIThingsDB.widgets
     if not db or not db.enabled then return end
+    if InCombatLockdown() then return end
 
     local anchorLookup = {}
     if UIThingsDB.frames and UIThingsDB.frames.list then
@@ -301,7 +302,7 @@ function Widgets.UpdateContent()
         end
     end
 
-    if needsLayoutUpdate then
+    if needsLayoutUpdate and not InCombatLockdown() then
         UpdateAnchoredLayouts()
     end
 end

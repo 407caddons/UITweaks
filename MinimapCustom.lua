@@ -560,6 +560,474 @@ function MinimapCustom.SetupMinimap()
     SetupMinimap()
 end
 
+-- == Minimap Drawer ==
+
+local drawerFrame = nil
+local drawerToggleBtn = nil
+local drawerCollapsed = false
+local collectedButtons = {}
+
+local DRAWER_BLACKLIST = {
+    ["MinimapZoomIn"] = true,
+    ["MinimapZoomOut"] = true,
+    ["MiniMapTrackingButton"] = true,
+    ["MinimapBackdrop"] = true,
+    ["GameTimeFrame"] = true,
+    ["TimeManagerClockButton"] = true,
+    ["QueueStatusButton"] = true,
+    ["AddonCompartmentFrame"] = true,
+    ["ExpansionLandingPageMinimapButton"] = true,
+    ["LunaMinimapFrame"] = true,
+    ["LunaMinimapZoneFrame"] = true,
+    ["LunaMinimapClockFrame"] = true,
+    ["LunaMinimapDrawer"] = true,
+}
+
+local function IsMinimapButton(child)
+    local name = child:GetName()
+    if name and DRAWER_BLACKLIST[name] then return false end
+
+    -- Skip non-interactive frame types (mask textures, etc.)
+    if not (child:IsObjectType("Button") or child:IsObjectType("Frame")) then return false end
+
+    -- Skip tiny frames (mask textures, helper frames)
+    local w, h = child:GetSize()
+    if w < 16 or h < 16 then return false end
+
+    -- Skip frames that are clearly not buttons (very large frames like the minimap itself)
+    if w > 60 or h > 60 then return false end
+
+    -- Must have been shown at some point (skip purely hidden helper frames)
+    if not child:IsShown() then return false end
+
+    -- Check for icon textures (LibDBIcon pattern: .icon or .Icon)
+    if child.icon or child.Icon or child.texture or child.Texture then return true end
+
+    -- Check if it has a visible texture region as a child
+    local regions = { child:GetRegions() }
+    for _, region in ipairs(regions) do
+        if region:IsObjectType("Texture") and region:IsShown() then
+            local tex = region:GetTexture()
+            if tex then return true end
+        end
+    end
+
+    -- Check name patterns for known addon button conventions
+    if name then
+        if name:find("LibDBIcon") or name:find("MinimapButton") or name:find("Minimap.*Button") then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function IsDrawerOnRightSide()
+    if not drawerFrame then return true end
+    local cx = drawerFrame:GetCenter()
+    if not cx then return true end
+    local screenW = UIParent:GetWidth()
+    return cx > (screenW / 2)
+end
+
+-- Creates or retrieves 3-sided border textures on a frame
+-- skipSide: "LEFT" or "RIGHT" — the side adjacent to the toggle button
+local function EnsureBorderTextures(frame)
+    if not frame.borderLines then
+        frame.borderLines = {
+            top = frame:CreateTexture(nil, "OVERLAY"),
+            bottom = frame:CreateTexture(nil, "OVERLAY"),
+            left = frame:CreateTexture(nil, "OVERLAY"),
+            right = frame:CreateTexture(nil, "OVERLAY"),
+        }
+        for _, tex in pairs(frame.borderLines) do
+            tex:SetColorTexture(1, 1, 1, 1)
+        end
+    end
+    return frame.borderLines
+end
+
+local function ApplyThreeSidedBorder(frame, borderSize, bc, skipSide)
+    local lines = EnsureBorderTextures(frame)
+
+    if borderSize <= 0 then
+        for _, tex in pairs(lines) do tex:Hide() end
+        return
+    end
+
+    -- Top border
+    lines.top:ClearAllPoints()
+    lines.top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    lines.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    lines.top:SetHeight(borderSize)
+    lines.top:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
+    lines.top:Show()
+
+    -- Bottom border
+    lines.bottom:ClearAllPoints()
+    lines.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    lines.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    lines.bottom:SetHeight(borderSize)
+    lines.bottom:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
+    lines.bottom:Show()
+
+    -- Left border
+    if skipSide == "LEFT" then
+        lines.left:Hide()
+    else
+        lines.left:ClearAllPoints()
+        lines.left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        lines.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+        lines.left:SetWidth(borderSize)
+        lines.left:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
+        lines.left:Show()
+    end
+
+    -- Right border
+    if skipSide == "RIGHT" then
+        lines.right:Hide()
+    else
+        lines.right:ClearAllPoints()
+        lines.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+        lines.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+        lines.right:SetWidth(borderSize)
+        lines.right:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
+        lines.right:Show()
+    end
+end
+
+local function UpdateToggleBtnColor()
+    if not drawerToggleBtn then return end
+    local settings = UIThingsDB.misc
+    local bg = settings.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
+    local bc = settings.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
+    local borderSize = settings.minimapDrawerBorderSize or 2
+
+    -- Background only via backdrop (no edge)
+    drawerToggleBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+    })
+    drawerToggleBtn:SetBackdropColor(bg.r, bg.g, bg.b, bg.a or 0.7)
+
+    -- 3-sided border: skip the side touching the drawer
+    local onRight = IsDrawerOnRightSide()
+    local skipSide = onRight and "RIGHT" or "LEFT"
+    ApplyThreeSidedBorder(drawerToggleBtn, borderSize, bc, skipSide)
+end
+
+local function ApplyDrawerLockVisuals()
+    if not drawerFrame then return end
+    local settings = UIThingsDB.misc
+    local borderSize = settings.minimapDrawerBorderSize or 2
+    local bc = settings.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
+    local bg = settings.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
+
+    if settings.minimapDrawerLocked then
+        -- Locked: bg only via backdrop, manual 3-sided border
+        drawerFrame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+        })
+        drawerFrame:SetBackdropColor(bg.r, bg.g, bg.b, bg.a or 0.7)
+
+        -- 3-sided border: skip the side where the toggle button sits
+        local onRight = IsDrawerOnRightSide()
+        local skipSide = onRight and "LEFT" or "RIGHT"
+        ApplyThreeSidedBorder(drawerFrame, borderSize, bc, skipSide)
+    else
+        -- Unlocked: full drag backdrop, hide manual borders
+        drawerFrame:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        drawerFrame:SetBackdropColor(0, 0, 0, 0.7)
+        drawerFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+        -- Hide manual border lines when unlocked
+        if drawerFrame.borderLines then
+            for _, tex in pairs(drawerFrame.borderLines) do tex:Hide() end
+        end
+    end
+
+    UpdateToggleBtnColor()
+end
+
+local TOGGLE_BTN_WIDTH = 16
+
+local function UpdateToggleButton()
+    if not drawerToggleBtn or not drawerFrame then return end
+    local onRight = IsDrawerOnRightSide()
+    local frameH = drawerFrame:GetHeight()
+
+    drawerToggleBtn:SetSize(TOGGLE_BTN_WIDTH, frameH)
+    drawerToggleBtn:ClearAllPoints()
+
+    if onRight then
+        -- Toggle on the left side of the drawer
+        drawerToggleBtn:SetPoint("TOPRIGHT", drawerFrame, "TOPLEFT", 0, 0)
+        if drawerCollapsed then
+            drawerToggleBtn.text:SetText("<")
+        else
+            drawerToggleBtn.text:SetText(">")
+        end
+    else
+        -- Toggle on the right side of the drawer
+        drawerToggleBtn:SetPoint("TOPLEFT", drawerFrame, "TOPRIGHT", 0, 0)
+        if drawerCollapsed then
+            drawerToggleBtn.text:SetText(">")
+        else
+            drawerToggleBtn.text:SetText("<")
+        end
+    end
+end
+
+local function SetDrawerCollapsed(collapsed)
+    drawerCollapsed = collapsed
+
+    for _, entry in ipairs(collectedButtons) do
+        if collapsed then
+            entry.button:Hide()
+        else
+            entry.button:Show()
+        end
+    end
+
+    if drawerFrame then
+        if collapsed then
+            drawerFrame:SetSize(1, drawerFrame:GetHeight())
+            drawerFrame:SetBackdrop(nil)
+        else
+            -- Re-layout to restore proper size
+            local settings = UIThingsDB.misc
+            local btnSize = settings.minimapDrawerButtonSize or 32
+            local padding = settings.minimapDrawerPadding or 4
+            local count = #collectedButtons
+            if count > 0 then
+                local numCols = math.ceil(count / 2)
+                local numRows = math.min(count, 2)
+                local frameW = (numCols * btnSize) + ((numCols + 1) * padding)
+                local frameH = (numRows * btnSize) + ((numRows + 1) * padding)
+                drawerFrame:SetSize(frameW, frameH)
+            end
+            ApplyDrawerLockVisuals()
+        end
+    end
+
+    UpdateToggleButton()
+end
+
+local function LayoutDrawerButtons()
+    if not drawerFrame then return end
+    local settings = UIThingsDB.misc
+    local btnSize = settings.minimapDrawerButtonSize or 32
+    local padding = settings.minimapDrawerPadding or 4
+
+    local count = #collectedButtons
+    if count == 0 then
+        drawerFrame:SetSize(1, 1)
+        drawerFrame:Hide()
+        if drawerToggleBtn then drawerToggleBtn:Hide() end
+        return
+    end
+
+    -- Layout in pairs: 2 rows, columns expand as needed
+    local numCols = math.ceil(count / 2)
+    local numRows = math.min(count, 2)
+    local frameW = (numCols * btnSize) + ((numCols + 1) * padding)
+    local frameH = (numRows * btnSize) + ((numRows + 1) * padding)
+
+    drawerFrame:SetSize(frameW, frameH)
+
+    for i, entry in ipairs(collectedButtons) do
+        local btn = entry.button
+        -- Fill top row first, then bottom row
+        local col = (i - 1) % numCols
+        local row = math.floor((i - 1) / numCols)
+        local x = padding + (col * (btnSize + padding))
+        local y = -(padding + (row * (btnSize + padding)))
+
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", drawerFrame, "TOPLEFT", x, y)
+        btn:SetSize(btnSize, btnSize)
+        btn:SetParent(drawerFrame)
+        btn:SetFrameStrata("MEDIUM")
+        btn:SetFrameLevel(drawerFrame:GetFrameLevel() + 5)
+
+        if drawerCollapsed then
+            btn:Hide()
+        else
+            btn:Show()
+        end
+    end
+
+    drawerFrame:Show()
+
+    if drawerCollapsed then
+        drawerFrame:SetSize(1, frameH)
+        drawerFrame:SetBackdrop(nil)
+    end
+
+    UpdateToggleButton()
+    if drawerToggleBtn then drawerToggleBtn:Show() end
+end
+
+local function CollectMinimapButtons()
+    -- Track already-collected buttons for dedup
+    local alreadyCollected = {}
+    for _, entry in ipairs(collectedButtons) do
+        alreadyCollected[entry.button] = true
+    end
+
+    local sources = { Minimap:GetChildren() }
+
+    for _, child in ipairs(sources) do
+        if not alreadyCollected[child] and IsMinimapButton(child) then
+            -- Save original state for restoration
+            local origParent = child:GetParent()
+            local origPoints = {}
+            for p = 1, child:GetNumPoints() do
+                origPoints[p] = { child:GetPoint(p) }
+            end
+            local origW, origH = child:GetSize()
+
+            table.insert(collectedButtons, {
+                button = child,
+                origParent = origParent,
+                origPoints = origPoints,
+                origWidth = origW,
+                origHeight = origH,
+            })
+        end
+    end
+
+    LayoutDrawerButtons()
+end
+
+local function ReleaseDrawerButtons()
+    for _, entry in ipairs(collectedButtons) do
+        local btn = entry.button
+        btn:SetParent(entry.origParent)
+        btn:ClearAllPoints()
+        btn:SetSize(entry.origWidth, entry.origHeight)
+        for _, pt in ipairs(entry.origPoints) do
+            btn:SetPoint(unpack(pt))
+        end
+    end
+    wipe(collectedButtons)
+end
+
+local function SetupDrawer()
+    local settings = UIThingsDB.misc
+    if not settings.minimapDrawerEnabled then return end
+
+    if not drawerFrame then
+        drawerFrame = CreateFrame("Frame", "LunaMinimapDrawer", UIParent, "BackdropTemplate")
+        drawerFrame:SetClampedToScreen(true)
+        drawerFrame:SetMovable(true)
+
+        local pos = settings.minimapDrawerPos
+        drawerFrame:ClearAllPoints()
+        drawerFrame:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
+
+        -- Apply lock-dependent visuals
+        ApplyDrawerLockVisuals()
+
+        -- Drag overlay for lock/unlock
+        local dragOverlay = CreateFrame("Frame", nil, drawerFrame)
+        dragOverlay:SetAllPoints(drawerFrame)
+        dragOverlay:SetFrameStrata("TOOLTIP")
+        dragOverlay:EnableMouse(true)
+        dragOverlay:RegisterForDrag("LeftButton")
+        dragOverlay:SetScript("OnDragStart", function()
+            drawerFrame:StartMoving()
+        end)
+        dragOverlay:SetScript("OnDragStop", function()
+            drawerFrame:StopMovingOrSizing()
+            local point, _, relPoint, x, y = drawerFrame:GetPoint()
+            UIThingsDB.misc.minimapDrawerPos = { point = point, relPoint = relPoint, x = x, y = y }
+            -- Update toggle side after moving
+            UpdateToggleButton()
+        end)
+
+        drawerFrame.dragOverlay = dragOverlay
+
+        -- Collapse/expand toggle button
+        drawerToggleBtn = CreateFrame("Button", nil, drawerFrame, "BackdropTemplate")
+        drawerToggleBtn:SetSize(TOGGLE_BTN_WIDTH, 40)
+        local tbg = settings.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
+        drawerToggleBtn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+        })
+        drawerToggleBtn:SetBackdropColor(tbg.r, tbg.g, tbg.b, tbg.a or 0.7)
+
+        local toggleText = drawerToggleBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        toggleText:SetPoint("CENTER")
+        toggleText:SetText(">")
+        drawerToggleBtn.text = toggleText
+
+        drawerToggleBtn:SetScript("OnClick", function()
+            SetDrawerCollapsed(not drawerCollapsed)
+        end)
+
+        -- Apply lock state
+        if settings.minimapDrawerLocked then
+            dragOverlay:Hide()
+        else
+            dragOverlay:Show()
+        end
+    end
+
+    CollectMinimapButtons()
+
+    -- Delayed re-collect for addons that create buttons lazily
+    C_Timer.After(3, function()
+        if drawerFrame and UIThingsDB.misc.minimapDrawerEnabled then
+            CollectMinimapButtons()
+        end
+    end)
+end
+
+function MinimapCustom.SetupDrawer()
+    SetupDrawer()
+end
+
+function MinimapCustom.DestroyDrawer()
+    ReleaseDrawerButtons()
+    if drawerFrame then
+        drawerFrame:Hide()
+    end
+    if drawerToggleBtn then
+        drawerToggleBtn:Hide()
+    end
+end
+
+function MinimapCustom.SetDrawerLocked(locked)
+    UIThingsDB.misc.minimapDrawerLocked = locked
+    if drawerFrame and drawerFrame.dragOverlay then
+        if locked then
+            drawerFrame.dragOverlay:Hide()
+        else
+            drawerFrame.dragOverlay:Show()
+        end
+    end
+    ApplyDrawerLockVisuals()
+end
+
+function MinimapCustom.UpdateDrawerBorder()
+    if not drawerCollapsed then
+        ApplyDrawerLockVisuals()
+    end
+end
+
+function MinimapCustom.RefreshDrawer()
+    if drawerFrame and UIThingsDB.misc.minimapDrawerEnabled then
+        CollectMinimapButtons()
+    end
+end
+
 -- == Events ==
 
 local frame = CreateFrame("Frame")
@@ -577,6 +1045,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         if UIThingsDB.misc then
             SetupMinimap()
+            SetupDrawer()
         end
     end
 end)

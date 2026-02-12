@@ -42,26 +42,38 @@ end
 -- Cleanup legacy fields from saved variables
 function TalentReminder.CleanupSavedVariables()
     if not LunaUITweaks_TalentReminders or not LunaUITweaks_TalentReminders.reminders then return end
-    
+
     local count = 0
     for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
         for difficultyID, difficulties in pairs(reminders) do
             for bossID, reminder in pairs(difficulties) do
                 -- Remove unused top-level fields
-                if reminder.instanceName then reminder.instanceName = nil count = count + 1 end
-                if reminder.difficulty then reminder.difficulty = nil count = count + 1 end
-                if reminder.minKeystoneLevel then reminder.minKeystoneLevel = nil count = count + 1 end
-                
+                if reminder.instanceName then
+                    reminder.instanceName = nil
+                    count = count + 1
+                end
+                if reminder.difficulty then
+                    reminder.difficulty = nil
+                    count = count + 1
+                end
+                if reminder.minKeystoneLevel then
+                    reminder.minKeystoneLevel = nil
+                    count = count + 1
+                end
+
                 -- Remove 'row' from talents
                 if reminder.talents then
                     for _, talent in pairs(reminder.talents) do
-                        if talent.row then talent.row = nil count = count + 1 end
+                        if talent.row then
+                            talent.row = nil
+                            count = count + 1
+                        end
                     end
                 end
             end
         end
     end
-    
+
     if count > 0 then
         addonTable.Core.Log("TalentReminder", "Cleaned up " .. count .. " unused fields from saved variables", 0)
     end
@@ -437,7 +449,6 @@ function TalentReminder.CompareTalents(savedTalents)
                 expected = savedData,
                 current = current
             })
-
         elseif current.rank < savedData.rank then
             -- Same talent but insufficient rank
             table.insert(mismatches, {
@@ -601,15 +612,18 @@ end
 function TalentReminder.DetectCurrentBoss()
     -- Check boss frames (boss1-boss5)
     for i = 1, 5 do
+        if InCombatLockdown() then return nil, nil end
         local unitID = "boss" .. i
         if UnitExists(unitID) then
             local guid = UnitGUID(unitID)
-            if guid then
+            if guid and not issecretvalue(guid) then
                 -- Extract creature ID from GUID
                 local _, _, _, _, _, creatureID = strsplit("-", guid)
-                if creatureID then
+                if creatureID and not issecretvalue(creatureID) then
                     local name = UnitName(unitID)
-                    return tonumber(creatureID), name
+                    if name and not issecretvalue(name) then
+                        return tonumber(creatureID), name
+                    end
                 end
             end
         end

@@ -328,6 +328,18 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end)
 
+    -- Hide Completed Subtasks Checkbox
+    local hideCompletedCheckbox = CreateFrame("CheckButton", "UIThingsTrackerHideCompletedCheckbox", panel,
+        "ChatConfigCheckButtonTemplate")
+    hideCompletedCheckbox:SetPoint("TOPLEFT", 300, -400)
+    hideCompletedCheckbox:SetHitRectInsets(0, -130, 0, 0)
+    _G[hideCompletedCheckbox:GetName() .. "Text"]:SetText("Hide Completed Subtasks")
+    hideCompletedCheckbox:SetChecked(UIThingsDB.tracker.hideCompletedSubtasks)
+    hideCompletedCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.tracker.hideCompletedSubtasks = self:GetChecked()
+        UpdateTracker()
+    end)
+
     -------------------------------------------------------------
     -- SECTION: Behavior
     -------------------------------------------------------------

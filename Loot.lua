@@ -231,9 +231,6 @@ end
 
 function Loot.ToggleBlizzardToasts(enable)
     if enable then
-        if LootWonAlertSystem then LootWonAlertSystem:RegisterEvent("SHOW_LOOT_TOAST") end
-        if LootUpgradeAlertSystem then LootUpgradeAlertSystem:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE") end
-
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST")
         AlertFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
         AlertFrame:RegisterEvent("SHOW_PVP_FACTION_LOOT_TOAST")

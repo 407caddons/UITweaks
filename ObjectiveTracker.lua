@@ -347,10 +347,12 @@ local function RenderSingleWQ(questID, superTrackedQuestID)
             local objectives = C_QuestLog.GetQuestObjectives(questID)
             if objectives then
                 for _, obj in pairs(objectives) do
-                    local objText = obj.text
-                    if objText and objText ~= "" then
-                        if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                        AddLine(objText, false, nil, nil, true)
+                    if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
+                        local objText = obj.text
+                        if objText and objText ~= "" then
+                            if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                            AddLine(objText, false, nil, nil, true)
+                        end
                     end
                 end
             end
@@ -468,10 +470,12 @@ local function RenderQuests()
                     local objectives = C_QuestLog.GetQuestObjectives(questID)
                     if objectives then
                         for _, obj in pairs(objectives) do
-                            local objText = obj.text
-                            if objText and objText ~= "" then
-                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                AddLine(objText, false, nil, nil, true)
+                            if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
+                                end
                             end
                         end
                     end
@@ -541,10 +545,12 @@ local function RenderQuests()
                     local objectives = C_QuestLog.GetQuestObjectives(questID)
                     if objectives then
                         for _, obj in pairs(objectives) do
-                            local objText = obj.text
-                            if objText and objText ~= "" then
-                                if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
-                                AddLine(objText, false, nil, nil, true)
+                            if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
+                                local objText = obj.text
+                                if objText and objText ~= "" then
+                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    AddLine(objText, false, nil, nil, true)
+                                end
                             end
                         end
                     end
