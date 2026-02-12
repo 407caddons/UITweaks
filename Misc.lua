@@ -51,6 +51,45 @@ function Misc.ShowAlert()
     ShowAlert()
 end
 
+-- Check if player has pending personal orders
+local function CheckForPersonalOrders()
+    if not UIThingsDB.misc.personalOrders then return end
+    if not UIThingsDB.misc.personalOrdersCheckAtLogon then return end
+
+    -- Don't check if in an instance
+    local inInstance = IsInInstance()
+    if inInstance then return end
+
+    -- Check if we have any personal crafting orders
+    local hasOrders = false
+
+    -- Try GetPersonalOrdersInfo - returns array of orders
+    if C_CraftingOrders and C_CraftingOrders.GetPersonalOrdersInfo then
+        local info = C_CraftingOrders.GetPersonalOrdersInfo()
+        if info then
+            -- Check if it's an array (has numeric indices)
+            if type(info) == "table" and #info > 0 then
+                hasOrders = true
+                -- Check if it has named field
+            elseif info.numPersonalOrders and info.numPersonalOrders > 0 then
+                hasOrders = true
+            end
+        end
+    end
+
+    -- Fallback: Try GetMyOrders
+    if not hasOrders and C_CraftingOrders and C_CraftingOrders.GetMyOrders then
+        local orders = C_CraftingOrders.GetMyOrders()
+        if orders and #orders > 0 then
+            hasOrders = true
+        end
+    end
+
+    if hasOrders then
+        ShowAlert()
+    end
+end
+
 -- Expose for testing
 function Misc.TestTTS()
     local message = UIThingsDB.misc.ttsMessage or "Personal order arrived"
@@ -246,6 +285,9 @@ local function OnEvent(self, event, ...)
             if UIThingsDB.misc.quickDestroy then
                 Misc.ToggleQuickDestroy(true)
             end
+
+            -- Check for personal orders after a delay (to ensure API is ready)
+            addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
         end
     elseif event == "AUCTION_HOUSE_SHOW" then
         if not UIThingsDB.misc.enabled then return end

@@ -252,7 +252,23 @@ function Widgets.UpdateVisuals()
         local frame = item.frame
 
         frame:ClearAllPoints()
-        if db[key].point then
+
+        -- Check if this is first time enabling (widget at default position)
+        -- New widgets (keystone, weeklyReset) default to CENTER with negative Y offsets
+        -- If position hasn't been customized yet, center them instead
+        local isNewWidget = (key == "keystone" or key == "weeklyReset")
+        local isDefaultPos = (db[key].point == "CENTER" and (db[key].x == 0) and
+            (db[key].y == -200 or db[key].y == -220))
+
+        if isNewWidget and isDefaultPos and not frame.hasBeenPositioned then
+            -- First time showing this widget - center it
+            frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            db[key].point = "CENTER"
+            db[key].relPoint = "CENTER"
+            db[key].x = 0
+            db[key].y = 0
+            frame.hasBeenPositioned = true
+        elseif db[key].point then
             frame:SetPoint(db[key].point, UIParent, db[key].relPoint or db[key].point, db[key].x, db[key].y)
         else
             frame:SetPoint("CENTER", 0, 0)

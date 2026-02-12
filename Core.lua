@@ -187,6 +187,7 @@ local function OnEvent(self, event, ...)
                 enabled = false,
                 ahFilter = false,
                 personalOrders = false,
+                personalOrdersCheckAtLogon = false,
                 ttsEnabled = true,
                 ttsMessage = "Personal order arrived",
                 ttsVoice = 0, -- 0 = Standard, 1 = Alternate 1
@@ -272,7 +273,14 @@ local function OnEvent(self, event, ...)
                 friends = { enabled = false, point = "CENTER", x = 0, y = -120 },
                 guild = { enabled = false, point = "CENTER", x = 0, y = -140 },
                 group = { enabled = false, point = "CENTER", x = 0, y = -160 },
-                teleports = { enabled = false, point = "CENTER", x = 0, y = -180 }
+                teleports = { enabled = false, point = "CENTER", x = 0, y = -180 },
+                keystone = { enabled = false, point = "CENTER", x = 0, y = -200 },
+                weeklyReset = { enabled = false, point = "CENTER", x = 0, y = -220 }
+            },
+            kick = {
+                enabled = false,
+                locked = true,
+                pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 }
             }
         }
 

@@ -39,7 +39,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         UpdateWidgets()
         Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.widgets.enabled)
     end)
-    
+
     -- Lock Widgets Checkbox
     local lockBtn = CreateFrame("CheckButton", "UIThingsWidgetsLockCheck", panel, "ChatConfigCheckButtonTemplate")
     lockBtn:SetPoint("TOPLEFT", 250, -40)
@@ -49,7 +49,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         UIThingsDB.widgets.locked = self:GetChecked()
         UpdateWidgets()
     end)
-    
+
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.widgets.enabled)
 
     -- SECTION: Appearance
@@ -181,28 +181,31 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     end
 
     local widgets = {
-        { key = "time", label = "Local/Server Time" },
-        { key = "fps", label = "System Stats (MS/FPS)" },
-        { key = "bags", label = "Bag Slots Info" },
-        { key = "spec", label = "Specialization/Loot Spec" },
-        { key = "durability", label = "Durability" },
-        { key = "combat", label = "Combat State" },
-        { key = "friends", label = "Friends Online" },
-        { key = "guild", label = "Guild Members" },
-        { key = "group", label = "Group Composition" },
-        { key = "teleports", label = "Teleports" },
+        { key = "time",        label = "Local/Server Time" },
+        { key = "fps",         label = "System Stats (MS/FPS)" },
+        { key = "bags",        label = "Bag Slots Info" },
+        { key = "spec",        label = "Specialization/Loot Spec" },
+        { key = "durability",  label = "Durability" },
+        { key = "combat",      label = "Combat State" },
+        { key = "friends",     label = "Friends Online" },
+        { key = "guild",       label = "Guild Members" },
+        { key = "group",       label = "Group Composition" },
+        { key = "teleports",   label = "Teleports" },
+        { key = "keystone",    label = "Mythic+ Keystone" },
+        { key = "weeklyReset", label = "Weekly Reset Timer" },
     }
 
     local yOffset = -250
     for i, widget in ipairs(widgets) do
-        local cb = CreateFrame("CheckButton", "UIThingsWidget" .. widget.key .. "Check", panel, "ChatConfigCheckButtonTemplate")
-        
+        local cb = CreateFrame("CheckButton", "UIThingsWidget" .. widget.key .. "Check", panel,
+            "ChatConfigCheckButtonTemplate")
+
         -- Two columns logic adapted for having dropdowns
-        -- If we add dropdowns, maybe single column is better? 
+        -- If we add dropdowns, maybe single column is better?
         -- Or Keep two columns but make rows taller?
         -- User said "On the widget screen after each widget checkbox add an anchor frame"
         -- Let's do single column to avoid crowding.
-        
+
         cb:SetPoint("TOPLEFT", 20, yOffset)
 
         _G[cb:GetName() .. "Text"]:SetText(widget.label)
@@ -211,9 +214,10 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
             UIThingsDB.widgets[widget.key].enabled = self:GetChecked()
             UpdateWidgets()
         end)
-        
+
         -- Anchor Dropdown
-        local anchorDropdown = CreateFrame("Frame", "UIThingsWidget" .. widget.key .. "AnchorDropdown", panel, "UIDropDownMenuTemplate")
+        local anchorDropdown = CreateFrame("Frame", "UIThingsWidget" .. widget.key .. "AnchorDropdown", panel,
+            "UIDropDownMenuTemplate")
         anchorDropdown:SetPoint("LEFT", cb, "RIGHT", 200, -2)
         UIDropDownMenu_SetWidth(anchorDropdown, 120)
 
@@ -221,7 +225,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         local function SwapOrder(direction)
             local currentAnchor = UIThingsDB.widgets[widget.key].anchor
             if not currentAnchor then return end
-            
+
             -- 1. Gather siblings
             local siblings = {}
             for _, wDef in ipairs(widgets) do
@@ -231,7 +235,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
                     table.insert(siblings, { key = k, data = w })
                 end
             end
-            
+
             -- 2. Sort by current order
             table.sort(siblings, function(a, b)
                 local orderA = a.data.order or 0
@@ -239,27 +243,27 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
                 if orderA ~= orderB then return orderA < orderB end
                 return a.key < b.key
             end)
-            
+
             -- 3. Normalize orders (1..N) and find self
             local myIndex = nil
             for i, sibling in ipairs(siblings) do
                 sibling.data.order = i
                 if sibling.key == widget.key then myIndex = i end
             end
-            
+
             if not myIndex then return end
-            
+
             -- 4. Identify Target
             local targetIndex = myIndex + direction
             if targetIndex >= 1 and targetIndex <= #siblings then
                 -- 5. Swap
                 local myData = siblings[myIndex].data
                 local targetData = siblings[targetIndex].data
-                
+
                 local temp = myData.order
                 myData.order = targetData.order
                 targetData.order = temp
-                
+
                 UpdateWidgets()
             end
         end
@@ -270,9 +274,10 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         leftBtn:SetSize(22, 22)
         leftBtn:SetText("<")
         leftBtn:SetScript("OnClick", function() SwapOrder(-1) end)
-        
+
         -- Right Button
-        local rightBtn = CreateFrame("Button", "UIThingsWidget" .. widget.key .. "RightBtn", panel, "UIPanelButtonTemplate")
+        local rightBtn = CreateFrame("Button", "UIThingsWidget" .. widget.key .. "RightBtn", panel,
+            "UIPanelButtonTemplate")
         rightBtn:SetPoint("LEFT", leftBtn, "RIGHT", 5, 0)
         rightBtn:SetSize(22, 22)
         rightBtn:SetText(">")
@@ -289,7 +294,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
                 rightBtn:Hide()
             end
         end
-        
+
         -- Redefine AnchorOnClick to include visibility update
         local function AnchorOnClick(self)
             UIDropDownMenu_SetSelectedID(anchorDropdown, self:GetID())
@@ -297,7 +302,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
             UpdateWidgets()
             UpdateButtonVisibility()
         end
-        
+
         -- Re-Initialize Dropdown with new handler
         local function AnchorInit(self, level)
             local anchors = GetAnchors()
@@ -315,7 +320,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
             end
         end
         UIDropDownMenu_Initialize(anchorDropdown, AnchorInit)
-        
+
         -- Set Text
         local currentAnchor = UIThingsDB.widgets[widget.key].anchor
         UIDropDownMenu_SetText(anchorDropdown, currentAnchor or "None")

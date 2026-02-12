@@ -58,7 +58,7 @@ function addonTable.Config.Initialize()
         -- Sidebar & Navigation
         ----------------------------------------------------
         local SIDEBAR_WIDTH = 180
-        
+
         -- Vertical Divider Line
         local divider = configWindow:CreateTexture(nil, "ARTWORK")
         divider:SetPoint("TOPLEFT", configWindow, "TOPLEFT", SIDEBAR_WIDTH, -25)
@@ -67,7 +67,8 @@ function addonTable.Config.Initialize()
         divider:SetColorTexture(0.3, 0.3, 0.3, 1)
 
         -- ScrollFrame for Navigation List
-        local navScrollFrame = CreateFrame("ScrollFrame", "UIThingsConfigNavScroll", configWindow, "UIPanelScrollFrameTemplate")
+        local navScrollFrame = CreateFrame("ScrollFrame", "UIThingsConfigNavScroll", configWindow,
+            "UIPanelScrollFrameTemplate")
         navScrollFrame:SetPoint("TOPLEFT", configWindow, "TOPLEFT", 10, -30)
         navScrollFrame:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMLEFT", SIDEBAR_WIDTH - 25, 10)
 
@@ -77,15 +78,16 @@ function addonTable.Config.Initialize()
 
         -- List of Modules
         local modules = {
-            { id = 1, name = "Tracker",      key = "tracker", icon = "Interface\\Icons\\Inv_Misc_Book_09" },
-            { id = 2, name = "Vendor",       key = "vendor",  icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
-            { id = 3, name = "Combat",       key = "combat",  icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
-            { id = 4, name = "Frames",       key = "frames",  icon = "Interface\\Icons\\Inv_Box_01" },
-            { id = 5, name = "Loot",         key = "loot",    icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 6, name = "Misc",         key = "misc",    icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 7, name = "Minimap",      key = "minimap", icon = "Interface\\Icons\\Inv_Misc_Map02" },
-            { id = 8, name = "Talents",      key = "talent",  icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 9, name = "Widgets",      key = "widgets", icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 1,  name = "Tracker",      key = "tracker", icon = "Interface\\Icons\\Inv_Misc_Book_09" },
+            { id = 2,  name = "Vendor",       key = "vendor",  icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 3,  name = "Combat",       key = "combat",  icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
+            { id = 4,  name = "Frames",       key = "frames",  icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 5,  name = "Loot",         key = "loot",    icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 6,  name = "Misc",         key = "misc",    icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 7,  name = "Minimap",      key = "minimap", icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 8,  name = "Talents",      key = "talent",  icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 9,  name = "Widgets",      key = "widgets", icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 10, name = "Experimental", key = "kick",    icon = "Interface\\Icons\\Ability_Kick" },
         }
 
         local navButtons = {}
@@ -101,7 +103,7 @@ function addonTable.Config.Initialize()
         ----------------------------------------------------
         local trackerPanel = CreateFrame("Frame", nil, contentContainer)
         trackerPanel:SetAllPoints()
-        
+
         local vendorPanel = CreateFrame("Frame", nil, contentContainer)
         vendorPanel:SetAllPoints()
         vendorPanel:Hide()
@@ -134,6 +136,10 @@ function addonTable.Config.Initialize()
         widgetsPanel:SetAllPoints()
         widgetsPanel:Hide()
 
+        local kickPanel = CreateFrame("Frame", nil, contentContainer)
+        kickPanel:SetAllPoints()
+        kickPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -144,6 +150,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.minimap = minimapPanel
         addonTable.ConfigPanels.talent = talentPanel
         addonTable.ConfigPanels.widgets = widgetsPanel
+        addonTable.ConfigPanels.kick = kickPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -156,6 +163,7 @@ function addonTable.Config.Initialize()
             [7] = minimapPanel,
             [8] = talentPanel,
             [9] = widgetsPanel,
+            [10] = kickPanel,
         }
 
         ----------------------------------------------------
@@ -164,7 +172,7 @@ function addonTable.Config.Initialize()
         local function SelectModule(id)
             -- Hide all panels
             for _, p in pairs(idToPanel) do p:Hide() end
-            
+
             -- Show selected panel
             if idToPanel[id] then
                 idToPanel[id]:Show()
@@ -177,14 +185,14 @@ function addonTable.Config.Initialize()
                     if btn.isDisabled then
                         btn.text:SetTextColor(1, 0.5, 0.5) -- Light Red if selected but disabled
                     else
-                        btn.text:SetTextColor(1, 1, 1) -- White
+                        btn.text:SetTextColor(1, 1, 1)     -- White
                     end
                 else
                     btn:UnlockHighlight()
                     if btn.isDisabled then
                         btn.text:SetTextColor(1, 0.2, 0.2) -- Red if disabled
                     else
-                        btn.text:SetTextColor(1, 0.82, 0) -- Gold
+                        btn.text:SetTextColor(1, 0.82, 0)  -- Gold
                     end
                 end
             end
@@ -202,30 +210,30 @@ function addonTable.Config.Initialize()
         for i, mod in ipairs(modules) do
             local btn = CreateFrame("Button", nil, navScrollChild)
             btn:SetSize(SIDEBAR_WIDTH - 25, BUTTON_HEIGHT)
-            btn:SetPoint("TOPLEFT", 0, -((i-1) * BUTTON_HEIGHT))
-            
+            btn:SetPoint("TOPLEFT", 0, -((i - 1) * BUTTON_HEIGHT))
+
             -- Visuals
             btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             btn.Text = btn.text -- Compatibility with Helpers.UpdateModuleVisuals
             btn.text:SetPoint("LEFT", 6, 0)
             btn.text:SetText(mod.name)
-            
+
             -- Highlight texture
             btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-            
+
             btn:SetScript("OnClick", function()
                 SelectModule(i)
             end)
-            
+
             navButtons[i] = btn
-            
+
             -- Store as tab-like object for compatibility with Helpers.UpdateModuleVisuals
             -- because existing panel setups expect a "tab" to tint red if disabled
             -- so we add a dummy "tab" object or just use the button itself?
             -- Helpers.UpdateModuleVisuals looks for tab.Text or tab:GetFontString()
             -- Button has btn.text, so it should work if we pass btn as 'tab'
         end
-        
+
         -- Store buttons as "Tabs" for compatibility with setup functions
         -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
         addonTable.ConfigTabs = navButtons
@@ -265,6 +273,9 @@ function addonTable.Config.Initialize()
             end
             if addonTable.ConfigSetup.Widgets then
                 addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[9], configWindow)
+            end
+            if addonTable.ConfigSetup.Kick then
+                addonTable.ConfigSetup.Kick(kickPanel, navButtons[10], configWindow)
             end
         end
     end

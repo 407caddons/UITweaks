@@ -581,11 +581,20 @@ local DRAWER_BLACKLIST = {
     ["LunaMinimapZoneFrame"] = true,
     ["LunaMinimapClockFrame"] = true,
     ["LunaMinimapDrawer"] = true,
+    -- TomTom arrows/direction indicators
+    ["TomTomCrazyArrow"] = true,
+    ["TomTomBlock"] = true,
+    -- TomTom waypoint pin
+    ["TomTomWorldMapPointer"] = true,
+    ["TomTomMinimapPointer"] = true,
 }
 
 local function IsMinimapButton(child)
     local name = child:GetName()
     if name and DRAWER_BLACKLIST[name] then return false end
+
+    -- Skip TomTom frames by name pattern
+    if name and (name:find("TomTom") or name:find("^TTMinimapButton")) then return false end
 
     -- Skip non-interactive frame types (mask textures, etc.)
     if not (child:IsObjectType("Button") or child:IsObjectType("Frame")) then return false end

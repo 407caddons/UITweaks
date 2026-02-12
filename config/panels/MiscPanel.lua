@@ -20,7 +20,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth()-30, 680) -- Matches content height
+    scrollChild:SetSize(panel:GetWidth() - 30, 680) -- Matches content height
     scrollFrame:SetScrollChild(scrollChild)
 
 
@@ -66,6 +66,16 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
     ordersBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.personalOrders = self:GetChecked()
+    end)
+
+    -- Check at Logon Checkbox
+    local logonCheckBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersLogonCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    logonCheckBtn:SetPoint("TOPLEFT", 280, -110)
+    _G[logonCheckBtn:GetName() .. "Text"]:SetText("Check at Logon")
+    logonCheckBtn:SetChecked(UIThingsDB.misc.personalOrdersCheckAtLogon)
+    logonCheckBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.personalOrdersCheckAtLogon = self:GetChecked()
     end)
 
     -- Alert Duration Slider
@@ -236,7 +246,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     -- UI Scale Slider
     local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
     local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
-    
+
     scaleSlider:SetPoint("TOPLEFT", 40, -430)
     scaleSlider:SetMinMaxValues(0.4, 1.25)
     scaleSlider:SetValueStep(0.001)
@@ -246,13 +256,13 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     _G[scaleSlider:GetName() .. 'Low']:SetText("0.4")
     _G[scaleSlider:GetName() .. 'High']:SetText("1.25")
     scaleSlider:SetValue(UIThingsDB.misc.uiScale)
-    
+
     -- UI Scale EditBox
     scaleEdit:SetSize(60, 20)
     scaleEdit:SetPoint("LEFT", scaleSlider, "RIGHT", 15, 0)
     scaleEdit:SetAutoFocus(false)
     scaleEdit:SetText(string.format("%.3f", UIThingsDB.misc.uiScale))
-    
+
     local function UpdateScaleUI(value, skipSlider)
         value = tonumber(string.format("%.3f", value))
         UIThingsDB.misc.uiScale = value
@@ -368,7 +378,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     rlBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.allowRL = self:GetChecked()
     end)
-    
+
     -- Quick Item Destroy Checkbox
     local qdBtn = CreateFrame("CheckButton", "UIThingsMiscQuickDestroy", panel, "ChatConfigCheckButtonTemplate")
     qdBtn:SetPoint("TOPLEFT", 20, -650)
@@ -380,8 +390,4 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
             addonTable.Misc.ToggleQuickDestroy(UIThingsDB.misc.quickDestroy)
         end
     end)
-
-
-
-
 end
