@@ -121,7 +121,11 @@ local function OnEvent(self, event, ...)
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 24,
                 warningLocked = true,
-                warningPos = { point = "TOP", x = 0, y = -150 }
+                warningPos = { point = "TOP", x = 0, y = -150 },
+                -- Bag Space Warnings
+                bagWarningEnabled = true,
+                bagWarningThreshold = 5, -- Warn when 5 or fewer free slots
+                bagWarningPos = { point = "TOP", x = 0, y = -200 }
             },
             loot = {
                 enabled = false,

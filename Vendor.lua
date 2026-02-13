@@ -70,6 +70,7 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_UNGHOST")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+frame:RegisterEvent("BAG_UPDATE_DELAYED") -- For bag space warnings
 
 -- Warning Frame
 local warningFrame = CreateFrame("Frame", "UIThingsRepairWarning", UIParent, "BackdropTemplate")
@@ -90,9 +91,75 @@ warningText:SetPoint("CENTER")
 warningText:SetText("Repair your gear")
 warningText:SetTextColor(1, 0, 0) -- Red
 
+-- Bag Warning Frame
+local bagWarningFrame = CreateFrame("Frame", "UIThingsBagWarning", UIParent, "BackdropTemplate")
+bagWarningFrame:SetSize(300, 50)
+bagWarningFrame:SetMovable(true)
+bagWarningFrame:SetClampedToScreen(true)
+bagWarningFrame:RegisterForDrag("LeftButton")
+bagWarningFrame:SetScript("OnDragStart", bagWarningFrame.StartMoving)
+bagWarningFrame:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, _, x, y = self:GetPoint()
+    UIThingsDB.vendor.bagWarningPos = { point = point, x = x, y = y }
+end)
+bagWarningFrame:Hide()
+
+local bagWarningText = bagWarningFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+bagWarningText:SetPoint("CENTER")
+bagWarningText:SetText("Bag space low")
+bagWarningText:SetTextColor(1, 0.5, 0) -- Orange
 
 
 
+
+
+local function CheckBagSpace()
+    if not UIThingsDB.vendor.enabled then return end
+    if not UIThingsDB.vendor.bagWarningEnabled then
+        bagWarningFrame:Hide()
+        return
+    end
+
+    -- If unlocked, keep showing for positioning
+    if not UIThingsDB.vendor.warningLocked then
+        bagWarningFrame:Show()
+        return
+    end
+
+    -- Check combat restriction (reuse durability setting)
+    if UIThingsDB.vendor.onlyCheckDurabilityOOC and InCombatLockdown() then return end
+
+    -- Hide at merchant (bags are visible there)
+    if MerchantFrame:IsShown() then
+        bagWarningFrame:Hide()
+        return
+    end
+
+    local threshold = UIThingsDB.vendor.bagWarningThreshold or 5
+    local totalFree = 0
+
+    -- Count free slots across all bags (0-4, where 0 is backpack)
+    for bagID = 0, 4 do
+        local freeSlots = C_Container.GetContainerNumFreeSlots(bagID)
+        if freeSlots then
+            totalFree = totalFree + freeSlots
+        end
+    end
+
+    if totalFree <= threshold then
+        if totalFree == 0 then
+            bagWarningText:SetText("Bags full!")
+        elseif totalFree == 1 then
+            bagWarningText:SetText("1 bag slot remaining")
+        else
+            bagWarningText:SetText(string.format("%d bag slots remaining", totalFree))
+        end
+        bagWarningFrame:Show()
+    else
+        bagWarningFrame:Hide()
+    end
+end
 
 local function CheckDurability()
     if not UIThingsDB.vendor.enabled then return end
@@ -151,12 +218,13 @@ local SafeAfter = addonTable.Core.SafeAfter
 function addonTable.Vendor.UpdateSettings()
     local settings = UIThingsDB.vendor
 
-    -- Font
+    -- Font (applies to both warnings)
     if settings.font and settings.fontSize then
         warningText:SetFont(settings.font, settings.fontSize, "OUTLINE")
+        bagWarningText:SetFont(settings.font, settings.fontSize, "OUTLINE")
     end
 
-    -- Position
+    -- Durability Warning Position
     warningFrame:ClearAllPoints()
     if settings.warningPos then
         warningFrame:SetPoint(settings.warningPos.point, UIParent, settings.warningPos.point, settings.warningPos.x,
@@ -165,69 +233,100 @@ function addonTable.Vendor.UpdateSettings()
         warningFrame:SetPoint("TOP", 0, -150)
     end
 
+    -- Bag Warning Position
+    bagWarningFrame:ClearAllPoints()
+    if settings.bagWarningPos then
+        bagWarningFrame:SetPoint(settings.bagWarningPos.point, UIParent, settings.bagWarningPos.point,
+            settings.bagWarningPos.x, settings.bagWarningPos.y)
+    else
+        bagWarningFrame:SetPoint("TOP", 0, -200)
+    end
+
     if not settings.enabled then
         warningFrame:Hide()
+        bagWarningFrame:Hide()
         return
     end
 
-    -- Lock/Unlock
+    -- Lock/Unlock (applies to both warnings)
     if settings.warningLocked then
         warningFrame:EnableMouse(false)
         warningFrame:SetBackdrop(nil)
+        bagWarningFrame:EnableMouse(false)
+        bagWarningFrame:SetBackdrop(nil)
 
-        -- If we were unlocking, hide the backdrop frame
+        -- If we were unlocking, hide the backdrop frames
         if warningFrame.isUnlocking then
             warningFrame:Hide()
             warningFrame.isUnlocking = false
         end
+        if bagWarningFrame.isUnlocking then
+            bagWarningFrame:Hide()
+            bagWarningFrame.isUnlocking = false
+        end
 
-        -- ALWAYS re-check durability logic to ensure correct visibility
-        -- ALWAYS re-check durability logic to ensure correct visibility
+        -- Re-check both warnings to ensure correct visibility
         StartDurabilityCheck(0.5)
+        CheckBagSpace()
     else
-        -- Unlocked -> Show frame + Backdrop
-        warningFrame:EnableMouse(true)
-        warningFrame:SetBackdrop({
+        -- Unlocked -> Show frames + Backdrop for positioning
+        local backdrop = {
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
             tile = true,
             tileSize = 16,
             edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
-        })
+        }
+
+        warningFrame:EnableMouse(true)
+        warningFrame:SetBackdrop(backdrop)
         warningFrame:SetBackdropColor(0, 0, 0, 0.5)
         warningFrame:Show()
         warningFrame.isUnlocking = true
+
+        bagWarningFrame:EnableMouse(true)
+        bagWarningFrame:SetBackdrop(backdrop)
+        bagWarningFrame:SetBackdropColor(0, 0, 0, 0.5)
+        bagWarningFrame:Show()
+        bagWarningFrame.isUnlocking = true
     end
 end
 
 frame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         addonTable.Vendor.UpdateSettings()
-        -- Also check durability on login after a slight delay
-        -- Also check durability on login after a slight delay
+        -- Check both durability and bag space on login
         StartDurabilityCheck(1)
+        CheckBagSpace()
         return
     end
 
     if not UIThingsDB.vendor.enabled then
         warningFrame:Hide()
+        bagWarningFrame:Hide()
         return
     end
 
     if event == "MERCHANT_SHOW" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
         warningFrame:Hide()                                    -- Hide when at vendor
+        bagWarningFrame:Hide()                                 -- Hide bag warning too
         -- Run slightly delayed to ensure merchant interaction is fully ready
         SafeAfter(0.1, function()
             AutoRepair()
             SellGreys()
         end)
+    elseif event == "BAG_UPDATE_DELAYED" then
+        -- Bag space changed, check if we need to show warning
+        CheckBagSpace()
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" or event == "MERCHANT_CLOSED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "PLAYER_UNGHOST" then
-        -- Run check slightly delayed to ensure info is ready/state is consistent
+        -- Run checks slightly delayed to ensure info is ready/state is consistent
         StartDurabilityCheck(1)
+        CheckBagSpace()
     elseif event == "PLAYER_REGEN_DISABLED" then
         if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
         warningFrame:Hide()                                    -- Hide in combat
+        bagWarningFrame:Hide()                                 -- Hide bag warning in combat
     end
 end)

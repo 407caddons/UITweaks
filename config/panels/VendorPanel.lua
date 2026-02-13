@@ -135,4 +135,49 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
         _G[self:GetName() .. 'Text']:SetText(string.format("Alert Size: %d", value))
         if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
     end)
+
+    -- Separator for Bag Warnings Section
+    local bagSeparator = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    bagSeparator:SetPoint("TOPLEFT", 16, -400)
+    bagSeparator:SetText("Bag Space Warnings")
+
+    -- Enable Bag Warning Checkbox
+    local enableBagWarningBtn = CreateFrame("CheckButton", "UIThingsBagWarningEnableCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    enableBagWarningBtn:SetPoint("TOPLEFT", 20, -430)
+    _G[enableBagWarningBtn:GetName() .. "Text"]:SetText("Enable Bag Space Warnings")
+    enableBagWarningBtn:SetChecked(UIThingsDB.vendor.bagWarningEnabled)
+    enableBagWarningBtn:SetScript("OnClick", function(self)
+        local enabled = not not self:GetChecked()
+        UIThingsDB.vendor.bagWarningEnabled = enabled
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Bag Warning Threshold Slider
+    local bagThresholdSlider = CreateFrame("Slider", "UIThingsBagThresholdSlider", panel, "OptionsSliderTemplate")
+    bagThresholdSlider:SetPoint("TOPLEFT", 20, -470)
+    bagThresholdSlider:SetMinMaxValues(0, 40)
+    bagThresholdSlider:SetValueStep(1)
+    bagThresholdSlider:SetObeyStepOnDrag(true)
+    bagThresholdSlider:SetWidth(200)
+    _G[bagThresholdSlider:GetName() .. 'Text']:SetText(string.format("Warning Threshold: %d slots",
+        UIThingsDB.vendor.bagWarningThreshold or 5))
+    _G[bagThresholdSlider:GetName() .. 'Low']:SetText("0")
+    _G[bagThresholdSlider:GetName() .. 'High']:SetText("40")
+    bagThresholdSlider:SetValue(UIThingsDB.vendor.bagWarningThreshold or 5)
+    bagThresholdSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.vendor.bagWarningThreshold = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Warning Threshold: %d slots", value))
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Help text for bag warnings
+    local bagHelpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bagHelpText:SetPoint("TOPLEFT", 40, -520)
+    bagHelpText:SetWidth(500)
+    bagHelpText:SetJustifyH("LEFT")
+    bagHelpText:SetText(
+        "Displays a warning when you have this many or fewer free bag slots remaining.\nShares font settings with durability warning. Unlock to position separately.")
+    bagHelpText:SetTextColor(0.7, 0.7, 0.7)
 end
