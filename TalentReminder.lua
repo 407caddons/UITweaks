@@ -141,7 +141,7 @@ function TalentReminder.OnEnteringWorld()
 
     -- Hide alert when not in a dungeon/raid instance
     if instanceType == "none" and alertFrame and alertFrame:IsShown() then
-        alertFrame:Hide()
+        TalentReminder.ReleaseAlertFrame()
         return
     end
 
@@ -266,7 +266,7 @@ function TalentReminder.CheckTalentsInInstance()
 
     -- If no mismatches found, dismiss any open alert
     if not foundMismatch and alertFrame and alertFrame:IsShown() then
-        alertFrame:Hide()
+        TalentReminder.ReleaseAlertFrame()
     end
 end
 
@@ -1094,7 +1094,7 @@ function TalentReminder.ApplyTalents(reminder)
             print("|cFF00FF00[LunaUITweaks]|r Talents applied successfully (" .. changes .. " changes)")
             -- Hide the alert frame
             if alertFrame then
-                alertFrame:Hide()
+                TalentReminder.ReleaseAlertFrame()
             end
             return true
         else
@@ -1108,7 +1108,7 @@ function TalentReminder.ApplyTalents(reminder)
     else
         print("|cFF00FF00[LunaUITweaks]|r Talents already match the saved build")
         if alertFrame then
-            alertFrame:Hide()
+            TalentReminder.ReleaseAlertFrame()
         end
         return true
     end
@@ -1441,13 +1441,37 @@ function TalentReminder.CreateAlertFrame()
     dismissBtn:SetNormalFontObject("GameFontNormal")
     dismissBtn:SetHighlightFontObject("GameFontHighlight")
     dismissBtn:SetScript("OnClick", function(self)
-        alertFrame:Hide()
+        TalentReminder.ReleaseAlertFrame()
     end)
     alertFrame.dismissBtn = dismissBtn
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, alertFrame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -5, -5)
+end
+
+-- Cleanup alert frame and release memory
+function TalentReminder.ReleaseAlertFrame()
+    if not alertFrame then return end
+
+    -- Hide and clear all references
+    alertFrame:Hide()
+    alertFrame.currentReminder = nil
+
+    -- Clear content to release string references
+    if alertFrame.content then
+        alertFrame.content:SetText("")
+    end
+    if alertFrame.title then
+        alertFrame.title:SetText("")
+    end
+    if alertFrame.bossName then
+        alertFrame.bossName:SetText("")
+    end
+
+    -- Note: We keep the frame structure intact for reuse
+    -- The frame itself is not released, but all dynamic content is cleared
+    addonTable.Core.Log("TalentReminder", "Alert frame content cleared", addonTable.Core.LogLevel.DEBUG)
 end
 
 -- Get current location info (for snapshot UI)

@@ -280,6 +280,8 @@ local function OnEvent(self, event, ...)
             kick = {
                 enabled = false,
                 locked = true,
+                attachToPartyFrames = false,
+                attachAnchorPoint = "BOTTOM", -- BOTTOM, TOP, LEFT, RIGHT
                 pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 },
                 bgColor = { r = 0, g = 0, b = 0, a = 0.8 },
                 borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
@@ -300,6 +302,9 @@ local function OnEvent(self, event, ...)
                 chatHeight = 200,
                 timestamps = "none",
                 pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
+            },
+            addonComm = {
+                hideFromWorld = false
             }
         }
 

@@ -16,10 +16,34 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     description:SetText(
         "Shows which party/raid members have LunaUITweaks installed, their version, keystone, and level. Data is exchanged automatically when joining a group.")
 
+    -- Hide from the world checkbox
+    local hideFromWorldCheckbox = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    hideFromWorldCheckbox:SetPoint("TOPLEFT", 20, -90)
+    hideFromWorldCheckbox.Text:SetText("Hide from the world")
+    hideFromWorldCheckbox.Text:SetFontObject("GameFontHighlight")
+    hideFromWorldCheckbox:SetChecked(UIThingsDB.addonComm.hideFromWorld)
+    hideFromWorldCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.addonComm.hideFromWorld = self:GetChecked()
+        -- Notify user
+        if UIThingsDB.addonComm.hideFromWorld then
+            print("|cFF00FF00[LunaUITweaks]|r Addon communication disabled - you are hidden from other addon users")
+        else
+            print("|cFF00FF00[LunaUITweaks]|r Addon communication enabled")
+        end
+    end)
+
+    local hideTooltip = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hideTooltip:SetPoint("TOPLEFT", hideFromWorldCheckbox, "BOTTOMLEFT", 5, -2)
+    hideTooltip:SetWidth(600)
+    hideTooltip:SetJustifyH("LEFT")
+    hideTooltip:SetTextColor(0.7, 0.7, 0.7)
+    hideTooltip:SetText(
+        "When enabled, this addon will not communicate with other players' addons (Kick tracker, Addon Versions)")
+
     -- Refresh button
     local refreshBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     refreshBtn:SetSize(120, 24)
-    refreshBtn:SetPoint("TOPLEFT", 20, -80)
+    refreshBtn:SetPoint("TOPLEFT", 20, -145)
     refreshBtn:SetText("Refresh")
     refreshBtn:SetScript("OnClick", function()
         if addonTable.AddonVersions then
@@ -29,24 +53,24 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     -- Column headers
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    nameHeader:SetPoint("TOPLEFT", 20, -120)
+    nameHeader:SetPoint("TOPLEFT", 20, -185)
     nameHeader:SetText("Player")
 
     local versionHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    versionHeader:SetPoint("TOPLEFT", 150, -120)
+    versionHeader:SetPoint("TOPLEFT", 150, -185)
     versionHeader:SetText("Version")
 
     local keystoneHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    keystoneHeader:SetPoint("TOPLEFT", 280, -120)
+    keystoneHeader:SetPoint("TOPLEFT", 280, -185)
     keystoneHeader:SetText("Keystone")
 
     local levelHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    levelHeader:SetPoint("TOPLEFT", 480, -120)
+    levelHeader:SetPoint("TOPLEFT", 480, -185)
     levelHeader:SetText("Level")
 
     -- Separator line
     local separator = panel:CreateTexture(nil, "ARTWORK")
-    separator:SetPoint("TOPLEFT", 20, -135)
+    separator:SetPoint("TOPLEFT", 20, -200)
     separator:SetSize(550, 1)
     separator:SetColorTexture(0.4, 0.4, 0.4, 1)
 
@@ -57,7 +81,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     for i = 1, MAX_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(550, 20)
-        row:SetPoint("TOPLEFT", 20, -140 - ((i - 1) * 22))
+        row:SetPoint("TOPLEFT", 20, -205 - ((i - 1) * 22))
 
         row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.nameText:SetPoint("LEFT", 0, 0)
@@ -85,7 +109,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     -- No data message
     local noDataText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    noDataText:SetPoint("TOPLEFT", 20, -150)
+    noDataText:SetPoint("TOPLEFT", 20, -215)
     noDataText:SetText("Not in a group, or no responses received yet.")
     noDataText:SetTextColor(0.5, 0.5, 0.5)
 

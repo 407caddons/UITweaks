@@ -18,7 +18,7 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     description:SetWidth(650)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "Track interrupt cooldowns for your party. Shows each member's interrupt ability with a cooldown bar. Syncs via addon messages so all party members with this addon can see each other's interrupts.")
+        "Track interrupt cooldowns for your party. Shows each member's interrupt ability with a cooldown bar or icon. Syncs via addon messages so all party members with this addon can see each other's interrupts. Enable 'Attach to Party Frames' to show icons on Blizzard party frames instead of a separate window.")
 
     -- Enable Checkbox
     local enableCheckbox = CreateFrame("CheckButton", "UIThingsKickEnable", panel,
@@ -34,6 +34,60 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
         end
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.kick.enabled)
+
+    -- Attach to Party Frames Checkbox
+    local attachCheckbox = CreateFrame("CheckButton", "UIThingsKickAttach", panel,
+        "ChatConfigCheckButtonTemplate")
+    attachCheckbox:SetPoint("TOPLEFT", 260, -95)
+    _G[attachCheckbox:GetName() .. "Text"]:SetText("Attach to Party Frames")
+    attachCheckbox:SetChecked(UIThingsDB.kick.attachToPartyFrames)
+    attachCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.kick.attachToPartyFrames = self:GetChecked()
+        if addonTable.Kick and addonTable.Kick.UpdateSettings then
+            addonTable.Kick.UpdateSettings()
+        end
+    end)
+
+    -- Anchor Point Dropdown
+    local anchorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    anchorLabel:SetPoint("TOPLEFT", 260, -125)
+    anchorLabel:SetText("Icon Anchor Point:")
+
+    local anchorDropdown = CreateFrame("Frame", "UIThingsKickAnchorDropdown", panel, "UIDropDownMenuTemplate")
+    anchorDropdown:SetPoint("LEFT", anchorLabel, "RIGHT", -15, -3)
+
+    local anchorOptions = {
+        { text = "Bottom", value = "BOTTOM" },
+        { text = "Top",    value = "TOP" },
+        { text = "Left",   value = "LEFT" },
+        { text = "Right",  value = "RIGHT" }
+    }
+
+    UIDropDownMenu_SetWidth(anchorDropdown, 100)
+    UIDropDownMenu_Initialize(anchorDropdown, function(self, level)
+        for _, option in ipairs(anchorOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.func = function()
+                UIThingsDB.kick.attachAnchorPoint = option.value
+                UIDropDownMenu_SetText(anchorDropdown, option.text)
+                if addonTable.Kick and addonTable.Kick.UpdateSettings then
+                    addonTable.Kick.UpdateSettings()
+                end
+            end
+            info.checked = (UIThingsDB.kick.attachAnchorPoint == option.value)
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    -- Set initial dropdown text
+    for _, option in ipairs(anchorOptions) do
+        if UIThingsDB.kick.attachAnchorPoint == option.value then
+            UIDropDownMenu_SetText(anchorDropdown, option.text)
+            break
+        end
+    end
 
     -- Lock/Unlock Button
     local lockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")

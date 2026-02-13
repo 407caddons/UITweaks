@@ -72,12 +72,16 @@ end
 
 local function BroadcastVersion()
     if not IsInGroup() then return end
+    -- Respect hideFromWorld setting
+    if UIThingsDB and UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
     local channel = IsInRaid() and "RAID" or "PARTY"
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, BuildMessage(), channel)
 end
 
 local function RequestVersions()
     if not IsInGroup() then return end
+    -- Respect hideFromWorld setting
+    if UIThingsDB and UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
     local channel = IsInRaid() and "RAID" or "PARTY"
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "REQUEST", channel)
 end

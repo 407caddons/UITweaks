@@ -160,8 +160,11 @@ local function ReleaseItems()
         if btn.ToggleBtn then btn.ToggleBtn:Hide() end
         if btn.ItemBtn then
             btn.ItemBtn:Hide()
-            btn.ItemBtn:SetAttribute("type", nil)
-            btn.ItemBtn:SetAttribute("item", nil)
+            -- Only modify secure attributes out of combat to prevent taint
+            if not InCombatLockdown() then
+                btn.ItemBtn:SetAttribute("type", nil)
+                btn.ItemBtn:SetAttribute("item", nil)
+            end
         end
     end
 end
@@ -287,8 +290,11 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                     local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(questLogIndex)
                     if questItemLink and questItemIcon then
                         btn.ItemBtn.iconTex:SetTexture(questItemIcon)
-                        btn.ItemBtn:SetAttribute("type", "item")
-                        btn.ItemBtn:SetAttribute("item", questItemLink)
+                        -- Only modify secure attributes out of combat to prevent taint
+                        if not InCombatLockdown() then
+                            btn.ItemBtn:SetAttribute("type", "item")
+                            btn.ItemBtn:SetAttribute("item", questItemLink)
+                        end
                         btn.ItemBtn:Show()
                     else
                         btn.ItemBtn:Hide()
