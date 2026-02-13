@@ -823,6 +823,8 @@ function Kick.RebuildPartyFrames()
 end
 
 function Kick.UpdateSettings()
+    if Kick.ApplyEvents then Kick.ApplyEvents() end
+
     if partyContainer then
         partyContainer:EnableMouse(not UIThingsDB.kick.locked)
 
@@ -909,12 +911,28 @@ local function OnEvent(self, event, ...)
 end
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
--- UNIT_SPELLCAST_INTERRUPTED removed - interruptedBy is a secret value during combat
-frame:RegisterEvent("CHAT_MSG_ADDON")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
 frame:SetScript("OnEvent", OnEvent)
 
 -- Register addon message prefix on load
 C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
+
+function Kick.ApplyEvents()
+    if UIThingsDB.kick and UIThingsDB.kick.enabled then
+        frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+        frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        frame:RegisterEvent("CHAT_MSG_ADDON")
+    else
+        frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+        frame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        frame:UnregisterEvent("CHAT_MSG_ADDON")
+        StopUpdateLoop()
+        if partyContainer then
+            partyContainer:Hide()
+        end
+        for unit, af in pairs(attachedFrames) do
+            af:Hide()
+        end
+    end
+end

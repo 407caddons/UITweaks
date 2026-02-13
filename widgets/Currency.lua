@@ -247,4 +247,15 @@ table.insert(Widgets.moduleInits, function()
             currencyFrame:UpdateContent()
         end
     end)
+
+    currencyFrame.eventFrame = eventFrame
+    currencyFrame.ApplyEvents = function(enabled)
+        if enabled then
+            eventFrame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+            eventFrame:RegisterEvent("PLAYER_MONEY")
+            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        else
+            eventFrame:UnregisterAllEvents()
+        end
+    end
 end)

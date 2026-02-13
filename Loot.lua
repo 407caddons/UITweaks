@@ -210,6 +210,8 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
 end
 
 function Loot.UpdateSettings()
+    if Loot.ApplyEvents then Loot.ApplyEvents() end
+
     -- Apply anchor position
     local settings = UIThingsDB.loot
     if settings.anchor then
@@ -297,10 +299,19 @@ end
 
 -- Event Handler
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("CHAT_MSG_LOOT")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("LOOT_READY")
-frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+frame:RegisterEvent("PLAYER_LOGIN") -- Always needed for initialization
+
+function Loot.ApplyEvents()
+    if UIThingsDB.loot.enabled then
+        frame:RegisterEvent("CHAT_MSG_LOOT")
+        frame:RegisterEvent("LOOT_READY")
+        frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    else
+        frame:UnregisterEvent("CHAT_MSG_LOOT")
+        frame:UnregisterEvent("LOOT_READY")
+        frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+    end
+end
 
 frame:SetScript("OnEvent", function(self, event, msg, ...)
     if event == "PLAYER_LOGIN" then

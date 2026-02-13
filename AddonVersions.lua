@@ -6,7 +6,7 @@ local ADDON_PREFIX = "LunaVer"
 local VERSION = C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
 local KEYSTONE_ITEM_ID = 158923
 
--- Tracked data: playerName -> { version, keystoneName, keystoneLevel, playerLevel }
+-- Tracked data: playerName -> { version, keystoneName, keystoneLevel, playerLevel, keystoneMapID }
 -- Players without the addon get { version = nil }
 local playerData = {}
 
@@ -31,7 +31,7 @@ local function GetPlayerKeystone()
                         level = tonumber(level)
                         local name = C_ChallengeMode.GetMapUIInfo(mapID)
                         if name then
-                            return name, level
+                            return name, level, mapID
                         end
                     end
                 end
@@ -41,31 +41,46 @@ local function GetPlayerKeystone()
     return nil, nil
 end
 
--- Build the broadcast message: "version|keystoneName|keystoneLevel|playerLevel"
+-- Build the broadcast message: "version|keystoneName|keystoneLevel|playerLevel|keystoneMapID"
 local function BuildMessage()
-    local keyName, keyLevel = GetPlayerKeystone()
+    local keyName, keyLevel, keyMapID = GetPlayerKeystone()
     local playerLevel = UnitLevel("player") or 0
-    return string.format("%s|%s|%d|%d",
+    return string.format("%s|%s|%d|%d|%d",
         VERSION,
         keyName or "none",
         keyLevel or 0,
-        playerLevel)
+        playerLevel,
+        keyMapID or 0)
 end
 
 -- Parse incoming message
 local function ParseMessage(message)
-    local version, keyName, keyLevel, playerLevel = message:match("^([^|]+)|([^|]+)|([^|]+)|([^|]+)$")
+    -- New format: version|keyName|keyLevel|playerLevel|keystoneMapID
+    local version, keyName, keyLevel, playerLevel, keyMapID = message:match("^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$")
+    if version then
+        local mapID = tonumber(keyMapID) or 0
+        return {
+            version = version,
+            keystoneName = keyName ~= "none" and keyName or nil,
+            keystoneLevel = tonumber(keyLevel) or 0,
+            playerLevel = tonumber(playerLevel) or 0,
+            keystoneMapID = mapID > 0 and mapID or nil,
+        }
+    end
+    -- Backwards compatible: version|keyName|keyLevel|playerLevel (no mapID)
+    version, keyName, keyLevel, playerLevel = message:match("^([^|]+)|([^|]+)|([^|]+)|([^|]+)$")
     if version then
         return {
             version = version,
             keystoneName = keyName ~= "none" and keyName or nil,
             keystoneLevel = tonumber(keyLevel) or 0,
             playerLevel = tonumber(playerLevel) or 0,
+            keystoneMapID = nil,
         }
     end
     -- Fallback: old format (just version string, no pipes)
     if not message:find("|") then
-        return { version = message, keystoneName = nil, keystoneLevel = 0, playerLevel = 0 }
+        return { version = message, keystoneName = nil, keystoneLevel = 0, playerLevel = 0, keystoneMapID = nil }
     end
     return nil
 end
@@ -166,12 +181,13 @@ function AddonVersions.RefreshVersions()
     wipe(playerData)
     -- Add self
     local playerName = UnitName("player")
-    local keyName, keyLevel = GetPlayerKeystone()
+    local keyName, keyLevel, keyMapID = GetPlayerKeystone()
     playerData[playerName] = {
         version = VERSION,
         keystoneName = keyName,
         keystoneLevel = keyLevel or 0,
         playerLevel = UnitLevel("player") or 0,
+        keystoneMapID = keyMapID,
     }
 
     UpdatePartyList()
@@ -201,12 +217,13 @@ frame:SetScript("OnEvent", function(self, event, ...)
             end
             wipe(playerData)
             local playerName = UnitName("player")
-            local keyName, keyLevel = GetPlayerKeystone()
+            local keyName, keyLevel, keyMapID = GetPlayerKeystone()
             playerData[playerName] = {
                 version = VERSION,
                 keystoneName = keyName,
                 keystoneLevel = keyLevel or 0,
                 playerLevel = UnitLevel("player") or 0,
+                keystoneMapID = keyMapID,
             }
         end
         if AddonVersions.onVersionsUpdated then

@@ -43,6 +43,9 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     enableBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.enabled = self:GetChecked()
         Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.misc.enabled)
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.misc.enabled)
 

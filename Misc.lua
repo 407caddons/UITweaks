@@ -273,10 +273,13 @@ if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.quickDestroy then
     Misc.ToggleQuickDestroy(true)
 end
 
+local ApplyMiscEvents -- forward declaration
+
 local function OnEvent(self, event, ...)
     if not UIThingsDB.misc then return end
 
     if event == "PLAYER_ENTERING_WORLD" then
+        ApplyMiscEvents()
         if UIThingsDB.misc.enabled then
             ApplyUIScale()
             Misc.UpdateAutoInviteKeywords()
@@ -297,6 +300,7 @@ local function OnEvent(self, event, ...)
         if not UIThingsDB.misc.enabled then return end
         if not UIThingsDB.misc.personalOrders then return end
         local msg = ...
+        if issecretvalue(msg) then return end
         -- Parse for "Personal Work Order" or similar text
         if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
             ShowAlert()
@@ -373,10 +377,50 @@ local function OnEvent(self, event, ...)
 end
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("AUCTION_HOUSE_SHOW")
-frame:RegisterEvent("CHAT_MSG_SYSTEM")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-frame:RegisterEvent("PARTY_INVITE_REQUEST")
-frame:RegisterEvent("CHAT_MSG_WHISPER")
-frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
 frame:SetScript("OnEvent", OnEvent)
+
+ApplyMiscEvents = function()
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then
+        frame:UnregisterEvent("AUCTION_HOUSE_SHOW")
+        frame:UnregisterEvent("CHAT_MSG_SYSTEM")
+        frame:UnregisterEvent("PARTY_INVITE_REQUEST")
+        frame:UnregisterEvent("CHAT_MSG_WHISPER")
+        frame:UnregisterEvent("CHAT_MSG_BN_WHISPER")
+        return
+    end
+
+    -- AH filter
+    if UIThingsDB.misc.ahFilter then
+        frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+    else
+        frame:UnregisterEvent("AUCTION_HOUSE_SHOW")
+    end
+
+    -- Personal orders
+    if UIThingsDB.misc.personalOrders then
+        frame:RegisterEvent("CHAT_MSG_SYSTEM")
+    else
+        frame:UnregisterEvent("CHAT_MSG_SYSTEM")
+    end
+
+    -- Auto-accept invites
+    if UIThingsDB.misc.autoAcceptFriends or UIThingsDB.misc.autoAcceptGuild or UIThingsDB.misc.autoAcceptEveryone then
+        frame:RegisterEvent("PARTY_INVITE_REQUEST")
+    else
+        frame:UnregisterEvent("PARTY_INVITE_REQUEST")
+    end
+
+    -- Auto-invite on whisper
+    if UIThingsDB.misc.autoInviteEnabled then
+        frame:RegisterEvent("CHAT_MSG_WHISPER")
+        frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
+    else
+        frame:UnregisterEvent("CHAT_MSG_WHISPER")
+        frame:UnregisterEvent("CHAT_MSG_BN_WHISPER")
+    end
+end
+
+function Misc.ApplyEvents()
+    ApplyMiscEvents()
+end

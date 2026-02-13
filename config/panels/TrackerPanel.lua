@@ -402,6 +402,18 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end)
 
+    -- Show Tooltip Preview Checkbox
+    local tooltipCheckbox = CreateFrame("CheckButton", "UIThingsTrackerTooltipCheckbox", panel,
+        "ChatConfigCheckButtonTemplate")
+    tooltipCheckbox:SetPoint("TOPLEFT", 380, -565)
+    tooltipCheckbox:SetHitRectInsets(0, -130, 0, 0)
+    _G[tooltipCheckbox:GetName() .. "Text"]:SetText("Show Tooltip Preview")
+    tooltipCheckbox:SetChecked(UIThingsDB.tracker.showTooltipPreview)
+    tooltipCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.tracker.showTooltipPreview = self:GetChecked()
+        UpdateTracker()
+    end)
+
     -------------------------------------------------------------
     -- SECTION: Appearance
     -------------------------------------------------------------

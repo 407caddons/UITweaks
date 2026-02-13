@@ -72,11 +72,13 @@ table.insert(Widgets.moduleInits, function()
     end)
     friendsFrame:SetScript("OnLeave", GameTooltip_Hide)
 
-    friendsFrame.UpdateContent = function(self)
+    -- Cached friend count (updated on events, not every second)
+    local cachedText = "Friends: 0"
+
+    local function RefreshFriendsCache()
         local numOnline = C_FriendList.GetNumOnlineFriends() or 0
         local _, numBNetOnline = BNGetNumFriends()
 
-        -- Recalculate BNet if we are filtering
         local bnetCount = 0
         if UIThingsDB.widgets.showWoWOnly then
             local numBNet = BNGetNumFriends()
@@ -92,6 +94,33 @@ table.insert(Widgets.moduleInits, function()
             bnetCount = numBNetOnline or 0
         end
 
-        self.text:SetFormattedText("Friends: %d", numOnline + bnetCount)
+        cachedText = string.format("Friends: %d", numOnline + bnetCount)
+    end
+
+    local friendsEventFrame = CreateFrame("Frame")
+    friendsEventFrame:RegisterEvent("BN_FRIEND_INFO_CHANGED")
+    friendsEventFrame:RegisterEvent("FRIENDLIST_UPDATE")
+    friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
+    friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
+    friendsEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    friendsEventFrame:SetScript("OnEvent", function()
+        RefreshFriendsCache()
+    end)
+
+    friendsFrame.eventFrame = friendsEventFrame
+    friendsFrame.ApplyEvents = function(enabled)
+        if enabled then
+            friendsEventFrame:RegisterEvent("BN_FRIEND_INFO_CHANGED")
+            friendsEventFrame:RegisterEvent("FRIENDLIST_UPDATE")
+            friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
+            friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
+            friendsEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        else
+            friendsEventFrame:UnregisterAllEvents()
+        end
+    end
+
+    friendsFrame.UpdateContent = function(self)
+        self.text:SetText(cachedText)
     end
 end)

@@ -7,6 +7,7 @@ local scrollChild
 local contentFrame
 local headerFrame
 local itemPool = {}
+local autoTrackFrame
 
 -- Constants
 local MINUTES_PER_DAY = 1440
@@ -33,14 +34,14 @@ local function OnQuestClick(self, button)
     if InCombatLockdown() and button == "LeftButton" then return end
 
     -- Shift-Click to Untrack (if enabled)
-    if IsShiftKeyDown() and self.questID and UIThingsDB.tracker.shiftClickUntrack then
+    if IsShiftKeyDown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.shiftClickUntrack then
         C_QuestLog.RemoveQuestWatch(self.questID)
         SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
         return
     end
 
     -- Right-Click to Super Track (if enabled) - Toggle behavior
-    if button == "RightButton" and self.questID and UIThingsDB.tracker.rightClickSuperTrack then
+    if button == "RightButton" and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.rightClickSuperTrack then
         if C_SuperTrack.GetSuperTrackedQuestID() == self.questID then
             C_SuperTrack.ClearAllSuperTracked() -- Clear super tracking
         else
@@ -50,7 +51,7 @@ local function OnQuestClick(self, button)
         return
     end
 
-    if self.questID then
+    if self.questID and type(self.questID) == "number" then
         -- Try modern Map/Quest Log
         if QuestMapFrame_OpenToQuestDetails then
             -- Make sure the frame is shown first
@@ -155,6 +156,8 @@ local function ReleaseItems()
     for _, btn in ipairs(itemPool) do
         btn:Hide()
         btn:SetScript("OnClick", nil)
+        btn:SetScript("OnEnter", nil)
+        btn:SetScript("OnLeave", nil)
         btn.Icon:Hide()
         btn.Text:ClearAllPoints() -- Reset points to ensure clean state
         if btn.ToggleBtn then btn.ToggleBtn:Hide() end
@@ -309,12 +312,33 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                 if btn.ItemBtn then btn.ItemBtn:Hide() end
             end
 
+            -- Tooltip preview on hover
+            if UIThingsDB.tracker.showTooltipPreview and (questID or achieID) then
+                btn:SetScript("OnEnter", function(self)
+                    if self.questID then
+                        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                        GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
+                        GameTooltip:SetHyperlink("quest:" .. self.questID)
+                        GameTooltip:Show()
+                    elseif self.achieID then
+                        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                        GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
+                        GameTooltip:SetHyperlink("achievement:" .. self.achieID)
+                        GameTooltip:Show()
+                    end
+                end)
+                btn:SetScript("OnLeave", GameTooltip_Hide)
+            else
+                btn:SetScript("OnEnter", nil)
+                btn:SetScript("OnLeave", nil)
+            end
+
             ucState.yOffset = ucState.yOffset - (currentSize + 4)
         end
     end
 end
 
---- Formats time remaining for World Quests
+--- Formats time remaining for World Quests with urgency coloring
 local function GetTimeLeftString(questID)
     local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
     if timeLeftMinutes and timeLeftMinutes > 0 then
@@ -322,13 +346,28 @@ local function GetTimeLeftString(questID)
         local hours = math.floor((timeLeftMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR)
         local minutes = timeLeftMinutes % 60
 
+        local timeStr
         if days > 0 then
-            return string.format(" (%dd %dh)", days, hours)
+            timeStr = string.format("(%dd %dh)", days, hours)
         elseif hours > 0 then
-            return string.format(" (%dh %dm)", hours, minutes)
+            timeStr = string.format("(%dh %dm)", hours, minutes)
         else
-            return string.format(" (%dm)", minutes)
+            timeStr = string.format("(%dm)", minutes)
         end
+
+        -- Color by urgency: green >4h, yellow 1-4h, orange 15m-1h, red <15m
+        local color
+        if timeLeftMinutes > 240 then
+            color = "00FF00" -- green
+        elseif timeLeftMinutes > 60 then
+            color = "FFFF00" -- yellow
+        elseif timeLeftMinutes > 15 then
+            color = "FF8800" -- orange
+        else
+            color = "FF0000" -- red
+        end
+
+        return string.format(" |cFF%s%s|r", color, timeStr)
     end
     return ""
 end
@@ -659,59 +698,14 @@ end
 UpdateContent = function()
     if not trackerFrame then return end
 
-    -- Check Counts for Auto-Hide (validate achievements have valid data)
-    local numQuests = C_QuestLog.GetNumQuestWatches()
-    local trackedAchievements = C_ContentTracking.GetTrackedIDs(Enum.ContentTrackingType.Achievement)
-    local validAchievementCount = 0
-    for _, achID in ipairs(trackedAchievements) do
-        local _, name = GetAchievementInfo(achID)
-        if name then
-            validAchievementCount = validAchievementCount + 1
-        end
-    end
-
-    -- Count world quests and task quests (cache mapID/tasks for RenderWorldQuests)
-    local worldQuestCount = 0
-    local cachedMapID = C_Map.GetBestMapForUnit("player")
-    local cachedTasks = cachedMapID and C_TaskQuest.GetQuestsOnMap(cachedMapID) or nil
-    if cachedTasks then
-        local onlyActive = UIThingsDB.tracker.onlyActiveWorldQuests
-        for _, info in ipairs(cachedTasks) do
-            local questID = info.questID
-            if questID and C_TaskQuest.IsActive(questID) then
-                local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
-                local isTaskQuest = C_QuestLog.IsQuestTask(questID)
-
-                if isWorldQuest or isTaskQuest then
-                    -- Task quests (bonus objectives/temporary quests) always show when active
-                    -- World quests respect the onlyActive filter
-                    if isTaskQuest and not isWorldQuest then
-                        worldQuestCount = worldQuestCount + 1
-                    elseif isWorldQuest then
-                        if onlyActive then
-                            if C_QuestLog.IsOnQuest(questID) then
-                                worldQuestCount = worldQuestCount + 1
-                            end
-                        else
-                            worldQuestCount = worldQuestCount + 1
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local total = numQuests + validAchievementCount + worldQuestCount
-
     -- Guard against combat execution (prevents taint on secure items)
     if InCombatLockdown() then return end
 
-    -- Check if disabled or should forcefully hide (M+ or Empty)
+    -- Check if disabled or should forcefully hide (M+)
     local enabled = UIThingsDB.tracker.enabled
     local shouldHideMPlus = enabled and (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
-    local shouldHideEmpty = enabled and (total == 0 and UIThingsDB.tracker.locked)
 
-    if not enabled or shouldHideMPlus or shouldHideEmpty then
+    if not enabled or shouldHideMPlus then
         UnregisterStateDriver(trackerFrame, "visibility")
         trackerFrame:Hide()
         return
@@ -726,6 +720,10 @@ UpdateContent = function()
     end
 
     ReleaseItems()
+
+    -- Cache map data once for RenderWorldQuests (avoids redundant API calls)
+    local cachedMapID = C_Map.GetBestMapForUnit("player")
+    local cachedTasks = cachedMapID and C_TaskQuest.GetQuestsOnMap(cachedMapID) or nil
 
     -- Populate shared state for hoisted helper functions
     ucState.baseFont = UIThingsDB.tracker.font or "Fonts\\FRIZQT__.TTF"
@@ -767,6 +765,13 @@ UpdateContent = function()
         if renderer then
             renderer()
         end
+    end
+
+    -- Auto-hide when empty and locked (deferred check avoids redundant pre-counting)
+    if ucState.yOffset == -5 and UIThingsDB.tracker.locked then
+        UnregisterStateDriver(trackerFrame, "visibility")
+        trackerFrame:Hide()
+        return
     end
 
     -- Resize Scroll Child
@@ -906,6 +911,15 @@ end
 function addonTable.ObjectiveTracker.UpdateSettings()
     local enabled = UIThingsDB.tracker.enabled
 
+    -- Auto-track event management
+    if autoTrackFrame then
+        if enabled and UIThingsDB.tracker.autoTrackQuests then
+            autoTrackFrame:RegisterEvent("QUEST_ACCEPTED")
+        else
+            autoTrackFrame:UnregisterAllEvents()
+        end
+    end
+
     -- Blizzard Tracker Logic
     if enabled then
         HookBlizzardTracker()
@@ -928,12 +942,37 @@ function addonTable.ObjectiveTracker.UpdateSettings()
                 ObjectiveTrackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
             end
         end
-        if trackerFrame then trackerFrame:Hide() end
+        if trackerFrame then
+            trackerFrame:UnregisterAllEvents()
+            trackerFrame:Hide()
+        end
         return
     end
 
     -- Custom Tracker Logic
     SetupCustomTracker()
+
+    -- Re-register events (SetupCustomTracker only registers once on creation,
+    -- so we must re-register after a disable/enable cycle)
+    if trackerFrame then
+        trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+        trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
+        trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE")
+        trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE")
+        trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
+        trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+        trackerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        trackerFrame:RegisterEvent("CHALLENGE_MODE_START")
+        trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+        trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
+        trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
+        trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        trackerFrame:RegisterEvent("ZONE_CHANGED")
+        trackerFrame:RegisterEvent("TASK_PROGRESS_UPDATE")
+        trackerFrame:RegisterEvent("QUEST_ACCEPTED")
+        trackerFrame:RegisterEvent("QUEST_REMOVED")
+    end
 
     -- Check visibility
     local shouldHide = (UIThingsDB.tracker.hideInCombat and InCombatLockdown()) or
@@ -1035,8 +1074,7 @@ hookFrame:SetScript("OnEvent", function(self, event)
 end)
 
 -- Auto Track Quests Feature
-local autoTrackFrame = CreateFrame("Frame")
-autoTrackFrame:RegisterEvent("QUEST_ACCEPTED")
+autoTrackFrame = CreateFrame("Frame")
 autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
     if event == "QUEST_ACCEPTED" and questID then
         if UIThingsDB.tracker and UIThingsDB.tracker.enabled and UIThingsDB.tracker.autoTrackQuests then

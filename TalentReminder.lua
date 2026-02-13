@@ -25,17 +25,29 @@ function TalentReminder.Initialize()
 
     TalentReminder.CreateAlertFrame()
 
-    local frame = CreateFrame("Frame")
-    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
-    frame:RegisterEvent("ZONE_CHANGED")
-    frame:RegisterEvent("ZONE_CHANGED_INDOORS")
-    frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    frame:SetScript("OnEvent", TalentReminder.OnEvent)
+    TalentReminder.eventFrame = CreateFrame("Frame")
+    TalentReminder.eventFrame:SetScript("OnEvent", TalentReminder.OnEvent)
+    TalentReminder.ApplyEvents()
 
     -- Clean up legacy data
     TalentReminder.CleanupSavedVariables()
+end
+
+function TalentReminder.ApplyEvents()
+    if not TalentReminder.eventFrame then return end
+    if UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
+        TalentReminder.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        TalentReminder.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+        TalentReminder.eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED")
+        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
+        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    else
+        TalentReminder.eventFrame:UnregisterAllEvents()
+        if alertFrame and alertFrame:IsShown() then
+            TalentReminder.ReleaseAlertFrame()
+        end
+    end
 end
 
 -- Cleanup legacy fields from saved variables

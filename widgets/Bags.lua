@@ -30,6 +30,16 @@ table.insert(Widgets.moduleInits, function()
         end
     end)
 
+    bagFrame.eventFrame = goldTracker
+    bagFrame.ApplyEvents = function(enabled)
+        if enabled then
+            goldTracker:RegisterEvent("PLAYER_MONEY")
+            goldTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
+        else
+            goldTracker:UnregisterAllEvents()
+        end
+    end
+
     bagFrame:SetScript("OnClick", function(self, button)
         if button == "RightButton" and IsShiftKeyDown() then
             UIThingsDB.widgets.bags.goldData = {}

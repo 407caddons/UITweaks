@@ -181,18 +181,26 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     end
 
     local widgets = {
-        { key = "time",        label = "Local/Server Time" },
-        { key = "fps",         label = "System Stats (MS/FPS)" },
-        { key = "bags",        label = "Bag Slots Info" },
-        { key = "spec",        label = "Specialization/Loot Spec" },
-        { key = "durability",  label = "Durability" },
-        { key = "combat",      label = "Combat State" },
-        { key = "friends",     label = "Friends Online" },
-        { key = "guild",       label = "Guild Members" },
-        { key = "group",       label = "Group Composition" },
-        { key = "teleports",   label = "Teleports" },
-        { key = "keystone",    label = "Mythic+ Keystone" },
-        { key = "weeklyReset", label = "Weekly Reset Timer" },
+        { key = "time",         label = "Local/Server Time" },
+        { key = "fps",          label = "System Stats (MS/FPS)" },
+        { key = "bags",         label = "Bag Slots Info" },
+        { key = "spec",         label = "Specialization/Loot Spec" },
+        { key = "durability",   label = "Durability" },
+        { key = "combat",       label = "Combat State" },
+        { key = "friends",      label = "Friends Online" },
+        { key = "guild",        label = "Guild Members" },
+        { key = "group",        label = "Group Composition" },
+        { key = "teleports",    label = "Teleports" },
+        { key = "keystone",     label = "Mythic+ Keystone" },
+        { key = "weeklyReset",  label = "Weekly Reset Timer" },
+        { key = "coordinates",  label = "Player Coordinates" },
+        { key = "battleRes",    label = "Battle Res Counter" },
+        { key = "speed",        label = "Movement Speed" },
+        { key = "itemLevel",    label = "Item Level" },
+        { key = "volume",       label = "Volume Control" },
+        { key = "zone",         label = "Zone / Subzone" },
+        { key = "pvp",          label = "Honor / Conquest PvP" },
+        { key = "mythicRating", label = "Mythic+ Rating" },
     }
 
     local yOffset = -250

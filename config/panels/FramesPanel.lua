@@ -263,6 +263,36 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
         end
     end)
 
+    -- Dock Direction Dropdown (next to Anchor checkbox)
+    local dockLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    dockLabel:SetPoint("TOPLEFT", 340, -34)
+    dockLabel:SetText("Dock:")
+    local dockDropdown = CreateFrame("Frame", "UIThingsFrameDockDropdown", frameControls, "UIDropDownMenuTemplate")
+    dockDropdown:SetPoint("LEFT", dockLabel, "RIGHT", -10, -2)
+    UIDropDownMenu_SetWidth(dockDropdown, 90)
+
+    local function DockDirectionInit(self, level)
+        local directions = {
+            { text = "Horizontal", value = "horizontal" },
+            { text = "Vertical",   value = "vertical" },
+        }
+        for _, dir in ipairs(directions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = dir.text
+            info.value = dir.value
+            info.func = function()
+                if selectedFrameIndex then
+                    UIThingsDB.frames.list[selectedFrameIndex].dockDirection = dir.value
+                    UIDropDownMenu_SetText(dockDropdown, dir.text)
+                    UpdateFrames()
+                end
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+    UIDropDownMenu_Initialize(dockDropdown, DockDirectionInit)
+    UIDropDownMenu_SetText(dockDropdown, "Horizontal")
+
     -- Helper to create input box
     local function CreateValueEditBox(slider, key)
         local edit = CreateFrame("EditBox", nil, slider:GetParent(), "InputBoxTemplate")
@@ -571,6 +601,10 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
             else
                 borderColorSwatch.tex:SetColorTexture(1, 1, 1, 1)
             end
+
+            -- Dock direction
+            local dir = f.dockDirection or "horizontal"
+            UIDropDownMenu_SetText(dockDropdown, dir == "vertical" and "Vertical" or "Horizontal")
 
             -- Borders - defaults to true
             borderTopBtn:SetChecked((f.showTop == nil) and true or f.showTop)

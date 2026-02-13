@@ -428,7 +428,11 @@ table.insert(Widgets.moduleInits, function()
         end
     end)
 
-    groupFrame.UpdateContent = function(self)
+    -- Cached group composition (updated on events, not every second)
+    local cachedTanks, cachedHealers, cachedDps, cachedMembers = 0, 0, 0, 0
+    local cachedText = "No Group"
+
+    local function RefreshGroupCache()
         local tanks, healers, dps = 0, 0, 0
         local members = GetNumGroupMembers()
         if members > 0 then
@@ -443,11 +447,35 @@ table.insert(Widgets.moduleInits, function()
                     dps = dps + 1
                 end
             end
-
-            self.text:SetFormattedText("%s %d %s %d %s %d (%d)", TANK_ICON, tanks, HEALER_ICON, healers, DPS_ICON, dps,
+            cachedTanks, cachedHealers, cachedDps, cachedMembers = tanks, healers, dps, members
+            cachedText = string.format("%s %d %s %d %s %d (%d)", TANK_ICON, tanks, HEALER_ICON, healers, DPS_ICON, dps,
                 members)
         else
-            self.text:SetText("No Group")
+            cachedTanks, cachedHealers, cachedDps, cachedMembers = 0, 0, 0, 0
+            cachedText = "No Group"
         end
+    end
+
+    local groupEventFrame = CreateFrame("Frame")
+    groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
+    groupEventFrame:SetScript("OnEvent", function()
+        RefreshGroupCache()
+    end)
+
+    groupFrame.eventFrame = groupEventFrame
+    groupFrame.ApplyEvents = function(enabled)
+        if enabled then
+            groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+            groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
+        else
+            groupEventFrame:UnregisterAllEvents()
+        end
+    end
+
+    groupFrame.UpdateContent = function(self)
+        self.text:SetText(cachedText)
     end
 end)

@@ -34,7 +34,7 @@ table.insert(Widgets.moduleInits, function()
                 local currentSpecIndex = GetSpecialization()
                 local _, currentSpecName = GetSpecializationInfo(currentSpecIndex)
                 local btn0 = rootDescription:CreateButton(
-                "Current Specialization (" .. (currentSpecName or "Unknown") .. ")",
+                    "Current Specialization (" .. (currentSpecName or "Unknown") .. ")",
                     function() SetLootSpecialization(0) end)
                 if currentLootSpec == 0 then
                     btn0:SetEnabled(false)
@@ -63,7 +63,7 @@ table.insert(Widgets.moduleInits, function()
             local lootSpecIcon = currentSpecIcon
             if lootSpecId ~= 0 then
                 local _, _, _, icon = GetSpecializationInfoByID(lootSpecId)
-                lootSpecIcon = icon
+                if icon then lootSpecIcon = icon end
             end
 
             if currentSpecIcon and lootSpecIcon then

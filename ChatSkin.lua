@@ -22,6 +22,7 @@ local languageButton = nil
 local urlCopyFrame = nil
 local urlCopyEditBox = nil
 local savedTimestampCVar = nil
+local filtersInstalled = false
 
 local EDITBOX_HEIGHT = 28
 local INNER_PAD = 4
@@ -58,13 +59,26 @@ local URL_PATTERNS = {
 }
 
 -- Wrap detected URLs in custom hyperlink format
+-- Shared table to reduce garbage checks
+local placeholders = {}
+
+-- Wrap detected URLs in custom hyperlink format
 local function FormatURLs(msg)
     if not msg then return msg end
+
+    -- Fast check: if no "http" or "www", skip heavy processing
+    -- This covers the two patterns in URL_PATTERNS
+    if not (string.find(msg, "http") or string.find(msg, "www")) then
+        return msg
+    end
+
     -- Don't process messages that already contain our custom links
-    if msg:find("|Hlunaurl:") then return msg end
+    if string.find(msg, "|Hlunaurl:") then return msg end
+
+    -- Reuse table
+    wipe(placeholders)
 
     -- Extract existing hyperlinks and replace with placeholders to avoid matching URLs inside them
-    local placeholders = {}
     local placeholderIdx = 0
     local safeMsg = msg:gsub("(|H.-|h.-|h)", function(link)
         placeholderIdx = placeholderIdx + 1
@@ -273,15 +287,18 @@ local function SkinChatFrame(chatFrame)
         bg:SetScript("OnShow", function(self)
             if UIThingsDB.chatSkin.enabled then self:Hide() end
         end)
-        local suppressBgAlpha = false
-        hooksecurefunc(bg, "SetAlpha", function(self)
-            if suppressBgAlpha then return end
-            if UIThingsDB.chatSkin.enabled then
-                suppressBgAlpha = true
-                self:SetAlpha(0)
-                suppressBgAlpha = false
-            end
-        end)
+        if not bg.lunaHooked then
+            local suppressBgAlpha = false
+            hooksecurefunc(bg, "SetAlpha", function(self)
+                if suppressBgAlpha then return end
+                if UIThingsDB.chatSkin.enabled then
+                    suppressBgAlpha = true
+                    self:SetAlpha(0)
+                    suppressBgAlpha = false
+                end
+            end)
+            bg.lunaHooked = true
+        end
     end
 
     -- Hide all border/clamp textures with OnShow + SetAlpha suppression
@@ -893,19 +910,7 @@ local function SetupChatSkin()
         end
 
         -- Register URL detection filter on common chat events
-        local chatEvents = {
-            "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM",
-            "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
-            "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_RAID_WARNING",
-            "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER",
-            "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER",
-            "CHAT_MSG_CHANNEL", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM",
-            "CHAT_MSG_BN_INLINE_TOAST_ALERT",
-            "CHAT_MSG_COMMUNITIES_CHANNEL",
-        }
-        for _, event in ipairs(chatEvents) do
-            ChatFrame_AddMessageEventFilter(event, URLMessageFilter)
-        end
+        ChatSkin.InstallMessageFilters()
 
         -- Hook tab selection changes
         hooksecurefunc("FCFTab_UpdateColors", function(tab, selected)
@@ -966,6 +971,34 @@ local function SetupChatSkin()
     end -- hooksInstalled guard
 end
 
+-- Chat events for URL message filters
+local URL_FILTER_EVENTS = {
+    "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM",
+    "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
+    "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_RAID_WARNING",
+    "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER",
+    "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER",
+    "CHAT_MSG_CHANNEL", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM",
+    "CHAT_MSG_BN_INLINE_TOAST_ALERT",
+    "CHAT_MSG_COMMUNITIES_CHANNEL",
+}
+
+function ChatSkin.InstallMessageFilters()
+    if filtersInstalled then return end
+    for _, event in ipairs(URL_FILTER_EVENTS) do
+        ChatFrame_AddMessageEventFilter(event, URLMessageFilter)
+    end
+    filtersInstalled = true
+end
+
+function ChatSkin.RemoveMessageFilters()
+    if not filtersInstalled then return end
+    for _, event in ipairs(URL_FILTER_EVENTS) do
+        ChatFrame_RemoveMessageEventFilter(event, URLMessageFilter)
+    end
+    filtersInstalled = false
+end
+
 function ChatSkin.UpdateTabDraggability()
     for tab in pairs(skinnedTabs) do
         if isTabUnlocked then
@@ -1018,6 +1051,9 @@ function ChatSkin.UpdateSettings()
         end
     end
 
+    -- Re-install URL message filters if they were removed on disable
+    ChatSkin.InstallMessageFilters()
+
     for tab in pairs(skinnedTabs) do UpdateTabColors(tab) end
 
     -- Reapply timestamp setting
@@ -1042,6 +1078,9 @@ function ChatSkin.Disable()
     isSetup = false
     isTabUnlocked = false
     suppressSetPoint = true
+
+    -- Remove URL message filters
+    ChatSkin.RemoveMessageFilters()
 
     -- Restore original timestamp CVar
     if savedTimestampCVar then

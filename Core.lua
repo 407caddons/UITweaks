@@ -106,6 +106,7 @@ local function OnEvent(self, event, ...)
                 strata = "LOW",
                 showWorldQuestTimer = true,
                 hideCompletedSubtasks = false,
+                showTooltipPreview = true,
                 collapsed = {}
             },
             minimap = {
@@ -279,7 +280,15 @@ local function OnEvent(self, event, ...)
                 group = { enabled = false, point = "CENTER", x = 0, y = -160 },
                 teleports = { enabled = false, point = "CENTER", x = 0, y = -180 },
                 keystone = { enabled = false, point = "CENTER", x = 0, y = -200 },
-                weeklyReset = { enabled = false, point = "CENTER", x = 0, y = -220 }
+                weeklyReset = { enabled = false, point = "CENTER", x = 0, y = -220 },
+                coordinates = { enabled = false, point = "CENTER", x = 0, y = -240 },
+                battleRes = { enabled = false, point = "CENTER", x = 0, y = -260 },
+                speed = { enabled = false, point = "CENTER", x = 0, y = -280 },
+                itemLevel = { enabled = false, point = "CENTER", x = 0, y = -300 },
+                volume = { enabled = false, point = "CENTER", x = 0, y = -320 },
+                zone = { enabled = false, point = "CENTER", x = 0, y = -340 },
+                pvp = { enabled = false, point = "CENTER", x = 0, y = -360 },
+                mythicRating = { enabled = false, point = "CENTER", x = 0, y = -380 }
             },
             kick = {
                 enabled = false,

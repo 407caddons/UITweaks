@@ -8,6 +8,32 @@ local updateInterval = 1.0
 local widgetTicker = nil
 Widgets.moduleInits = {}
 
+-- Estimate M+ score for a timed run at a given key level
+-- Community-known formula: base score ≈ 37.5 + (level * 7.5)
+function Widgets.EstimateTimedScore(keystoneLevel)
+    if not keystoneLevel or keystoneLevel < 2 then return 0 end
+    return math.floor(37.5 + (keystoneLevel * 7.5))
+end
+
+-- Estimate rating gain from timing a key at a given level for a specific dungeon
+-- Returns: estimatedGain, estimatedScore, currentBest
+function Widgets.EstimateRatingGain(mapID, keystoneLevel)
+    if not mapID or not keystoneLevel then return 0, 0, 0 end
+    local estimatedScore = Widgets.EstimateTimedScore(keystoneLevel)
+    local currentBest = 0
+    -- GetSeasonBestForMap returns (intimeInfo, overtimeInfo) as MapSeasonBestInfo tables
+    -- Try to get overall dungeon score via GetMapScoreInfo first, fallback to season best
+    local intimeInfo, overtimeInfo = C_MythicPlus.GetSeasonBestForMap(mapID)
+    if intimeInfo and intimeInfo.dungeonScore then
+        currentBest = intimeInfo.dungeonScore
+    end
+    if overtimeInfo and overtimeInfo.dungeonScore and overtimeInfo.dungeonScore > currentBest then
+        currentBest = overtimeInfo.dungeonScore
+    end
+    local gain = math.max(0, estimatedScore - currentBest)
+    return gain, estimatedScore, currentBest
+end
+
 -- Helper to create a widget frame
 function Widgets.CreateWidgetFrame(name, configKey)
     local f = CreateFrame("Button", "LunaUITweaks_Widget_" .. name, UIParent)
@@ -128,11 +154,15 @@ local function UpdateAnchoredLayouts()
     if InCombatLockdown() then return end
 
     local anchorLookup = {}
+    local anchorData = {}
     if UIThingsDB.frames and UIThingsDB.frames.list then
         for i, data in ipairs(UIThingsDB.frames.list) do
             if data.isAnchor then
                 local f = _G["UIThingsCustomFrame" .. i]
-                if f then anchorLookup[data.name] = f end
+                if f then
+                    anchorLookup[data.name] = f
+                    anchorData[data.name] = data
+                end
             end
         end
     end
@@ -161,25 +191,39 @@ local function UpdateAnchoredLayouts()
         end)
 
         if anchorFrame then
-            local width = anchorFrame:GetWidth()
             local count = #items
             if count > 0 then
-                local totalContentWidth = 0
+                local direction = anchorData[anchorName] and anchorData[anchorName].dockDirection or "horizontal"
+                local isVertical = (direction == "vertical")
+
+                -- Measure content size along the dock axis
+                local totalContentSize = 0
                 for _, item in ipairs(items) do
                     local f = item.frame
                     local textWidth = f.text:GetStringWidth()
                     local w = textWidth + 10
                     f:SetWidth(w)
-                    totalContentWidth = totalContentWidth + w
+                    if isVertical then
+                        totalContentSize = totalContentSize + f:GetHeight()
+                    else
+                        totalContentSize = totalContentSize + w
+                    end
                 end
 
-                local gapSize = (width - totalContentWidth) / (count + 1)
-                local currentX = gapSize
+                local axisLength = isVertical and anchorFrame:GetHeight() or anchorFrame:GetWidth()
+                local gapSize = (axisLength - totalContentSize) / (count + 1)
+                local currentOffset = gapSize
+
                 for _, item in ipairs(items) do
                     local f = item.frame
                     f:ClearAllPoints()
-                    f:SetPoint("LEFT", anchorFrame, "LEFT", currentX, 0)
-                    currentX = currentX + f:GetWidth() + gapSize
+                    if isVertical then
+                        f:SetPoint("TOP", anchorFrame, "TOP", 0, -currentOffset)
+                        currentOffset = currentOffset + f:GetHeight() + gapSize
+                    else
+                        f:SetPoint("LEFT", anchorFrame, "LEFT", currentOffset, 0)
+                        currentOffset = currentOffset + f:GetWidth() + gapSize
+                    end
                     f:SetFrameLevel(anchorFrame:GetFrameLevel() + 10)
                 end
             end
@@ -219,6 +263,7 @@ function Widgets.UpdateVisuals()
     for key, frame in pairs(frames) do
         if db.enabled and db[key] and db[key].enabled then
             frame:Show()
+            if frame.ApplyEvents then frame.ApplyEvents(true) end
 
             -- Apply Common Styles
             local fontName = db.font
@@ -243,6 +288,7 @@ function Widgets.UpdateVisuals()
             end
         else
             frame:Hide()
+            if frame.ApplyEvents then frame.ApplyEvents(false) end
         end
     end
 

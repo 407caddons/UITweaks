@@ -6,10 +6,42 @@ table.insert(Widgets.moduleInits, function()
 
     local addonMemList = {}
     local addonMemPool = {}
+    local cachedTotalMem = 0
+    local lastMemUpdateTime = 0
+    local MEM_UPDATE_INTERVAL = 15 -- seconds between expensive UpdateAddOnMemoryUsage calls
+
     local function GetMemEntry()
         local t = table.remove(addonMemPool)
         if not t then t = {} end
         return t
+    end
+
+    local function RefreshMemoryData()
+        -- Recycle entries
+        for _, t in ipairs(addonMemList) do
+            table.insert(addonMemPool, t)
+        end
+        wipe(addonMemList)
+
+        cachedTotalMem = 0
+
+        if UIThingsDB.widgets.showAddonMemory then
+            UpdateAddOnMemoryUsage()
+            for i = 1, C_AddOns.GetNumAddOns() do
+                local mem = GetAddOnMemoryUsage(i)
+                cachedTotalMem = cachedTotalMem + mem
+                local entry = GetMemEntry()
+                local name, title = C_AddOns.GetAddOnInfo(i)
+                entry.name = title or name
+                entry.mem = mem
+                table.insert(addonMemList, entry)
+            end
+            table.sort(addonMemList, function(a, b) return a.mem > b.mem end)
+        else
+            cachedTotalMem = collectgarbage("count")
+        end
+
+        lastMemUpdateTime = GetTime()
     end
 
     fpsFrame:SetScript("OnEnter", function(self)
@@ -23,28 +55,12 @@ table.insert(Widgets.moduleInits, function()
         GameTooltip:AddDoubleLine("World MS:", latencyWorld, 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("FPS:", string.format("%.0f", fps), 1, 1, 1, 1, 1, 1)
 
-        local totalMem = 0
-
-        -- Recycle entries (always clean up previous list)
-        for _, t in ipairs(addonMemList) do
-            table.insert(addonMemPool, t)
+        -- Throttle expensive memory scan to once per MEM_UPDATE_INTERVAL seconds
+        if (GetTime() - lastMemUpdateTime) >= MEM_UPDATE_INTERVAL then
+            RefreshMemoryData()
         end
-        wipe(addonMemList)
 
-        if UIThingsDB.widgets.showAddonMemory then
-            UpdateAddOnMemoryUsage()
-            for i = 1, C_AddOns.GetNumAddOns() do
-                local mem = GetAddOnMemoryUsage(i)
-                totalMem = totalMem + mem
-                local entry = GetMemEntry()
-                local name, title = C_AddOns.GetAddOnInfo(i)
-                entry.name = title or name
-                entry.mem = mem
-                table.insert(addonMemList, entry)
-            end
-        else
-            totalMem = collectgarbage("count")
-        end
+        local totalMem = cachedTotalMem
 
         GameTooltip:AddDoubleLine("Memory:", string.format("%.2f MB", totalMem / 1024), 1, 1, 1, 1, 1, 1)
 

@@ -1,6 +1,6 @@
 # Claude Code configuration
 .claude/
-
+.gemini/
 docs/
 
 # Compiled Lua sources

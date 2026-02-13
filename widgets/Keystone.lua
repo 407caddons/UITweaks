@@ -35,7 +35,7 @@ table.insert(Widgets.moduleInits, function()
                     if itemLink then
                         local name, level, mapID = GetKeystoneInfo(itemLink)
                         if name and level then
-                            return name, level
+                            return name, level, mapID
                         end
                     end
 
@@ -71,9 +71,19 @@ table.insert(Widgets.moduleInits, function()
         Widgets.SmartAnchorTooltip(self)
         GameTooltip:SetText("Keystone Tracker", 1, 1, 1)
 
-        local keyName, keyLevel = GetPlayerKeystone()
+        local keyName, keyLevel, keyMapID = GetPlayerKeystone()
         if keyName and keyLevel then
-            GameTooltip:AddLine(string.format("%s +%d", keyName, keyLevel), 0, 1, 0)
+            local keyLine = string.format("%s +%d", keyName, keyLevel)
+            if keyMapID then
+                local gain = Widgets.EstimateRatingGain(keyMapID, keyLevel)
+                if gain > 0 then
+                    GameTooltip:AddDoubleLine(keyLine, string.format("est. +%d rating", gain), 0, 1, 0, 0, 1, 0)
+                else
+                    GameTooltip:AddDoubleLine(keyLine, "no upgrade", 0, 1, 0, 0.5, 0.5, 0.5)
+                end
+            else
+                GameTooltip:AddLine(keyLine, 0, 1, 0)
+            end
         else
             GameTooltip:AddLine("No keystone found", 0.7, 0.7, 0.7)
         end
@@ -81,7 +91,7 @@ table.insert(Widgets.moduleInits, function()
         -- Show party keystones from AddonVersions data
         if IsInGroup() and addonTable.AddonVersions then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Party Keystones", 1, 0.82, 0)
+            GameTooltip:AddLine("Party Keystones (est. timed)", 1, 0.82, 0)
 
             local playerData = addonTable.AddonVersions.GetPlayerData()
             local playerName = UnitName("player")
@@ -100,9 +110,16 @@ table.insert(Widgets.moduleInits, function()
                 if data and data.version then
                     -- Has the addon
                     if data.keystoneName then
+                        local rightText = string.format("%s +%d", data.keystoneName, data.keystoneLevel)
+                        if data.keystoneMapID then
+                            local gain = Widgets.EstimateRatingGain(data.keystoneMapID, data.keystoneLevel)
+                            if gain > 0 then
+                                rightText = rightText .. string.format(" |cFF00FF00+%d|r", gain)
+                            end
+                        end
                         GameTooltip:AddDoubleLine(
                             name,
-                            string.format("%s +%d", data.keystoneName, data.keystoneLevel),
+                            rightText,
                             1, 1, 1,
                             0, 1, 0.5)
                     else
@@ -142,6 +159,18 @@ table.insert(Widgets.moduleInits, function()
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+
+    keystoneFrame.eventFrame = eventFrame
+    keystoneFrame.ApplyEvents = function(enabled)
+        if enabled then
+            eventFrame:RegisterEvent("BAG_UPDATE")
+            eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+        else
+            eventFrame:UnregisterAllEvents()
+        end
+    end
 
     local updatePending = false
     eventFrame:SetScript("OnEvent", function(self, event, ...)

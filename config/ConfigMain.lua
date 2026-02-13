@@ -298,6 +298,21 @@ function addonTable.Config.Initialize()
                 addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[12], configWindow)
             end
         end
+        ----------------------------------------------------
+        -- Register with Blizzard Settings (AddOns list)
+        -- Clicking the entry opens the standalone config window
+        ----------------------------------------------------
+        if Settings and Settings.RegisterCanvasLayoutCategory then
+            local settingsFrame = CreateFrame("Frame")
+            settingsFrame:SetScript("OnShow", function(self)
+                self:Hide()
+                HideUIPanel(SettingsPanel)
+                addonTable.Config.ToggleWindow()
+            end)
+            local category = Settings.RegisterCanvasLayoutCategory(settingsFrame, "Luna's UI Tweaks")
+            category.ID = addonName
+            Settings.RegisterAddOnCategory(category)
+        end
     end
 end
 

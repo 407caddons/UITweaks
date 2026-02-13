@@ -24,6 +24,9 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         local enabled = not not self:GetChecked()
         UIThingsDB.talentReminders.enabled = enabled
         Helpers.UpdateModuleVisuals(panel, tab, enabled)
+        if addonTable.TalentReminder and addonTable.TalentReminder.ApplyEvents then
+            addonTable.TalentReminder.ApplyEvents()
+        end
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.talentReminders.enabled)
 

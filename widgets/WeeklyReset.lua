@@ -119,16 +119,4 @@ table.insert(Widgets.moduleInits, function()
 
         self.text:SetText(string.format("Reset: %s%s|r", color, timeStr))
     end
-
-    -- Update every second
-    local elapsed = 0
-    resetFrame:SetScript("OnUpdate", function(self, delta)
-        if not UIThingsDB.widgets.weeklyReset.enabled then return end
-
-        elapsed = elapsed + delta
-        if elapsed >= 1 then
-            elapsed = 0
-            self:UpdateContent()
-        end
-    end)
 end)

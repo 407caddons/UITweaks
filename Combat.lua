@@ -16,6 +16,11 @@ end
 function addonTable.Combat.UpdateSettings()
     if not timerFrame then return end
 
+    addonTable.Combat.ApplyTimerEvents()
+    if addonTable.Combat.ApplyLogFrameEvents then
+        addonTable.Combat.ApplyLogFrameEvents()
+    end
+
     if not UIThingsDB.combat.enabled then
         timerFrame:Hide()
         return
@@ -99,24 +104,37 @@ local function Init()
             addonTable.Combat.UpdateSettings() -- Update color
         end
     end)
-    timerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    timerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    addonTable.Combat.ApplyTimerEvents()
+end
 
-    -- Throttled OnUpdate (only update once per second)
-    local updateTimer = 0
-    timerFrame:SetScript("OnUpdate", function(self, elapsed)
-        if inCombat then
-            updateTimer = updateTimer + elapsed
-            if updateTimer >= 1.0 then
-                updateTimer = 0
-                timeElapsed = GetTime() - startTime
-                SetFormattedTime(timerText, timeElapsed)
-            end
+-- Throttled OnUpdate handler (only update once per second)
+local updateTimer = 0
+local function TimerOnUpdate(self, elapsed)
+    if inCombat then
+        updateTimer = updateTimer + elapsed
+        if updateTimer >= 1.0 then
+            updateTimer = 0
+            timeElapsed = GetTime() - startTime
+            SetFormattedTime(timerText, timeElapsed)
         end
-    end)
+    end
+end
+
+function addonTable.Combat.ApplyTimerEvents()
+    if not timerFrame then return end
+    if UIThingsDB.combat.enabled then
+        timerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+        timerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        timerFrame:SetScript("OnUpdate", TimerOnUpdate)
+    else
+        timerFrame:UnregisterAllEvents()
+        timerFrame:SetScript("OnUpdate", nil)
+        updateTimer = 0
+    end
 end
 
 -- Combat Logging by Instance Difficulty
+local ApplyLogFrameEvents -- forward declaration
 local combatLogActive = false
 
 local difficultyMap = {
@@ -156,16 +174,40 @@ local function CheckCombatLogging()
 end
 
 function addonTable.Combat.CheckCombatLogging()
+    ApplyLogFrameEvents()
     CheckCombatLogging()
+end
+
+function addonTable.Combat.ApplyLogFrameEvents()
+    ApplyLogFrameEvents()
 end
 
 -- Instance detection frame (separate from timer so it works even with timer disabled)
 local logFrame = CreateFrame("Frame")
-logFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-logFrame:RegisterEvent("CHALLENGE_MODE_START")
 logFrame:SetScript("OnEvent", function(self, event)
     C_Timer.After(2, CheckCombatLogging)
 end)
+
+ApplyLogFrameEvents = function()
+    local settings = UIThingsDB.combat.combatLog
+    if not settings then
+        logFrame:UnregisterAllEvents()
+        return
+    end
+    -- Check if any combat log option is enabled
+    local anyEnabled = false
+    for _, v in pairs(settings) do
+        if v == true then
+            anyEnabled = true; break
+        end
+    end
+    if anyEnabled then
+        logFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        logFrame:RegisterEvent("CHALLENGE_MODE_START")
+    else
+        logFrame:UnregisterAllEvents()
+    end
+end
 
 -- ============================================================
 -- Combat Reminders
@@ -176,6 +218,7 @@ local reminderFrame
 local reminderTitle
 local reminderTitleLine
 local reminderLines = {}
+local reminderEventFrame
 local UpdateReminderFrame -- Forward declaration
 
 -- Weapon buff polling (only thing that needs a ticker — no event for enchant expiration)
@@ -213,10 +256,10 @@ end
 local hasFlaskCache, hasFoodCache = false, false
 local lastAuraScanTime = 0
 
--- Case-insensitive patterns to avoid string.lower() allocations
-local PATTERN_FLASK = "[Ff][Ll][Aa][Ss][Kk]"
-local PATTERN_PHIAL = "[Pp][Hh][Ii][Aa][Ll]"
-local PATTERN_WELL_FED = "[Ww][Ee][Ll][Ll]%s-[Ff][Ee][Dd]"
+-- Lowercase patterns matched against string.lower(name) — faster than character-class patterns
+local PATTERN_FLASK = "flask"
+local PATTERN_PHIAL = "phial"
+local PATTERN_WELL_FED = "well%s-fed"
 
 local function ScanConsumableBuffs()
     -- Cache results within the same frame to avoid redundant scans
@@ -233,10 +276,11 @@ local function ScanConsumableBuffs()
 
         local name = auraData.name
         if name then
-            if not hasFlaskCache and (string.find(name, PATTERN_FLASK) or string.find(name, PATTERN_PHIAL)) then
+            local lowerName = string.lower(name)
+            if not hasFlaskCache and (string.find(lowerName, PATTERN_FLASK) or string.find(lowerName, PATTERN_PHIAL)) then
                 hasFlaskCache = true
             end
-            if not hasFoodCache and string.find(name, PATTERN_WELL_FED) then
+            if not hasFoodCache and string.find(lowerName, PATTERN_WELL_FED) then
                 -- Exclude "Food" (regen) and "Drink" (mana) but allow "Well Fed"
                 hasFoodCache = true
             end
@@ -393,6 +437,7 @@ local MAX_PET_ICONS = 5
 
 local function CreateClassBuffButton()
     if not classBuffID then return end
+    if classBuffIconFrame then return end -- Already created
 
     local btn = CreateFrame("Button", "LunaCombatClassBuffIcon", reminderFrame, "SecureActionButtonTemplate")
     btn:SetSize(PET_ICON_SIZE, PET_ICON_SIZE)
@@ -441,6 +486,7 @@ end
 
 -- Pre-create pet icon buttons during init (must be done out of combat for SecureActionButtonTemplate)
 local function CreatePetIconButtons()
+    if petIconFrames[1] then return end -- Already created
     for i = 1, MAX_PET_ICONS do
         local btn = CreateFrame("Button", "LunaCombatPetIcon" .. i, reminderFrame, "SecureActionButtonTemplate")
         btn:SetSize(PET_ICON_SIZE, PET_ICON_SIZE)
@@ -593,6 +639,7 @@ local consumableIconFrames = {
 }
 
 local function CreateConsumableIconButtons()
+    if consumableIconFrames.flask[1] then return end -- Already created
     local categories = { "flask", "food", "weapon" }
     for _, cat in ipairs(categories) do
         for i = 1, 10 do
@@ -626,10 +673,24 @@ local function CreateConsumableIconButtons()
     end
 end
 
+-- Bag scan cache: invalidated on BAG_UPDATE_DELAYED
+local bagScanCache = {}
+local bagScanCacheDirty = true
+
+local function InvalidateBagScanCache()
+    bagScanCacheDirty = true
+    wipe(bagScanCache)
+end
+
 -- Helper to scan bags and group items by name
 local function ScanBagConsumables(category)
     local usage = UIThingsDB.combat.reminders.consumableUsage[category]
     if not usage or #usage == 0 then return {} end
+
+    -- Return cached result if bags haven't changed
+    if not bagScanCacheDirty and bagScanCache[category] then
+        return bagScanCache[category]
+    end
 
     -- Build lookup set of names we care about
     local watchedNames = {}
@@ -681,6 +742,14 @@ local function ScanBagConsumables(category)
     -- Sort variants by quality (descending)
     for name, variants in pairs(bagCache) do
         table.sort(variants, function(a, b) return a.quality > b.quality end)
+    end
+
+    -- Cache the result for this category
+    bagScanCache[category] = bagCache
+    -- Mark clean only after all categories have been scanned (deferred)
+    -- We clear the dirty flag after a short delay so all 3 categories get fresh data
+    if bagScanCacheDirty then
+        bagScanCacheDirty = false
     end
 
     return bagCache
@@ -1061,18 +1130,12 @@ local function InitReminders()
     reminderFrame:Hide()
 
     -- Register events for ongoing checks
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:RegisterEvent("UNIT_AURA")
-    eventFrame:RegisterEvent("UNIT_PET")
-    eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-    eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-    eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    eventFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
+    reminderEventFrame = CreateFrame("Frame")
+    reminderEventFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
         if event == "UNIT_AURA" and unit ~= "player" then return end
+        if event == "BAG_UPDATE_DELAYED" then
+            InvalidateBagScanCache()
+        end
         if event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
             if spellID then
                 local spellName = C_Spell.GetSpellName(spellID)
@@ -1096,11 +1159,40 @@ local function InitReminders()
         end
     end)
 
-    -- Run initial check now (covers /reload where PLAYER_ENTERING_WORLD already fired)
+    -- Apply events based on enabled state and run initial check
+    addonTable.Combat.ApplyReminderEvents()
     C_Timer.After(0.1, UpdateReminderFrame)
 end
 
+local function ApplyReminderEvents()
+    if not reminderEventFrame then return end
+    local settings = UIThingsDB.combat.reminders
+    if settings and settings.enabled ~= false then
+        reminderEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        reminderEventFrame:RegisterEvent("UNIT_AURA")
+        reminderEventFrame:RegisterEvent("UNIT_PET")
+        reminderEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        reminderEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        reminderEventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+        reminderEventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        reminderEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+        reminderEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    else
+        reminderEventFrame:UnregisterAllEvents()
+        StopWeaponBuffTicker()
+        if reminderFrame then
+            reminderFrame:Hide()
+            UnregisterStateDriver(reminderFrame, "visibility")
+        end
+    end
+end
+
+function addonTable.Combat.ApplyReminderEvents()
+    ApplyReminderEvents()
+end
+
 function addonTable.Combat.UpdateReminders()
+    ApplyReminderEvents()
     UpdateReminderFrame()
 end
 
@@ -1120,8 +1212,10 @@ f:SetScript("OnEvent", function()
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(1, Init)
         addonTable.Core.SafeAfter(1, InitReminders)
+        addonTable.Core.SafeAfter(1, ApplyLogFrameEvents)
     elseif C_Timer and C_Timer.After then
         C_Timer.After(1, Init)
         C_Timer.After(1, InitReminders)
+        C_Timer.After(1, ApplyLogFrameEvents)
     end
 end)

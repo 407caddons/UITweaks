@@ -14,14 +14,22 @@ table.insert(Widgets.moduleInits, function()
             local numMembers = GetNumGuildMembers()
             for i = 1, numMembers do
                 local name, rank, rankIndex, level, class, zone, note, officernote, online, status, classFileName =
-                GetGuildRosterInfo(i)
+                    GetGuildRosterInfo(i)
                 if online then
+                    -- Fix malformed names with repeated realm (e.g. "Name-Realm-Realm-Realm...")
+                    local charName, realm = name:match("^([^-]+)-(.+)$")
+                    local shortName = name
+                    if charName and realm then
+                        realm = realm:match("^([^-]+)") or realm
+                        shortName = charName .. "-" .. realm
+                    end
                     local classColor = C_ClassColor.GetClassColor(classFileName)
                     if classColor then
-                        GameTooltip:AddDoubleLine(name, "Lvl " .. level, classColor.r, classColor.g, classColor.b, 1, 1,
+                        GameTooltip:AddDoubleLine(shortName, "Lvl " .. level, classColor.r, classColor.g, classColor.b, 1,
+                            1,
                             1)
                     else
-                        GameTooltip:AddDoubleLine(name, "Lvl " .. level, 1, 1, 1, 1, 1, 1)
+                        GameTooltip:AddDoubleLine(shortName, "Lvl " .. level, 1, 1, 1, 1, 1, 1)
                     end
                 end
             end
@@ -32,12 +40,38 @@ table.insert(Widgets.moduleInits, function()
     end)
     guildFrame:SetScript("OnLeave", GameTooltip_Hide)
 
-    guildFrame.UpdateContent = function(self)
+    -- Cached guild count (updated on events, not every second)
+    local cachedText = "Guild: -"
+
+    local function RefreshGuildCache()
         if IsInGuild() then
             local _, numOnline = GetNumGuildMembers()
-            self.text:SetFormattedText("Guild: %d", numOnline or 0)
+            cachedText = string.format("Guild: %d", numOnline or 0)
         else
-            self.text:SetText("Guild: -")
+            cachedText = "Guild: -"
         end
+    end
+
+    local guildEventFrame = CreateFrame("Frame")
+    guildEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    guildEventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
+    guildEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    guildEventFrame:SetScript("OnEvent", function()
+        RefreshGuildCache()
+    end)
+
+    guildFrame.eventFrame = guildEventFrame
+    guildFrame.ApplyEvents = function(enabled)
+        if enabled then
+            guildEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+            guildEventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
+            guildEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        else
+            guildEventFrame:UnregisterAllEvents()
+        end
+    end
+
+    guildFrame.UpdateContent = function(self)
+        self.text:SetText(cachedText)
     end
 end)

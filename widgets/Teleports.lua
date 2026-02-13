@@ -3,52 +3,61 @@ local Widgets = addonTable.Widgets
 
 -- Teleport Data
 local TELEPORT_DATA = {
-    { category = "Classic", spells = {
-        "Teleport: Stormwind", "Teleport: Orgrimmar", "Teleport: Ironforge",
-        "Teleport: Undercity", "Teleport: Darnassus", "Teleport: Thunder Bluff",
-        "Teleport: Exodar", "Teleport: Silvermoon",
-        "Teleport: Theramore", "Teleport: Stonard",
-    }},
-    { category = "TBC", spells = { "Teleport: Shattrath" }},
-    { category = "WotLK", spells = { "Teleport: Dalaran - Northrend", "Ancient Teleport: Dalaran" }},
-    { category = "Cataclysm", spells = { "Teleport: Tol Barad" }},
-    { category = "MoP", spells = { "Teleport: Vale of Eternal Blossoms" }},
-    { category = "WoD", spells = { "Teleport: Stormshield", "Teleport: Warspear" }},
-    { category = "Legion", spells = {
-        "Teleport: Dalaran - Broken Isles",
-        "Teleport: Hall of the Guardian",
-    }},
-    { category = "BfA", spells = { "Teleport: Boralus", "Teleport: Dazar'alor" }},
-    { category = "Shadowlands", spells = { "Teleport: Oribos" }},
-    { category = "Dragonflight", spells = { "Teleport: Valdrakken" }},
-    { category = "TWW", spells = { "Teleport: Dornogal" }},
+    {
+        category = "Classic",
+        spells = {
+            "Teleport: Stormwind", "Teleport: Orgrimmar", "Teleport: Ironforge",
+            "Teleport: Undercity", "Teleport: Darnassus", "Teleport: Thunder Bluff",
+            "Teleport: Exodar", "Teleport: Silvermoon",
+            "Teleport: Theramore", "Teleport: Stonard",
+        }
+    },
+    { category = "TBC",       spells = { "Teleport: Shattrath" } },
+    { category = "WotLK",     spells = { "Teleport: Dalaran - Northrend", "Ancient Teleport: Dalaran" } },
+    { category = "Cataclysm", spells = { "Teleport: Tol Barad" } },
+    { category = "MoP",       spells = { "Teleport: Vale of Eternal Blossoms" } },
+    { category = "WoD",       spells = { "Teleport: Stormshield", "Teleport: Warspear" } },
+    {
+        category = "Legion",
+        spells = {
+            "Teleport: Dalaran - Broken Isles",
+            "Teleport: Hall of the Guardian",
+        }
+    },
+    { category = "BfA",          spells = { "Teleport: Boralus", "Teleport: Dazar'alor" } },
+    { category = "Shadowlands",  spells = { "Teleport: Oribos" } },
+    { category = "Dragonflight", spells = { "Teleport: Valdrakken" } },
+    { category = "TWW",          spells = { "Teleport: Dornogal" } },
 }
 
 local PORTAL_DATA = {
-    { category = "Classic", spells = {
-        "Portal: Stormwind", "Portal: Orgrimmar", "Portal: Ironforge",
-        "Portal: Undercity", "Portal: Darnassus", "Portal: Thunder Bluff",
-        "Portal: Exodar", "Portal: Silvermoon",
-        "Portal: Theramore", "Portal: Stonard",
-    }},
-    { category = "TBC", spells = { "Portal: Shattrath" }},
-    { category = "WotLK", spells = { "Portal: Dalaran - Northrend" }},
-    { category = "Cataclysm", spells = { "Portal: Tol Barad" }},
-    { category = "MoP", spells = { "Portal: Vale of Eternal Blossoms" }},
-    { category = "WoD", spells = { "Portal: Stormshield", "Portal: Warspear" }},
-    { category = "Legion", spells = { "Portal: Dalaran - Broken Isles" }},
-    { category = "BfA", spells = { "Portal: Boralus", "Portal: Dazar'alor" }},
-    { category = "Shadowlands", spells = { "Portal: Oribos" }},
-    { category = "Dragonflight", spells = { "Portal: Valdrakken" }},
-    { category = "TWW", spells = { "Portal: Dornogal" }},
+    {
+        category = "Classic",
+        spells = {
+            "Portal: Stormwind", "Portal: Orgrimmar", "Portal: Ironforge",
+            "Portal: Undercity", "Portal: Darnassus", "Portal: Thunder Bluff",
+            "Portal: Exodar", "Portal: Silvermoon",
+            "Portal: Theramore", "Portal: Stonard",
+        }
+    },
+    { category = "TBC",          spells = { "Portal: Shattrath" } },
+    { category = "WotLK",        spells = { "Portal: Dalaran - Northrend" } },
+    { category = "Cataclysm",    spells = { "Portal: Tol Barad" } },
+    { category = "MoP",          spells = { "Portal: Vale of Eternal Blossoms" } },
+    { category = "WoD",          spells = { "Portal: Stormshield", "Portal: Warspear" } },
+    { category = "Legion",       spells = { "Portal: Dalaran - Broken Isles" } },
+    { category = "BfA",          spells = { "Portal: Boralus", "Portal: Dazar'alor" } },
+    { category = "Shadowlands",  spells = { "Portal: Oribos" } },
+    { category = "Dragonflight", spells = { "Portal: Valdrakken" } },
+    { category = "TWW",          spells = { "Portal: Dornogal" } },
 }
 
 local CLASS_TELEPORTS = {
-    { className = "DEATHKNIGHT", spells = { "Death Gate" }},
-    { className = "DRUID", spells = { "Dreamwalk" }},
-    { className = "MONK", spells = { "Zen Pilgrimage" }},
-    { className = "SHAMAN", spells = { "Astral Recall" }},
-    { className = "WARLOCK", spells = { "Demonic Gateway" }},
+    { className = "DEATHKNIGHT", spells = { "Death Gate" } },
+    { className = "DRUID",       spells = { "Dreamwalk" } },
+    { className = "MONK",        spells = { "Zen Pilgrimage" } },
+    { className = "SHAMAN",      spells = { "Astral Recall" } },
+    { className = "WARLOCK",     spells = { "Demonic Gateway" } },
 }
 
 local function IsSpellKnownByName(spellName)
@@ -75,18 +84,21 @@ end
 local function GetTeleportDestFromTooltip(spellName)
     local info = C_Spell.GetSpellInfo(spellName)
     if not info or not info.spellID then return nil end
-    
+
     local tooltipData = C_TooltipInfo.GetSpellByID(info.spellID)
     if not tooltipData then return nil end
-    
+
     for _, line in ipairs(tooltipData.lines) do
         if line.leftText then
             local dest = line.leftText:match("to (.+)%.?")
             if dest then
                 dest = dest:gsub("%.$", "")
-                if dest:find("^the entrance to ") then dest = dest:sub(17)
-                elseif dest:find("^entrance to ") then dest = dest:sub(13)
-                elseif dest:find("^the ") then dest = dest:sub(5)
+                if dest:find("^the entrance to ") then
+                    dest = dest:sub(17)
+                elseif dest:find("^entrance to ") then
+                    dest = dest:sub(13)
+                elseif dest:find("^the ") then
+                    dest = dest:sub(5)
                 end
                 return dest
             end
@@ -95,9 +107,28 @@ local function GetTeleportDestFromTooltip(spellName)
     return nil
 end
 
--- Scan Spellbook
+-- Spellbook scan cache (invalidated on spell changes)
+local cachedScanGroups = nil
+local cachedScanUngrouped = nil
+
+local function InvalidateTeleportCache()
+    cachedScanGroups = nil
+    cachedScanUngrouped = nil
+end
+
+-- Invalidate cache when spells change (talent swap, level up, etc.)
+local teleportCacheFrame = CreateFrame("Frame")
+teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
+teleportCacheFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+teleportCacheFrame:SetScript("OnEvent", InvalidateTeleportCache)
+
+-- Scan Spellbook (results cached until spells change)
 local function ScanSpellbookForTeleports()
-    local groups = {} 
+    if cachedScanGroups and cachedScanUngrouped then
+        return cachedScanGroups, cachedScanUngrouped
+    end
+
+    local groups = {}
     local ungrouped = {}
     local seen = {}
     local numLines = C_SpellBook.GetNumSpellBookSkillLines()
@@ -145,6 +176,8 @@ local function ScanSpellbookForTeleports()
             end
         end
     end
+    cachedScanGroups = groups
+    cachedScanUngrouped = ungrouped
     return groups, ungrouped
 end
 
@@ -152,6 +185,16 @@ end
 table.insert(Widgets.moduleInits, function()
     local teleportFrame = Widgets.CreateWidgetFrame("Teleports", "teleports")
     teleportFrame:RegisterForClicks("AnyUp")
+
+    teleportFrame.eventFrame = teleportCacheFrame
+    teleportFrame.ApplyEvents = function(enabled)
+        if enabled then
+            teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
+            teleportCacheFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+        else
+            teleportCacheFrame:UnregisterAllEvents()
+        end
+    end
 
     -- ==================== Main Panel ====================
     local teleportPanel = CreateFrame("Frame", "LunaUITweaksTeleportPanel", UIParent, "BackdropTemplate")
@@ -168,7 +211,7 @@ table.insert(Widgets.moduleInits, function()
     teleportPanel:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
     teleportPanel:EnableMouse(true)
     teleportPanel:Hide()
-    
+
     tinsert(UISpecialFrames, "LunaUITweaksTeleportPanel")
 
     -- Dismiss frame (click outside to close)
@@ -329,14 +372,14 @@ table.insert(Widgets.moduleInits, function()
             else
                 displayName = spellName:gsub("^Teleport: ", ""):gsub("^Portal: ", "")
             end
-            
+
             local btn = AcquireSecureButton(subContentFrame)
             btn:SetSize(200, 20)
             btn:SetPoint("TOPLEFT", 0, yOffset)
             btn:SetAttribute("type", "spell")
             btn:SetAttribute("spell", spellName)
             btn.label:SetText(displayName)
-            
+
             btn:SetScript("PostClick", function()
                 subPanel:Hide()
                 teleportPanel:Hide()
@@ -392,50 +435,51 @@ table.insert(Widgets.moduleInits, function()
         local _, classFileName = UnitClass("player")
         local isMage = (classFileName == "MAGE")
         local hasAnything = false
-        
+
         local dungeonGroups, ungrouped = ScanSpellbookForTeleports()
-        
+
         -- Current Season
         local currentSeasonSpells = {}
         local seasonMaps = C_ChallengeMode.GetMapTable()
         if seasonMaps and #seasonMaps > 0 then
-             local mapNames = {}
-             for _, mapID in ipairs(seasonMaps) do
-                 local name = C_ChallengeMode.GetMapUIInfo(mapID)
-                 if name then
-                     mapNames[name] = true
-                     if name:find("^The ") then mapNames[name:sub(5)] = true else mapNames["The " .. name] = true end
-                 end
-             end
-             
-             local function IsCurrentSeason(spellName)
-                 local dest = GetTeleportDestFromTooltip(spellName)
-                 if not dest then
-                     dest = spellName:gsub("^Teleport: ", ""):gsub("^Portal: ", ""):gsub("^Hero's Path: ", ""):gsub("^Ancient Teleport: ", "")
-                 end
-                 for mapName in pairs(mapNames) do
-                     if dest == mapName or dest:find(mapName, 1, true) or mapName:find(dest, 1, true) then return true end
-                 end
-                 return false
-             end
-             
-             local seenSeason = {}
-             for _, group in ipairs(dungeonGroups) do
-                 for _, spell in ipairs(group.spells) do
-                     if not seenSeason[spell] and IsCurrentSeason(spell) then
-                         seenSeason[spell] = true
-                         table.insert(currentSeasonSpells, spell)
-                     end
-                 end
-             end
-             for _, spell in ipairs(ungrouped) do
-                 if not seenSeason[spell] and IsCurrentSeason(spell) then
-                     seenSeason[spell] = true
-                     table.insert(currentSeasonSpells, spell)
-                 end
-             end
+            local mapNames = {}
+            for _, mapID in ipairs(seasonMaps) do
+                local name = C_ChallengeMode.GetMapUIInfo(mapID)
+                if name then
+                    mapNames[name] = true
+                    if name:find("^The ") then mapNames[name:sub(5)] = true else mapNames["The " .. name] = true end
+                end
+            end
+
+            local function IsCurrentSeason(spellName)
+                local dest = GetTeleportDestFromTooltip(spellName)
+                if not dest then
+                    dest = spellName:gsub("^Teleport: ", ""):gsub("^Portal: ", ""):gsub("^Hero's Path: ", ""):gsub(
+                        "^Ancient Teleport: ", "")
+                end
+                for mapName in pairs(mapNames) do
+                    if dest == mapName or dest:find(mapName, 1, true) or mapName:find(dest, 1, true) then return true end
+                end
+                return false
+            end
+
+            local seenSeason = {}
+            for _, group in ipairs(dungeonGroups) do
+                for _, spell in ipairs(group.spells) do
+                    if not seenSeason[spell] and IsCurrentSeason(spell) then
+                        seenSeason[spell] = true
+                        table.insert(currentSeasonSpells, spell)
+                    end
+                end
+            end
+            for _, spell in ipairs(ungrouped) do
+                if not seenSeason[spell] and IsCurrentSeason(spell) then
+                    seenSeason[spell] = true
+                    table.insert(currentSeasonSpells, spell)
+                end
+            end
         end
-        
+
         if #currentSeasonSpells > 0 then
             hasAnything = true
             AddMenuButton("Current Season (" .. #currentSeasonSpells .. ")", yOffset, function(self)
@@ -532,8 +576,8 @@ table.insert(Widgets.moduleInits, function()
             teleportPanel:Show()
         end
     end)
-    
+
     teleportFrame.UpdateContent = function(self)
-         self.text:SetText("Teleports")
+        self.text:SetText("Teleports")
     end
 end)

@@ -63,14 +63,7 @@ local function SellGreys()
 end
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("MERCHANT_SHOW")
-frame:RegisterEvent("MERCHANT_CLOSED")
-frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-frame:RegisterEvent("PLAYER_REGEN_DISABLED")
-frame:RegisterEvent("PLAYER_UNGHOST")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-frame:RegisterEvent("BAG_UPDATE_DELAYED") -- For bag space warnings
+frame:RegisterEvent("PLAYER_LOGIN") -- Always needed for initialization
 
 -- Warning Frame
 local warningFrame = CreateFrame("Frame", "UIThingsRepairWarning", UIParent, "BackdropTemplate")
@@ -215,8 +208,30 @@ end
 
 local SafeAfter = addonTable.Core.SafeAfter
 
+local function ApplyVendorEvents()
+    if UIThingsDB.vendor.enabled then
+        frame:RegisterEvent("MERCHANT_SHOW")
+        frame:RegisterEvent("MERCHANT_CLOSED")
+        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+        frame:RegisterEvent("PLAYER_UNGHOST")
+        frame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+        frame:RegisterEvent("BAG_UPDATE_DELAYED")
+    else
+        frame:UnregisterEvent("MERCHANT_SHOW")
+        frame:UnregisterEvent("MERCHANT_CLOSED")
+        frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        frame:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        frame:UnregisterEvent("PLAYER_UNGHOST")
+        frame:UnregisterEvent("UPDATE_INVENTORY_DURABILITY")
+        frame:UnregisterEvent("BAG_UPDATE_DELAYED")
+    end
+end
+
 function addonTable.Vendor.UpdateSettings()
     local settings = UIThingsDB.vendor
+
+    ApplyVendorEvents()
 
     -- Font (applies to both warnings)
     if settings.font and settings.fontSize then
