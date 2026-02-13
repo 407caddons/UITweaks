@@ -140,7 +140,10 @@ local function OnEvent(self, event, ...)
                 fontSize = 14,
                 iconSize = 32,
                 whoLootedFontSize = 12,
-                anchor = { point = "CENTER", x = 0, y = 200 }
+                anchor = { point = "CENTER", x = 0, y = 200 },
+                showCurrency = false,
+                showGold = false,
+                minGoldAmount = 10000, -- copper (1 gold = 10000 copper)
             },
             combat = {
                 enabled = false,

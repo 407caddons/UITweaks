@@ -71,14 +71,17 @@ local function AcquireToast()
         toast.winner:SetPoint("RIGHT", 0, 0)
         toast.winner:SetJustifyH("LEFT")
 
-        -- Tooltip Scripts
+        -- Tooltip Scripts (type-aware)
         toast:SetScript("OnEnter", function(self)
-            if self.itemLink then
+            if self.toastType == "item" and self.itemLink then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink(self.itemLink)
                 GameTooltip:Show()
+            elseif self.toastType == "currency" and self.currencyID then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetCurrencyByID(self.currencyID)
+                GameTooltip:Show()
             end
-            self:SetAlpha(1) -- Pause fade if hovering? Or just keep it visible
         end)
         toast:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
@@ -98,6 +101,11 @@ local function AcquireToast()
             end
         end)
     end
+
+    -- Reset type fields for reuse
+    toast.toastType = nil
+    toast.currencyID = nil
+    toast.itemLink = nil
 
     -- Apply Settings
     local settings = UIThingsDB.loot
@@ -162,6 +170,7 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
     local toast = AcquireToast()
 
     -- Data
+    toast.toastType = "item"
     toast.itemLink = itemLink
     local itemName, _, itemRarity, _, _, _, _, _, _, itemTexture = GetItemInfo(itemLink)
 
@@ -199,6 +208,63 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
     end
 
     -- Timer Setup
+    toast.timeParams = {
+        duration = UIThingsDB.loot.duration,
+        elapsed = 0
+    }
+
+    toast:Show()
+    table.insert(activeToasts, toast)
+    Loot.UpdateLayout()
+end
+
+local function SpawnCurrencyToast(currencyID, quantityChange)
+    if not currencyID or not quantityChange or quantityChange <= 0 then return end
+
+    local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
+    if not info or not info.discovered then return end
+    if not info.name or info.name == "" then return end
+
+    local toast = AcquireToast()
+
+    toast.toastType = "currency"
+    toast.currencyID = currencyID
+
+    if info.iconFileID then
+        toast.icon:SetTexture(info.iconFileID)
+    else
+        toast.icon:SetTexture(134400) -- Question mark fallback
+    end
+
+    toast.text:SetText("+" .. quantityChange .. " " .. info.name)
+    toast.text:SetTextColor(1, 0.82, 0) -- Gold color
+
+    toast.winner:Hide()
+
+    toast.timeParams = {
+        duration = UIThingsDB.loot.duration,
+        elapsed = 0
+    }
+
+    toast:Show()
+    table.insert(activeToasts, toast)
+    Loot.UpdateLayout()
+end
+
+local function SpawnGoldToast(copperAmount)
+    if not copperAmount or copperAmount <= 0 then return end
+
+    local toast = AcquireToast()
+
+    toast.toastType = "gold"
+
+    toast.icon:SetTexture(133784) -- Gold coin icon
+
+    toast.text:SetText(GetCoinTextureString(copperAmount))
+    toast.text:SetTextColor(1, 1, 1)
+
+    toast.winner:Hide()
+
     toast.timeParams = {
         duration = UIThingsDB.loot.duration,
         elapsed = 0
@@ -306,10 +372,26 @@ function Loot.ApplyEvents()
         frame:RegisterEvent("CHAT_MSG_LOOT")
         frame:RegisterEvent("LOOT_READY")
         frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+
+        -- Currency notifications
+        if UIThingsDB.loot.showCurrency then
+            frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+        else
+            frame:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+        end
+
+        -- Gold notifications
+        if UIThingsDB.loot.showGold then
+            frame:RegisterEvent("CHAT_MSG_MONEY")
+        else
+            frame:UnregisterEvent("CHAT_MSG_MONEY")
+        end
     else
         frame:UnregisterEvent("CHAT_MSG_LOOT")
         frame:UnregisterEvent("LOOT_READY")
         frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+        frame:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+        frame:UnregisterEvent("CHAT_MSG_MONEY")
     end
 end
 
@@ -326,6 +408,34 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
     end
 
     if not UIThingsDB.loot.enabled then return end
+
+    if event == "CURRENCY_DISPLAY_UPDATE" then
+        if UIThingsDB.loot.showCurrency then
+            local currencyID, quantity, quantityChange = msg, ...
+            if currencyID and quantityChange and quantityChange > 0 then
+                SpawnCurrencyToast(currencyID, quantityChange)
+            end
+        end
+        return
+    end
+
+    if event == "CHAT_MSG_MONEY" then
+        if UIThingsDB.loot.showGold then
+            -- Parse copper amount from the chat message
+            local copper = 0
+            local gold = msg and msg:match("(%d+) Gold")
+            local silver = msg and msg:match("(%d+) Silver")
+            local cop = msg and msg:match("(%d+) Copper")
+            if gold then copper = copper + tonumber(gold) * 10000 end
+            if silver then copper = copper + tonumber(silver) * 100 end
+            if cop then copper = copper + tonumber(cop) end
+
+            if copper > 0 and copper >= (UIThingsDB.loot.minGoldAmount or 10000) then
+                SpawnGoldToast(copper)
+            end
+        end
+        return
+    end
 
     if event == "LOOT_READY" then
         if UIThingsDB.loot.fasterLoot and GetCVar("autoLootDefault") == "1" then

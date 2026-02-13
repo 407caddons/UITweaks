@@ -248,4 +248,83 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
             self:ClearFocus()
         end
     end)
+
+    -- == Currency & Gold Notifications ==
+    Helpers.CreateSectionHeader(panel, "Currency & Gold Notifications", -510)
+
+    -- Show Currency Checkbox
+    local currencyBtn = CreateFrame("CheckButton", "UIThingsLootCurrencyCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    currencyBtn:SetPoint("TOPLEFT", 20, -535)
+    _G[currencyBtn:GetName() .. "Text"]:SetText("Show Currency Gain Toasts")
+    currencyBtn:SetChecked(UIThingsDB.loot.showCurrency)
+    currencyBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.showCurrency = self:GetChecked()
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    local currencyHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    currencyHelp:SetPoint("TOPLEFT", 45, -558)
+    currencyHelp:SetTextColor(0.5, 0.5, 0.5)
+    currencyHelp:SetText("Shows a toast when you gain currency (Valorstones, Crests, Conquest, etc.)")
+
+    -- Show Gold Checkbox
+    local goldBtn = CreateFrame("CheckButton", "UIThingsLootGoldCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    goldBtn:SetPoint("TOPLEFT", 20, -580)
+    _G[goldBtn:GetName() .. "Text"]:SetText("Show Gold Loot Toasts")
+    goldBtn:SetChecked(UIThingsDB.loot.showGold)
+    goldBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.showGold = self:GetChecked()
+        addonTable.Loot.UpdateSettings()
+    end)
+
+    -- Min Gold Slider
+    local minGoldValue = (UIThingsDB.loot.minGoldAmount or 10000) / 10000 -- Convert copper to gold
+    local minGoldSlider = CreateFrame("Slider", "UIThingsLootMinGoldSlider", panel, "OptionsSliderTemplate")
+    minGoldSlider:SetPoint("TOPLEFT", 20, -625)
+    minGoldSlider:SetMinMaxValues(0, 100)
+    minGoldSlider:SetValueStep(1)
+    minGoldSlider:SetObeyStepOnDrag(true)
+    minGoldSlider:SetWidth(200)
+    _G[minGoldSlider:GetName() .. 'Text']:SetText("Min Gold: " .. minGoldValue .. "g")
+    _G[minGoldSlider:GetName() .. 'Low']:SetText("0g")
+    _G[minGoldSlider:GetName() .. 'High']:SetText("100g")
+    minGoldSlider:SetValue(minGoldValue)
+
+    -- EditBox for Min Gold
+    local minGoldEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    minGoldEdit:SetSize(40, 20)
+    minGoldEdit:SetPoint("LEFT", minGoldSlider, "RIGHT", 10, 0)
+    minGoldEdit:SetAutoFocus(false)
+    minGoldEdit:SetText(tostring(minGoldValue))
+
+    minGoldSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.loot.minGoldAmount = value * 10000
+        _G[self:GetName() .. 'Text']:SetText("Min Gold: " .. value .. "g")
+        if not minGoldEdit:HasFocus() then
+            minGoldEdit:SetText(tostring(value))
+        end
+    end)
+
+    minGoldEdit:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val then
+            val = math.max(0, math.min(100, math.floor(val)))
+            UIThingsDB.loot.minGoldAmount = val * 10000
+            minGoldSlider:SetValue(val)
+            self:SetText(tostring(val))
+            self:ClearFocus()
+        else
+            local current = (UIThingsDB.loot.minGoldAmount or 10000) / 10000
+            self:SetText(tostring(current))
+            self:ClearFocus()
+        end
+    end)
+
+    local goldHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    goldHelp:SetPoint("TOPLEFT", 45, -602)
+    goldHelp:SetTextColor(0.5, 0.5, 0.5)
+    goldHelp:SetText("Shows a toast when you loot gold above the minimum threshold")
 end
