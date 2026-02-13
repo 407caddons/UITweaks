@@ -61,7 +61,39 @@ end
 
 local partyFrames = {}        -- GUID -> frame
 local interruptCooldowns = {} -- GUID -> { spellID, endTime }
+local interruptCounts = {}    -- GUID -> { successful = N, total = N }
+local framePool = {}          -- Recycled party frames
 local ADDON_PREFIX = "LunaKick"
+
+-- Forward declarations
+local StartUpdateLoop
+local lastInterruptHandledAt = 0
+
+-- == KICK COUNT HELPERS ==
+
+local function IncrementTotal(guid)
+    if not interruptCounts[guid] then
+        interruptCounts[guid] = { successful = 0, total = 0 }
+    end
+    interruptCounts[guid].total = interruptCounts[guid].total + 1
+    local frame = partyFrames[guid]
+    if frame then
+        local counts = interruptCounts[guid]
+        frame.kickCount:SetText(string.format("(%d/%d)", counts.successful, counts.total))
+    end
+end
+
+local function IncrementSuccessful(guid)
+    if not interruptCounts[guid] then
+        interruptCounts[guid] = { successful = 0, total = 0 }
+    end
+    interruptCounts[guid].successful = interruptCounts[guid].successful + 1
+    local frame = partyFrames[guid]
+    if frame then
+        local counts = interruptCounts[guid]
+        frame.kickCount:SetText(string.format("(%d/%d)", counts.successful, counts.total))
+    end
+end
 
 -- == UTILITY FUNCTIONS ==
 
@@ -84,6 +116,17 @@ local function GetUnitKickSpell(unit)
     if CLASS_INTERRUPTS[class] then
         -- For party members, we can't check IsPlayerSpell, so return first interrupt
         return CLASS_INTERRUPTS[class][1]
+    end
+    return nil
+end
+
+local function GetUnitByGUID(guid)
+    if UnitGUID("player") == guid then return "player" end
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) and UnitGUID(unit) == guid then
+            return unit
+        end
     end
     return nil
 end
@@ -131,8 +174,9 @@ local function OnAddonMessage(prefix, message, channel, sender)
         endTime = GetTime() + cooldown
     }
 
-    -- Update the frame
+    IncrementTotal(senderGUID)
     Kick.UpdatePartyFrame(senderGUID)
+    StartUpdateLoop()
 end
 
 -- == PARTY FRAMES ==
@@ -167,8 +211,10 @@ local function CreatePartyContainer()
         edgeSize = 2,
         insets = { left = 0, right = 0, top = 0, bottom = 0 }
     })
-    partyContainer:SetBackdropColor(0, 0, 0, 0.8)
-    partyContainer:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    local bg = UIThingsDB.kick.bgColor
+    local border = UIThingsDB.kick.borderColor
+    partyContainer:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
+    partyContainer:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
     -- Title
     partyContainer.title = partyContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -197,54 +243,85 @@ end
 local function CreatePartyFrame(guid, unit)
     local container = CreatePartyContainer()
 
-    local frame = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    frame:SetSize(180, 40)
-    frame:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false,
-        tileSize = 0,
-        edgeSize = 1,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 }
-    })
-    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    frame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    -- Reuse a pooled frame if available, otherwise create a new one
+    local frame = table.remove(framePool)
+    if frame then
+        frame:SetParent(container)
+        frame:ClearAllPoints()
+    else
+        frame = CreateFrame("Frame", nil, container, "BackdropTemplate")
+        frame:SetSize(180, 40)
+        frame:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            tile = false,
+            tileSize = 0,
+            edgeSize = 1,
+            insets = { left = 0, right = 0, top = 0, bottom = 0 }
+        })
 
-    -- Player name
-    frame.name = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.name:SetPoint("TOPLEFT", 45, -5)
-    frame.name:SetText(UnitName(unit) or "Unknown")
+        -- Player name
+        frame.name = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        frame.name:SetPoint("TOPLEFT", 45, -5)
 
-    -- Interrupt icon
-    frame.icon = frame:CreateTexture(nil, "ARTWORK")
-    frame.icon:SetSize(32, 32)
-    frame.icon:SetPoint("LEFT", 5, 0)
+        -- Kick count (successful/total) after name
+        frame.kickCount = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        frame.kickCount:SetPoint("LEFT", frame.name, "RIGHT", 4, 0)
+        frame.kickCount:SetTextColor(0.7, 0.7, 0.7)
 
+        -- Interrupt icon
+        frame.icon = frame:CreateTexture(nil, "ARTWORK")
+        frame.icon:SetSize(32, 32)
+        frame.icon:SetPoint("LEFT", 5, 0)
+
+        -- Cooldown bar
+        frame.bar = CreateFrame("StatusBar", nil, frame)
+        frame.bar:SetSize(120, 16)
+        frame.bar:SetPoint("BOTTOMRIGHT", -5, 5)
+        frame.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        frame.bar:SetStatusBarColor(0.2, 0.8, 0.2, 1)
+        frame.bar:SetMinMaxValues(0, 1)
+        frame.bar:SetValue(1)
+
+        -- Bar background
+        frame.bar.bg = frame.bar:CreateTexture(nil, "BACKGROUND")
+        frame.bar.bg:SetAllPoints()
+        frame.bar.bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        frame.bar.bg:SetVertexColor(0.2, 0.2, 0.2, 0.5)
+
+        -- Cooldown text
+        frame.cdText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        frame.cdText:SetPoint("CENTER", frame.bar, "CENTER", 0, 0)
+        frame.cdText:SetText("Ready")
+    end
+
+    -- Apply current colors
+    local barBg = UIThingsDB.kick.barBgColor
+    local barBorder = UIThingsDB.kick.barBorderColor
+    frame:SetBackdropColor(barBg.r, barBg.g, barBg.b, barBg.a)
+    frame:SetBackdropBorderColor(barBorder.r, barBorder.g, barBorder.b, barBorder.a)
+
+    -- Set name and initial count
+    local unitName = UnitName(unit) or "Unknown"
+    frame.name:SetText(unitName)
+    local counts = interruptCounts[guid]
+    if counts and counts.total > 0 then
+        frame.kickCount:SetText(string.format("(%d/%d)", counts.successful, counts.total))
+    else
+        frame.kickCount:SetText("")
+    end
+
+    -- Set interrupt icon
     local spellID = GetUnitKickSpell(unit)
     if spellID then
         local spellTexture = C_Spell.GetSpellTexture(spellID)
         frame.icon:SetTexture(spellTexture)
     end
 
-    -- Cooldown bar
-    frame.bar = CreateFrame("StatusBar", nil, frame)
-    frame.bar:SetSize(120, 16)
-    frame.bar:SetPoint("BOTTOMRIGHT", -5, 5)
-    frame.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    frame.bar:SetStatusBarColor(0.2, 0.8, 0.2, 1)
-    frame.bar:SetMinMaxValues(0, 1)
+    -- Reset bar state
     frame.bar:SetValue(1)
-
-    -- Bar background
-    frame.bar.bg = frame.bar:CreateTexture(nil, "BACKGROUND")
-    frame.bar.bg:SetAllPoints()
-    frame.bar.bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    frame.bar.bg:SetVertexColor(0.2, 0.2, 0.2, 0.5)
-
-    -- Cooldown text
-    frame.cdText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.cdText:SetPoint("CENTER", frame.bar, "CENTER", 0, 0)
     frame.cdText:SetText("Ready")
+    frame.icon:SetDesaturated(false)
 
     frame.guid = guid
     frame.unit = unit
@@ -333,30 +410,43 @@ end
 local updateFrame = CreateFrame("Frame")
 local elapsed = 0
 
+local updateLoopRunning = false
+
 local function OnUpdateHandler(self, delta)
     elapsed = elapsed + delta
     if elapsed >= 0.1 then
         elapsed = 0
+        local anyActive = false
         for guid, _ in pairs(partyFrames) do
+            if interruptCooldowns[guid] then
+                anyActive = true
+            end
             Kick.UpdatePartyFrame(guid)
+        end
+        if not anyActive then
+            updateLoopRunning = false
+            updateFrame:SetScript("OnUpdate", nil)
         end
     end
 end
 
-local function StartUpdateLoop()
+StartUpdateLoop = function()
+    if updateLoopRunning then return end
+    updateLoopRunning = true
     elapsed = 0
     updateFrame:SetScript("OnUpdate", OnUpdateHandler)
 end
 
 local function StopUpdateLoop()
+    updateLoopRunning = false
     updateFrame:SetScript("OnUpdate", nil)
 end
 
 function Kick.RebuildPartyFrames()
-    -- Clear existing frames
+    -- Pool existing frames for reuse
     for guid, frame in pairs(partyFrames) do
         frame:Hide()
-        frame:SetParent(nil)
+        table.insert(framePool, frame)
     end
     wipe(partyFrames)
     wipe(interruptCooldowns)
@@ -389,13 +479,7 @@ function Kick.RebuildPartyFrames()
     end
 
     Kick.UpdatePartyLayout()
-
-    -- Only run the update loop when there are frames to update
-    if next(partyFrames) then
-        StartUpdateLoop()
-    else
-        StopUpdateLoop()
-    end
+    StopUpdateLoop()
 end
 
 function Kick.UpdateSettings()
@@ -413,6 +497,12 @@ function Kick.UpdateSettings()
                 UIThingsDB.kick.pos.y or 0
             )
         end
+
+        -- Apply colors
+        local bg = UIThingsDB.kick.bgColor
+        local border = UIThingsDB.kick.borderColor
+        partyContainer:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
+        partyContainer:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
     end
 
     Kick.RebuildPartyFrames()
@@ -424,6 +514,7 @@ local function OnEvent(self, event, ...)
     if not UIThingsDB.kick then return end
 
     if event == "PLAYER_ENTERING_WORLD" then
+        wipe(interruptCounts)
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
         end
@@ -448,8 +539,35 @@ local function OnEvent(self, event, ...)
                     endTime = GetTime() + cooldown
                 }
 
+                IncrementTotal(guid)
                 Kick.UpdatePartyFrame(guid)
                 SendKickMessage(spellID)
+                StartUpdateLoop()
+            end
+        end
+    elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
+        if not UIThingsDB.kick.enabled then return end
+
+        local unitTarget, castGUID, spellID = ...
+
+        -- Deduplicate: this event fires once per unitID for the same cast
+        -- (e.g. target + nameplate). Use a short time window to ignore duplicates.
+        local now = GetTime()
+        if now - lastInterruptHandledAt < 0.1 then return end
+        lastInterruptHandledAt = now
+
+        -- interruptedBy GUID is a secret value in combat, so we can't identify
+        -- who interrupted. Instead, check if any party member just used their
+        -- kick (tracked via UNIT_SPELLCAST_SUCCEEDED or addon message) within
+        -- the last second, and credit them with a successful interrupt.
+        local now = GetTime()
+        for guid, cdInfo in pairs(interruptCooldowns) do
+            if partyFrames[guid] then
+                local elapsed = now - (cdInfo.endTime - INTERRUPT_SPELLS[cdInfo.spellID].cd)
+                if elapsed >= 0 and elapsed <= 1.0 then
+                    IncrementSuccessful(guid)
+                    break
+                end
             end
         end
     elseif event == "CHAT_MSG_ADDON" then
@@ -461,6 +579,7 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:SetScript("OnEvent", OnEvent)
 

@@ -280,7 +280,11 @@ local function OnEvent(self, event, ...)
             kick = {
                 enabled = false,
                 locked = true,
-                pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 }
+                pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 },
+                bgColor = { r = 0, g = 0, b = 0, a = 0.8 },
+                borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                barBgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.9 },
+                barBorderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 }
             },
             chatSkin = {
                 enabled = false,
@@ -294,6 +298,7 @@ local function OnEvent(self, event, ...)
                 locked = true,
                 chatWidth = 430,
                 chatHeight = 200,
+                timestamps = "none",
                 pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
             }
         }

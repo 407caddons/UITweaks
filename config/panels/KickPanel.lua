@@ -18,7 +18,7 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     description:SetWidth(650)
     description:SetJustifyH("LEFT")
     description:SetText(
-    "Track interrupt cooldowns for your party. Shows each member's interrupt ability with a cooldown bar. Syncs via addon messages so all party members with this addon can see each other's interrupts.")
+        "Track interrupt cooldowns for your party. Shows each member's interrupt ability with a cooldown bar. Syncs via addon messages so all party members with this addon can see each other's interrupts.")
 
     -- Enable Checkbox
     local enableCheckbox = CreateFrame("CheckButton", "UIThingsKickEnable", panel,
@@ -58,33 +58,47 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
         end
     end)
 
+    -- Appearance section
+    Helpers.CreateSectionHeader(panel, "Appearance", -155)
+
+    local function updateKick()
+        if addonTable.Kick and addonTable.Kick.UpdateSettings then
+            addonTable.Kick.UpdateSettings()
+        end
+    end
+
+    Helpers.CreateColorSwatch(panel, "Background Color", UIThingsDB.kick.bgColor, updateKick, 20, -180)
+    Helpers.CreateColorSwatch(panel, "Border Color", UIThingsDB.kick.borderColor, updateKick, 220, -180)
+    Helpers.CreateColorSwatch(panel, "Bar Background", UIThingsDB.kick.barBgColor, updateKick, 20, -210)
+    Helpers.CreateColorSwatch(panel, "Bar Border", UIThingsDB.kick.barBorderColor, updateKick, 220, -210)
+
     -- Features section
     local featuresTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    featuresTitle:SetPoint("TOPLEFT", 20, -165)
+    featuresTitle:SetPoint("TOPLEFT", 20, -250)
     featuresTitle:SetText("Features:")
 
     local feature1 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature1:SetPoint("TOPLEFT", 40, -190)
+    feature1:SetPoint("TOPLEFT", 40, -275)
     feature1:SetText("• Automatically detects your class interrupt ability")
 
     local feature2 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature2:SetPoint("TOPLEFT", 40, -210)
+    feature2:SetPoint("TOPLEFT", 40, -295)
     feature2:SetText("• Shows interrupt icon and cooldown progress bar for each party member")
 
     local feature3 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature3:SetPoint("TOPLEFT", 40, -230)
+    feature3:SetPoint("TOPLEFT", 40, -315)
     feature3:SetText("• Syncs interrupt usage across party members using addon messages")
 
     local feature4 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature4:SetPoint("TOPLEFT", 40, -250)
+    feature4:SetPoint("TOPLEFT", 40, -335)
     feature4:SetText("• Desaturates icon when on cooldown, shows time remaining")
 
     -- Supported interrupts section
     local interruptsTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    interruptsTitle:SetPoint("TOPLEFT", 20, -285)
+    interruptsTitle:SetPoint("TOPLEFT", 20, -370)
     interruptsTitle:SetText("Supported Interrupts:")
 
-    local yOffset = -310
+    local yOffset = -395
     local interrupts = {
         { class = "Death Knight", spell = "Mind Freeze",       cd = "15s" },
         { class = "Demon Hunter", spell = "Disrupt",           cd = "15s" },
@@ -112,30 +126,30 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
 
     -- Usage instructions
     local usageTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    usageTitle:SetPoint("TOPLEFT", 20, -460)
+    usageTitle:SetPoint("TOPLEFT", 20, -545)
     usageTitle:SetText("Usage:")
 
     local usage1 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage1:SetPoint("TOPLEFT", 40, -485)
+    usage1:SetPoint("TOPLEFT", 40, -570)
     usage1:SetWidth(650)
     usage1:SetJustifyH("LEFT")
     usage1:SetText("1. Enable the tracker and join a party")
 
     local usage2 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage2:SetPoint("TOPLEFT", 40, -505)
+    usage2:SetPoint("TOPLEFT", 40, -590)
     usage2:SetWidth(650)
     usage2:SetJustifyH("LEFT")
     usage2:SetText("2. Unlock the tracker to move it to your preferred position")
 
     local usage3 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage3:SetPoint("TOPLEFT", 40, -525)
+    usage3:SetPoint("TOPLEFT", 40, -610)
     usage3:SetWidth(650)
     usage3:SetJustifyH("LEFT")
     usage3:SetText("3. When you or party members use an interrupt, it will show on cooldown")
 
     local usage4 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage4:SetPoint("TOPLEFT", 40, -545)
+    usage4:SetPoint("TOPLEFT", 40, -630)
     usage4:SetWidth(650)
     usage4:SetJustifyH("LEFT")
-    usage4:SetText("4. Note: Party members must also have this addon installed to sync their interrupts")
+    usage4:SetText("4. Interrupts are detected automatically, addon sync provides exact spell info")
 end

@@ -129,9 +129,19 @@ The `CompareTalents()` function returns mismatches categorized as:
 - Movable UI elements use a lock/unlock pattern: when unlocked, the frame is draggable and shows controls; when locked, mouse interaction is disabled.
 - The addon targets WoW API for Interface version 120000 (The War Within, 12.0). All API calls are Blizzard's standard Lua API (C_Timer, C_TradeSkillUI, C_QuestLog, etc.).
 - No external library dependencies (no Ace3, LibDBIcon, etc.) — everything is self-contained.
-- `issecretvalue ()` is a real WoW API function — it detects "secure" values that cannot be used in calculations during combat (due to Blizzard's combat lockdown restrictions). Not currently used in this addon but may appear in related projects.
+- `issecretvalue()` is a real WoW API function — it detects "secure" values that cannot be used in calculations during combat (due to Blizzard's combat lockdown restrictions). Not currently used in this addon but may appear in related projects.
 - Showing and hiding frames in combat should be done with UnregisterStateDriver and RegisterStateDriver. RegisterStateDriver is used to show/hide frames in combat, while UnregisterStateDriver is used to unregister the driver when the frame is no longer needed.
+- `COMBAT_LOG_EVENT_UNFILTERED` must not be used — it is restricted to Blizzard UI only and will produce a blocking error for third-party addons.
+- `UNIT_SPELLCAST_INTERRUPTED` provides `(unitTarget, castGUID, spellID, interruptedBy, castBarID)` as of Patch 12.0.0. However, the `interruptedBy` GUID is a **secret value** during combat (`issecretvalue()` returns true), making it unreadable by addons. The event still fires and confirms an interrupt occurred, but the interrupter cannot be identified directly.
 
 ## API Documentation
 
 The `docs/` folder contains WoW API documentation extracted directly from the in-game client. **Always consult `docs/index.md` and the linked files in the `docs/` folder first for all WoW API lookups and research.** This is the most accurate source of information as it was taken from in-game documentation and reflects the actual available API for the current client version.
+
+## Daily prompts
+
+Could you do an in depth code review of this entire addon? Look for performance issues, code readability, and potential improvements. Also, please check for any potential memory leaks and optimize the code to reduce memory usage. Write the results and replace .clause\codreview.md
+
+Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results and replace .clause\features.md
+
+Could you write a short bulleted change log, for the last release no need to get to detailed. Write the results and replace .claude\changeLog.md

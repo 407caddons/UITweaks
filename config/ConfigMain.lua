@@ -78,17 +78,18 @@ function addonTable.Config.Initialize()
 
         -- List of Modules
         local modules = {
-            { id = 1,  name = "Tracker",      key = "tracker",  icon = "Interface\\Icons\\Inv_Misc_Book_09" },
-            { id = 2,  name = "Vendor",       key = "vendor",   icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
-            { id = 3,  name = "Combat",       key = "combat",   icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
-            { id = 4,  name = "Frames",       key = "frames",   icon = "Interface\\Icons\\Inv_Box_01" },
-            { id = 5,  name = "Loot",         key = "loot",     icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 6,  name = "Misc",         key = "misc",     icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 7,  name = "Minimap",      key = "minimap",  icon = "Interface\\Icons\\Inv_Misc_Map02" },
-            { id = 8,  name = "Talents",      key = "talent",   icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 9,  name = "Widgets",      key = "widgets",  icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 10, name = "Chat",         key = "chatSkin", icon = "Interface\\Icons\\INV_Misc_Note_06" },
-            { id = 11, name = "Experimental", key = "kick",     icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 1,  name = "Tracker",        key = "tracker",       icon = "Interface\\Icons\\Inv_Misc_Book_09" },
+            { id = 2,  name = "Vendor",         key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 3,  name = "Combat",         key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
+            { id = 4,  name = "Frames",         key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 5,  name = "Loot",           key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 6,  name = "Misc",           key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 7,  name = "Minimap",        key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 8,  name = "Talents",        key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 9,  name = "Widgets",        key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 10, name = "Chat",           key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
+            { id = 11, name = "Experimental",   key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 12, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -145,6 +146,10 @@ function addonTable.Config.Initialize()
         chatSkinPanel:SetAllPoints()
         chatSkinPanel:Hide()
 
+        local addonVersionsPanel = CreateFrame("Frame", nil, contentContainer)
+        addonVersionsPanel:SetAllPoints()
+        addonVersionsPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -157,6 +162,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.widgets = widgetsPanel
         addonTable.ConfigPanels.kick = kickPanel
         addonTable.ConfigPanels.chatSkin = chatSkinPanel
+        addonTable.ConfigPanels.addonVersions = addonVersionsPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -171,6 +177,7 @@ function addonTable.Config.Initialize()
             [9] = widgetsPanel,
             [10] = chatSkinPanel,
             [11] = kickPanel,
+            [12] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -286,6 +293,9 @@ function addonTable.Config.Initialize()
             end
             if addonTable.ConfigSetup.Kick then
                 addonTable.ConfigSetup.Kick(kickPanel, navButtons[11], configWindow)
+            end
+            if addonTable.ConfigSetup.AddonVersions then
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[12], configWindow)
             end
         end
     end

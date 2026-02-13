@@ -644,7 +644,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     _G[drawerBorderSlider:GetName() .. "Low"]:SetText("0")
     _G[drawerBorderSlider:GetName() .. "High"]:SetText("5")
     _G[drawerBorderSlider:GetName() .. "Text"]:SetText("Border Thickness: " ..
-    (UIThingsDB.misc.minimapDrawerBorderSize or 2))
+        (UIThingsDB.misc.minimapDrawerBorderSize or 2))
     drawerBorderSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
         UIThingsDB.misc.minimapDrawerBorderSize = value

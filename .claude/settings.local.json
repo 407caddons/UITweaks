@@ -6,7 +6,10 @@
       "mcp__acp__Bash",
       "WebFetch(domain:wowpedia.fandom.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.icy-veins.com)",
+      "WebFetch(domain:warcraft.wiki.gg)",
+      "WebFetch(domain:www.curseforge.com)"
     ]
   }
 }
