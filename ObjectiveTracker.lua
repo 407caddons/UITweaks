@@ -8,6 +8,14 @@ local contentFrame
 local headerFrame
 local itemPool = {}
 local autoTrackFrame
+local distanceTicker
+
+-- Blizzard quest sound file IDs to mute when custom sounds are active
+local QUEST_SOUND_FILES = {
+    567439, -- Sound/Interface/iQuestComplete.ogg
+    567400, -- Sound/Interface/iQuestUpdate.ogg
+}
+local questSoundsMuted = false
 
 -- Constants
 local MINUTES_PER_DAY = 1440
@@ -195,6 +203,85 @@ local validWQs = {}
 local hiddenTaskQuests = {}
 local filteredIndices = {}
 local validAchievements = {}
+local zoneOrder = {}
+local questsByZone = {}
+
+-- Quest/objective completion sound tracking
+local prevObjectiveState = {} -- [questID] = { [objIndex] = { finished = bool, text = string } }
+local prevQuestComplete = {}  -- [questID] = bool
+
+local function CheckQuestSounds(questID, playQuestSound, playObjSound)
+    local isComplete = C_QuestLog.IsComplete(questID)
+    local wasComplete = prevQuestComplete[questID]
+    local channel = UIThingsDB.tracker.soundChannel or "Master"
+
+    -- Quest completion sound
+    if playQuestSound and isComplete and wasComplete == false then
+        PlaySound(UIThingsDB.tracker.questCompletionSoundID or 6199, channel)
+    end
+    prevQuestComplete[questID] = isComplete
+
+    -- Objective completion sound
+    if playObjSound and not isComplete then
+        local objectives = C_QuestLog.GetQuestObjectives(questID)
+        if objectives then
+            if not prevObjectiveState[questID] then
+                prevObjectiveState[questID] = {}
+            end
+            for j, obj in ipairs(objectives) do
+                local prev = prevObjectiveState[questID][j]
+                if prev and not prev.finished and obj.finished then
+                    PlaySound(UIThingsDB.tracker.objectiveCompletionSoundID or 6197, channel)
+                end
+                prevObjectiveState[questID][j] = { finished = obj.finished }
+            end
+        end
+    end
+end
+
+local function CheckCompletionSounds()
+    if not UIThingsDB.tracker.enabled then return end
+    local playQuestSound = UIThingsDB.tracker.questCompletionSound
+    local playObjSound = UIThingsDB.tracker.objectiveCompletionSound
+    if not playQuestSound and not playObjSound then return end
+
+    local checked = {}
+
+    -- Regular tracked quests
+    local numWatches = C_QuestLog.GetNumQuestWatches()
+    for i = 1, numWatches do
+        local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+        if questID and not checked[questID] then
+            checked[questID] = true
+            CheckQuestSounds(questID, playQuestSound, playObjSound)
+        end
+    end
+
+    -- World quests and task quests on the current map
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if mapID then
+        local tasks = C_TaskQuest.GetQuestsOnMap(mapID)
+        if tasks then
+            for _, info in ipairs(tasks) do
+                local questID = info.questID
+                if questID and not checked[questID] and C_QuestLog.IsOnQuest(questID) then
+                    checked[questID] = true
+                    CheckQuestSounds(questID, playQuestSound, playObjSound)
+                end
+            end
+        end
+    end
+
+    -- Hidden task quests (bonus objectives)
+    local numEntries = C_QuestLog.GetNumQuestLogEntries()
+    for i = 1, numEntries do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader and info.isHidden and info.isTask and info.questID and not checked[info.questID] then
+            checked[info.questID] = true
+            CheckQuestSounds(info.questID, playQuestSound, playObjSound)
+        end
+    end
+end
 
 local UpdateContent -- forward declaration for ScheduleUpdateContent
 
@@ -208,13 +295,15 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
 
     btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
 
-    btn:SetWidth(ucState.width)
-    btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
+    local indent = ucState.indent or 0
+    btn:SetWidth(ucState.width - indent)
+    btn:SetPoint("TOPLEFT", indent, ucState.yOffset)
 
     if isHeader then
-        btn.Text:SetFont(ucState.baseFont, ucState.baseSize + 2, "OUTLINE")
+        btn.Text:SetFont(ucState.sectionHeaderFont, ucState.sectionHeaderSize, "OUTLINE")
         btn.Text:SetText(text)
-        btn.Text:SetTextColor(1, 0.82, 0)
+        local shc = ucState.sectionHeaderColor
+        btn.Text:SetTextColor(shc.r, shc.g, shc.b, shc.a or 1)
         btn.Icon:Hide()
         btn.Text:SetPoint("LEFT", 0, 0)
 
@@ -241,14 +330,15 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             btn.ToggleBtn:Hide()
         end
 
-        ucState.yOffset = ucState.yOffset - (ucState.baseSize + 8)
+        ucState.yOffset = ucState.yOffset - (ucState.sectionHeaderSize + 6)
     else
         if isObjective then
             local currentSize = ucState.detailSize
 
             btn.Text:SetFont(ucState.detailFont, currentSize, "OUTLINE")
             btn.Text:SetText(text)
-            btn.Text:SetTextColor(0.8, 0.8, 0.8)
+            local oc = ucState.objectiveColor
+            btn.Text:SetTextColor(oc.r, oc.g, oc.b, oc.a or 1)
             btn.Icon:Hide()
             btn.Text:SetPoint("LEFT", 19, 0)
             btn:EnableMouse(false)
@@ -262,7 +352,8 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             if overrideColor then
                 btn.Text:SetTextColor(overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a or 1)
             else
-                btn.Text:SetTextColor(1, 1, 1)
+                local qnc = ucState.questNameColor
+                btn.Text:SetTextColor(qnc.r, qnc.g, qnc.b, qnc.a or 1)
             end
 
             if questID then
@@ -338,6 +429,72 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
     end
 end
 
+--- Returns campaign quest color override if quest is a campaign quest
+local function GetCampaignColor(questID)
+    if not UIThingsDB.tracker.highlightCampaignQuests then return nil end
+    if C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(questID) then
+        return UIThingsDB.tracker.campaignQuestColor
+    end
+    return nil
+end
+
+--- Returns a prefix tag for daily/weekly quests
+local function GetQuestTypePrefix(questID)
+    if not UIThingsDB.tracker.showQuestTypeIndicators then return "" end
+    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
+    if tagInfo and tagInfo.frequency then
+        if tagInfo.frequency == Enum.QuestFrequency.Daily then
+            return "|cFF00CCFF[D]|r "
+        elseif tagInfo.frequency == Enum.QuestFrequency.Weekly then
+            return "|cFFCC00FF[W]|r "
+        end
+    end
+    -- Fallback: check if repeatable (callings, etc.)
+    if C_QuestLog.IsRepeatableQuest and C_QuestLog.IsRepeatableQuest(questID) then
+        return "|cFF00CCFF[R]|r "
+    end
+    return ""
+end
+
+--- Returns a reward type icon string for world quests
+local function GetWQRewardIcon(questID)
+    if not UIThingsDB.tracker.showWQRewardIcons then return "" end
+
+    -- Check reward type via quest reward APIs (pcall for safety since some may not be available for all WQs)
+    local ok, numRewards = pcall(function() return GetNumQuestLogRewards(questID) end)
+    numRewards = ok and numRewards or 0
+
+    local currencies = {}
+    if C_QuestLog.GetQuestRewardCurrencies then
+        local cOk, result = pcall(C_QuestLog.GetQuestRewardCurrencies, questID)
+        if cOk and result then currencies = result end
+    end
+
+    local goldReward = 0
+    if GetQuestLogRewardMoney then
+        local gOk, result = pcall(GetQuestLogRewardMoney, questID)
+        if gOk and result then goldReward = result end
+    end
+
+    if numRewards > 0 then
+        return "|TInterface\\Minimap\\Tracking\\Banker:0|t "
+    elseif #currencies > 0 then
+        return "|TInterface\\Minimap\\Tracking\\Auctioneer:0|t "
+    elseif goldReward > 0 then
+        return "|TInterface\\MoneyFrame\\UI-GoldIcon:0|t "
+    end
+    return ""
+end
+
+--- Formats a completed objective with optional checkmark prefix
+local function FormatCompletedObjective(text)
+    if UIThingsDB.tracker.completedObjectiveCheckmark then
+        return "|cFF00FF00|TInterface\\RaidFrame\\ReadyCheck-Ready:0|t " .. text .. "|r"
+    else
+        return "|cFF00FF00" .. text .. "|r"
+    end
+end
+
 --- Formats time remaining for World Quests with urgency coloring
 local function GetTimeLeftString(questID)
     local timeLeftMinutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
@@ -372,14 +529,35 @@ local function GetTimeLeftString(questID)
     return ""
 end
 
+--- Formats distance to quest with grey coloring, localized units
+local useMetric = not (GetLocale() == "enUS" or GetLocale() == "enGB")
+local function GetDistanceString(questID)
+    if not UIThingsDB.tracker.showQuestDistance then return "" end
+    local distSq = C_QuestLog.GetDistanceSqToQuest(questID)
+    if not distSq then return "" end
+    local dist = math.sqrt(distSq)
+    local unit = "yds"
+    if useMetric then
+        dist = dist * 0.9144
+        unit = "m"
+    end
+    if dist >= 1000 then
+        return string.format(" |cFFAAAAAA(%.1fk %s)|r", dist / 1000, unit)
+    else
+        return string.format(" |cFFAAAAAA(%d %s)|r", dist, unit)
+    end
+end
+
 --- Renders a single World Quest entry
 local function RenderSingleWQ(questID, superTrackedQuestID)
     if not displayedIDs[questID] then
         local title = C_QuestLog.GetTitleForQuestID(questID)
         if title then
+            title = GetWQRewardIcon(questID) .. GetQuestTypePrefix(questID) .. title
             if UIThingsDB.tracker.showWorldQuestTimer then
                 title = title .. GetTimeLeftString(questID)
             end
+            title = title .. GetDistanceString(questID)
 
             local color = nil
             if questID == superTrackedQuestID then
@@ -395,7 +573,7 @@ local function RenderSingleWQ(questID, superTrackedQuestID)
                     if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
                         local objText = obj.text
                         if objText and objText ~= "" then
-                            if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                            if obj.finished then objText = FormatCompletedObjective(objText) end
                             AddLine(objText, false, nil, nil, true)
                         end
                     end
@@ -454,10 +632,31 @@ local function RenderWorldQuests()
         end
     end
 
+    -- Sort world quests by chosen method
+    local wqSortBy = UIThingsDB.tracker.worldQuestSortBy or "time"
+    if wqSortBy == "distance" then
+        local function sortByDistance(a, b)
+            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
+            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
+            return distA < distB
+        end
+        table.sort(activeWQs, sortByDistance)
+        table.sort(otherWQs, sortByDistance)
+    else
+        local function sortByTimeLeft(a, b)
+            local timeA = C_TaskQuest.GetQuestTimeLeftMinutes(a) or 99999
+            local timeB = C_TaskQuest.GetQuestTimeLeftMinutes(b) or 99999
+            return timeA < timeB
+        end
+        table.sort(activeWQs, sortByTimeLeft)
+        table.sort(otherWQs, sortByTimeLeft)
+    end
+
     local hasWQs = (#activeWQs > 0) or (#otherWQs > 0)
 
     if hasWQs then
-        AddLine("World Quests", true, "worldQuests")
+        local wqCount = #activeWQs + #otherWQs
+        AddLine("World Quests (" .. wqCount .. ")", true, "worldQuests")
 
         if UIThingsDB.tracker.collapsed["worldQuests"] then
             ucState.yOffset = ucState.yOffset - ITEM_SPACING
@@ -509,7 +708,7 @@ local function RenderQuests()
                             if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
                                 local objText = obj.text
                                 if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    if obj.finished then objText = FormatCompletedObjective(objText) end
                                     AddLine(objText, false, nil, nil, true)
                                 end
                             end
@@ -546,24 +745,41 @@ local function RenderQuests()
             end
         end
 
+        -- Sort quests by distance if enabled
+        if UIThingsDB.tracker.sortQuestsByDistance then
+            table.sort(filteredIndices, function(a, b)
+                local qA = C_QuestLog.GetQuestIDForQuestWatchIndex(a)
+                local qB = C_QuestLog.GetQuestIDForQuestWatchIndex(b)
+                local distA = qA and C_QuestLog.GetDistanceSqToQuest(qA) or 99999999
+                local distB = qB and C_QuestLog.GetDistanceSqToQuest(qB) or 99999999
+                return distA < distB
+            end)
+        end
+
         if superTrackedIndex then
             table.insert(filteredIndices, 1, superTrackedIndex)
         end
 
         if #filteredIndices > 0 then
-            AddLine("Quests", true, "quests")
+            AddLine("Quests (" .. #filteredIndices .. ")", true, "quests")
 
             if UIThingsDB.tracker.collapsed["quests"] then
                 ucState.yOffset = ucState.yOffset - 5
                 return
             end
-            for _, i in ipairs(filteredIndices) do
-                local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+
+            -- Helper to render a single quest entry (title + objectives)
+            local function RenderSingleQuest(questID, extraIndent)
+                if extraIndent then ucState.indent = extraIndent end
                 local title = C_QuestLog.GetTitleForQuestID(questID)
                 if title then
+                    title = GetQuestTypePrefix(questID) .. title .. GetDistanceString(questID)
+
                     local color = nil
                     if questID == superTrackedQuestID then
                         color = UIThingsDB.tracker.activeQuestColor
+                    else
+                        color = GetCampaignColor(questID)
                     end
 
                     AddLine(title, false, questID, nil, false, color)
@@ -575,13 +791,110 @@ local function RenderQuests()
                             if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
                                 local objText = obj.text
                                 if objText and objText ~= "" then
-                                    if obj.finished then objText = "|cFF00FF00" .. objText .. "|r" end
+                                    if obj.finished then objText = FormatCompletedObjective(objText) end
                                     AddLine(objText, false, nil, nil, true)
                                 end
                             end
                         end
                     end
                     ucState.yOffset = ucState.yOffset - 5
+                end
+                if extraIndent then ucState.indent = 0 end
+            end
+
+            if UIThingsDB.tracker.groupQuestsByZone then
+                -- Render super-tracked quest first (above zone groups)
+                local superRendered = false
+                if superTrackedIndex then
+                    local stQuestID = C_QuestLog.GetQuestIDForQuestWatchIndex(superTrackedIndex)
+                    if stQuestID then
+                        RenderSingleQuest(stQuestID)
+                        superRendered = true
+                    end
+                end
+
+                -- Group remaining quests by zone
+                wipe(zoneOrder)
+                wipe(questsByZone)
+                for _, i in ipairs(filteredIndices) do
+                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                    if questID and not displayedIDs[questID] then
+                        local zoneName = "Other"
+                        local headerIndex = C_QuestLog.GetHeaderIndexForQuest(questID)
+                        if headerIndex then
+                            local headerInfo = C_QuestLog.GetInfo(headerIndex)
+                            if headerInfo and headerInfo.title then
+                                zoneName = headerInfo.title
+                            end
+                        end
+                        if not questsByZone[zoneName] then
+                            questsByZone[zoneName] = {}
+                            table.insert(zoneOrder, zoneName)
+                        end
+                        table.insert(questsByZone[zoneName], questID)
+                    end
+                end
+
+                -- Sort quests within each zone by distance if enabled
+                if UIThingsDB.tracker.sortQuestsByDistance then
+                    for _, zoneName in ipairs(zoneOrder) do
+                        table.sort(questsByZone[zoneName], function(a, b)
+                            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
+                            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
+                            return distA < distB
+                        end)
+                    end
+                end
+
+                -- Render each zone group with collapsible sub-headers
+                for _, zoneName in ipairs(zoneOrder) do
+                    local zoneKey = "zone_" .. zoneName
+                    local isCollapsed = UIThingsDB.tracker.collapsed[zoneKey]
+
+                    -- Zone sub-header with toggle button
+                    local btn = AcquireItem()
+                    btn:Show()
+                    btn.questID = nil
+                    btn.achieID = nil
+                    btn:SetScript("OnClick", nil)
+                    btn:SetWidth(ucState.width)
+                    btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
+                    btn.Text:SetFont(ucState.questNameFont, ucState.questNameSize, "OUTLINE")
+                    btn.Text:SetText(zoneName .. " (" .. #questsByZone[zoneName] .. ")")
+                    btn.Text:SetTextColor(0.7, 0.85, 1.0)
+                    btn.Icon:Hide()
+                    btn.Text:SetPoint("LEFT", 10, 0)
+                    btn:EnableMouse(false)
+                    btn:SetScript("OnEnter", nil)
+                    btn:SetScript("OnLeave", nil)
+                    if btn.ItemBtn then btn.ItemBtn:Hide() end
+
+                    btn.ToggleBtn:Show()
+                    btn.ToggleBtn:SetScript("OnClick", function(self, button)
+                        if InCombatLockdown() and button == "LeftButton" then return end
+                        UIThingsDB.tracker.collapsed[zoneKey] = not isCollapsed
+                        UpdateContent()
+                    end)
+                    btn.ToggleBtn.Text:SetText(isCollapsed and "+" or "-")
+                    local textWidth = btn.Text:GetStringWidth()
+                    btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
+
+                    ucState.yOffset = ucState.yOffset - (ucState.questNameSize + 4)
+
+                    if not isCollapsed then
+                        for _, questID in ipairs(questsByZone[zoneName]) do
+                            RenderSingleQuest(questID, 10)
+                        end
+                    end
+                    ucState.yOffset = ucState.yOffset - ITEM_SPACING
+                end
+            else
+                -- Flat rendering (original behavior)
+                for _, i in ipairs(filteredIndices) do
+                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                    if questID then
+                        RenderSingleQuest(questID)
+                    end
                 end
             end
             ucState.yOffset = ucState.yOffset - 10
@@ -733,7 +1046,13 @@ UpdateContent = function()
     ucState.detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
     ucState.detailSize = UIThingsDB.tracker.detailFontSize or 12
     ucState.questPadding = UIThingsDB.tracker.questPadding or 2
+    ucState.sectionHeaderFont = UIThingsDB.tracker.sectionHeaderFont or "Fonts\\FRIZQT__.TTF"
+    ucState.sectionHeaderSize = UIThingsDB.tracker.sectionHeaderFontSize or 14
+    ucState.sectionHeaderColor = UIThingsDB.tracker.sectionHeaderColor or { r = 1, g = 0.82, b = 0, a = 1 }
+    ucState.questNameColor = UIThingsDB.tracker.questNameColor or { r = 1, g = 1, b = 1, a = 1 }
+    ucState.objectiveColor = UIThingsDB.tracker.objectiveColor or { r = 0.8, g = 0.8, b = 0.8, a = 1 }
     ucState.yOffset = -5
+    ucState.indent = 0
     ucState.width = scrollChild:GetWidth()
     ucState.cachedMapID = cachedMapID
     ucState.cachedTasks = cachedTasks
@@ -820,7 +1139,7 @@ local function SetupCustomTracker()
     })
     trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
 
-    -- Header ("OBJECTIVES") - Fixed at top
+    -- Header ("OBJECTIVES") - Fixed at top, can be hidden
     headerFrame = CreateFrame("Frame", nil, trackerFrame)
     headerFrame:SetPoint("TOPLEFT")
     headerFrame:SetPoint("TOPRIGHT")
@@ -829,6 +1148,11 @@ local function SetupCustomTracker()
     local headerText = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     headerText:SetPoint("CENTER")
     headerText:SetText("OBJECTIVES")
+
+    if UIThingsDB.tracker.hideHeader then
+        headerFrame:SetHeight(1)
+        headerFrame:Hide()
+    end
 
     -- Drag Logic
     trackerFrame:EnableMouse(true)
@@ -903,6 +1227,10 @@ local function SetupCustomTracker()
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- Handled by StateDriver
         else
+            -- Check for completion sounds before updating display
+            if event == "QUEST_LOG_UPDATE" or event == "TASK_PROGRESS_UPDATE" then
+                CheckCompletionSounds()
+            end
             ScheduleUpdateContent()
         end
     end)
@@ -989,6 +1317,17 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     trackerFrame:SetFrameStrata(UIThingsDB.tracker.strata or "LOW")
     scrollChild:SetWidth(UIThingsDB.tracker.width - 40)
 
+    -- Header visibility
+    if headerFrame then
+        if UIThingsDB.tracker.hideHeader then
+            headerFrame:SetHeight(1)
+            headerFrame:Hide()
+        else
+            headerFrame:SetHeight(30)
+            headerFrame:Show()
+        end
+    end
+
     -- Lock/Unlock & Border State
     if UIThingsDB.tracker.locked then
         trackerFrame:EnableMouse(false)
@@ -1037,6 +1376,34 @@ function addonTable.ObjectiveTracker.UpdateSettings()
         })
         trackerFrame:SetBackdropColor(0, 0, 0, 0.5)
         trackerFrame:SetBackdropBorderColor(1, 1, 1, 1)
+    end
+
+    -- Distance update ticker
+    if distanceTicker then
+        distanceTicker:Cancel()
+        distanceTicker = nil
+    end
+    local interval = UIThingsDB.tracker.distanceUpdateInterval or 0
+    if interval > 0 then
+        distanceTicker = C_Timer.NewTicker(interval, function()
+            if trackerFrame and trackerFrame:IsShown() and not InCombatLockdown() then
+                UpdateContent()
+            end
+        end)
+    end
+
+    -- Mute/unmute default Blizzard quest sounds
+    local shouldMute = UIThingsDB.tracker.enabled and UIThingsDB.tracker.muteDefaultQuestSounds
+    if shouldMute and not questSoundsMuted then
+        for _, fileID in ipairs(QUEST_SOUND_FILES) do
+            MuteSoundFile(fileID)
+        end
+        questSoundsMuted = true
+    elseif not shouldMute and questSoundsMuted then
+        for _, fileID in ipairs(QUEST_SOUND_FILES) do
+            UnmuteSoundFile(fileID)
+        end
+        questSoundsMuted = false
     end
 
     UpdateContent()

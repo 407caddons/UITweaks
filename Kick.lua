@@ -180,6 +180,11 @@ local function OnAddonMessage(prefix, message, channel, sender)
 
     if not senderGUID then return end
 
+    -- If we don't have a frame for this sender yet, rebuild so they get one
+    if not partyFrames[senderGUID] then
+        Kick.RebuildPartyFrames()
+    end
+
     -- Store cooldown info (support multiple cooldowns per player)
     local cooldown = INTERRUPT_SPELLS[spellID].cd
     if not interruptCooldowns[senderGUID] then
@@ -863,6 +868,12 @@ local function OnEvent(self, event, ...)
     elseif event == "GROUP_ROSTER_UPDATE" then
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
+            -- Delayed rebuild so unit frames are available for attached mode
+            addonTable.Core.SafeAfter(0.5, function()
+                if UIThingsDB.kick.enabled then
+                    Kick.RebuildPartyFrames()
+                end
+            end)
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         if not UIThingsDB.kick.enabled then return end

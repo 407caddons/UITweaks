@@ -440,9 +440,9 @@ local function GetChatContent()
 
     local lines = {}
     for i = 1, selectedFrame:GetNumMessages() do
-        local msg = selectedFrame:GetMessageInfo(i)
-        if msg and msg ~= "" then
-            table.insert(lines, msg)
+        local ok, msg = pcall(selectedFrame.GetMessageInfo, selectedFrame, i)
+        if ok and msg then
+            table.insert(lines, tostring(msg))
         end
     end
 
