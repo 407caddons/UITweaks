@@ -229,6 +229,12 @@ local function OnEvent(self, event, ...)
                 autoAcceptGuild = false,
                 autoAcceptEveryone = false,
                 allowRL = true,
+                mailNotification = false,
+                mailTtsEnabled = true,
+                mailTtsMessage = "You've got mail",
+                mailTtsVoice = 0,
+                mailAlertDuration = 5,
+                mailAlertColor = { r = 1, g = 0.82, b = 0, a = 1 },
                 autoInviteEnabled = false,
                 autoInviteKeywords = "inv,invite",
                 quickDestroy = false,
@@ -313,7 +319,11 @@ local function OnEvent(self, event, ...)
                 volume = { enabled = false, point = "CENTER", x = 0, y = -320 },
                 zone = { enabled = false, point = "CENTER", x = 0, y = -340 },
                 pvp = { enabled = false, point = "CENTER", x = 0, y = -360 },
-                mythicRating = { enabled = false, point = "CENTER", x = 0, y = -380 }
+                mythicRating = { enabled = false, point = "CENTER", x = 0, y = -380 },
+                vault = { enabled = false, point = "CENTER", x = 0, y = -400 },
+                darkmoonFaire = { enabled = false, point = "CENTER", x = 0, y = -420 },
+                mail = { enabled = false, point = "CENTER", x = 0, y = -440 },
+                pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460 }
             },
             kick = {
                 enabled = false,

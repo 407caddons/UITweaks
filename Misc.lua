@@ -51,6 +51,61 @@ function Misc.ShowAlert()
     ShowAlert()
 end
 
+-- == MAIL NOTIFICATION ==
+
+local mailAlertFrame = CreateFrame("Frame", "UIThingsMailAlert", UIParent, "BackdropTemplate")
+mailAlertFrame:SetSize(400, 50)
+mailAlertFrame:SetPoint("TOP", 0, -260)
+mailAlertFrame:SetFrameStrata("DIALOG")
+mailAlertFrame:Hide()
+
+mailAlertFrame.text = mailAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+mailAlertFrame.text:SetPoint("CENTER")
+mailAlertFrame.text:SetText("New mail arrived")
+
+local function PlayMailTTS()
+    if not UIThingsDB.misc.mailTtsEnabled then return end
+    local message = UIThingsDB.misc.mailTtsMessage or "You've got mail"
+    local voiceType = UIThingsDB.misc.mailTtsVoice or 0
+
+    if TextToSpeech_Speak then
+        local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
+        pcall(function()
+            TextToSpeech_Speak(message, voiceID)
+        end)
+    elseif C_VoiceChat and C_VoiceChat.SpeakText then
+        pcall(function()
+            C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
+        end)
+    end
+end
+
+local function ShowMailAlert()
+    if not UIThingsDB.misc.mailNotification then return end
+
+    local color = UIThingsDB.misc.mailAlertColor
+    mailAlertFrame.text:SetTextColor(color.r, color.g, color.b, color.a or 1)
+
+    mailAlertFrame:Show()
+
+    -- Delay TTS so it plays after personal order TTS
+    addonTable.Core.SafeAfter(2, PlayMailTTS)
+
+    -- Hide after duration
+    local duration = UIThingsDB.misc.mailAlertDuration or 5
+    addonTable.Core.SafeAfter(duration, function()
+        mailAlertFrame:Hide()
+    end)
+end
+
+function Misc.ShowMailAlert()
+    ShowMailAlert()
+end
+
+function Misc.TestMailTTS()
+    PlayMailTTS()
+end
+
 -- Check if player has pending personal orders
 local function CheckForPersonalOrders()
     if not UIThingsDB.misc.personalOrders then return end
@@ -305,6 +360,12 @@ local function OnEvent(self, event, ...)
         if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
             ShowAlert()
         end
+    elseif event == "UPDATE_PENDING_MAIL" then
+        if not UIThingsDB.misc.enabled then return end
+        if not UIThingsDB.misc.mailNotification then return end
+        if HasNewMail() then
+            ShowMailAlert()
+        end
     elseif event == "PARTY_INVITE_REQUEST" then
         if not UIThingsDB.misc.enabled then return end
         local name, guid = ...
@@ -402,6 +463,13 @@ ApplyMiscEvents = function()
         frame:RegisterEvent("CHAT_MSG_SYSTEM")
     else
         frame:UnregisterEvent("CHAT_MSG_SYSTEM")
+    end
+
+    -- Mail notification
+    if UIThingsDB.misc.mailNotification then
+        frame:RegisterEvent("UPDATE_PENDING_MAIL")
+    else
+        frame:UnregisterEvent("UPDATE_PENDING_MAIL")
     end
 
     -- Auto-accept invites

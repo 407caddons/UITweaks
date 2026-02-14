@@ -862,6 +862,7 @@ local function OnEvent(self, event, ...)
 
     if event == "PLAYER_ENTERING_WORLD" then
         wipe(interruptCounts)
+        Kick.ApplyEvents()
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
         end
@@ -882,7 +883,7 @@ local function OnEvent(self, event, ...)
         if issecretvalue(spellID) then return end
         -- Check if it's an interrupt spell
         if INTERRUPT_SPELLS[spellID] then
-            -- Check if it's the player
+            -- Only track the player's own casts; party members are tracked via addon comms
             if unit == "player" then
                 local guid = UnitGUID("player")
                 local cooldown = INTERRUPT_SPELLS[spellID].cd

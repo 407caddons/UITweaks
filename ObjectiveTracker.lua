@@ -17,6 +17,40 @@ local QUEST_SOUND_FILES = {
 }
 local questSoundsMuted = false
 
+-- Global secure button for keybind: use super-tracked quest item
+local questItemButton = CreateFrame("Button", "LunaQuestItemButton", UIParent, "SecureActionButtonTemplate")
+questItemButton:Hide()
+questItemButton:RegisterForClicks("AnyUp", "AnyDown")
+
+-- Binding display name
+BINDING_HEADER_LUNAUITWEAKS = "Luna's UI Tweaks"
+_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"] = "Use Quest Item (Super Tracked)"
+
+-- Pending item update for when we leave combat
+local pendingQuestItemUpdate = nil
+
+local function UpdateQuestItemButton()
+    if InCombatLockdown() then
+        pendingQuestItemUpdate = true
+        return
+    end
+    local questID = C_SuperTrack.GetSuperTrackedQuestID()
+    if questID and questID ~= 0 then
+        local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+        if logIndex then
+            local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(logIndex)
+            if questItemLink then
+                questItemButton:SetAttribute("type", "item")
+                questItemButton:SetAttribute("item", questItemLink)
+                return
+            end
+        end
+    end
+    -- No item found, clear attributes
+    questItemButton:SetAttribute("type", nil)
+    questItemButton:SetAttribute("item", nil)
+end
+
 -- Constants
 local MINUTES_PER_DAY = 1440
 local MINUTES_PER_HOUR = 60
@@ -410,7 +444,35 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
                         GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
                         GameTooltip:SetHyperlink("quest:" .. self.questID)
-                        GameTooltip:Show()
+                        -- Show party members on the same quest
+                        if IsInGroup() then
+                            local members = {}
+                            local maxUnit = IsInRaid() and 40 or 4
+                            local prefix = IsInRaid() and "raid" or "party"
+                            for i = 1, maxUnit do
+                                local unit = prefix .. i
+                                if UnitExists(unit) and not UnitIsUnit(unit, "player") then
+                                    if C_QuestLog.IsUnitOnQuest(unit, self.questID) then
+                                        local name = UnitName(unit)
+                                        local _, class = UnitClass(unit)
+                                        local color = RAID_CLASS_COLORS[class]
+                                        if color and name then
+                                            table.insert(members, color:WrapTextInColorCode(name))
+                                        elseif name then
+                                            table.insert(members, name)
+                                        end
+                                    end
+                                end
+                            end
+                            if #members > 0 then
+                                GameTooltip:AddLine(" ")
+                                GameTooltip:AddLine("Party Members on Quest:")
+                                for _, name in ipairs(members) do
+                                    GameTooltip:AddLine("  " .. name)
+                                end
+                                GameTooltip:Show()
+                            end
+                        end
                     elseif self.achieID then
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
                         GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
@@ -441,12 +503,15 @@ end
 --- Returns a prefix tag for daily/weekly quests
 local function GetQuestTypePrefix(questID)
     if not UIThingsDB.tracker.showQuestTypeIndicators then return "" end
-    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
-    if tagInfo and tagInfo.frequency then
-        if tagInfo.frequency == Enum.QuestFrequency.Daily then
-            return "|cFF00CCFF[D]|r "
-        elseif tagInfo.frequency == Enum.QuestFrequency.Weekly then
-            return "|cFFCC00FF[W]|r "
+    local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+    if logIndex then
+        local info = C_QuestLog.GetInfo(logIndex)
+        if info and info.frequency then
+            if info.frequency == Enum.QuestFrequency.Daily then
+                return "|cFF00CCFF[D]|r "
+            elseif info.frequency == Enum.QuestFrequency.Weekly then
+                return "|cFFCC00FF[W]|r "
+            end
         end
     end
     -- Fallback: check if repeatable (callings, etc.)
@@ -1096,6 +1161,9 @@ UpdateContent = function()
     -- Resize Scroll Child
     local totalHeight = math.abs(ucState.yOffset)
     scrollChild:SetHeight(math.max(totalHeight, 50))
+
+    -- Update keybind quest item button
+    UpdateQuestItemButton()
 end
 
 -- Aggressive Hide Hook for Blizzard tracker
@@ -1226,6 +1294,15 @@ local function SetupCustomTracker()
             C_Timer.After(2, UpdateContent)
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- Handled by StateDriver
+        elseif event == "PLAYER_REGEN_ENABLED" then
+            if pendingQuestItemUpdate then
+                pendingQuestItemUpdate = nil
+                UpdateQuestItemButton()
+            end
+            ScheduleUpdateContent()
+        elseif event == "SUPER_TRACKING_CHANGED" then
+            UpdateQuestItemButton()
+            ScheduleUpdateContent()
         else
             -- Check for completion sounds before updating display
             if event == "QUEST_LOG_UPDATE" or event == "TASK_PROGRESS_UPDATE" then

@@ -20,7 +20,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 680) -- Matches content height
+    scrollChild:SetSize(panel:GetWidth() - 30, 970) -- Matches content height
     scrollFrame:SetScrollChild(scrollChild)
 
 
@@ -230,13 +230,175 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
     UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
 
+    -- Mail Notification Section Header
+    Helpers.CreateSectionHeader(panel, "Mail Notification", -360)
+
+    -- Mail Notification Checkbox
+    local mailBtn = CreateFrame("CheckButton", "UIThingsMiscMailCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    mailBtn:SetPoint("TOPLEFT", 20, -390)
+    _G[mailBtn:GetName() .. "Text"]:SetText("Enable Mail Notification")
+    mailBtn:SetChecked(UIThingsDB.misc.mailNotification)
+    mailBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.mailNotification = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+    end)
+
+    -- Mail Alert Duration Slider
+    local mailDurSlider = CreateFrame("Slider", "UIThingsMiscMailAlertDur", panel, "OptionsSliderTemplate")
+    mailDurSlider:SetPoint("TOPLEFT", 40, -430)
+    mailDurSlider:SetMinMaxValues(1, 10)
+    mailDurSlider:SetValueStep(1)
+    mailDurSlider:SetObeyStepOnDrag(true)
+    mailDurSlider:SetWidth(200)
+    _G[mailDurSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.mailAlertDuration .. "s")
+    _G[mailDurSlider:GetName() .. 'Low']:SetText("1s")
+    _G[mailDurSlider:GetName() .. 'High']:SetText("10s")
+    mailDurSlider:SetValue(UIThingsDB.misc.mailAlertDuration)
+    mailDurSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.misc.mailAlertDuration = value
+        _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
+    end)
+
+    -- Mail Alert Color Picker
+    local mailColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mailColorLabel:SetPoint("TOPLEFT", 40, -470)
+    mailColorLabel:SetText("Alert Color:")
+
+    local mailColorSwatch = CreateFrame("Button", nil, panel)
+    mailColorSwatch:SetSize(20, 20)
+    mailColorSwatch:SetPoint("LEFT", mailColorLabel, "RIGHT", 10, 0)
+
+    mailColorSwatch.tex = mailColorSwatch:CreateTexture(nil, "OVERLAY")
+    mailColorSwatch.tex:SetAllPoints()
+    local mc = UIThingsDB.misc.mailAlertColor
+    mailColorSwatch.tex:SetColorTexture(mc.r, mc.g, mc.b, mc.a or 1)
+
+    Mixin(mailColorSwatch, BackdropTemplateMixin)
+    mailColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    mailColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+    mailColorSwatch:SetScript("OnClick", function()
+        local prevR, prevG, prevB, prevA = mc.r, mc.g, mc.b, mc.a
+
+        if ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = mc.r,
+                g = mc.g,
+                b = mc.b,
+                opacity = mc.a,
+                hasOpacity = true,
+                swatchFunc = function()
+                    local r, g, b = ColorPickerFrame:GetColorRGB()
+                    local a = ColorPickerFrame:GetColorAlpha()
+                    mc.r, mc.g, mc.b, mc.a = r, g, b, a
+                    mailColorSwatch.tex:SetColorTexture(r, g, b, a)
+                    UIThingsDB.misc.mailAlertColor = mc
+                end,
+                opacityFunc = function()
+                    local a = ColorPickerFrame:GetColorAlpha()
+                    local r, g, b = ColorPickerFrame:GetColorRGB()
+                    mc.r, mc.g, mc.b, mc.a = r, g, b, a
+                    mailColorSwatch.tex:SetColorTexture(r, g, b, a)
+                    UIThingsDB.misc.mailAlertColor = mc
+                end,
+                cancelFunc = function(restore)
+                    mc.r, mc.g, mc.b, mc.a = prevR, prevG, prevB, prevA
+                    mailColorSwatch.tex:SetColorTexture(mc.r, mc.g, mc.b, mc.a)
+                    UIThingsDB.misc.mailAlertColor = mc
+                end
+            })
+        else
+            ColorPickerFrame:SetColorRGB(mc.r, mc.g, mc.b)
+            ColorPickerFrame.hasOpacity = true
+            ColorPickerFrame.opacity = mc.a
+            ColorPickerFrame.func = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetOpacity()
+                mc.r, mc.g, mc.b, mc.a = r, g, b, a
+                mailColorSwatch.tex:SetColorTexture(r, g, b, a)
+                UIThingsDB.misc.mailAlertColor = mc
+            end
+            ColorPickerFrame:Show()
+        end
+    end)
+
+    -- Mail TTS Enable Checkbox
+    local mailTtsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscMailTTSEnable", panel,
+        "ChatConfigCheckButtonTemplate")
+    mailTtsEnableBtn:SetPoint("TOPLEFT", 20, -510)
+    _G[mailTtsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
+    mailTtsEnableBtn:SetChecked(UIThingsDB.misc.mailTtsEnabled)
+    mailTtsEnableBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.mailTtsEnabled = self:GetChecked()
+    end)
+
+    -- Mail TTS Message
+    local mailTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mailTtsLabel:SetPoint("TOPLEFT", 40, -550)
+    mailTtsLabel:SetText("TTS Message:")
+
+    local mailTtsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    mailTtsEdit:SetSize(250, 20)
+    mailTtsEdit:SetPoint("LEFT", mailTtsLabel, "RIGHT", 10, 0)
+    mailTtsEdit:SetAutoFocus(false)
+    mailTtsEdit:SetText(UIThingsDB.misc.mailTtsMessage)
+    mailTtsEdit:SetScript("OnEnterPressed", function(self)
+        UIThingsDB.misc.mailTtsMessage = self:GetText()
+        self:ClearFocus()
+    end)
+
+    -- Mail Test Button
+    local testMailBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    testMailBtn:SetSize(60, 22)
+    testMailBtn:SetPoint("LEFT", mailTtsEdit, "RIGHT", 5, 0)
+    testMailBtn:SetText("Test")
+    testMailBtn:SetScript("OnClick", function()
+        UIThingsDB.misc.mailTtsMessage = mailTtsEdit:GetText()
+        if addonTable.Misc and addonTable.Misc.ShowMailAlert then
+            addonTable.Misc.ShowMailAlert()
+        end
+    end)
+
+    -- Mail TTS Voice Dropdown
+    local mailVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mailVoiceLabel:SetPoint("TOPLEFT", 40, -590)
+    mailVoiceLabel:SetText("Voice Type:")
+
+    local mailVoiceDropdown = CreateFrame("Frame", "UIThingsMiscMailVoiceDropdown", panel, "UIDropDownMenuTemplate")
+    mailVoiceDropdown:SetPoint("LEFT", mailVoiceLabel, "RIGHT", -15, -3)
+
+    local mailVoiceOptions = {
+        { text = "Standard",    value = 0 },
+        { text = "Alternate 1", value = 1 }
+    }
+
+    UIDropDownMenu_SetWidth(mailVoiceDropdown, 120)
+    UIDropDownMenu_Initialize(mailVoiceDropdown, function(self, level)
+        for _, option in ipairs(mailVoiceOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.func = function(btn)
+                UIThingsDB.misc.mailTtsVoice = btn.value
+                UIDropDownMenu_SetSelectedValue(mailVoiceDropdown, btn.value)
+            end
+            info.checked = (UIThingsDB.misc.mailTtsVoice == option.value)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(mailVoiceDropdown, UIThingsDB.misc.mailTtsVoice or 0)
+
     -- General UI Section Header
-    Helpers.CreateSectionHeader(panel, "General UI", -360)
+    Helpers.CreateSectionHeader(panel, "General UI", -640)
 
     -- UI Scale Enable Checkbox
     local uiScaleBtn = CreateFrame("CheckButton", "UIThingsMiscUIScaleEnable", panel,
         "ChatConfigCheckButtonTemplate")
-    uiScaleBtn:SetPoint("TOPLEFT", 20, -390)
+    uiScaleBtn:SetPoint("TOPLEFT", 20, -670)
     _G[uiScaleBtn:GetName() .. "Text"]:SetText("Enable UI Scaling")
     uiScaleBtn:SetChecked(UIThingsDB.misc.uiScaleEnabled)
     uiScaleBtn:SetScript("OnClick", function(self)
@@ -250,7 +412,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
     local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
 
-    scaleSlider:SetPoint("TOPLEFT", 40, -430)
+    scaleSlider:SetPoint("TOPLEFT", 40, -710)
     scaleSlider:SetMinMaxValues(0.4, 1.25)
     scaleSlider:SetValueStep(0.001)
     scaleSlider:SetObeyStepOnDrag(true)
@@ -317,11 +479,11 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Invite Automation
     local inviteHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    inviteHeader:SetPoint("TOPLEFT", 20, -480)
+    inviteHeader:SetPoint("TOPLEFT", 20, -760)
     inviteHeader:SetText("Invite Automation:")
 
     local friendsBtn = CreateFrame("CheckButton", "UIThingsMiscAutoFriends", panel, "ChatConfigCheckButtonTemplate")
-    friendsBtn:SetPoint("TOPLEFT", 20, -505)
+    friendsBtn:SetPoint("TOPLEFT", 20, -785)
     _G[friendsBtn:GetName() .. "Text"]:SetText("Auto-Accept: Friends")
     friendsBtn:SetChecked(UIThingsDB.misc.autoAcceptFriends)
     friendsBtn:SetScript("OnClick", function(self)
@@ -329,7 +491,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local guildBtn = CreateFrame("CheckButton", "UIThingsMiscAutoGuild", panel, "ChatConfigCheckButtonTemplate")
-    guildBtn:SetPoint("TOPLEFT", 180, -505)
+    guildBtn:SetPoint("TOPLEFT", 180, -785)
     _G[guildBtn:GetName() .. "Text"]:SetText("Auto-Accept: Guild")
     guildBtn:SetChecked(UIThingsDB.misc.autoAcceptGuild)
     guildBtn:SetScript("OnClick", function(self)
@@ -337,7 +499,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local everyoneBtn = CreateFrame("CheckButton", "UIThingsMiscAutoEveryone", panel, "ChatConfigCheckButtonTemplate")
-    everyoneBtn:SetPoint("TOPLEFT", 340, -505)
+    everyoneBtn:SetPoint("TOPLEFT", 340, -785)
     _G[everyoneBtn:GetName() .. "Text"]:SetText("Auto-Accept: Everyone")
     everyoneBtn:SetChecked(UIThingsDB.misc.autoAcceptEveryone)
     everyoneBtn:SetScript("OnClick", function(self)
@@ -346,7 +508,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Invite by Whisper
     local whisperBtn = CreateFrame("CheckButton", "UIThingsMiscAutoInvite", panel, "ChatConfigCheckButtonTemplate")
-    whisperBtn:SetPoint("TOPLEFT", 20, -540)
+    whisperBtn:SetPoint("TOPLEFT", 20, -820)
     _G[whisperBtn:GetName() .. "Text"]:SetText("Enable Invite by Whisper")
     whisperBtn:SetChecked(UIThingsDB.misc.autoInviteEnabled)
     whisperBtn:SetScript("OnClick", function(self)
@@ -355,12 +517,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    kwLabel:SetPoint("TOPLEFT", 40, -570)
+    kwLabel:SetPoint("TOPLEFT", 40, -850)
     kwLabel:SetText("Keywords (comma separated):")
 
     local kwEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     kwEdit:SetSize(200, 20)
-    kwEdit:SetPoint("TOPLEFT", 40, -585)
+    kwEdit:SetPoint("TOPLEFT", 40, -865)
     kwEdit:SetText(UIThingsDB.misc.autoInviteKeywords or "inv,invite")
     kwEdit:SetAutoFocus(false)
     kwEdit:SetScript("OnEnterPressed", function(self)
@@ -375,7 +537,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Reload UI Checkbox
     local rlBtn = CreateFrame("CheckButton", "UIThingsMiscAllowRL", panel, "ChatConfigCheckButtonTemplate")
-    rlBtn:SetPoint("TOPLEFT", 20, -620)
+    rlBtn:SetPoint("TOPLEFT", 20, -900)
     _G[rlBtn:GetName() .. "Text"]:SetText("Allow /rl to Reload UI")
     rlBtn:SetChecked(UIThingsDB.misc.allowRL)
     rlBtn:SetScript("OnClick", function(self)
@@ -384,7 +546,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Quick Item Destroy Checkbox
     local qdBtn = CreateFrame("CheckButton", "UIThingsMiscQuickDestroy", panel, "ChatConfigCheckButtonTemplate")
-    qdBtn:SetPoint("TOPLEFT", 20, -650)
+    qdBtn:SetPoint("TOPLEFT", 20, -930)
     _G[qdBtn:GetName() .. "Text"]:SetText("Quick Item Destroy (Red Button)")
     qdBtn:SetChecked(UIThingsDB.misc.quickDestroy)
     qdBtn:SetScript("OnClick", function(self)
