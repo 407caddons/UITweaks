@@ -144,4 +144,4 @@ Could you do an in depth code review of this entire addon? Look for performance 
 
 Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results and replace .clause\features.md
 
-Could you write a short bulleted change log, for the last release no need to get to detailed. Write the results and replace .claude\changeLog.md
+Could you write a short bulleted change log, for the last release no need to get to detailed don't include any minor fixes. Write the results and replace .claude\changeLog.md
