@@ -88,7 +88,7 @@ function addonTable.Config.Initialize()
             { id = 8,  name = "Talents",        key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
             { id = 9,  name = "Widgets",        key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 10, name = "Chat",           key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
-            { id = 11, name = "Experimental",   key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 11, name = "Kick CDs",       key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
             { id = 12, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 

@@ -352,12 +352,18 @@ local function OnEvent(self, event, ...)
                 pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
             },
             addonComm = {
-                hideFromWorld = false
+                hideFromWorld = false,
+                debugMode = false
             }
         }
 
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
+
+        -- Apply debug mode from saved settings
+        if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then
+            addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.DEBUG
+        end
 
         self:UnregisterEvent("ADDON_LOADED")
 

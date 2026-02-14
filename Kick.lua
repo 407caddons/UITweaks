@@ -41,10 +41,10 @@ local INTERRUPT_SPELLS = {
     -- Shaman
     [57994] = { name = "Wind Shear", cd = 12, class = "SHAMAN" },
 
-    -- Warlock (different pets per spec)
-    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 1 },  -- Affliction (Felhunter)
-    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK", specID = 2 },    -- Demonology (Felguard)
-    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 3 }, -- Destruction (Command Demon)
+    -- Warlock (pet abilities — different pets per spec)
+    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 1, isPet = true },  -- Affliction (Felhunter)
+    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK", specID = 2, isPet = true },    -- Demonology (Felguard)
+    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 3, isPet = true }, -- Destruction (Command Demon)
 
     -- Warrior
     [6552] = { name = "Pummel", cd = 15, class = "WARRIOR" },
@@ -58,17 +58,35 @@ for spellID, data in pairs(INTERRUPT_SPELLS) do
     table.insert(CLASS_INTERRUPTS[class], spellID)
 end
 
+-- Check if a spell is known by the player (or their pet for pet abilities)
+local function IsInterruptKnown(spellID)
+    local data = INTERRUPT_SPELLS[spellID]
+    if not data then return false end
+    if data.isPet then
+        -- Pet spells: IsPlayerSpell doesn't work, check the pet spellbook
+        if C_SpellBook and C_SpellBook.IsSpellKnown then
+            return C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Pet)
+        end
+        -- Legacy fallback
+        if IsSpellKnownOrOverridesKnown then
+            return IsSpellKnownOrOverridesKnown(spellID, true)
+        end
+        return false
+    end
+    return IsPlayerSpell(spellID)
+end
+
 -- == PARTY TRACKER STATE ==
 
 local partyFrames = {}        -- GUID -> frame
 local interruptCooldowns = {} -- GUID -> { [spellID] = { spellID, endTime } }
 local interruptCounts = {}    -- GUID -> { total = N }
 local framePool = {}          -- Recycled party frames
-local ADDON_PREFIX = "LunaKick"
-
 -- Forward declarations
 local StartUpdateLoop
-local lastInterruptHandledAt = 0
+
+-- Received spell lists from addon comms: GUID -> { spellID1, spellID2, ... }
+local knownSpells = {}
 
 -- == KICK COUNT HELPERS ==
 
@@ -96,7 +114,7 @@ local function GetPlayerKickSpell()
     local _, class = UnitClass("player")
     if CLASS_INTERRUPTS[class] then
         for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
-            if IsPlayerSpell(spellID) then
+            if IsInterruptKnown(spellID) then
                 return spellID
             end
         end
@@ -115,35 +133,44 @@ local function GetUnitKickSpell(unit)
     return nil
 end
 
--- Track observed specs for party members (updated when we see which spells they use)
-local observedSpecs = {} -- GUID -> specIndex
-
--- Returns all interrupt spells applicable to a unit (considers spec for spec-specific spells)
+-- Returns all interrupt spells applicable to a unit
 local function GetUnitKickSpells(unit)
     local _, class = UnitClass(unit)
     if not CLASS_INTERRUPTS[class] then return {} end
 
+    -- For the player, check which interrupt spells are actually known
+    if UnitIsUnit(unit, "player") then
+        local spells = {}
+        for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
+            if IsInterruptKnown(spellID) then
+                table.insert(spells, spellID)
+            end
+        end
+        return spells
+    end
+
+    -- For other players, check if we received their spell list via addon comms
+    local guid = UnitGUID(unit)
+    if guid and knownSpells[guid] ~= nil then
+        -- We've received data from this player (even if empty = no interrupt spells)
+        local spells = {}
+        for _, spellID in ipairs(knownSpells[guid]) do
+            if INTERRUPT_SPELLS[spellID] then
+                table.insert(spells, spellID)
+            end
+        end
+        return spells -- May be empty — means they have no interrupt spells
+    end
+
+    -- Fallback for players without the addon: guess from class/role
     local spells = {}
     local spec = nil
 
-    -- Try to get spec index for the unit
-    if UnitIsUnit(unit, "player") then
-        spec = GetSpecialization()
-    else
-        local guid = UnitGUID(unit)
-        -- Check if we've observed their spec from a previous spell cast
-        if guid and observedSpecs[guid] then
-            spec = observedSpecs[guid]
-        else
-            -- Use role as a proxy for classes where it helps
-            local role = UnitGroupRolesAssigned(unit)
-            if class == "DEMONHUNTER" then
-                spec = (role == "TANK") and 2 or 1
-            end
-        end
+    local role = UnitGroupRolesAssigned(unit)
+    if class == "DEMONHUNTER" then
+        spec = (role == "TANK") and 2 or 1
     end
 
-    -- Check if all spells for this class are spec-specific
     local allSpecific = true
     for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
         if not INTERRUPT_SPELLS[spellID].specID then
@@ -154,24 +181,15 @@ local function GetUnitKickSpells(unit)
 
     for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
         local data = INTERRUPT_SPELLS[spellID]
-
-        if UnitIsUnit(unit, "player") then
-            -- For the player, only show spells they actually know
-            if IsPlayerSpell(spellID) then
-                table.insert(spells, spellID)
-            end
-        elseif data.specID then
+        if data.specID then
             if spec and data.specID == spec then
-                -- Spec matches
                 table.insert(spells, spellID)
             elseif not spec and allSpecific then
-                -- Unknown spec but all spells are spec-specific: show first one as fallback
                 if #spells == 0 then
                     table.insert(spells, spellID)
                 end
             end
         else
-            -- No spec restriction, always include
             table.insert(spells, spellID)
         end
     end
@@ -192,85 +210,101 @@ end
 
 -- == ADDON COMMUNICATION ==
 
-local function SendKickMessage(spellID, cooldown)
-    if not UIThingsDB.kick.enabled then return end
-    -- Check if in a group
-    if not IsInGroup() then return end
-    -- Respect hideFromWorld setting
-    if UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
-
-    -- Format: "spellID:timestamp:cooldown"
-    local message = string.format("%d:%d:%.1f", spellID, GetTime(), cooldown)
-    -- Use RAID channel if in raid, otherwise PARTY
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    addonTable.Core.Log("Kick", string.format("Sending addon message on %s: %s", channel, message), 1)
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
+-- Helper to find a sender's GUID from their short name
+local function FindSenderGUID(senderShort)
+    -- Check party members
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) and UnitName(unit) == senderShort then
+            return UnitGUID(unit)
+        end
+    end
+    -- Check raid members
+    if IsInRaid() then
+        for i = 1, 40 do
+            local unit = "raid" .. i
+            if UnitExists(unit) and UnitName(unit) == senderShort then
+                return UnitGUID(unit)
+            end
+        end
+    end
+    return nil
 end
 
-local function OnAddonMessage(prefix, message, channel, sender)
-    if prefix == ADDON_PREFIX then
-        addonTable.Core.Log("Kick",
-            string.format("Addon message received from %s on %s: %s", sender or "?", channel or "?", message or "?"), 1)
-    end
+local function SendKickMessage(spellID, cooldown)
     if not UIThingsDB.kick.enabled then return end
-    if prefix ~= ADDON_PREFIX then return end
+    local payload = string.format("%d:%d:%.1f", spellID, GetTime(), cooldown)
+    addonTable.Comm.Send("KICK", "CD", payload, "LunaKick", payload)
+end
 
-    -- Parse message: "spellID:timestamp:cooldown" (cooldown is optional for backwards compat)
-    local spellID, timestamp, msgCooldown = message:match("(%d+):([%d%.]+):?([%d%.]*)")
+-- Broadcast the player's interrupt spells to the group
+function Kick.BroadcastSpells()
+    if not UIThingsDB.kick.enabled then
+        addonTable.Core.Log("Kick", "BroadcastSpells: kick not enabled", 0)
+        return
+    end
+    local _, class = UnitClass("player")
+    if not CLASS_INTERRUPTS[class] then
+        addonTable.Core.Log("Kick", "BroadcastSpells: no interrupts for class " .. (class or "?"), 0)
+        return
+    end
+
+    local spells = {}
+    for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
+        local known = IsInterruptKnown(spellID)
+        addonTable.Core.Log("Kick", string.format("BroadcastSpells: checking %d (%s) = %s",
+            spellID, INTERRUPT_SPELLS[spellID].name, tostring(known)), 0)
+        if known then
+            table.insert(spells, tostring(spellID))
+        end
+    end
+
+    local payload = table.concat(spells, ",")
+    addonTable.Core.Log("Kick", "BroadcastSpells: sending " .. (payload ~= "" and payload or "NONE"), 0)
+    -- Send even if empty — tells others to remove us from tracking
+    addonTable.Comm.Send("KICK", "SPELLS", payload)
+end
+
+-- Register handler for interrupt cooldown messages
+addonTable.Comm.Register("KICK", "CD", function(senderShort, payload, senderFull)
+    if not UIThingsDB.kick.enabled then return end
+
+    -- Skip self (already handled locally)
+    if UnitName("player") == senderShort then return end
+
+    -- Parse payload: "spellID:timestamp:cooldown" (cooldown is optional for backwards compat)
+    local spellID, timestamp, msgCooldown = payload:match("(%d+):([%d%.]+):?([%d%.]*)")
     spellID = tonumber(spellID)
     timestamp = tonumber(timestamp)
     msgCooldown = tonumber(msgCooldown)
 
     if not spellID or not INTERRUPT_SPELLS[spellID] then return end
 
-    -- Find the sender's GUID
-    -- Sender includes realm ("Name-Realm") but UnitName() returns just "Name" for same-realm players
-    local senderShort = sender:match("^([^%-]+)")
-    local senderGUID = nil
-    if UnitName("player") == senderShort then
-        -- Skip our own messages; already handled by UNIT_SPELLCAST_SUCCEEDED
-        return
-    else
-        -- Check party members (party1-4)
-        for i = 1, 4 do
-            local unit = "party" .. i
-            if UnitExists(unit) and UnitName(unit) == senderShort then
-                senderGUID = UnitGUID(unit)
-                break
-            end
-        end
-
-        -- If not found and in raid, check raid members (raid1-40)
-        if not senderGUID and IsInRaid() then
-            for i = 1, 40 do
-                local unit = "raid" .. i
-                if UnitExists(unit) and UnitName(unit) == senderShort then
-                    senderGUID = UnitGUID(unit)
-                    break
-                end
-            end
-        end
-    end
-
+    local senderGUID = FindSenderGUID(senderShort)
     if not senderGUID then return end
 
-    -- Track observed spec for this sender based on the spell they used
-    local spellData = INTERRUPT_SPELLS[spellID]
-    if spellData and spellData.specID then
-        local prevSpec = observedSpecs[senderGUID]
-        observedSpecs[senderGUID] = spellData.specID
-        -- If spec changed, rebuild frames to show the correct spell rows
-        if prevSpec and prevSpec ~= spellData.specID then
-            Kick.RebuildPartyFrames()
+    -- Update knownSpells: if they used this spell, they have it
+    if not knownSpells[senderGUID] then
+        knownSpells[senderGUID] = {}
+    end
+    local found = false
+    for _, id in ipairs(knownSpells[senderGUID]) do
+        if id == spellID then
+            found = true; break
         end
     end
+    if not found then
+        table.insert(knownSpells[senderGUID], spellID)
+        -- Rebuild frames to show the new spell row
+        Kick.RebuildPartyFrames()
+    end
 
-    -- If we don't have a frame for this sender yet, rebuild so they get one
+    -- If we don't have a frame for this sender yet, rebuild
     if not partyFrames[senderGUID] then
         Kick.RebuildPartyFrames()
     end
 
-    -- Store cooldown info — use sender's actual cooldown if provided, fall back to hardcoded
+    -- Store cooldown info
     local cooldown = msgCooldown or INTERRUPT_SPELLS[spellID].cd
     if not interruptCooldowns[senderGUID] then
         interruptCooldowns[senderGUID] = {}
@@ -284,7 +318,58 @@ local function OnAddonMessage(prefix, message, channel, sender)
     IncrementTotal(senderGUID)
     Kick.UpdatePartyFrame(senderGUID)
     StartUpdateLoop()
-end
+end)
+
+-- Register handler for spell list broadcasts
+addonTable.Comm.Register("KICK", "SPELLS", function(senderShort, payload, senderFull)
+    if not UIThingsDB.kick.enabled then return end
+
+    -- Skip self
+    if UnitName("player") == senderShort then return end
+
+    local senderGUID = FindSenderGUID(senderShort)
+    if not senderGUID then return end
+
+    -- Parse comma-separated spell IDs
+    local spells = {}
+    for idStr in payload:gmatch("(%d+)") do
+        local id = tonumber(idStr)
+        if id and INTERRUPT_SPELLS[id] then
+            table.insert(spells, id)
+        end
+    end
+
+    -- Only rebuild if the spell list actually changed
+    local existing = knownSpells[senderGUID]
+    local changed = false
+    if not existing or #existing ~= #spells then
+        changed = true
+    else
+        for i, id in ipairs(spells) do
+            if existing[i] ~= id then
+                changed = true
+                break
+            end
+        end
+    end
+
+    knownSpells[senderGUID] = spells
+
+    if changed then
+        Kick.RebuildPartyFrames()
+    end
+end)
+
+-- Register handler for spell list requests (e.g. after someone reloads)
+addonTable.Comm.Register("KICK", "REQ", function(senderShort, payload, senderFull)
+    if not UIThingsDB.kick.enabled then return end
+    if UnitName("player") == senderShort then return end
+
+    -- Respond with our spells after a short throttled delay
+    addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 2, function()
+        Kick.BroadcastSpells()
+    end)
+end)
 
 -- == PARTY FRAMES ==
 
@@ -417,6 +502,33 @@ local function FindUnitFrame(unit)
 end
 
 -- Create a simple attached frame that shows on party/raid frames
+local ICON_SIZE = 28
+local ICON_SPACING = 2
+
+local function CreateAttachedIcon(parent, index)
+    local icon = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    icon:SetSize(ICON_SIZE, ICON_SIZE)
+
+    icon:SetBackdrop({
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        tileSize = 0,
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 }
+    })
+    icon:SetBackdropBorderColor(0, 0, 0, 0.8)
+
+    icon.texture = icon:CreateTexture(nil, "ARTWORK")
+    icon.texture:SetAllPoints()
+
+    icon.cooldown = CreateFrame("Cooldown", nil, icon, "CooldownFrameTemplate")
+    icon.cooldown:SetAllPoints()
+    icon.cooldown:SetDrawEdge(true)
+    icon.cooldown:SetHideCountdownNumbers(false)
+
+    return icon
+end
+
 local function CreateAttachedFrame(guid, unit)
     -- Find the actual Blizzard unit frame
     local blizzFrame = FindUnitFrame(unit)
@@ -425,22 +537,17 @@ local function CreateAttachedFrame(guid, unit)
         return nil
     end
 
-    -- Create or reuse frame
+    -- Create or reuse container frame
     local frame = attachedFrames[unit]
 
     if not frame then
-        -- Attach to UIParent instead of the party frame (which may be hidden)
-        frame = CreateFrame("Frame", "LunaKickAttached_" .. unit, UIParent, "BackdropTemplate")
-        frame:SetSize(28, 28) -- Small icon size
+        frame = CreateFrame("Frame", "LunaKickAttached_" .. unit, UIParent)
         frame:SetFrameStrata("MEDIUM")
-
-        -- Store reference to the blizz frame for positioning
-        frame.blizzFrame = blizzFrame
+        frame.icons = {}
 
         -- Set up OnUpdate to dynamically position based on the blizz frame
         frame:SetScript("OnUpdate", function(self, elapsed)
             if self.blizzFrame and self.blizzFrame:IsShown() then
-                -- Position relative to the blizz frame based on anchor point setting
                 local anchorPoint = UIThingsDB.kick.attachAnchorPoint or "BOTTOM"
                 self:ClearAllPoints()
 
@@ -460,41 +567,66 @@ local function CreateAttachedFrame(guid, unit)
             end
         end)
 
-        -- Subtle border
-        frame:SetBackdrop({
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            tile = false,
-            tileSize = 0,
-            edgeSize = 1,
-            insets = { left = 0, right = 0, top = 0, bottom = 0 }
-        })
-        frame:SetBackdropBorderColor(0, 0, 0, 0.8)
-
-        -- Icon
-        frame.icon = frame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetAllPoints()
-        frame.icon:SetTexture(nil)
-
-        -- Cooldown spiral
-        frame.cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
-        frame.cooldown:SetAllPoints()
-        frame.cooldown:SetDrawEdge(true)
-        frame.cooldown:SetHideCountdownNumbers(false)
-
-        -- Count text (kick count)
+        -- Count text (total kick count)
         frame.count = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        frame.count:SetPoint("BOTTOMRIGHT", 2, 2)
         frame.count:SetTextColor(1, 1, 1)
 
         attachedFrames[unit] = frame
     end
 
-    -- Update icon texture
-    local spellID = GetUnitKickSpell(unit)
-    if spellID then
-        local spellTexture = C_Spell.GetSpellTexture(spellID)
-        frame.icon:SetTexture(spellTexture)
+    -- Get all spells for this unit
+    local unitSpells = GetUnitKickSpells(unit)
+    if #unitSpells == 0 and not UnitIsUnit(unit, "player") and not (guid and knownSpells[guid] ~= nil) then
+        local fallback = GetUnitKickSpell(unit)
+        if fallback then unitSpells = { fallback } end
     end
+
+    local numSpells = math.max(#unitSpells, 1)
+
+    -- Determine layout direction based on anchor point
+    local anchorPoint = UIThingsDB.kick.attachAnchorPoint or "BOTTOM"
+    local horizontal = (anchorPoint == "BOTTOM" or anchorPoint == "TOP")
+
+    -- Size the container to fit all icons
+    if horizontal then
+        frame:SetSize(numSpells * ICON_SIZE + (numSpells - 1) * ICON_SPACING, ICON_SIZE)
+    else
+        frame:SetSize(ICON_SIZE, numSpells * ICON_SIZE + (numSpells - 1) * ICON_SPACING)
+    end
+
+    -- Create/reuse icon sub-frames and position them
+    for i, spellID in ipairs(unitSpells) do
+        if not frame.icons[i] then
+            frame.icons[i] = CreateAttachedIcon(frame, i)
+        end
+        local iconFrame = frame.icons[i]
+        iconFrame:ClearAllPoints()
+
+        if horizontal then
+            iconFrame:SetPoint("LEFT", (i - 1) * (ICON_SIZE + ICON_SPACING), 0)
+        else
+            iconFrame:SetPoint("TOP", 0, -((i - 1) * (ICON_SIZE + ICON_SPACING)))
+        end
+
+        local spellTexture = C_Spell.GetSpellTexture(spellID)
+        iconFrame.texture:SetTexture(spellTexture)
+        iconFrame.cooldown:Clear()
+        iconFrame.spellID = spellID
+        iconFrame:Show()
+    end
+
+    -- Hide unused icons
+    for i = #unitSpells + 1, #frame.icons do
+        frame.icons[i]:Hide()
+        frame.icons[i].spellID = nil
+    end
+
+    -- Store spell order for UpdatePartyFrame
+    frame.spellOrder = unitSpells
+
+    -- Position count text
+    frame.count:ClearAllPoints()
+    frame.count:SetPoint("BOTTOMRIGHT", frame.icons[1] or frame, "BOTTOMRIGHT", 2, 2)
 
     -- Update count
     local counts = interruptCounts[guid]
@@ -504,16 +636,12 @@ local function CreateAttachedFrame(guid, unit)
         frame.count:SetText("")
     end
 
-    -- Reset cooldown
-    frame.cooldown:Clear()
-
     frame.guid = guid
     frame.unit = unit
-
-    -- Update the blizzFrame reference in case it changed
     frame.blizzFrame = blizzFrame
+    -- Keep .cooldown as nil so UpdatePartyFrame uses the multi-icon path
+    frame.cooldown = nil
 
-    -- Force show (OnUpdate will handle positioning)
     frame:Show()
 
     partyFrames[guid] = frame
@@ -610,7 +738,9 @@ local function CreatePartyFrame(guid, unit)
 
     -- Get all interrupt spells for this unit
     local unitSpells = GetUnitKickSpells(unit)
-    if #unitSpells == 0 then
+    local guid = UnitGUID(unit)
+    if #unitSpells == 0 and not UnitIsUnit(unit, "player") and not (guid and knownSpells[guid] ~= nil) then
+        -- Only use fallback for other players without explicit data (not for self)
         local fallback = GetUnitKickSpell(unit)
         if fallback then unitSpells = { fallback } end
     end
@@ -691,15 +821,38 @@ function Kick.UpdatePartyFrame(guid)
     -- Sort by remaining time (longest first)
     table.sort(activeCDs, function(a, b) return a.remaining > b.remaining end)
 
-    -- If this is an attached frame (has cooldown property), update it differently
-    if frame.cooldown then
-        -- Attached frame mode
-        local cdData = activeCDs[1] -- Show only the first cooldown
-        if cdData then
-            local totalCD = cdData.totalCD or INTERRUPT_SPELLS[cdData.spellID].cd
-            frame.cooldown:SetCooldown(cdData.endTime - totalCD, totalCD)
-        else
-            frame.cooldown:Clear()
+    -- Attached frame mode (multi-icon)
+    if frame.icons then
+        for _, iconFrame in ipairs(frame.icons) do
+            if iconFrame:IsShown() and iconFrame.spellID then
+                local cdInfo = cooldowns[iconFrame.spellID]
+
+                -- Check variant spells (same class + same specID)
+                if not cdInfo then
+                    local iconData = INTERRUPT_SPELLS[iconFrame.spellID]
+                    if iconData and iconData.specID then
+                        for cdSpellID, cd in pairs(cooldowns) do
+                            local cdData = INTERRUPT_SPELLS[cdSpellID]
+                            if cdData and cdData.class == iconData.class and cdData.specID == iconData.specID and cdSpellID ~= iconFrame.spellID then
+                                cdInfo = cd
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if cdInfo then
+                    local remaining = cdInfo.endTime - now
+                    if remaining > 0 then
+                        local totalCD = cdInfo.totalCD or INTERRUPT_SPELLS[iconFrame.spellID].cd
+                        iconFrame.cooldown:SetCooldown(cdInfo.endTime - totalCD, totalCD)
+                    else
+                        iconFrame.cooldown:Clear()
+                    end
+                else
+                    iconFrame.cooldown:Clear()
+                end
+            end
         end
 
         -- Update count
@@ -709,7 +862,10 @@ function Kick.UpdatePartyFrame(guid)
         else
             frame.count:SetText("")
         end
-    elseif frame.rows then
+        return
+    end
+
+    if frame.rows then
         -- Row-based frame mode: each row has its own icon + bar for a specific spell
         for i, row in ipairs(frame.rows) do
             if not row:IsShown() then break end
@@ -852,6 +1008,13 @@ local function StopUpdateLoop()
 end
 
 function Kick.RebuildPartyFrames()
+    -- Debug: log what triggered the rebuild and current cooldown state
+    local cdCount = 0
+    for guid, cds in pairs(interruptCooldowns) do
+        for _ in pairs(cds) do cdCount = cdCount + 1 end
+    end
+    addonTable.Core.Log("Kick", string.format("RebuildPartyFrames called — %d active cooldowns", cdCount), 0)
+
     -- Hide and clean up attached frames
     for unit, frame in pairs(attachedFrames) do
         frame:Hide()
@@ -860,13 +1023,46 @@ function Kick.RebuildPartyFrames()
     -- Pool existing frames for reuse
     for guid, frame in pairs(partyFrames) do
         -- Don't pool attached frames, just hide them
-        if not frame.cooldown then
+        if not frame.icons then
             frame:Hide()
             table.insert(framePool, frame)
         end
     end
     wipe(partyFrames)
-    wipe(interruptCooldowns)
+
+    -- Clean up knownSpells and interruptCooldowns for GUIDs no longer in the group
+    local validGUIDs = {}
+    local playerGUID = UnitGUID("player")
+    if playerGUID then validGUIDs[playerGUID] = true end
+    if IsInGroup() then
+        if IsInRaid() then
+            for i = 1, 40 do
+                local unit = "raid" .. i
+                if UnitExists(unit) then
+                    local guid = UnitGUID(unit)
+                    if guid then validGUIDs[guid] = true end
+                end
+            end
+        else
+            for i = 1, 4 do
+                local unit = "party" .. i
+                if UnitExists(unit) then
+                    local guid = UnitGUID(unit)
+                    if guid then validGUIDs[guid] = true end
+                end
+            end
+        end
+    end
+    for guid in pairs(knownSpells) do
+        if not validGUIDs[guid] then
+            knownSpells[guid] = nil
+        end
+    end
+    for guid in pairs(interruptCooldowns) do
+        if not validGUIDs[guid] then
+            interruptCooldowns[guid] = nil
+        end
+    end
 
     if not UIThingsDB.kick.enabled then
         StopUpdateLoop()
@@ -894,7 +1090,7 @@ function Kick.RebuildPartyFrames()
             -- In raid, create frames for raid members
             for i = 1, 40 do
                 local unit = "raid" .. i
-                if UnitExists(unit) and not UnitIsUnit(unit, "player") then
+                if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitIsConnected(unit) then
                     local guid = UnitGUID(unit)
                     if guid then
                         if useAttached then
@@ -909,7 +1105,7 @@ function Kick.RebuildPartyFrames()
             -- In party, create frames for party members
             for i = 1, 4 do
                 local unit = "party" .. i
-                if UnitExists(unit) then
+                if UnitExists(unit) and UnitIsConnected(unit) then
                     local guid = UnitGUID(unit)
                     if guid then
                         if useAttached then
@@ -973,8 +1169,16 @@ local function OnEvent(self, event, ...)
         Kick.ApplyEvents()
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
+            -- Broadcast our spells after entering world (throttled)
+            addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 3, function()
+                Kick.BroadcastSpells()
+            end)
+            -- Request spells from others after our broadcast (they may have loaded before us)
+            addonTable.Comm.ScheduleThrottled("KICK_REQ", 5, function()
+                addonTable.Comm.Send("KICK", "REQ", "")
+            end)
         end
-    elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+    elseif event == "GROUP_ROSTER_UPDATE" then
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
             -- Delayed rebuild so unit frames are available for attached mode
@@ -982,6 +1186,31 @@ local function OnEvent(self, event, ...)
                 if UIThingsDB.kick.enabled then
                     Kick.RebuildPartyFrames()
                 end
+            end)
+            -- Broadcast our spells when group changes (throttled)
+            addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 3, function()
+                Kick.BroadcastSpells()
+            end)
+        end
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if UIThingsDB.kick.enabled then
+            Kick.RebuildPartyFrames()
+            addonTable.Core.SafeAfter(0.5, function()
+                if UIThingsDB.kick.enabled then
+                    Kick.RebuildPartyFrames()
+                end
+            end)
+            -- Re-broadcast spells after spec change (throttled)
+            addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 2, function()
+                Kick.BroadcastSpells()
+            end)
+        end
+    elseif event == "SPELLS_CHANGED" then
+        if UIThingsDB.kick.enabled then
+            -- Throttle heavily — SPELLS_CHANGED fires many times during login
+            addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 5, function()
+                Kick.BroadcastSpells()
+                Kick.RebuildPartyFrames()
             end)
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_SENT" then
@@ -1001,8 +1230,6 @@ local function OnEvent(self, event, ...)
         if issecretvalue(spellID) then return end
         -- Check if it's an interrupt spell
         if INTERRUPT_SPELLS[spellID] then
-            addonTable.Core.Log("Kick", string.format("Detected %s: unit=%s spellID=%d event=%s",
-                INTERRUPT_SPELLS[spellID].name, unit or "?", spellID, event), 1)
             -- Only track the player's own casts; party members are tracked via addon comms
             if unit == "player" then
                 -- Prevent double-tracking if both SENT and SUCCEEDED fire
@@ -1054,8 +1281,6 @@ local function OnEvent(self, event, ...)
         --
         -- If you need accurate interrupt tracking, consider using WeakAuras or a boss mod
         -- that has access to more combat log data.
-    elseif event == "CHAT_MSG_ADDON" then
-        OnAddonMessage(...)
     end
 end
 
@@ -1063,23 +1288,20 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
 frame:SetScript("OnEvent", OnEvent)
 
--- Register addon message prefix on load
-C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
-
 function Kick.ApplyEvents()
     if UIThingsDB.kick and UIThingsDB.kick.enabled then
         frame:RegisterEvent("PLAYER_ENTERING_WORLD")
         frame:RegisterEvent("GROUP_ROSTER_UPDATE")
         frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+        frame:RegisterEvent("SPELLS_CHANGED")
         frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:RegisterEvent("UNIT_SPELLCAST_SENT")
-        frame:RegisterEvent("CHAT_MSG_ADDON")
     else
         frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
         frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+        frame:UnregisterEvent("SPELLS_CHANGED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
-        frame:UnregisterEvent("CHAT_MSG_ADDON")
         StopUpdateLoop()
         if partyContainer then
             partyContainer:Hide()

@@ -40,10 +40,34 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     hideTooltip:SetText(
         "When enabled, this addon will not communicate with other players' addons (Kick tracker, Addon Versions)")
 
+    -- Debug mode checkbox
+    local debugCheckbox = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    debugCheckbox:SetPoint("TOPLEFT", hideTooltip, "BOTTOMLEFT", -5, -8)
+    debugCheckbox.Text:SetText("Debug mode")
+    debugCheckbox.Text:SetFontObject("GameFontHighlight")
+    debugCheckbox:SetChecked(UIThingsDB.addonComm.debugMode)
+    debugCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.addonComm.debugMode = self:GetChecked()
+        if UIThingsDB.addonComm.debugMode then
+            addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.DEBUG
+            addonTable.Core.Log("Core", "Debug mode enabled", addonTable.Core.LogLevel.INFO)
+        else
+            addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.INFO
+            addonTable.Core.Log("Core", "Debug mode disabled", addonTable.Core.LogLevel.INFO)
+        end
+    end)
+
+    local debugTooltip = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    debugTooltip:SetPoint("TOPLEFT", debugCheckbox, "BOTTOMLEFT", 5, -2)
+    debugTooltip:SetWidth(600)
+    debugTooltip:SetJustifyH("LEFT")
+    debugTooltip:SetTextColor(0.7, 0.7, 0.7)
+    debugTooltip:SetText("Shows detailed debug messages in chat for addon communication and module activity")
+
     -- Refresh button
     local refreshBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     refreshBtn:SetSize(120, 24)
-    refreshBtn:SetPoint("TOPLEFT", 20, -145)
+    refreshBtn:SetPoint("TOPLEFT", debugTooltip, "BOTTOMLEFT", -5, -8)
     refreshBtn:SetText("Refresh")
     refreshBtn:SetScript("OnClick", function()
         if addonTable.AddonVersions then
@@ -53,24 +77,24 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     -- Column headers
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    nameHeader:SetPoint("TOPLEFT", 20, -185)
+    nameHeader:SetPoint("TOPLEFT", refreshBtn, "BOTTOMLEFT", 0, -10)
     nameHeader:SetText("Player")
 
     local versionHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    versionHeader:SetPoint("TOPLEFT", 150, -185)
+    versionHeader:SetPoint("TOPLEFT", nameHeader, "TOPLEFT", 130, 0)
     versionHeader:SetText("Version")
 
     local keystoneHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    keystoneHeader:SetPoint("TOPLEFT", 280, -185)
+    keystoneHeader:SetPoint("TOPLEFT", nameHeader, "TOPLEFT", 260, 0)
     keystoneHeader:SetText("Keystone")
 
     local levelHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    levelHeader:SetPoint("TOPLEFT", 480, -185)
+    levelHeader:SetPoint("TOPLEFT", nameHeader, "TOPLEFT", 460, 0)
     levelHeader:SetText("Level")
 
     -- Separator line
     local separator = panel:CreateTexture(nil, "ARTWORK")
-    separator:SetPoint("TOPLEFT", 20, -200)
+    separator:SetPoint("TOPLEFT", nameHeader, "BOTTOMLEFT", 0, -3)
     separator:SetSize(550, 1)
     separator:SetColorTexture(0.4, 0.4, 0.4, 1)
 
@@ -81,7 +105,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     for i = 1, MAX_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(550, 20)
-        row:SetPoint("TOPLEFT", 20, -205 - ((i - 1) * 22))
+        row:SetPoint("TOPLEFT", separator, "BOTTOMLEFT", 0, -3 - ((i - 1) * 22))
 
         row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.nameText:SetPoint("LEFT", 0, 0)
@@ -109,7 +133,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     -- No data message
     local noDataText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    noDataText:SetPoint("TOPLEFT", 20, -215)
+    noDataText:SetPoint("TOPLEFT", separator, "BOTTOMLEFT", 0, -8)
     noDataText:SetText("Not in a group, or no responses received yet.")
     noDataText:SetTextColor(0.5, 0.5, 0.5)
 

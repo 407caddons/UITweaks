@@ -436,13 +436,52 @@ end
 -- Get all chat content from the current visible chat frame
 local function GetChatContent()
     local selectedFrame = FCFDock_GetSelectedWindow(GENERAL_CHAT_DOCK) or ChatFrame1
-    if not selectedFrame then return "" end
+    if not selectedFrame then
+        addonTable.Core.Log("ChatSkin", "GetChatContent: no selected frame", 2)
+        return ""
+    end
 
     local lines = {}
-    for i = 1, selectedFrame:GetNumMessages() do
-        local ok, msg = pcall(selectedFrame.GetMessageInfo, selectedFrame, i)
-        if ok and msg then
-            table.insert(lines, tostring(msg))
+    local numMessages = selectedFrame:GetNumMessages()
+    addonTable.Core.Log("ChatSkin", string.format("GetChatContent: frame=%s numMessages=%d hasGetMessageInfo=%s",
+        selectedFrame:GetName() or "?", numMessages, tostring(selectedFrame.GetMessageInfo ~= nil)), 0)
+
+    for i = 1, numMessages do
+        if selectedFrame.GetMessageInfo then
+            local ok, msg = pcall(selectedFrame.GetMessageInfo, selectedFrame, i)
+            if ok and msg and msg ~= "" then
+                -- Strip all WoW UI escape sequences for clean copyable text
+                local clean = msg
+                clean = clean:gsub("|T.-|t", "")
+                clean = clean:gsub("|A.-|a", "")
+                clean = clean:gsub("|H.-|h(.-)|h", "%1")
+                clean = clean:gsub("|c%x%x%x%x%x%x%x%x", "")
+                clean = clean:gsub("|r", "")
+                clean = clean:gsub("|n", "\n")
+                clean = clean:gsub("|", "")
+                table.insert(lines, clean)
+            elseif not ok then
+                addonTable.Core.Log("ChatSkin", string.format("GetMessageInfo error at %d: %s", i, tostring(msg)), 2)
+                break
+            end
+        end
+    end
+
+    addonTable.Core.Log("ChatSkin", string.format("GetChatContent: got %d lines", #lines), 0)
+
+    -- If GetMessageInfo didn't work, try the visible message regions
+    if #lines == 0 then
+        local regions = { selectedFrame:GetRegions() }
+        addonTable.Core.Log("ChatSkin", string.format("Fallback: checking %d regions", #regions), 0)
+        for _, region in ipairs(regions) do
+            if region:IsObjectType("FontString") then
+                local text = region:GetText()
+                if text and text ~= "" then
+                    local clean = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h(.-)|h", "%1"):gsub(
+                        "|T.-|t", "")
+                    table.insert(lines, clean)
+                end
+            end
         end
     end
 
@@ -457,10 +496,25 @@ local function ToggleCopyBox()
 
     if isCopyBoxVisible then
         local content = GetChatContent()
-        copyEditBox:SetText(content)
+        addonTable.Core.Log("ChatSkin", string.format("ToggleCopyBox: content length=%d, first 100 chars=[%s]",
+            #content, content:sub(1, 100)), 0)
         copyFrame:Show()
-        copyEditBox:HighlightText()
+        copyEditBox:Show()
+        copyEditBox:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+        copyEditBox:SetTextColor(1, 1, 1, 1)
+        copyEditBox:SetText("")
         copyEditBox:SetFocus()
+        copyEditBox:SetText(content)
+        copyEditBox:SetCursorPosition(0)
+        -- Update height after frame is shown so geometry is valid
+        C_Timer.After(0.05, function()
+            if copyEditBox.UpdateHeight then
+                copyEditBox:UpdateHeight()
+            end
+            copyEditBox:HighlightText()
+            local textLen = #(copyEditBox:GetText() or "")
+            addonTable.Core.Log("ChatSkin", string.format("After SetText: editbox text length=%d", textLen), 0)
+        end)
     else
         copyFrame:Hide()
         copyEditBox:ClearFocus()
@@ -803,8 +857,8 @@ local function SetupChatSkin()
 
     -- Create copy frame (to the right of the main container, initially hidden)
     copyFrame = CreateFrame("Frame", "LunaChatSkinCopyFrame", UIParent, "BackdropTemplate")
-    copyFrame:SetFrameStrata("LOW")
-    copyFrame:SetFrameLevel(0)
+    copyFrame:SetFrameStrata("MEDIUM")
+    copyFrame:SetFrameLevel(5)
     copyFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     copyFrame:SetBackdropColor(bg.r, bg.g, bg.b, bg.a or 0.7)
 
@@ -828,10 +882,33 @@ local function SetupChatSkin()
     copyEditBox:SetMultiLine(true)
     copyEditBox:SetAutoFocus(false)
     copyEditBox:SetFontObject(ChatFontNormal)
-    copyEditBox:SetWidth(COPY_FRAME_WIDTH - (border + INNER_PAD) * 2 - 20)
+    copyEditBox:SetTextColor(1, 1, 1, 1)
+    local editBoxWidth = COPY_FRAME_WIDTH - (border + INNER_PAD) * 2 - 20
+    copyEditBox:SetWidth(editBoxWidth)
+    copyEditBox:SetHeight(totalH) -- Initial height, updated when content is set
     copyEditBox:SetMaxLetters(0)
 
     scrollFrame:SetScrollChild(copyEditBox)
+
+    -- Helper FontString to measure text height (EditBox doesn't have GetStringHeight)
+    local measureString = copyFrame:CreateFontString(nil, "BACKGROUND")
+    measureString:SetFontObject(ChatFontNormal)
+    measureString:SetWidth(editBoxWidth)
+    measureString:Hide()
+
+    local function UpdateEditBoxHeight()
+        measureString:SetWidth(editBoxWidth)
+        measureString:SetText(copyEditBox:GetText())
+        local textHeight = measureString:GetStringHeight() or 100
+        copyEditBox:SetHeight(math.max(textHeight + 20, scrollFrame:GetHeight()))
+    end
+
+    -- Update height when text changes so ScrollFrame knows the content size
+    copyEditBox:SetScript("OnTextChanged", function(self)
+        UpdateEditBoxHeight()
+    end)
+
+    copyEditBox.UpdateHeight = UpdateEditBoxHeight
 
     copyEditBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()

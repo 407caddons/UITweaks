@@ -2,16 +2,12 @@ local addonName, addonTable = ...
 local AddonVersions = {}
 addonTable.AddonVersions = AddonVersions
 
-local ADDON_PREFIX = "LunaVer"
 local VERSION = C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
 local KEYSTONE_ITEM_ID = 158923
 
 -- Tracked data: playerName -> { version, keystoneName, keystoneLevel, playerLevel, keystoneMapID }
 -- Players without the addon get { version = nil }
 local playerData = {}
-
--- Pending broadcast timer (cancellable)
-local broadcastTimer = nil
 
 -- Callback for when data changes (set by config panel)
 AddonVersions.onVersionsUpdated = nil
@@ -86,19 +82,12 @@ local function ParseMessage(message)
 end
 
 local function BroadcastVersion()
-    if not IsInGroup() then return end
-    -- Respect hideFromWorld setting
-    if UIThingsDB and UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, BuildMessage(), channel)
+    local message = BuildMessage()
+    addonTable.Comm.Send("VER", "HELLO", message, "LunaVer", message)
 end
 
 local function RequestVersions()
-    if not IsInGroup() then return end
-    -- Respect hideFromWorld setting
-    if UIThingsDB and UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "REQUEST", channel)
+    addonTable.Comm.Send("VER", "REQ", "", "LunaVer", "REQUEST")
 end
 
 -- Build the full party/raid list, marking members without the addon
@@ -137,37 +126,27 @@ local function UpdatePartyList()
 end
 
 local function ScheduleBroadcast()
-    -- Cancel any pending timer so new joins reset the delay
-    if broadcastTimer then
-        broadcastTimer:Cancel()
-        broadcastTimer = nil
-    end
-    broadcastTimer = C_Timer.NewTimer(3, function()
-        broadcastTimer = nil
+    addonTable.Comm.ScheduleThrottled("VER_HELLO", 3, function()
         if IsInGroup() then
             BroadcastVersion()
         end
     end)
 end
 
-local function OnAddonMessage(prefix, message, channel, sender)
-    if prefix ~= ADDON_PREFIX then return end
-
-    -- Strip realm name for display
-    local shortName = sender:match("^([^-]+)") or sender
-
-    if message == "REQUEST" then
-        BroadcastVersion()
-    else
-        local data = ParseMessage(message)
-        if data then
-            playerData[shortName] = data
-            if AddonVersions.onVersionsUpdated then
-                AddonVersions.onVersionsUpdated()
-            end
+-- Register handlers with central comm
+addonTable.Comm.Register("VER", "HELLO", function(senderShort, payload, senderFull)
+    local data = ParseMessage(payload)
+    if data then
+        playerData[senderShort] = data
+        if AddonVersions.onVersionsUpdated then
+            AddonVersions.onVersionsUpdated()
         end
     end
-end
+end)
+
+addonTable.Comm.Register("VER", "REQ", function(senderShort, payload, senderFull)
+    BroadcastVersion()
+end)
 
 function AddonVersions.GetPlayerData()
     return playerData
@@ -201,20 +180,16 @@ function AddonVersions.RefreshVersions()
     end
 end
 
--- Event handling
+-- Event handling (only GROUP_ROSTER_UPDATE — CHAT_MSG_ADDON handled by AddonComm)
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "GROUP_ROSTER_UPDATE" then
         if IsInGroup() then
             UpdatePartyList()
             ScheduleBroadcast()
         else
-            if broadcastTimer then
-                broadcastTimer:Cancel()
-                broadcastTimer = nil
-            end
+            addonTable.Comm.CancelThrottle("VER_HELLO")
             wipe(playerData)
             local playerName = UnitName("player")
             local keyName, keyLevel, keyMapID = GetPlayerKeystone()
@@ -229,9 +204,5 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if AddonVersions.onVersionsUpdated then
             AddonVersions.onVersionsUpdated()
         end
-    elseif event == "CHAT_MSG_ADDON" then
-        OnAddonMessage(...)
     end
 end)
-
-C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
