@@ -23,13 +23,14 @@ table.insert(Widgets.moduleInits, function()
                         realm = realm:match("^([^-]+)") or realm
                         shortName = charName .. "-" .. realm
                     end
+                    local rightText = zone or ""
                     local classColor = C_ClassColor.GetClassColor(classFileName)
                     if classColor then
-                        GameTooltip:AddDoubleLine(shortName, "Lvl " .. level, classColor.r, classColor.g, classColor.b, 1,
-                            1,
-                            1)
+                        GameTooltip:AddDoubleLine(shortName, rightText, classColor.r, classColor.g, classColor.b, 0.7,
+                            0.7,
+                            0.7)
                     else
-                        GameTooltip:AddDoubleLine(shortName, "Lvl " .. level, 1, 1, 1, 1, 1, 1)
+                        GameTooltip:AddDoubleLine(shortName, rightText, 1, 1, 1, 0.7, 0.7, 0.7)
                     end
                 end
             end

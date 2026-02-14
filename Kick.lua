@@ -10,7 +10,7 @@ local INTERRUPT_SPELLS = {
 
     -- Demon Hunter
     [183752] = { name = "Disrupt", cd = 15, class = "DEMONHUNTER" },
-    [202137] = { name = "Sigil of Silence", cd = 60, class = "DEMONHUNTER" },
+    [202137] = { name = "Sigil of Silence", cd = 90, class = "DEMONHUNTER", specID = 2 }, -- Vengeance
 
     -- Druid
     [106839] = { name = "Skull Bash", cd = 15, class = "DRUID" },
@@ -41,10 +41,10 @@ local INTERRUPT_SPELLS = {
     -- Shaman
     [57994] = { name = "Wind Shear", cd = 12, class = "SHAMAN" },
 
-    -- Warlock
-    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK" },  -- Felhunter
-    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK" },    -- Felguard
-    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK" }, -- Command Demon version
+    -- Warlock (different pets per spec)
+    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 1 },  -- Affliction (Felhunter)
+    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK", specID = 2 },    -- Demonology (Felguard)
+    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 3 }, -- Destruction (Command Demon)
 
     -- Warrior
     [6552] = { name = "Pummel", cd = 15, class = "WARRIOR" },
@@ -115,6 +115,70 @@ local function GetUnitKickSpell(unit)
     return nil
 end
 
+-- Track observed specs for party members (updated when we see which spells they use)
+local observedSpecs = {} -- GUID -> specIndex
+
+-- Returns all interrupt spells applicable to a unit (considers spec for spec-specific spells)
+local function GetUnitKickSpells(unit)
+    local _, class = UnitClass(unit)
+    if not CLASS_INTERRUPTS[class] then return {} end
+
+    local spells = {}
+    local spec = nil
+
+    -- Try to get spec index for the unit
+    if UnitIsUnit(unit, "player") then
+        spec = GetSpecialization()
+    else
+        local guid = UnitGUID(unit)
+        -- Check if we've observed their spec from a previous spell cast
+        if guid and observedSpecs[guid] then
+            spec = observedSpecs[guid]
+        else
+            -- Use role as a proxy for classes where it helps
+            local role = UnitGroupRolesAssigned(unit)
+            if class == "DEMONHUNTER" then
+                spec = (role == "TANK") and 2 or 1
+            end
+        end
+    end
+
+    -- Check if all spells for this class are spec-specific
+    local allSpecific = true
+    for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
+        if not INTERRUPT_SPELLS[spellID].specID then
+            allSpecific = false
+            break
+        end
+    end
+
+    for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
+        local data = INTERRUPT_SPELLS[spellID]
+
+        if UnitIsUnit(unit, "player") then
+            -- For the player, only show spells they actually know
+            if IsPlayerSpell(spellID) then
+                table.insert(spells, spellID)
+            end
+        elseif data.specID then
+            if spec and data.specID == spec then
+                -- Spec matches
+                table.insert(spells, spellID)
+            elseif not spec and allSpecific then
+                -- Unknown spec but all spells are spec-specific: show first one as fallback
+                if #spells == 0 then
+                    table.insert(spells, spellID)
+                end
+            end
+        else
+            -- No spec restriction, always include
+            table.insert(spells, spellID)
+        end
+    end
+
+    return spells
+end
+
 local function GetUnitByGUID(guid)
     if UnitGUID("player") == guid then return "player" end
     for i = 1, 4 do
@@ -128,14 +192,15 @@ end
 
 -- == ADDON COMMUNICATION ==
 
-local function SendKickMessage(spellID)
+local function SendKickMessage(spellID, cooldown)
     if not UIThingsDB.kick.enabled then return end
     -- Check if in a group
     if not IsInGroup() then return end
     -- Respect hideFromWorld setting
     if UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return end
 
-    local message = string.format("%d:%d", spellID, GetTime())
+    -- Format: "spellID:timestamp:cooldown"
+    local message = string.format("%d:%d:%.1f", spellID, GetTime(), cooldown)
     -- Use RAID channel if in raid, otherwise PARTY
     local channel = IsInRaid() and "RAID" or "PARTY"
     addonTable.Core.Log("Kick", string.format("Sending addon message on %s: %s", channel, message), 1)
@@ -150,10 +215,11 @@ local function OnAddonMessage(prefix, message, channel, sender)
     if not UIThingsDB.kick.enabled then return end
     if prefix ~= ADDON_PREFIX then return end
 
-    -- Parse message: "spellID:timestamp"
-    local spellID, timestamp = message:match("(%d+):([%d%.]+)")
+    -- Parse message: "spellID:timestamp:cooldown" (cooldown is optional for backwards compat)
+    local spellID, timestamp, msgCooldown = message:match("(%d+):([%d%.]+):?([%d%.]*)")
     spellID = tonumber(spellID)
     timestamp = tonumber(timestamp)
+    msgCooldown = tonumber(msgCooldown)
 
     if not spellID or not INTERRUPT_SPELLS[spellID] then return end
 
@@ -162,7 +228,8 @@ local function OnAddonMessage(prefix, message, channel, sender)
     local senderShort = sender:match("^([^%-]+)")
     local senderGUID = nil
     if UnitName("player") == senderShort then
-        senderGUID = UnitGUID("player")
+        -- Skip our own messages; already handled by UNIT_SPELLCAST_SUCCEEDED
+        return
     else
         -- Check party members (party1-4)
         for i = 1, 4 do
@@ -187,19 +254,31 @@ local function OnAddonMessage(prefix, message, channel, sender)
 
     if not senderGUID then return end
 
+    -- Track observed spec for this sender based on the spell they used
+    local spellData = INTERRUPT_SPELLS[spellID]
+    if spellData and spellData.specID then
+        local prevSpec = observedSpecs[senderGUID]
+        observedSpecs[senderGUID] = spellData.specID
+        -- If spec changed, rebuild frames to show the correct spell rows
+        if prevSpec and prevSpec ~= spellData.specID then
+            Kick.RebuildPartyFrames()
+        end
+    end
+
     -- If we don't have a frame for this sender yet, rebuild so they get one
     if not partyFrames[senderGUID] then
         Kick.RebuildPartyFrames()
     end
 
-    -- Store cooldown info (support multiple cooldowns per player)
-    local cooldown = INTERRUPT_SPELLS[spellID].cd
+    -- Store cooldown info — use sender's actual cooldown if provided, fall back to hardcoded
+    local cooldown = msgCooldown or INTERRUPT_SPELLS[spellID].cd
     if not interruptCooldowns[senderGUID] then
         interruptCooldowns[senderGUID] = {}
     end
     interruptCooldowns[senderGUID][spellID] = {
         spellID = spellID,
-        endTime = GetTime() + cooldown
+        endTime = GetTime() + cooldown,
+        totalCD = cooldown
     }
 
     IncrementTotal(senderGUID)
@@ -441,6 +520,40 @@ local function CreateAttachedFrame(guid, unit)
     return frame
 end
 
+local ROW_HEIGHT = 22
+local ROW_ICON_SIZE = 20
+local ROW_BAR_HEIGHT = 16
+local NAME_HEIGHT = 20
+
+local function CreateSpellRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(170, ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", 5, -(NAME_HEIGHT + (index - 1) * ROW_HEIGHT))
+
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(ROW_ICON_SIZE, ROW_ICON_SIZE)
+    row.icon:SetPoint("LEFT", 0, 0)
+
+    row.bar = CreateFrame("StatusBar", nil, row)
+    row.bar:SetSize(120, ROW_BAR_HEIGHT)
+    row.bar:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+    row.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    row.bar:SetStatusBarColor(0.2, 0.8, 0.2, 1)
+    row.bar:SetMinMaxValues(0, 1)
+    row.bar:SetValue(1)
+
+    row.bar.bg = row.bar:CreateTexture(nil, "BACKGROUND")
+    row.bar.bg:SetAllPoints()
+    row.bar.bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    row.bar.bg:SetVertexColor(0.2, 0.2, 0.2, 0.5)
+
+    row.cdText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.cdText:SetPoint("RIGHT", row.bar, "RIGHT", -4, 0)
+    row.cdText:SetText("")
+
+    return row
+end
+
 local function CreatePartyFrame(guid, unit)
     local container = CreatePartyContainer()
 
@@ -449,6 +562,12 @@ local function CreatePartyFrame(guid, unit)
     if frame then
         frame:SetParent(container)
         frame:ClearAllPoints()
+        -- Hide existing rows
+        if frame.rows then
+            for _, row in ipairs(frame.rows) do
+                row:Hide()
+            end
+        end
     else
         frame = CreateFrame("Frame", nil, container, "BackdropTemplate")
         frame:SetSize(180, 40)
@@ -463,61 +582,14 @@ local function CreatePartyFrame(guid, unit)
 
         -- Player name
         frame.name = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        frame.name:SetPoint("TOPLEFT", 45, -5)
+        frame.name:SetPoint("TOPLEFT", 5, -4)
 
         -- Kick count (successful/total) after name
         frame.kickCount = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         frame.kickCount:SetPoint("LEFT", frame.name, "RIGHT", 4, 0)
         frame.kickCount:SetTextColor(0.7, 0.7, 0.7)
 
-        -- Interrupt icon
-        frame.icon = frame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetSize(32, 32)
-        frame.icon:SetPoint("LEFT", 5, 0)
-
-        -- Cooldown bars (support up to 2 for classes with multiple interrupts)
-        frame.bars = {}
-
-        -- Primary bar (bar1)
-        frame.bars[1] = CreateFrame("StatusBar", nil, frame)
-        frame.bars[1]:SetSize(120, 16)
-        frame.bars[1]:SetPoint("BOTTOMRIGHT", -5, 5)
-        frame.bars[1]:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        frame.bars[1]:SetStatusBarColor(0.2, 0.8, 0.2, 1)
-        frame.bars[1]:SetMinMaxValues(0, 1)
-        frame.bars[1]:SetValue(1)
-
-        frame.bars[1].bg = frame.bars[1]:CreateTexture(nil, "BACKGROUND")
-        frame.bars[1].bg:SetAllPoints()
-        frame.bars[1].bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        frame.bars[1].bg:SetVertexColor(0.2, 0.2, 0.2, 0.5)
-
-        frame.bars[1].cdText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        frame.bars[1].cdText:SetPoint("CENTER", frame.bars[1], "CENTER", 0, 0)
-        frame.bars[1].cdText:SetText("Ready")
-
-        -- Secondary bar (bar2) - initially hidden
-        frame.bars[2] = CreateFrame("StatusBar", nil, frame)
-        frame.bars[2]:SetSize(120, 16)
-        frame.bars[2]:SetPoint("BOTTOMRIGHT", -5, 23)
-        frame.bars[2]:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        frame.bars[2]:SetStatusBarColor(0.8, 0.6, 0.2, 1)
-        frame.bars[2]:SetMinMaxValues(0, 1)
-        frame.bars[2]:SetValue(1)
-        frame.bars[2]:Hide()
-
-        frame.bars[2].bg = frame.bars[2]:CreateTexture(nil, "BACKGROUND")
-        frame.bars[2].bg:SetAllPoints()
-        frame.bars[2].bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        frame.bars[2].bg:SetVertexColor(0.2, 0.2, 0.2, 0.5)
-
-        frame.bars[2].cdText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        frame.bars[2].cdText:SetPoint("CENTER", frame.bars[2], "CENTER", 0, 0)
-        frame.bars[2].cdText:SetText("Ready")
-
-        -- Legacy compatibility (frame.bar points to bars[1])
-        frame.bar = frame.bars[1]
-        frame.cdText = frame.bars[1].cdText
+        frame.rows = {}
     end
 
     -- Apply current colors
@@ -531,32 +603,57 @@ local function CreatePartyFrame(guid, unit)
     frame.name:SetText(unitName)
     local counts = interruptCounts[guid]
     if counts and counts.total > 0 then
-        -- Only show total kicks used (successful tracking removed due to API limitations)
         frame.kickCount:SetText(string.format("(%d)", counts.total))
     else
         frame.kickCount:SetText("")
     end
 
-    -- Set interrupt icon
-    local spellID = GetUnitKickSpell(unit)
-    if spellID then
-        local spellTexture = C_Spell.GetSpellTexture(spellID)
-        frame.icon:SetTexture(spellTexture)
+    -- Get all interrupt spells for this unit
+    local unitSpells = GetUnitKickSpells(unit)
+    if #unitSpells == 0 then
+        local fallback = GetUnitKickSpell(unit)
+        if fallback then unitSpells = { fallback } end
     end
 
-    -- Reset bar states
-    for i = 1, 2 do
-        if frame.bars[i] then
-            frame.bars[i]:SetValue(1)
-            frame.bars[i].cdText:SetText("Ready")
-            if i == 2 then
-                frame.bars[i]:Hide()
-            else
-                frame.bars[i]:Show()
-            end
+    -- Create/reuse rows for each spell
+    frame.spellOrder = {}
+    for i, spellID in ipairs(unitSpells) do
+        -- Create row if it doesn't exist yet
+        if not frame.rows[i] then
+            frame.rows[i] = CreateSpellRow(frame, i)
         end
+
+        local row = frame.rows[i]
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 5, -(NAME_HEIGHT + (i - 1) * ROW_HEIGHT))
+
+        -- Set icon
+        local spellTexture = C_Spell.GetSpellTexture(spellID)
+        row.icon:SetTexture(spellTexture)
+        row.icon:SetDesaturated(false)
+
+        -- Reset bar
+        row.bar:SetValue(1)
+        row.cdText:SetText("")
+        row.spellID = spellID
+        row:Show()
+
+        frame.spellOrder[i] = spellID
     end
-    frame.icon:SetDesaturated(false)
+
+    -- Hide unused rows
+    for i = #unitSpells + 1, #frame.rows do
+        frame.rows[i]:Hide()
+    end
+
+    frame.numSpells = #unitSpells
+    -- Resize frame based on number of spell rows
+    frame:SetHeight(NAME_HEIGHT + #unitSpells * ROW_HEIGHT + 4)
+
+    -- If there are active cooldowns for this player, apply them immediately
+    if interruptCooldowns[guid] then
+        Kick.UpdatePartyFrame(guid)
+    end
 
     frame.guid = guid
     frame.unit = unit
@@ -582,7 +679,8 @@ function Kick.UpdatePartyFrame(guid)
             table.insert(activeCDs, {
                 spellID = spellID,
                 remaining = remaining,
-                endTime = cdInfo.endTime
+                endTime = cdInfo.endTime,
+                totalCD = cdInfo.totalCD
             })
         else
             -- Remove expired cooldowns
@@ -598,8 +696,7 @@ function Kick.UpdatePartyFrame(guid)
         -- Attached frame mode
         local cdData = activeCDs[1] -- Show only the first cooldown
         if cdData then
-            local spellData = INTERRUPT_SPELLS[cdData.spellID]
-            local totalCD = spellData.cd
+            local totalCD = cdData.totalCD or INTERRUPT_SPELLS[cdData.spellID].cd
             frame.cooldown:SetCooldown(cdData.endTime - totalCD, totalCD)
         else
             frame.cooldown:Clear()
@@ -612,42 +709,53 @@ function Kick.UpdatePartyFrame(guid)
         else
             frame.count:SetText("")
         end
-    else
-        -- Regular frame mode
-        local hasAnyCooldown = false
-        for i = 1, 2 do
-            local bar = frame.bars[i]
-            if not bar then break end
+    elseif frame.rows then
+        -- Row-based frame mode: each row has its own icon + bar for a specific spell
+        for i, row in ipairs(frame.rows) do
+            if not row:IsShown() then break end
 
-            local cdData = activeCDs[i]
-            if cdData then
-                hasAnyCooldown = true
-                local spellData = INTERRUPT_SPELLS[cdData.spellID]
-                local totalCD = spellData.cd
-                local progress = cdData.remaining / totalCD
+            local spellID = row.spellID
+            local cdInfo = cooldowns[spellID]
 
-                bar:SetValue(1 - progress)
-                bar.cdText:SetText(string.format("%.1f", cdData.remaining))
-                bar:Show()
-
-                -- Show spell name as tooltip on bar hover
-                if not bar.spellName then
-                    bar.spellName = spellData.name
-                end
-            else
-                -- No cooldown for this bar slot
-                bar:SetValue(1)
-                bar.cdText:SetText("Ready")
-                if i == 2 then
-                    bar:Hide() -- Hide second bar if not needed
-                else
-                    bar:Show()
+            -- If no direct match, check variant spells from the same class AND same specID
+            -- (e.g., if we're showing Spell Lock row but they used Command Demon 132409)
+            -- Only matches spells that occupy the same spec slot — prevents Sigil of Silence
+            -- from also triggering the Disrupt bar on Demon Hunters
+            if not cdInfo then
+                local rowData = INTERRUPT_SPELLS[spellID]
+                if rowData and rowData.specID then
+                    for cdSpellID, cd in pairs(cooldowns) do
+                        local cdData = INTERRUPT_SPELLS[cdSpellID]
+                        if cdData and cdData.class == rowData.class and cdData.specID == rowData.specID and cdSpellID ~= spellID then
+                            cdInfo = cd
+                            spellID = cdSpellID
+                            break
+                        end
+                    end
                 end
             end
-        end
 
-        -- Desaturate icon if any cooldown is active
-        frame.icon:SetDesaturated(hasAnyCooldown)
+            if cdInfo then
+                local remaining = cdInfo.endTime - now
+                if remaining > 0 then
+                    local totalCD = cdInfo.totalCD or INTERRUPT_SPELLS[spellID].cd
+                    local progress = remaining / totalCD
+
+                    row.bar:SetValue(1 - progress)
+                    row.cdText:SetText(string.format("%.1f", remaining))
+                    row.icon:SetDesaturated(true)
+                else
+                    cooldowns[spellID] = nil
+                    row.bar:SetValue(1)
+                    row.cdText:SetText("")
+                    row.icon:SetDesaturated(false)
+                end
+            else
+                row.bar:SetValue(1)
+                row.cdText:SetText("")
+                row.icon:SetDesaturated(false)
+            end
+        end
     end
 
     -- Clean up empty cooldown table
@@ -659,52 +767,45 @@ end
 function Kick.UpdatePartyLayout()
     local container = CreatePartyContainer()
 
-    local yOffset = -40
+    local yOffset = -30
     local index = 0
+
+    local function PlaceFrame(guid)
+        local f = partyFrames[guid]
+        if not f then return end
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", container, "TOPLEFT", 5, yOffset)
+        f:SetPoint("RIGHT", container, "RIGHT", -5, 0)
+        f:Show()
+        index = index + 1
+        yOffset = yOffset - (f:GetHeight() + 4)
+    end
 
     -- Always show player first
     local playerGUID = UnitGUID("player")
-    if partyFrames[playerGUID] then
-        partyFrames[playerGUID]:SetPoint("TOP", container, "TOP", 0, yOffset)
-        partyFrames[playerGUID]:Show()
-        index = index + 1
-        yOffset = yOffset - 45
-    end
+    PlaceFrame(playerGUID)
 
     -- Then party/raid members
     if IsInRaid() then
-        -- In raid, iterate raid members
         for i = 1, 40 do
             local unit = "raid" .. i
             if UnitExists(unit) and not UnitIsUnit(unit, "player") then
                 local guid = UnitGUID(unit)
-                if guid and partyFrames[guid] then
-                    partyFrames[guid]:SetPoint("TOP", container, "TOP", 0, yOffset)
-                    partyFrames[guid]:Show()
-                    index = index + 1
-                    yOffset = yOffset - 45
-                end
+                if guid then PlaceFrame(guid) end
             end
         end
     else
-        -- In party, iterate party members
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
                 local guid = UnitGUID(unit)
-                if guid and partyFrames[guid] then
-                    partyFrames[guid]:SetPoint("TOP", container, "TOP", 0, yOffset)
-                    partyFrames[guid]:Show()
-                    index = index + 1
-                    yOffset = yOffset - 45
-                end
+                if guid then PlaceFrame(guid) end
             end
         end
     end
 
-    -- Resize container based on number of frames
-    local height = 40 + (index * 45)
-    container:SetHeight(height)
+    -- Resize container based on actual content
+    container:SetHeight(math.abs(yOffset) + 10)
 
     if index > 0 and UIThingsDB.kick.enabled then
         container:Show()
@@ -873,7 +974,7 @@ local function OnEvent(self, event, ...)
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
         end
-    elseif event == "GROUP_ROSTER_UPDATE" then
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" then
         if UIThingsDB.kick.enabled then
             Kick.RebuildPartyFrames()
             -- Delayed rebuild so unit frames are available for attached mode
@@ -883,30 +984,59 @@ local function OnEvent(self, event, ...)
                 end
             end)
         end
-    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_SENT" then
         if not UIThingsDB.kick.enabled then return end
 
-        local unit, _, spellID = ...
+        -- UNIT_SPELLCAST_SENT args: (unit, target, castGUID, spellID)
+        -- UNIT_SPELLCAST_SUCCEEDED args: (unit, castGUID, spellID)
+        local unit, spellID
+        if event == "UNIT_SPELLCAST_SENT" then
+            local u, _, _, sid = ...
+            unit, spellID = u, sid
+        else
+            local u, _, sid = ...
+            unit, spellID = u, sid
+        end
+
         if issecretvalue(spellID) then return end
         -- Check if it's an interrupt spell
         if INTERRUPT_SPELLS[spellID] then
+            addonTable.Core.Log("Kick", string.format("Detected %s: unit=%s spellID=%d event=%s",
+                INTERRUPT_SPELLS[spellID].name, unit or "?", spellID, event), 1)
             -- Only track the player's own casts; party members are tracked via addon comms
             if unit == "player" then
+                -- Prevent double-tracking if both SENT and SUCCEEDED fire
                 local guid = UnitGUID("player")
-                local cooldown = INTERRUPT_SPELLS[spellID].cd
-
-                -- Store cooldown info (support multiple cooldowns per player)
+                local now = GetTime()
                 if not interruptCooldowns[guid] then
                     interruptCooldowns[guid] = {}
                 end
+                local existing = interruptCooldowns[guid][spellID]
+                if existing and (existing.endTime - now) > 2 then
+                    -- Already tracking this spell with significant time remaining, skip
+                    -- (prevents double-tracking from SENT + SUCCEEDED both firing)
+                    return
+                end
+
+                -- Get actual cooldown from the game (respects talent modifiers)
+                -- Note: duration is a secret value during combat, so check before comparing
+                -- Also ignore GCD-length cooldowns (< 2s) which can happen for ground-targeted
+                -- spells when queried before the real cooldown starts
+                local cooldown = INTERRUPT_SPELLS[spellID].cd
+                local cdInfo = C_Spell.GetSpellCooldown(spellID)
+                if cdInfo and cdInfo.duration and not issecretvalue(cdInfo.duration) and cdInfo.duration > 2 then
+                    cooldown = cdInfo.duration
+                end
+
                 interruptCooldowns[guid][spellID] = {
                     spellID = spellID,
-                    endTime = GetTime() + cooldown
+                    endTime = now + cooldown,
+                    totalCD = cooldown
                 }
 
                 IncrementTotal(guid)
                 Kick.UpdatePartyFrame(guid)
-                SendKickMessage(spellID)
+                SendKickMessage(spellID, cooldown)
                 StartUpdateLoop()
             end
         end
@@ -940,11 +1070,15 @@ function Kick.ApplyEvents()
     if UIThingsDB.kick and UIThingsDB.kick.enabled then
         frame:RegisterEvent("PLAYER_ENTERING_WORLD")
         frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+        frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        frame:RegisterEvent("UNIT_SPELLCAST_SENT")
         frame:RegisterEvent("CHAT_MSG_ADDON")
     else
         frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+        frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
         frame:UnregisterEvent("CHAT_MSG_ADDON")
         StopUpdateLoop()
         if partyContainer then

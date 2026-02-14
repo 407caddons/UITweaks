@@ -147,15 +147,24 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     feature4:SetPoint("TOPLEFT", 40, -335)
     feature4:SetText("• Desaturates icon when on cooldown, shows time remaining")
 
+    local feature5 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    feature5:SetPoint("TOPLEFT", 40, -355)
+    feature5:SetText("• Syncs actual cooldown durations (talent-modified) between party members")
+
+    local feature6 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    feature6:SetPoint("TOPLEFT", 40, -375)
+    feature6:SetText("• Vengeance Demon Hunters show both Disrupt and Sigil of Silence")
+
     -- Supported interrupts section
     local interruptsTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    interruptsTitle:SetPoint("TOPLEFT", 20, -370)
+    interruptsTitle:SetPoint("TOPLEFT", 20, -410)
     interruptsTitle:SetText("Supported Interrupts:")
 
-    local yOffset = -395
+    local yOffset = -435
     local interrupts = {
         { class = "Death Knight", spell = "Mind Freeze",       cd = "15s" },
         { class = "Demon Hunter", spell = "Disrupt",           cd = "15s" },
+        { class = "Demon Hunter", spell = "Sigil of Silence",  cd = "90s (Vengeance)" },
         { class = "Druid",        spell = "Skull Bash",        cd = "15s" },
         { class = "Evoker",       spell = "Quell",             cd = "40s" },
         { class = "Hunter",       spell = "Counter Shot",      cd = "24s" },
@@ -180,30 +189,30 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
 
     -- Usage instructions
     local usageTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    usageTitle:SetPoint("TOPLEFT", 20, -545)
+    usageTitle:SetPoint("TOPLEFT", 20, -605)
     usageTitle:SetText("Usage:")
 
     local usage1 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage1:SetPoint("TOPLEFT", 40, -570)
+    usage1:SetPoint("TOPLEFT", 40, -630)
     usage1:SetWidth(650)
     usage1:SetJustifyH("LEFT")
     usage1:SetText("1. Enable the tracker and join a party")
 
     local usage2 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage2:SetPoint("TOPLEFT", 40, -590)
+    usage2:SetPoint("TOPLEFT", 40, -650)
     usage2:SetWidth(650)
     usage2:SetJustifyH("LEFT")
     usage2:SetText("2. Unlock the tracker to move it to your preferred position")
 
     local usage3 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage3:SetPoint("TOPLEFT", 40, -610)
+    usage3:SetPoint("TOPLEFT", 40, -670)
     usage3:SetWidth(650)
     usage3:SetJustifyH("LEFT")
     usage3:SetText("3. When you or party members use an interrupt, it will show on cooldown")
 
     local usage4 = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage4:SetPoint("TOPLEFT", 40, -630)
+    usage4:SetPoint("TOPLEFT", 40, -690)
     usage4:SetWidth(650)
     usage4:SetJustifyH("LEFT")
-    usage4:SetText("4. Interrupts are detected automatically, addon sync provides exact spell info")
+    usage4:SetText("4. Actual cooldown durations are synced, accounting for talent reductions")
 end
