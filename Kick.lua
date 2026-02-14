@@ -138,10 +138,15 @@ local function SendKickMessage(spellID)
     local message = string.format("%d:%d", spellID, GetTime())
     -- Use RAID channel if in raid, otherwise PARTY
     local channel = IsInRaid() and "RAID" or "PARTY"
+    addonTable.Core.Log("Kick", string.format("Sending addon message on %s: %s", channel, message), 1)
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
 end
 
 local function OnAddonMessage(prefix, message, channel, sender)
+    if prefix == ADDON_PREFIX then
+        addonTable.Core.Log("Kick",
+            string.format("Addon message received from %s on %s: %s", sender or "?", channel or "?", message or "?"), 1)
+    end
     if not UIThingsDB.kick.enabled then return end
     if prefix ~= ADDON_PREFIX then return end
 
@@ -153,14 +158,16 @@ local function OnAddonMessage(prefix, message, channel, sender)
     if not spellID or not INTERRUPT_SPELLS[spellID] then return end
 
     -- Find the sender's GUID
+    -- Sender includes realm ("Name-Realm") but UnitName() returns just "Name" for same-realm players
+    local senderShort = sender:match("^([^%-]+)")
     local senderGUID = nil
-    if UnitName("player") == sender then
+    if UnitName("player") == senderShort then
         senderGUID = UnitGUID("player")
     else
         -- Check party members (party1-4)
         for i = 1, 4 do
             local unit = "party" .. i
-            if UnitExists(unit) and UnitName(unit) == sender then
+            if UnitExists(unit) and UnitName(unit) == senderShort then
                 senderGUID = UnitGUID(unit)
                 break
             end
@@ -170,7 +177,7 @@ local function OnAddonMessage(prefix, message, channel, sender)
         if not senderGUID and IsInRaid() then
             for i = 1, 40 do
                 local unit = "raid" .. i
-                if UnitExists(unit) and UnitName(unit) == sender then
+                if UnitExists(unit) and UnitName(unit) == senderShort then
                     senderGUID = UnitGUID(unit)
                     break
                 end
