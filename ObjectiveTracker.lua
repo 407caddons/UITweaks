@@ -132,6 +132,17 @@ local function OnAchieveClick(self, button)
     end
 end
 
+local function OnPerksActivityClick(self, button)
+    -- Shift-Click to Untrack (if enabled)
+    if IsShiftKeyDown() and self.perksActivityID and UIThingsDB.tracker.shiftClickUntrack then
+        if C_PerksActivities and C_PerksActivities.RemoveTrackedPerksActivity then
+            C_PerksActivities.RemoveTrackedPerksActivity(self.perksActivityID)
+            SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent)
+        end
+        return
+    end
+end
+
 
 
 -- Toggle Button Factory (Yellow +/-)
@@ -190,6 +201,25 @@ local function AcquireItem()
     itemBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     btn.ItemBtn = itemBtn
 
+    -- Progress Bar for Supertracked Quest (Hidden by default)
+    local progressBar = CreateFrame("StatusBar", nil, btn)
+    progressBar:SetSize(0, 3)
+    progressBar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 19, -2)
+    progressBar:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -25, -2)
+    progressBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    progressBar:SetStatusBarColor(1, 0.82, 0, 1) -- Gold color
+    progressBar:SetMinMaxValues(0, 100)
+    progressBar:SetValue(0)
+    progressBar:Hide()
+
+    -- Progress bar background
+    local progressBg = progressBar:CreateTexture(nil, "BACKGROUND")
+    progressBg:SetAllPoints(progressBar)
+    progressBg:SetColorTexture(0, 0, 0, 0.5)
+    progressBar.bg = progressBg
+
+    btn.ProgressBar = progressBar
+
     table.insert(itemPool, btn)
     return btn
 end
@@ -211,6 +241,7 @@ local function ReleaseItems()
                 btn.ItemBtn:SetAttribute("item", nil)
             end
         end
+        if btn.ProgressBar then btn.ProgressBar:Hide() end
     end
 end
 
@@ -319,15 +350,40 @@ end
 
 local UpdateContent -- forward declaration for ScheduleUpdateContent
 
+-- Helper to extract progress from objective text
+local function GetObjectiveProgress(objectiveText)
+    if not objectiveText then return 0, false end
+
+    -- Check for percentage in text (e.g., "50%" or "Progress: 27%")
+    local percentMatch = objectiveText:match("(%d+)%%")
+    if percentMatch then
+        return tonumber(percentMatch), true
+    end
+
+    -- Check for count-based objectives (e.g., "10/20 items")
+    local current, total = objectiveText:match("(%d+)/(%d+)")
+    if current and total then
+        current, total = tonumber(current), tonumber(total)
+        if total > 0 then
+            return (current / total) * 100, true
+        end
+    end
+
+    return 0, false
+end
+
 -- Helper to add lines (hoisted from UpdateContent)
-local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor)
+local function AddLine(text, isHeader, questID, achieID, isObjective, overrideColor, perksActivityID)
     local btn = AcquireItem()
     btn:Show()
 
     btn.questID = questID
     btn.achieID = achieID
+    btn.perksActivityID = perksActivityID
+    btn.isSuperTrackedObjective = isObjective and questID and C_SuperTrack.GetSuperTrackedQuestID() == questID
 
-    btn:SetScript("OnClick", questID and OnQuestClick or achieID and OnAchieveClick or nil)
+    btn:SetScript("OnClick",
+        questID and OnQuestClick or achieID and OnAchieveClick or perksActivityID and OnPerksActivityClick or nil)
 
     local indent = ucState.indent or 0
     btn:SetWidth(ucState.width - indent)
@@ -376,6 +432,16 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             btn.Icon:Hide()
             btn.Text:SetPoint("LEFT", 19, 0)
             btn:EnableMouse(false)
+
+            -- Show progress bar only for supertracked quest objectives with progress
+            if btn.isSuperTrackedObjective then
+                local progress, hasProgress = GetObjectiveProgress(text)
+                if hasProgress and progress < 100 then
+                    btn.ProgressBar:SetValue(progress)
+                    btn.ProgressBar:Show()
+                end
+            end
+
             ucState.yOffset = ucState.yOffset - (currentSize + ucState.questPadding)
         else
             local currentSize = ucState.questNameSize
@@ -438,7 +504,7 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             end
 
             -- Tooltip preview on hover
-            if UIThingsDB.tracker.showTooltipPreview and (questID or achieID) then
+            if UIThingsDB.tracker.showTooltipPreview and (questID or achieID or perksActivityID) then
                 btn:SetScript("OnEnter", function(self)
                     if self.questID then
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
@@ -470,13 +536,73 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                                 for _, name in ipairs(members) do
                                     GameTooltip:AddLine("  " .. name)
                                 end
-                                GameTooltip:Show()
                             end
                         end
+
+                        -- Add interaction hints
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine("|cFFFFFFFFClick:|r Open Quest Log", 0.5, 0.5, 0.5)
+                        if UIThingsDB.tracker.shiftClickUntrack then
+                            GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Quest", 0.5, 0.5, 0.5)
+                        end
+                        if UIThingsDB.tracker.rightClickSuperTrack then
+                            GameTooltip:AddLine("|cFFFFFFFFRight-Click:|r Toggle Super Track", 0.5, 0.5, 0.5)
+                        end
+                        GameTooltip:Show()
                     elseif self.achieID then
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
                         GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
                         GameTooltip:SetHyperlink("achievement:" .. self.achieID)
+
+                        -- Add interaction hints
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine("|cFFFFFFFFClick:|r Open Achievement UI", 0.5, 0.5, 0.5)
+                        if UIThingsDB.tracker.shiftClickUntrack then
+                            GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Achievement", 0.5, 0.5, 0.5)
+                        end
+                        GameTooltip:Show()
+                    elseif self.perksActivityID then
+                        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                        GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
+
+                        -- Get activity data
+                        local allActivities = C_PerksActivities.GetPerksActivitiesInfo()
+                        if allActivities and allActivities.activities then
+                            for _, activity in ipairs(allActivities.activities) do
+                                if activity.ID == self.perksActivityID then
+                                    -- Show activity name as title
+                                    GameTooltip:AddLine(activity.activityName, 1, 1, 1)
+
+                                    -- Show description if available
+                                    if activity.description and activity.description ~= "" then
+                                        GameTooltip:AddLine(activity.description, nil, nil, nil, true)
+                                    end
+
+                                    -- Show requirements
+                                    if activity.requirementsList and #activity.requirementsList > 0 then
+                                        GameTooltip:AddLine(" ")
+                                        for _, req in ipairs(activity.requirementsList) do
+                                            if req.requirementText then
+                                                local r, g, b = 1, 1, 1
+                                                if req.completed then
+                                                    r, g, b = 0, 1, 0 -- Green for completed
+                                                end
+                                                GameTooltip:AddLine(req.requirementText, r, g, b)
+                                            end
+                                        end
+                                    end
+
+                                    -- Add interaction hints
+                                    if UIThingsDB.tracker.shiftClickUntrack then
+                                        GameTooltip:AddLine(" ")
+                                        GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Activity", 0.5, 0.5, 0.5)
+                                    end
+
+                                    break
+                                end
+                            end
+                        end
+
                         GameTooltip:Show()
                     end
                 end)
@@ -639,7 +765,7 @@ local function RenderSingleWQ(questID, superTrackedQuestID)
                         local objText = obj.text
                         if objText and objText ~= "" then
                             if obj.finished then objText = FormatCompletedObjective(objText) end
-                            AddLine(objText, false, nil, nil, true)
+                            AddLine(objText, false, questID, nil, true)
                         end
                     end
                 end
@@ -774,7 +900,7 @@ local function RenderQuests()
                                 local objText = obj.text
                                 if objText and objText ~= "" then
                                     if obj.finished then objText = FormatCompletedObjective(objText) end
-                                    AddLine(objText, false, nil, nil, true)
+                                    AddLine(objText, false, questID, nil, true)
                                 end
                             end
                         end
@@ -857,7 +983,7 @@ local function RenderQuests()
                                 local objText = obj.text
                                 if objText and objText ~= "" then
                                     if obj.finished then objText = FormatCompletedObjective(objText) end
-                                    AddLine(objText, false, nil, nil, true)
+                                    AddLine(objText, false, questID, nil, true)
                                 end
                             end
                         end
@@ -1032,29 +1158,153 @@ local function RenderAchievements()
 
         for _, achID in ipairs(validAchievements) do
             local _, name = GetAchievementInfo(achID)
-            AddLine(name, false, nil, achID)
+
+            -- Check if all criteria are completed
+            local allCompleted = true
             local numCriteria = GetAchievementNumCriteria(achID)
-            for j = 1, numCriteria do
-                local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
-                if criteriaString then
-                    local text = criteriaString
-                    if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
-                        text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
+            if numCriteria > 0 then
+                for j = 1, numCriteria do
+                    local _, _, completed = GetAchievementCriteriaInfo(achID, j)
+                    if not completed then
+                        allCompleted = false
+                        break
                     end
-                    if completed then text = "|cFF00FF00" .. text .. "|r" end
-                    AddLine(text, false, nil, nil, true)
                 end
             end
-            ucState.yOffset = ucState.yOffset - 5
+
+            -- Skip fully completed achievements if hideCompletedSubtasks is enabled
+            if numCriteria > 0 and allCompleted and UIThingsDB.tracker.hideCompletedSubtasks then
+                -- Skip this achievement entirely
+            else
+                AddLine(name, false, nil, achID)
+                for j = 1, numCriteria do
+                    local criteriaString, _, completed, quantity, reqQuantity = GetAchievementCriteriaInfo(achID, j)
+                    if criteriaString then
+                        -- Skip completed criteria if hideCompletedSubtasks is enabled
+                        if not (completed and UIThingsDB.tracker.hideCompletedSubtasks) then
+                            local text = criteriaString
+                            if (type(quantity) == "number" and type(reqQuantity) == "number") and reqQuantity > 1 then
+                                text = text .. " (" .. quantity .. "/" .. reqQuantity .. ")"
+                            end
+                            if completed then text = "|cFF00FF00" .. text .. "|r" end
+                            AddLine(text, false, nil, nil, true)
+                        end
+                    end
+                end
+                ucState.yOffset = ucState.yOffset - 5
+            end
         end
         ucState.yOffset = ucState.yOffset - 10
     end
+end
+
+local function RenderTravelersLog()
+    if not C_ContentTracking then
+        addonTable.Core.Log("Tracker", "C_ContentTracking API not available", 1)
+        return
+    end
+
+    -- Try multiple possible tracking types
+    local trackedActivities = {}
+    local allActivities = nil
+
+    -- Method 1: Try GetTrackedPerksActivities
+    if C_PerksActivities and C_PerksActivities.GetTrackedPerksActivities then
+        local tracked = C_PerksActivities.GetTrackedPerksActivities()
+        if tracked and #tracked > 0 then
+            trackedActivities = tracked
+        end
+    end
+
+    -- Method 2: Try GetPerksActivitiesInfo and filter for tracked ones
+    if #trackedActivities == 0 and C_PerksActivities and C_PerksActivities.GetPerksActivitiesInfo then
+        allActivities = C_PerksActivities.GetPerksActivitiesInfo()
+        if allActivities and allActivities.activities then
+            -- Iterate through activities and find tracked ones
+            for _, activity in ipairs(allActivities.activities) do
+                if activity and activity.tracked and activity.ID then
+                    table.insert(trackedActivities, activity.ID)
+                end
+            end
+        end
+    end
+
+    if #trackedActivities == 0 then
+        return
+    end
+
+    AddLine("Traveler's Log (" .. #trackedActivities .. ")", true, "travelersLog")
+
+    if UIThingsDB.tracker.collapsed["travelersLog"] then
+        ucState.yOffset = ucState.yOffset - 5
+        return
+    end
+
+    -- Build a lookup table of activities by ID for quick access
+    local activityLookup = {}
+    if allActivities and allActivities.activities then
+        for _, activity in ipairs(allActivities.activities) do
+            if activity and activity.ID then
+                activityLookup[activity.ID] = activity
+            end
+        end
+    end
+
+    for _, activityID in ipairs(trackedActivities) do
+        local activity = activityLookup[activityID]
+        if activity then
+            -- Check if all requirements are completed
+            local allCompleted = true
+            local hasRequirements = false
+            if activity.requirementsList and #activity.requirementsList > 0 then
+                hasRequirements = true
+                for _, req in ipairs(activity.requirementsList) do
+                    if req and req.requirementText and req.requirementText ~= "" then
+                        if not req.completed then
+                            allCompleted = false
+                            break
+                        end
+                    end
+                end
+            end
+
+            -- Skip fully completed activities if hideCompletedSubtasks is enabled
+            if hasRequirements and allCompleted and UIThingsDB.tracker.hideCompletedSubtasks then
+                -- Skip this activity entirely
+            else
+                local title = activity.activityName or "Unknown Activity"
+
+                AddLine(title, false, nil, nil, false, nil, activityID)
+
+                -- Add progress info from requirementsList if available
+                if activity.requirementsList and #activity.requirementsList > 0 then
+                    for _, req in ipairs(activity.requirementsList) do
+                        if req and req.requirementText and req.requirementText ~= "" then
+                            -- Skip completed objectives if hideCompletedSubtasks is enabled
+                            if not (req.completed and UIThingsDB.tracker.hideCompletedSubtasks) then
+                                local objText = req.requirementText
+                                if req.completed then
+                                    objText = FormatCompletedObjective(objText)
+                                end
+                                AddLine(objText, false, nil, nil, true, nil, activityID)
+                            end
+                        end
+                    end
+                end
+
+                ucState.yOffset = ucState.yOffset - 5
+            end
+        end
+    end
+
+    ucState.yOffset = ucState.yOffset - SECTION_SPACING
 end
 
 -- Section renderer lookup (hoisted, reuses the static functions above)
 local sectionRenderers = {
     scenarios = RenderScenarios,
     tempObjectives = function() end, -- handled within RenderQuests
+    travelersLog = RenderTravelersLog,
     worldQuests = RenderWorldQuests,
     quests = RenderQuests,
     achievements = RenderAchievements,
@@ -1141,7 +1391,28 @@ UpdateContent = function()
         }
         orderList = oldOrderMap[oldOrder] or oldOrderMap[1]
         table.insert(orderList, 2, "tempObjectives")
+        table.insert(orderList, 3, "travelersLog")
         UIThingsDB.tracker.sectionOrderList = orderList
+    else
+        -- Migration: Add travelersLog if it doesn't exist in user's list
+        local hasTravelersLog = false
+        for _, key in ipairs(orderList) do
+            if key == "travelersLog" then
+                hasTravelersLog = true
+                break
+            end
+        end
+        if not hasTravelersLog then
+            -- Insert after tempObjectives if it exists, otherwise after scenarios
+            local insertPos = 3
+            for i, key in ipairs(orderList) do
+                if key == "tempObjectives" then
+                    insertPos = i + 1
+                    break
+                end
+            end
+            table.insert(orderList, insertPos, "travelersLog")
+        end
     end
 
     for _, sectionKey in ipairs(orderList) do
@@ -1199,6 +1470,8 @@ local function RegisterTrackerEvents(frame)
     frame:RegisterEvent("TASK_PROGRESS_UPDATE")
     frame:RegisterEvent("QUEST_ACCEPTED")
     frame:RegisterEvent("QUEST_REMOVED")
+    frame:RegisterEvent("PERKS_ACTIVITIES_TRACKED_LIST_CHANGED")
+    frame:RegisterEvent("PERKS_ACTIVITIES_TRACKED_UPDATED")
 end
 
 local function SetupCustomTracker()

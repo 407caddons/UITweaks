@@ -1100,9 +1100,12 @@ function TalentReminder.ApplyTalents(reminder)
 
     -- Step 3: Commit the changes
     if changes > 0 then
-        local result = C_ClassTalents.CommitConfig(configID)
-        -- CommitConfig returns true on success, false or nil on failure
-        if result then
+        local result = C_Traits.CommitConfig(configID)
+        -- C_Traits.CommitConfig returns a result code (0 = success, non-zero = error)
+        -- or boolean in some game versions
+        local success = (result == 0) or (result == true) or (type(result) == "number" and result >= 0)
+
+        if success then
             print("|cFF00FF00[LunaUITweaks]|r Talents applied successfully (" .. changes .. " changes)")
             -- Hide the alert frame
             if alertFrame then
@@ -1110,7 +1113,7 @@ function TalentReminder.ApplyTalents(reminder)
             end
             return true
         else
-            print("|cFFFF0000[LunaUITweaks]|r Failed to commit talent changes (error code: " .. tostring(result) .. ")")
+            print("|cFFFF0000[LunaUITweaks]|r Unable to load talents (result: " .. tostring(result) .. ")")
             print("|cFFFFAA00[LunaUITweaks]|r You may need to manually apply the changes in the talent UI")
             return false
         end

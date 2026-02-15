@@ -82,15 +82,36 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UIThingsDB.tracker.sectionOrderList = {
             "scenarios",
             "tempObjectives",
+            "travelersLog",
             "worldQuests",
             "quests",
             "achievements"
         }
+    else
+        -- Migration: Add travelersLog if it doesn't exist
+        local hasTravelersLog = false
+        for _, key in ipairs(UIThingsDB.tracker.sectionOrderList) do
+            if key == "travelersLog" then
+                hasTravelersLog = true
+                break
+            end
+        end
+        if not hasTravelersLog then
+            local insertPos = 3
+            for i, key in ipairs(UIThingsDB.tracker.sectionOrderList) do
+                if key == "tempObjectives" then
+                    insertPos = i + 1
+                    break
+                end
+            end
+            table.insert(UIThingsDB.tracker.sectionOrderList, insertPos, "travelersLog")
+        end
     end
 
     local sectionNames = {
         scenarios = "Scenarios",
         tempObjectives = "Temporary Objectives",
+        travelersLog = "Traveler's Log",
         worldQuests = "World Quests",
         quests = "Quests",
         achievements = "Achievements"
@@ -110,7 +131,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end
 
-    for i = 1, 5 do
+    for i = 1, 6 do
         local item = CreateFrame("Frame", nil, panel)
         item:SetPoint("TOPLEFT", 20, yPos)
         item:SetSize(250, 24)

@@ -88,6 +88,7 @@ local function OnEvent(self, event, ...)
                 sectionOrderList = {
                     "scenarios",
                     "tempObjectives",
+                    "travelersLog",
                     "worldQuests",
                     "quests",
                     "achievements"
