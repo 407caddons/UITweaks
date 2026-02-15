@@ -368,7 +368,7 @@ local function OnEvent(self, event, ...)
         end
     elseif event == "PARTY_INVITE_REQUEST" then
         if not UIThingsDB.misc.enabled then return end
-        local name, guid = ...
+        local name, isTank, isHealer, isDamage, isNativeRealm, allowMultipleRoles, inviterGUID = ...
         local settings = UIThingsDB.misc
 
         if settings.autoAcceptEveryone then
@@ -379,14 +379,15 @@ local function OnEvent(self, event, ...)
 
         local isFriend = false
         if settings.autoAcceptFriends then
-            if guid and C_FriendList.IsFriend(guid) then
+            if inviterGUID and C_FriendList.IsFriend(inviterGUID) then
                 isFriend = true
-            else
+            end
+            if not isFriend then
                 -- Check BNet Friends
                 local numBNet = BNGetNumFriends()
                 for i = 1, numBNet do
                     local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-                    if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.playerGuid == guid then
+                    if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.playerGuid == inviterGUID then
                         isFriend = true
                         break
                     end
@@ -395,8 +396,8 @@ local function OnEvent(self, event, ...)
         end
 
         local isGuildMember = false
-        if settings.autoAcceptGuild then
-            if guid and IsGuildMember(guid) then
+        if settings.autoAcceptGuild and name then
+            if C_GuildInfo.MemberExistsByName(name) then
                 isGuildMember = true
             end
         end

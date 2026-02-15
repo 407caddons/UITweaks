@@ -29,6 +29,13 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             print("|cFF00FF00[LunaUITweaks]|r Addon communication disabled - you are hidden from other addon users")
         else
             print("|cFF00FF00[LunaUITweaks]|r Addon communication enabled")
+            -- Immediately announce presence and request data from the group
+            addonTable.AddonVersions.BroadcastPresence()
+            if UIThingsDB.kick and UIThingsDB.kick.enabled then
+                addonTable.Kick.BroadcastSpells()
+                -- Request spell lists from others so we get fresh data
+                addonTable.Comm.Send("KICK", "REQ", "")
+            end
         end
     end)
 

@@ -1132,11 +1132,10 @@ local function InitReminders()
     -- Register events for ongoing checks
     reminderEventFrame = CreateFrame("Frame")
     reminderEventFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
-        if event == "UNIT_AURA" and unit ~= "player" then return end
         if event == "BAG_UPDATE_DELAYED" then
             InvalidateBagScanCache()
         end
-        if event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
+        if event == "UNIT_SPELLCAST_SUCCEEDED" then
             if spellID then
                 local spellName = C_Spell.GetSpellName(spellID)
                 if spellName then
@@ -1169,12 +1168,12 @@ local function ApplyReminderEvents()
     local settings = UIThingsDB.combat.reminders
     if settings and settings.enabled ~= false then
         reminderEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        reminderEventFrame:RegisterEvent("UNIT_AURA")
-        reminderEventFrame:RegisterEvent("UNIT_PET")
+        reminderEventFrame:RegisterUnitEvent("UNIT_AURA", "player")
+        reminderEventFrame:RegisterUnitEvent("UNIT_PET", "player")
         reminderEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
         reminderEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         reminderEventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-        reminderEventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        reminderEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         reminderEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
         reminderEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     else

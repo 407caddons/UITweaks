@@ -330,6 +330,7 @@ local function OnEvent(self, event, ...)
                 locked = true,
                 attachToPartyFrames = false,
                 attachAnchorPoint = "BOTTOM", -- BOTTOM, TOP, LEFT, RIGHT
+                trackNonAddonUsers = false,
                 pos = { point = "CENTER", relPoint = "CENTER", x = 0, y = 0 },
                 bgColor = { r = 0, g = 0, b = 0, a = 0.8 },
                 borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },

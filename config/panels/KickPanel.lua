@@ -14,7 +14,7 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 750)
+    child:SetSize(650, 780)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -56,6 +56,28 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     attachCheckbox:SetChecked(UIThingsDB.kick.attachToPartyFrames)
     attachCheckbox:SetScript("OnClick", function(self)
         UIThingsDB.kick.attachToPartyFrames = self:GetChecked()
+        if addonTable.Kick and addonTable.Kick.UpdateSettings then
+            addonTable.Kick.UpdateSettings()
+        end
+    end)
+
+    -- Track Non-Addon Users Checkbox
+    local trackNonAddonCheckbox = CreateFrame("CheckButton", "UIThingsKickTrackNonAddon", child,
+        "ChatConfigCheckButtonTemplate")
+    trackNonAddonCheckbox:SetPoint("TOPLEFT", 20, -125)
+    _G[trackNonAddonCheckbox:GetName() .. "Text"]:SetText("Track players without addon")
+    trackNonAddonCheckbox:SetChecked(UIThingsDB.kick.trackNonAddonUsers)
+    trackNonAddonCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Track Non-Addon Users", 1, 1, 1)
+        GameTooltip:AddLine(
+            "Watches party members' spell casts to detect and track their interrupt cooldowns, even if they don't have the addon installed.",
+            nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    trackNonAddonCheckbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    trackNonAddonCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.kick.trackNonAddonUsers = self:GetChecked()
         if addonTable.Kick and addonTable.Kick.UpdateSettings then
             addonTable.Kick.UpdateSettings()
         end
@@ -105,7 +127,7 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     -- Lock/Unlock Button
     local lockBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     lockBtn:SetSize(120, 24)
-    lockBtn:SetPoint("TOPLEFT", 20, -125)
+    lockBtn:SetPoint("TOPLEFT", 20, -155)
     lockBtn:SetScript("OnShow", function(self)
         if UIThingsDB.kick.locked then
             self:SetText("Unlock Tracker")
@@ -126,7 +148,7 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
     end)
 
     -- Appearance section
-    Helpers.CreateSectionHeader(child, "Appearance", -155)
+    Helpers.CreateSectionHeader(child, "Appearance", -185)
 
     local function updateKick()
         if addonTable.Kick and addonTable.Kick.UpdateSettings then
@@ -134,46 +156,46 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
         end
     end
 
-    Helpers.CreateColorSwatch(child, "Background Color", UIThingsDB.kick.bgColor, updateKick, 20, -180)
-    Helpers.CreateColorSwatch(child, "Border Color", UIThingsDB.kick.borderColor, updateKick, 220, -180)
-    Helpers.CreateColorSwatch(child, "Bar Background", UIThingsDB.kick.barBgColor, updateKick, 20, -210)
-    Helpers.CreateColorSwatch(child, "Bar Border", UIThingsDB.kick.barBorderColor, updateKick, 220, -210)
+    Helpers.CreateColorSwatch(child, "Background Color", UIThingsDB.kick.bgColor, updateKick, 20, -210)
+    Helpers.CreateColorSwatch(child, "Border Color", UIThingsDB.kick.borderColor, updateKick, 220, -210)
+    Helpers.CreateColorSwatch(child, "Bar Background", UIThingsDB.kick.barBgColor, updateKick, 20, -240)
+    Helpers.CreateColorSwatch(child, "Bar Border", UIThingsDB.kick.barBorderColor, updateKick, 220, -240)
 
     -- Features section
     local featuresTitle = child:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    featuresTitle:SetPoint("TOPLEFT", 20, -250)
+    featuresTitle:SetPoint("TOPLEFT", 20, -280)
     featuresTitle:SetText("Features:")
 
     local feature1 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature1:SetPoint("TOPLEFT", 40, -275)
+    feature1:SetPoint("TOPLEFT", 40, -305)
     feature1:SetText("• Automatically detects your class interrupt ability")
 
     local feature2 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature2:SetPoint("TOPLEFT", 40, -295)
+    feature2:SetPoint("TOPLEFT", 40, -325)
     feature2:SetText("• Shows interrupt icon and cooldown progress bar for each party member")
 
     local feature3 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature3:SetPoint("TOPLEFT", 40, -315)
+    feature3:SetPoint("TOPLEFT", 40, -345)
     feature3:SetText("• Syncs interrupt usage across party members using addon messages")
 
     local feature4 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature4:SetPoint("TOPLEFT", 40, -335)
+    feature4:SetPoint("TOPLEFT", 40, -365)
     feature4:SetText("• Desaturates icon when on cooldown, shows time remaining")
 
     local feature5 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature5:SetPoint("TOPLEFT", 40, -355)
+    feature5:SetPoint("TOPLEFT", 40, -385)
     feature5:SetText("• Syncs actual cooldown durations (talent-modified) between party members")
 
     local feature6 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    feature6:SetPoint("TOPLEFT", 40, -375)
+    feature6:SetPoint("TOPLEFT", 40, -405)
     feature6:SetText("• Vengeance Demon Hunters show both Disrupt and Sigil of Silence")
 
     -- Supported interrupts section
     local interruptsTitle = child:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    interruptsTitle:SetPoint("TOPLEFT", 20, -410)
+    interruptsTitle:SetPoint("TOPLEFT", 20, -440)
     interruptsTitle:SetText("Supported Interrupts:")
 
-    local yOffset = -435
+    local yOffset = -465
     local interrupts = {
         { class = "Death Knight", spell = "Mind Freeze",       cd = "15s" },
         { class = "Demon Hunter", spell = "Disrupt",           cd = "15s" },
@@ -202,29 +224,29 @@ function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
 
     -- Usage instructions
     local usageTitle = child:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    usageTitle:SetPoint("TOPLEFT", 20, -605)
+    usageTitle:SetPoint("TOPLEFT", 20, -635)
     usageTitle:SetText("Usage:")
 
     local usage1 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage1:SetPoint("TOPLEFT", 40, -630)
+    usage1:SetPoint("TOPLEFT", 40, -660)
     usage1:SetWidth(620)
     usage1:SetJustifyH("LEFT")
     usage1:SetText("1. Enable the tracker and join a party")
 
     local usage2 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage2:SetPoint("TOPLEFT", 40, -650)
+    usage2:SetPoint("TOPLEFT", 40, -680)
     usage2:SetWidth(620)
     usage2:SetJustifyH("LEFT")
     usage2:SetText("2. Unlock the tracker to move it to your preferred position")
 
     local usage3 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage3:SetPoint("TOPLEFT", 40, -670)
+    usage3:SetPoint("TOPLEFT", 40, -700)
     usage3:SetWidth(620)
     usage3:SetJustifyH("LEFT")
     usage3:SetText("3. When you or party members use an interrupt, it will show on cooldown")
 
     local usage4 = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    usage4:SetPoint("TOPLEFT", 40, -690)
+    usage4:SetPoint("TOPLEFT", 40, -720)
     usage4:SetWidth(620)
     usage4:SetJustifyH("LEFT")
     usage4:SetText("4. Actual cooldown durations are synced, accounting for talent reductions")

@@ -156,6 +156,14 @@ function AddonVersions.GetOwnVersion()
     return VERSION
 end
 
+-- Broadcast our version and request others' — used when unhiding from the world
+function AddonVersions.BroadcastPresence()
+    if IsInGroup() then
+        BroadcastVersion()
+        RequestVersions()
+    end
+end
+
 function AddonVersions.RefreshVersions()
     wipe(playerData)
     -- Add self

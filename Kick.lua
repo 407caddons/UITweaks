@@ -10,18 +10,18 @@ local INTERRUPT_SPELLS = {
 
     -- Demon Hunter
     [183752] = { name = "Disrupt", cd = 15, class = "DEMONHUNTER" },
-    [202137] = { name = "Sigil of Silence", cd = 90, class = "DEMONHUNTER", specID = 2 }, -- Vengeance
+    [202137] = { name = "Sigil of Silence", cd = 90, class = "DEMONHUNTER", specID = 2 },
 
     -- Druid
     [106839] = { name = "Skull Bash", cd = 15, class = "DRUID" },
-    [78675] = { name = "Solar Beam", cd = 60, class = "DRUID" }, -- Balance
+    [78675] = { name = "Solar Beam", cd = 60, class = "DRUID" },
 
     -- Evoker
     [351338] = { name = "Quell", cd = 40, class = "EVOKER" },
 
     -- Hunter
     [147362] = { name = "Counter Shot", cd = 24, class = "HUNTER" },
-    [187650] = { name = "Freezing Trap", cd = 30, class = "HUNTER" }, -- CC but used as interrupt
+    [187650] = { name = "Freezing Trap", cd = 30, class = "HUNTER" },
 
     -- Mage
     [2139] = { name = "Counterspell", cd = 24, class = "MAGE" },
@@ -33,7 +33,7 @@ local INTERRUPT_SPELLS = {
     [96231] = { name = "Rebuke", cd = 15, class = "PALADIN" },
 
     -- Priest
-    [15487] = { name = "Silence", cd = 45, class = "PRIEST" }, -- Shadow
+    [15487] = { name = "Silence", cd = 45, class = "PRIEST" },
 
     -- Rogue
     [1766] = { name = "Kick", cd = 15, class = "ROGUE" },
@@ -42,9 +42,9 @@ local INTERRUPT_SPELLS = {
     [57994] = { name = "Wind Shear", cd = 12, class = "SHAMAN" },
 
     -- Warlock (pet abilities — different pets per spec)
-    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 1, isPet = true },  -- Affliction (Felhunter)
-    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK", specID = 2, isPet = true },    -- Demonology (Felguard)
-    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 3, isPet = true }, -- Destruction (Command Demon)
+    [19647] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 1, isPet = true },
+    [89766] = { name = "Axe Toss", cd = 30, class = "WARLOCK", specID = 2, isPet = true },
+    [132409] = { name = "Spell Lock", cd = 24, class = "WARLOCK", specID = 3, isPet = true },
 
     -- Warrior
     [6552] = { name = "Pummel", cd = 15, class = "WARRIOR" },
@@ -57,6 +57,21 @@ for spellID, data in pairs(INTERRUPT_SPELLS) do
     CLASS_INTERRUPTS[class] = CLASS_INTERRUPTS[class] or {}
     table.insert(CLASS_INTERRUPTS[class], spellID)
 end
+
+-- Specs that have NO interrupt (used for trackNonAddonUsers to skip these specs)
+local SPEC_NO_INTERRUPT = {
+    [256] = true,
+    [257] = true,
+    [105] = true,
+    [65]  = true,
+}
+
+-- Classes where healers keep their interrupt
+local HEALER_KEEPS_KICK = {
+    SHAMAN = true,
+    EVOKER = true,
+    MONK   = true,
+}
 
 -- Check if a spell is known by the player (or their pet for pet abilities)
 local function IsInterruptKnown(spellID)
@@ -529,6 +544,24 @@ local function CreateAttachedIcon(parent, index)
     return icon
 end
 
+local function AnchorToBlizzFrame(frame)
+    local blizzFrame = frame.blizzFrame
+    if not blizzFrame then return end
+
+    local anchorPoint = UIThingsDB.kick.attachAnchorPoint or "BOTTOM"
+    frame:ClearAllPoints()
+
+    if anchorPoint == "BOTTOM" then
+        frame:SetPoint("TOP", blizzFrame, "BOTTOM", 0, -2)
+    elseif anchorPoint == "TOP" then
+        frame:SetPoint("BOTTOM", blizzFrame, "TOP", 0, 2)
+    elseif anchorPoint == "LEFT" then
+        frame:SetPoint("RIGHT", blizzFrame, "LEFT", -2, 0)
+    elseif anchorPoint == "RIGHT" then
+        frame:SetPoint("LEFT", blizzFrame, "RIGHT", 2, 0)
+    end
+end
+
 local function CreateAttachedFrame(guid, unit)
     -- Find the actual Blizzard unit frame
     local blizzFrame = FindUnitFrame(unit)
@@ -541,37 +574,20 @@ local function CreateAttachedFrame(guid, unit)
     local frame = attachedFrames[unit]
 
     if not frame then
-        frame = CreateFrame("Frame", "LunaKickAttached_" .. unit, UIParent)
+        frame = CreateFrame("Frame", "LunaKickAttached_" .. unit, blizzFrame)
         frame:SetFrameStrata("MEDIUM")
         frame.icons = {}
-
-        -- Set up OnUpdate to dynamically position based on the blizz frame
-        frame:SetScript("OnUpdate", function(self, elapsed)
-            if self.blizzFrame and self.blizzFrame:IsShown() then
-                local anchorPoint = UIThingsDB.kick.attachAnchorPoint or "BOTTOM"
-                self:ClearAllPoints()
-
-                if anchorPoint == "BOTTOM" then
-                    self:SetPoint("TOP", self.blizzFrame, "BOTTOM", 0, -2)
-                elseif anchorPoint == "TOP" then
-                    self:SetPoint("BOTTOM", self.blizzFrame, "TOP", 0, 2)
-                elseif anchorPoint == "LEFT" then
-                    self:SetPoint("RIGHT", self.blizzFrame, "LEFT", -2, 0)
-                elseif anchorPoint == "RIGHT" then
-                    self:SetPoint("LEFT", self.blizzFrame, "RIGHT", 2, 0)
-                end
-
-                self:Show()
-            else
-                self:Hide()
-            end
-        end)
 
         -- Count text (total kick count)
         frame.count = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         frame.count:SetTextColor(1, 1, 1)
 
         attachedFrames[unit] = frame
+    else
+        -- Re-parent if the Blizzard frame changed (e.g. group roster update)
+        if frame.blizzFrame ~= blizzFrame then
+            frame:SetParent(blizzFrame)
+        end
     end
 
     -- Get all spells for this unit
@@ -642,6 +658,7 @@ local function CreateAttachedFrame(guid, unit)
     -- Keep .cooldown as nil so UpdatePartyFrame uses the multi-icon path
     frame.cooldown = nil
 
+    AnchorToBlizzFrame(frame)
     frame:Show()
 
     partyFrames[guid] = frame
@@ -1128,7 +1145,19 @@ function Kick.RebuildPartyFrames()
         Kick.UpdatePartyLayout()
     end
 
-    StopUpdateLoop()
+    -- If there are active cooldowns, restart the update loop to keep displaying them
+    local hasActiveCDs = false
+    for guid in pairs(interruptCooldowns) do
+        if next(interruptCooldowns[guid]) then
+            hasActiveCDs = true
+            break
+        end
+    end
+    if hasActiveCDs then
+        StartUpdateLoop()
+    else
+        StopUpdateLoop()
+    end
 end
 
 function Kick.UpdateSettings()
@@ -1191,6 +1220,15 @@ local function OnEvent(self, event, ...)
             addonTable.Comm.ScheduleThrottled("KICK_SPELLS", 3, function()
                 Kick.BroadcastSpells()
             end)
+            -- Update party watcher for non-addon users
+            if UIThingsDB.kick.trackNonAddonUsers then
+                if IsInGroup() then
+                    RegisterPartyWatcher()
+                else
+                    UnregisterPartyWatcher()
+                end
+                AutoRegisterPartyByClass()
+            end
         end
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         if UIThingsDB.kick.enabled then
@@ -1213,6 +1251,11 @@ local function OnEvent(self, event, ...)
                 Kick.RebuildPartyFrames()
             end)
         end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Leaving combat — rebuild frames to pick up any cooldowns detected mid-combat
+        if UIThingsDB.kick.enabled then
+            Kick.RebuildPartyFrames()
+        end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_SENT" then
         if not UIThingsDB.kick.enabled then return end
 
@@ -1228,44 +1271,41 @@ local function OnEvent(self, event, ...)
         end
 
         if issecretvalue(spellID) then return end
-        -- Check if it's an interrupt spell
+        -- Check if it's an interrupt spell (unit is always "player" via RegisterUnitEvent)
         if INTERRUPT_SPELLS[spellID] then
-            -- Only track the player's own casts; party members are tracked via addon comms
-            if unit == "player" then
-                -- Prevent double-tracking if both SENT and SUCCEEDED fire
-                local guid = UnitGUID("player")
-                local now = GetTime()
-                if not interruptCooldowns[guid] then
-                    interruptCooldowns[guid] = {}
-                end
-                local existing = interruptCooldowns[guid][spellID]
-                if existing and (existing.endTime - now) > 2 then
-                    -- Already tracking this spell with significant time remaining, skip
-                    -- (prevents double-tracking from SENT + SUCCEEDED both firing)
-                    return
-                end
-
-                -- Get actual cooldown from the game (respects talent modifiers)
-                -- Note: duration is a secret value during combat, so check before comparing
-                -- Also ignore GCD-length cooldowns (< 2s) which can happen for ground-targeted
-                -- spells when queried before the real cooldown starts
-                local cooldown = INTERRUPT_SPELLS[spellID].cd
-                local cdInfo = C_Spell.GetSpellCooldown(spellID)
-                if cdInfo and cdInfo.duration and not issecretvalue(cdInfo.duration) and cdInfo.duration > 2 then
-                    cooldown = cdInfo.duration
-                end
-
-                interruptCooldowns[guid][spellID] = {
-                    spellID = spellID,
-                    endTime = now + cooldown,
-                    totalCD = cooldown
-                }
-
-                IncrementTotal(guid)
-                Kick.UpdatePartyFrame(guid)
-                SendKickMessage(spellID, cooldown)
-                StartUpdateLoop()
+            -- Prevent double-tracking if both SENT and SUCCEEDED fire
+            local guid = UnitGUID("player")
+            local now = GetTime()
+            if not interruptCooldowns[guid] then
+                interruptCooldowns[guid] = {}
             end
+            local existing = interruptCooldowns[guid][spellID]
+            if existing and (existing.endTime - now) > 2 then
+                -- Already tracking this spell with significant time remaining, skip
+                -- (prevents double-tracking from SENT + SUCCEEDED both firing)
+                return
+            end
+
+            -- Get actual cooldown from the game (respects talent modifiers)
+            -- Note: duration is a secret value during combat, so check before comparing
+            -- Also ignore GCD-length cooldowns (< 2s) which can happen for ground-targeted
+            -- spells when queried before the real cooldown starts
+            local cooldown = INTERRUPT_SPELLS[spellID].cd
+            local cdInfo = C_Spell.GetSpellCooldown(spellID)
+            if cdInfo and cdInfo.duration and not issecretvalue(cdInfo.duration) and cdInfo.duration > 2 then
+                cooldown = cdInfo.duration
+            end
+
+            interruptCooldowns[guid][spellID] = {
+                spellID = spellID,
+                endTime = now + cooldown,
+                totalCD = cooldown
+            }
+
+            IncrementTotal(guid)
+            Kick.UpdatePartyFrame(guid)
+            SendKickMessage(spellID, cooldown)
+            StartUpdateLoop()
         end
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
         -- NOTE: The interruptedBy parameter in UNIT_SPELLCAST_INTERRUPTED is a secret value
@@ -1284,6 +1324,228 @@ local function OnEvent(self, event, ...)
     end
 end
 
+-- == PARTY SPELL CAST WATCHER (for non-addon users) ==
+
+-- Pre-create watcher frames for each party/raid slot (must be created at load time)
+local partyWatcherFrames = {}
+local partyPetWatcherFrames = {}
+for i = 1, 4 do
+    partyWatcherFrames[i] = CreateFrame("Frame")
+    partyPetWatcherFrames[i] = CreateFrame("Frame")
+end
+local partyWatcherRegistered = false
+
+-- Auto-register party members by class (for non-addon users)
+local function AutoRegisterPartyByClass()
+    if not UIThingsDB.kick.trackNonAddonUsers then return end
+    if not IsInGroup() then return end
+
+    local maxUnits = IsInRaid() and 40 or 4
+    local unitPrefix = IsInRaid() and "raid" or "party"
+
+    for i = 1, maxUnits do
+        local unit = unitPrefix .. i
+        if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitIsConnected(unit) then
+            local guid = UnitGUID(unit)
+            if guid and knownSpells[guid] == nil then
+                -- This player hasn't sent us spell data via addon comms — they don't have the addon
+                local _, class = UnitClass(unit)
+                if class and CLASS_INTERRUPTS[class] then
+                    -- Skip healers from classes that lose their kick
+                    local role = UnitGroupRolesAssigned(unit)
+                    if role == "HEALER" and not HEALER_KEEPS_KICK[class] then
+                        addonTable.Core.Log("Kick",
+                            string.format("AutoRegister: skipping %s (%s HEALER) — no kick expected",
+                                UnitName(unit) or "?", class), 0)
+                    else
+                        -- Auto-assign the first non-spec-specific interrupt for their class
+                        local spells = {}
+                        for _, spellID in ipairs(CLASS_INTERRUPTS[class]) do
+                            local data = INTERRUPT_SPELLS[spellID]
+                            if not data.specID then
+                                table.insert(spells, spellID)
+                            end
+                        end
+                        -- If all interrupts are spec-specific (e.g., Warlock), add the first one
+                        if #spells == 0 then
+                            table.insert(spells, CLASS_INTERRUPTS[class][1])
+                        end
+
+                        -- Don't overwrite if they already have a frame with cooldowns
+                        if not partyFrames[guid] then
+                            addonTable.Core.Log("Kick", string.format("AutoRegister: %s (%s) with %d interrupt(s)",
+                                UnitName(unit) or "?", class, #spells), 0)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function OnPartySpellCast(self, event, unit, castGUID, spellID)
+    if not UIThingsDB.kick.enabled then return end
+    if not UIThingsDB.kick.trackNonAddonUsers then return end
+    if not spellID then return end
+
+    -- During combat, spellIDs are tainted (secret values) and cannot be read
+    if issecretvalue(spellID) then return end
+
+    local spellData = INTERRUPT_SPELLS[spellID]
+    if not spellData then return end
+
+    local ownerUnit = unit
+
+    -- At this point we know a party member cast an interrupt spell
+    addonTable.Core.Log("Kick", string.format("PartyWatcher: %s (%s) cast %s (%s)",
+        UnitName(ownerUnit) or "?", unit, spellData.name, tostring(spellID)), 0)
+
+    local guid = UnitGUID(ownerUnit)
+    if not guid then return end
+
+    -- Skip if this player has the addon AND reported having interrupt spells
+    -- (empty knownSpells means they either have no kicks or are hiding — still watch them)
+    if knownSpells[guid] and #knownSpells[guid] > 0 then
+        addonTable.Core.Log("Kick", string.format("PartyWatcher: skipping %s — has addon with %d known spell(s)",
+            UnitName(ownerUnit) or "?", #knownSpells[guid]), 0)
+        return
+    end
+
+    addonTable.Core.Log("Kick", string.format("PartyWatcher: recording CD for %s — %s (%s) base CD=%ds",
+        UnitName(ownerUnit) or "?", spellData.name, tostring(spellID), spellData.cd), 0)
+
+    -- Record the cooldown
+    local cooldown = spellData.cd
+    local now = GetTime()
+
+    if not interruptCooldowns[guid] then
+        interruptCooldowns[guid] = {}
+    end
+
+    -- Skip if already tracking this spell with significant time remaining
+    local existing = interruptCooldowns[guid][spellID]
+    if existing and (existing.endTime - now) > 2 then
+        return
+    end
+
+    interruptCooldowns[guid][spellID] = {
+        spellID = spellID,
+        endTime = now + cooldown,
+        totalCD = cooldown
+    }
+
+    -- Rebuild frames if we don't have one for this player yet (but not during combat)
+    if not partyFrames[guid] then
+        if not InCombatLockdown() then
+            Kick.RebuildPartyFrames()
+        end
+    end
+
+    IncrementTotal(guid)
+    Kick.UpdatePartyFrame(guid)
+    StartUpdateLoop()
+end
+
+-- Pet watcher handler — resolves pet unit to owner unit
+local function OnPartyPetSpellCast(ownerIndex, self, event, unit, castGUID, spellID)
+    if not UIThingsDB.kick.enabled then return end
+    if not UIThingsDB.kick.trackNonAddonUsers then return end
+    if not spellID then return end
+
+    -- During combat, spellIDs are tainted (secret values) and cannot be read
+    if issecretvalue(spellID) then return end
+
+    local spellData = INTERRUPT_SPELLS[spellID]
+    if not spellData then return end
+
+    -- Resolve to owner
+    local ownerUnit = "party" .. ownerIndex
+    local ownerName = UnitName(ownerUnit)
+    if not ownerName then return end
+
+    addonTable.Core.Log("Kick", string.format("PartyWatcher: %s's pet cast %s (%s)",
+        ownerName, spellData.name, tostring(spellID)), 0)
+
+    local guid = UnitGUID(ownerUnit)
+    if not guid then return end
+
+    if knownSpells[guid] and #knownSpells[guid] > 0 then return end
+
+    local cooldown = spellData.cd
+    local now = GetTime()
+    if not interruptCooldowns[guid] then interruptCooldowns[guid] = {} end
+    local existing = interruptCooldowns[guid][spellID]
+    if existing and (existing.endTime - now) > 2 then return end
+
+    interruptCooldowns[guid][spellID] = {
+        spellID = spellID,
+        endTime = now + cooldown,
+        totalCD = cooldown
+    }
+
+    if not partyFrames[guid] then Kick.RebuildPartyFrames() end
+    IncrementTotal(guid)
+    Kick.UpdatePartyFrame(guid)
+    StartUpdateLoop()
+end
+
+-- Set the handler on all pre-created frames
+for i = 1, 4 do
+    partyWatcherFrames[i]:SetScript("OnEvent", OnPartySpellCast)
+    local idx = i
+    partyPetWatcherFrames[i]:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
+        OnPartyPetSpellCast(idx, self, event, unit, castGUID, spellID)
+    end)
+end
+
+local function RegisterPartyWatcher()
+    addonTable.Core.Log("Kick", string.format("RegisterPartyWatcher: registered=%s, trackNonAddon=%s, inGroup=%s",
+        tostring(partyWatcherRegistered),
+        tostring(UIThingsDB.kick.trackNonAddonUsers),
+        tostring(IsInGroup())), 0)
+    if not UIThingsDB.kick.trackNonAddonUsers then return end
+    if not IsInGroup() then return end
+
+    -- Unregister first to refresh unit tokens
+    for i = 1, 4 do
+        partyWatcherFrames[i]:UnregisterAllEvents()
+        partyPetWatcherFrames[i]:UnregisterAllEvents()
+    end
+
+    -- Register each party unit individually using RegisterUnitEvent
+    local count = 0
+    for i = 1, 4 do
+        local unit = "party" .. i
+        local petUnit = "partypet" .. i
+        if UnitExists(unit) then
+            partyWatcherFrames[i]:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", unit)
+            count = count + 1
+            addonTable.Core.Log("Kick", string.format("Party watcher: registered %s (%s)",
+                unit, UnitName(unit) or "?"), 0)
+        end
+        if UnitExists(petUnit) then
+            partyPetWatcherFrames[i]:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", petUnit)
+            addonTable.Core.Log("Kick", string.format("Party watcher: registered %s (pet of %s)",
+                petUnit, UnitName(unit) or "?"), 0)
+        end
+    end
+
+    partyWatcherRegistered = count > 0
+    if partyWatcherRegistered then
+        addonTable.Core.Log("Kick", string.format("Party watcher: watching %d party unit(s)", count), 1)
+    end
+end
+
+local function UnregisterPartyWatcher()
+    if not partyWatcherRegistered then return end
+    for i = 1, 4 do
+        partyWatcherFrames[i]:UnregisterAllEvents()
+        partyPetWatcherFrames[i]:UnregisterAllEvents()
+    end
+    partyWatcherRegistered = false
+    addonTable.Core.Log("Kick", "Party watcher: stopped watching", 0)
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
 frame:SetScript("OnEvent", OnEvent)
@@ -1294,14 +1556,26 @@ function Kick.ApplyEvents()
         frame:RegisterEvent("GROUP_ROSTER_UPDATE")
         frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         frame:RegisterEvent("SPELLS_CHANGED")
-        frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-        frame:RegisterEvent("UNIT_SPELLCAST_SENT")
+        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+        frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+        -- Party watcher for non-addon users
+        if UIThingsDB.kick.trackNonAddonUsers then
+            -- Re-register to pick up current party units
+            UnregisterPartyWatcher()
+            RegisterPartyWatcher()
+            AutoRegisterPartyByClass()
+        else
+            UnregisterPartyWatcher()
+        end
     else
         frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
         frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         frame:UnregisterEvent("SPELLS_CHANGED")
+        frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
+        UnregisterPartyWatcher()
         StopUpdateLoop()
         if partyContainer then
             partyContainer:Hide()

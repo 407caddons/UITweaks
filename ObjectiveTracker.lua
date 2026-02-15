@@ -1181,6 +1181,26 @@ end
 -- Try hooking immediately if already available
 HookBlizzardTracker()
 
+local function RegisterTrackerEvents(frame)
+    frame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+    frame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
+    frame:RegisterEvent("CONTENT_TRACKING_UPDATE")
+    frame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE")
+    frame:RegisterEvent("QUEST_LOG_UPDATE")
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    frame:RegisterEvent("CHALLENGE_MODE_START")
+    frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+    frame:RegisterEvent("CHALLENGE_MODE_RESET")
+    frame:RegisterEvent("SUPER_TRACKING_CHANGED")
+    frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    frame:RegisterEvent("ZONE_CHANGED")
+    frame:RegisterEvent("TASK_PROGRESS_UPDATE")
+    frame:RegisterEvent("QUEST_ACCEPTED")
+    frame:RegisterEvent("QUEST_REMOVED")
+end
+
 local function SetupCustomTracker()
     if trackerFrame then return end
     local settings = UIThingsDB.tracker
@@ -1271,23 +1291,7 @@ local function SetupCustomTracker()
     end)
 
     -- Event Registry
-    trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
-    trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED") -- Legacy?
-    trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE")          -- Modern
-    trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE")     -- Modern
-    trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
-    trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    trackerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    trackerFrame:RegisterEvent("CHALLENGE_MODE_START")
-    trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-    trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
-    trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
-    trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    trackerFrame:RegisterEvent("ZONE_CHANGED")
-    trackerFrame:RegisterEvent("TASK_PROGRESS_UPDATE") -- For bonus objectives/task quests
-    trackerFrame:RegisterEvent("QUEST_ACCEPTED")       -- When task quests are picked up
-    trackerFrame:RegisterEvent("QUEST_REMOVED")        -- When task quests are removed
+    RegisterTrackerEvents(trackerFrame)
 
     trackerFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_ENTERING_WORLD" then
@@ -1360,23 +1364,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     -- Re-register events (SetupCustomTracker only registers once on creation,
     -- so we must re-register after a disable/enable cycle)
     if trackerFrame then
-        trackerFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
-        trackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_LIST_CHANGED")
-        trackerFrame:RegisterEvent("CONTENT_TRACKING_UPDATE")
-        trackerFrame:RegisterEvent("CONTENT_TRACKING_LIST_UPDATE")
-        trackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
-        trackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        trackerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-        trackerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        trackerFrame:RegisterEvent("CHALLENGE_MODE_START")
-        trackerFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-        trackerFrame:RegisterEvent("CHALLENGE_MODE_RESET")
-        trackerFrame:RegisterEvent("SUPER_TRACKING_CHANGED")
-        trackerFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-        trackerFrame:RegisterEvent("ZONE_CHANGED")
-        trackerFrame:RegisterEvent("TASK_PROGRESS_UPDATE")
-        trackerFrame:RegisterEvent("QUEST_ACCEPTED")
-        trackerFrame:RegisterEvent("QUEST_REMOVED")
+        RegisterTrackerEvents(trackerFrame)
     end
 
     -- Check visibility
