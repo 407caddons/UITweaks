@@ -9,7 +9,38 @@ end
 
 local framePool = {}
 
+-- Save all visible frame positions back to saved variables
+-- Called on PLAYER_LOGOUT to ensure dragged positions are never lost
+local function SaveAllFramePositions()
+    if not UIThingsDB or not UIThingsDB.frames or not UIThingsDB.frames.enabled then return end
+    local list = UIThingsDB.frames.list or {}
+    local parentX, parentY = UIParent:GetCenter()
+    if not parentX then return end
+
+    for i, data in ipairs(list) do
+        local f = framePool[i]
+        if f and f:IsShown() then
+            local centerX, centerY = f:GetCenter()
+            if centerX then
+                local x = math.floor(centerX - parentX + 0.5)
+                local y = math.floor(centerY - parentY + 0.5)
+                data.x = x
+                data.y = y
+            end
+        end
+    end
+end
+
+local logoutFrame = CreateFrame("Frame")
+logoutFrame:RegisterEvent("PLAYER_LOGOUT")
+logoutFrame:SetScript("OnEvent", SaveAllFramePositions)
+
 function addonTable.Frames.UpdateFrames()
+    -- Invalidate widget anchor cache since frames may have changed
+    if addonTable.Widgets and addonTable.Widgets.InvalidateAnchorCache then
+        addonTable.Widgets.InvalidateAnchorCache()
+    end
+
     -- Hide all existing frames first (simple pooling)
     for _, f in pairs(framePool) do
         f:Hide()

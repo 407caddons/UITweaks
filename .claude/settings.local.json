@@ -12,7 +12,11 @@
       "WebFetch(domain:www.curseforge.com)",
       "WebFetch(domain:breezewiki.com)",
       "WebFetch(domain:wowwiki-archive.fandom.com)",
-      "WebFetch(domain:www.wowinterface.com)"
+      "WebFetch(domain:www.wowinterface.com)",
+      "WebFetch(domain:www.mmo-champion.com)",
+      "WebFetch(domain:dotesports.com)",
+      "WebFetch(domain:wowpedia.fandom.com)",
+      "WebFetch(domain:www.wowace.com)"
     ]
   }
 }

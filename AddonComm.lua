@@ -126,7 +126,23 @@ end
 
 -- == INTERNAL ==
 
+--- Purge expired entries from the dedup map
+local function CleanupRecentMessages()
+    local now = GetTime()
+    for key, timestamp in pairs(recentMessages) do
+        if (now - timestamp) >= DEDUP_WINDOW then
+            recentMessages[key] = nil
+        end
+    end
+    for key, timestamp in pairs(lastSendTime) do
+        if (now - timestamp) >= MIN_SEND_INTERVAL then
+            lastSendTime[key] = nil
+        end
+    end
+end
+
 --- Check if a message should be processed (dedup filter)
+local cleanupCounter = 0
 local function ShouldProcess(sender, module, action)
     local key = sender .. ":" .. module .. ":" .. action
     local now = GetTime()
@@ -134,6 +150,14 @@ local function ShouldProcess(sender, module, action)
         return false
     end
     recentMessages[key] = now
+
+    -- Periodically clean up expired entries (every 20 messages)
+    cleanupCounter = cleanupCounter + 1
+    if cleanupCounter >= 20 then
+        cleanupCounter = 0
+        CleanupRecentMessages()
+    end
+
     return true
 end
 

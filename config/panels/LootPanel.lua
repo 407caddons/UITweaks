@@ -327,4 +327,19 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     goldHelp:SetPoint("TOPLEFT", 45, -602)
     goldHelp:SetTextColor(0.5, 0.5, 0.5)
     goldHelp:SetText("Shows a toast when you loot gold above the minimum threshold")
+
+    -- Show Item Level Checkbox
+    local ilvlBtn = CreateFrame("CheckButton", "UIThingsLootIlvlCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    ilvlBtn:SetPoint("TOPLEFT", 20, -660)
+    _G[ilvlBtn:GetName() .. "Text"]:SetText("Show Item Level & Upgrade Indicator")
+    ilvlBtn:SetChecked(UIThingsDB.loot.showItemLevel)
+    ilvlBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.showItemLevel = self:GetChecked()
+    end)
+
+    local ilvlHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ilvlHelp:SetPoint("TOPLEFT", 45, -683)
+    ilvlHelp:SetTextColor(0.5, 0.5, 0.5)
+    ilvlHelp:SetText("Shows item level on gear toasts with green +X for upgrades")
 end

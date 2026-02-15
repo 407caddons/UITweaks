@@ -6,6 +6,52 @@ local PAGE_NAME = "UIThingsLootToast"
 local activeToasts = {}
 local itemPool = {} -- Recycled frames
 
+-- Map itemEquipLoc to inventory slot IDs for upgrade comparison
+local EQUIP_LOC_TO_SLOT = {
+    INVTYPE_HEAD = { 1 },
+    INVTYPE_NECK = { 2 },
+    INVTYPE_SHOULDER = { 3 },
+    INVTYPE_BODY = { 4 },
+    INVTYPE_CHEST = { 5 },
+    INVTYPE_ROBE = { 5 },
+    INVTYPE_WAIST = { 6 },
+    INVTYPE_LEGS = { 7 },
+    INVTYPE_FEET = { 8 },
+    INVTYPE_WRIST = { 9 },
+    INVTYPE_HAND = { 10 },
+    INVTYPE_FINGER = { 11, 12 },
+    INVTYPE_TRINKET = { 13, 14 },
+    INVTYPE_CLOAK = { 15 },
+    INVTYPE_WEAPON = { 16, 17 },
+    INVTYPE_2HWEAPON = { 16 },
+    INVTYPE_WEAPONMAINHAND = { 16 },
+    INVTYPE_WEAPONOFFHAND = { 17 },
+    INVTYPE_HOLDABLE = { 17 },
+    INVTYPE_SHIELD = { 17 },
+    INVTYPE_RANGED = { 16 },
+    INVTYPE_RANGEDRIGHT = { 16 },
+}
+
+local function GetEquippedIlvlForSlots(slots)
+    if not slots then return nil end
+    local lowestIlvl = nil
+    for _, slotID in ipairs(slots) do
+        local link = GetInventoryItemLink("player", slotID)
+        if link then
+            local ilvl = GetDetailedItemLevelInfo(link)
+            if ilvl then
+                if not lowestIlvl or ilvl < lowestIlvl then
+                    lowestIlvl = ilvl
+                end
+            end
+        else
+            -- Empty slot = 0 ilvl, definitely an upgrade
+            return 0
+        end
+    end
+    return lowestIlvl
+end
+
 -- Anchor Frame
 local anchorFrame = CreateFrame("Frame", "UIThingsLootAnchor", UIParent, "BackdropTemplate")
 anchorFrame:SetSize(200, 20)
@@ -182,8 +228,38 @@ local function SpawnToast(itemLink, text, count, looterName, looterClass)
     if itemTexture then toast.icon:SetTexture(itemTexture) end
     if itemName then
         local countText = (count and count > 1) and (" x" .. count) or ""
-        toast.text:SetText(itemName .. countText)
-        -- Color name by rarity?
+
+        -- Item level and upgrade indicator
+        local ilvlSuffix = ""
+        if UIThingsDB.loot.showItemLevel and itemLink then
+            local itemLevel = GetDetailedItemLevelInfo(itemLink)
+            if itemLevel then
+                local _, _, _, _, _, _, _, _, itemEquipLoc = GetItemInfo(itemLink)
+                local slots = itemEquipLoc and EQUIP_LOC_TO_SLOT[itemEquipLoc]
+                if slots then
+                    local equippedIlvl = GetEquippedIlvlForSlots(slots)
+                    if equippedIlvl then
+                        local diff = itemLevel - equippedIlvl
+                        if diff > 0 then
+                            ilvlSuffix = string.format(" |cFF00FF00[%d +%d]|r", itemLevel, diff)
+                        elseif diff < 0 then
+                            ilvlSuffix = string.format(" |cFF888888[%d]|r", itemLevel)
+                        else
+                            ilvlSuffix = string.format(" |cFFFFFF00[%d]|r", itemLevel)
+                        end
+                    else
+                        ilvlSuffix = string.format(" |cFFFFFF00[%d]|r", itemLevel)
+                    end
+                else
+                    -- Non-equippable item with ilvl (e.g., tokens)
+                    if itemLevel > 1 then
+                        ilvlSuffix = string.format(" |cFFFFFF00[%d]|r", itemLevel)
+                    end
+                end
+            end
+        end
+
+        toast.text:SetText(itemName .. ilvlSuffix .. countText)
         if itemRarity then
             local r, g, b = GetItemQualityColor(itemRarity)
             toast.text:SetTextColor(r, g, b)
@@ -365,6 +441,7 @@ end
 
 -- Event Handler
 local frame = CreateFrame("Frame")
+local lastMoney = 0                 -- Tracks previous gold amount for locale-independent gold change detection
 frame:RegisterEvent("PLAYER_LOGIN") -- Always needed for initialization
 
 function Loot.ApplyEvents()
@@ -382,21 +459,23 @@ function Loot.ApplyEvents()
 
         -- Gold notifications
         if UIThingsDB.loot.showGold then
-            frame:RegisterEvent("CHAT_MSG_MONEY")
+            lastMoney = GetMoney()
+            frame:RegisterEvent("PLAYER_MONEY")
         else
-            frame:UnregisterEvent("CHAT_MSG_MONEY")
+            frame:UnregisterEvent("PLAYER_MONEY")
         end
     else
         frame:UnregisterEvent("CHAT_MSG_LOOT")
         frame:UnregisterEvent("LOOT_READY")
         frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
         frame:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
-        frame:UnregisterEvent("CHAT_MSG_MONEY")
+        frame:UnregisterEvent("PLAYER_MONEY")
     end
 end
 
 frame:SetScript("OnEvent", function(self, event, msg, ...)
     if event == "PLAYER_LOGIN" then
+        lastMoney = GetMoney()
         addonTable.Loot.UpdateSettings()
         UpdateRosterCache()
         return
@@ -419,19 +498,14 @@ frame:SetScript("OnEvent", function(self, event, msg, ...)
         return
     end
 
-    if event == "CHAT_MSG_MONEY" then
+    if event == "PLAYER_MONEY" then
         if UIThingsDB.loot.showGold then
-            -- Parse copper amount from the chat message
-            local copper = 0
-            local gold = msg and msg:match("(%d+) Gold")
-            local silver = msg and msg:match("(%d+) Silver")
-            local cop = msg and msg:match("(%d+) Copper")
-            if gold then copper = copper + tonumber(gold) * 10000 end
-            if silver then copper = copper + tonumber(silver) * 100 end
-            if cop then copper = copper + tonumber(cop) end
+            local currentMoney = GetMoney()
+            local gained = currentMoney - lastMoney
+            lastMoney = currentMoney
 
-            if copper > 0 and copper >= (UIThingsDB.loot.minGoldAmount or 10000) then
-                SpawnGoldToast(copper)
+            if gained > 0 and gained >= (UIThingsDB.loot.minGoldAmount or 10000) then
+                SpawnGoldToast(gained)
             end
         end
         return

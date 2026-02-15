@@ -127,6 +127,72 @@ local function URLMessageFilter(self, event, msg, ...)
     return false
 end
 
+-- Keyword highlight filter
+local function HighlightKeywords(msg)
+    local keywords = UIThingsDB.chatSkin.highlightKeywords
+    if not keywords or #keywords == 0 then return msg end
+
+    local color = UIThingsDB.chatSkin.highlightColor or { r = 1, g = 1, b = 0 }
+    local colorCode = string.format("|cFF%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
+
+    -- Protect existing hyperlinks and color codes from modification
+    local placeholders = {}
+    local placeholderIdx = 0
+    local safeMsg = msg:gsub("(|H.-|h.-|h)", function(link)
+        placeholderIdx = placeholderIdx + 1
+        local key = "\001KW" .. placeholderIdx .. "\001"
+        placeholders[key] = link
+        return key
+    end)
+    safeMsg = safeMsg:gsub("(|c%x%x%x%x%x%x%x%x)", function(code)
+        placeholderIdx = placeholderIdx + 1
+        local key = "\001KW" .. placeholderIdx .. "\001"
+        placeholders[key] = code
+        return key
+    end)
+    safeMsg = safeMsg:gsub("(|r)", function(code)
+        placeholderIdx = placeholderIdx + 1
+        local key = "\001KW" .. placeholderIdx .. "\001"
+        placeholders[key] = code
+        return key
+    end)
+
+    -- Apply keyword highlights (case-insensitive)
+    for _, keyword in ipairs(keywords) do
+        if keyword ~= "" then
+            -- Escape Lua pattern special characters in keyword
+            local escaped = keyword:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+            safeMsg = safeMsg:gsub("(" .. escaped .. ")", colorCode .. "%1|r")
+        end
+    end
+
+    -- Restore placeholders
+    for key, original in pairs(placeholders) do
+        local start, stop = safeMsg:find(key, 1, true)
+        while start do
+            safeMsg = safeMsg:sub(1, start - 1) .. original .. safeMsg:sub(stop + 1)
+            start, stop = safeMsg:find(key, 1, true)
+        end
+    end
+
+    return safeMsg
+end
+
+local function KeywordMessageFilter(self, event, msg, ...)
+    if not UIThingsDB.chatSkin.enabled then return false end
+    local keywords = UIThingsDB.chatSkin.highlightKeywords
+    if not keywords or #keywords == 0 then return false end
+
+    local newMsg = HighlightKeywords(msg)
+    if newMsg ~= msg then
+        if UIThingsDB.chatSkin.highlightSound then
+            PlaySound(3081) -- RAID_WARNING sound
+        end
+        return false, newMsg, ...
+    end
+    return false
+end
+
 -- Border helper
 local function EnsureBorders(frame)
     if not frame.lunaBorders then
@@ -1064,6 +1130,7 @@ function ChatSkin.InstallMessageFilters()
     if filtersInstalled then return end
     for _, event in ipairs(URL_FILTER_EVENTS) do
         ChatFrame_AddMessageEventFilter(event, URLMessageFilter)
+        ChatFrame_AddMessageEventFilter(event, KeywordMessageFilter)
     end
     filtersInstalled = true
 end
@@ -1072,6 +1139,7 @@ function ChatSkin.RemoveMessageFilters()
     if not filtersInstalled then return end
     for _, event in ipairs(URL_FILTER_EVENTS) do
         ChatFrame_RemoveMessageEventFilter(event, URLMessageFilter)
+        ChatFrame_RemoveMessageEventFilter(event, KeywordMessageFilter)
     end
     filtersInstalled = false
 end

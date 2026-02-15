@@ -282,7 +282,7 @@ end
 
 -- Register handler for interrupt cooldown messages
 addonTable.Comm.Register("KICK", "CD", function(senderShort, payload, senderFull)
-    if not UIThingsDB.kick.enabled then return end
+    if not UIThingsDB.kick.enabled or not IsInGroup() or IsInRaid() then return end
 
     -- Skip self (already handled locally)
     if UnitName("player") == senderShort then return end
@@ -337,7 +337,7 @@ end)
 
 -- Register handler for spell list broadcasts
 addonTable.Comm.Register("KICK", "SPELLS", function(senderShort, payload, senderFull)
-    if not UIThingsDB.kick.enabled then return end
+    if not UIThingsDB.kick.enabled or not IsInGroup() or IsInRaid() then return end
 
     -- Skip self
     if UnitName("player") == senderShort then return end
@@ -377,7 +377,7 @@ end)
 
 -- Register handler for spell list requests (e.g. after someone reloads)
 addonTable.Comm.Register("KICK", "REQ", function(senderShort, payload, senderFull)
-    if not UIThingsDB.kick.enabled then return end
+    if not UIThingsDB.kick.enabled or not IsInGroup() or IsInRaid() then return end
     if UnitName("player") == senderShort then return end
 
     -- Respond with our spells after a short throttled delay
@@ -1081,7 +1081,7 @@ function Kick.RebuildPartyFrames()
         end
     end
 
-    if not UIThingsDB.kick.enabled then
+    if not UIThingsDB.kick.enabled or not IsInGroup() or IsInRaid() then
         StopUpdateLoop()
         if partyContainer then
             partyContainer:Hide()
@@ -1257,7 +1257,7 @@ local function OnEvent(self, event, ...)
             Kick.RebuildPartyFrames()
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_SENT" then
-        if not UIThingsDB.kick.enabled then return end
+        if not UIThingsDB.kick.enabled or not IsInGroup() or IsInRaid() then return end
 
         -- UNIT_SPELLCAST_SENT args: (unit, target, castGUID, spellID)
         -- UNIT_SPELLCAST_SUCCEEDED args: (unit, castGUID, spellID)

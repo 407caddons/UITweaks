@@ -138,13 +138,14 @@ The `CompareTalents()` function returns mismatches categorized as:
 
 The `docs/` folder contains WoW API documentation extracted directly from the in-game client. **Always consult `docs/index.md` and the linked files in the `docs/` folder first for all WoW API lookups and research.** This is the most accurate source of information as it was taken from in-game documentation and reflects the actual available API for the current client version.
 
-## Daily prompts
+## Daily prompts (4)
 
-Could you do an in depth code review of this entire addon? Look for performance issues, code readability, and potential improvements. Also, please check for any potential memory leaks and optimize the code to reduce memory usage. Write the results and replace .clause\codreview.md
+Each of these prompts may have been done already today, if so could you not remove them and use them as a baseline for your review. If anything has fixed or been changed mark it as such in the file.
 
-Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results and replace .clause\features.md
+1. Could you do an in depth code review of this entire addon? Look for performance issues, code readability, and potential improvements. Also, please check for any potential memory leaks and optimize the code to reduce memory usage. Write the results to .clause\codreview.md.
 
-Can you give me 20 ideas for widgets and improvements to existing ones, give an estimation of ease of use. Write the results and replace .clause\widgets.md
+2. Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results to .clause\features.md
 
+3. Can you give me 20 ideas for widgets and improvements to existing ones, give an estimation of ease of use. Write the results to .clause\widgets.md
 
-Could you write a short bulleted change log, for the last release no need to get to detailed don't include any minor fixes. Write the results and replace .claude\changeLog.md
+4. Could you write a short bulleted change log, for the last release no need to get to detailed don't include any minor fixes. Write the results and replace .claude\changeLog.md

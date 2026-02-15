@@ -205,6 +205,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "darkmoonFaire", label = "Darkmoon Faire" },
         { key = "mail",          label = "Mail Indicator" },
         { key = "pullCounter",   label = "Pull Counter" },
+        { key = "hearthstone",   label = "Hearthstone" },
     }
 
     local yOffset = -250

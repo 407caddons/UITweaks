@@ -55,6 +55,7 @@ end
 local MINUTES_PER_DAY = 1440
 local MINUTES_PER_HOUR = 60
 local UPDATE_THROTTLE_DELAY = 0.1
+-- These are updated from settings in UpdateContent via ucState
 local SECTION_SPACING = 10
 local ITEM_SPACING = 5
 
@@ -72,13 +73,30 @@ local SafeAfter = addonTable.Core.SafeAfter
 
 
 local function OnQuestClick(self, button)
-    -- Disable left-click in combat
-    if InCombatLockdown() and button == "LeftButton" then return end
+    -- Shift-Left-Click to link quest in chat (WoW convention)
+    if button == "LeftButton" and IsShiftKeyDown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.shiftClickLink then
+        local questLink = GetQuestLink(self.questID)
+        if questLink and ChatFrame1EditBox:IsShown() then
+            ChatFrame1EditBox:Insert(questLink)
+        elseif questLink then
+            ChatFrame_OpenChat(questLink)
+        end
+        return
+    end
 
-    -- Shift-Click to Untrack (if enabled)
-    if IsShiftKeyDown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.shiftClickUntrack then
+    -- Ctrl-Left-Click to Untrack (if enabled)
+    if button == "LeftButton" and IsControlKeyDown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.shiftClickUntrack then
         C_QuestLog.RemoveQuestWatch(self.questID)
-        SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent) -- Refresh list
+        SafeAfter(0.1, addonTable.ObjectiveTracker.UpdateContent)
+        return
+    end
+
+    -- Middle-Click to share quest with party
+    if button == "MiddleButton" and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.middleClickShare then
+        if IsInGroup() and C_QuestLog.IsPushableQuest(self.questID) then
+            C_QuestLog.SetSelectedQuest(self.questID)
+            QuestLogPushQuest()
+        end
         return
     end
 
@@ -93,7 +111,8 @@ local function OnQuestClick(self, button)
         return
     end
 
-    if self.questID and type(self.questID) == "number" then
+    -- Left-Click to open quest log (blocked in combat — UI panels are protected)
+    if not InCombatLockdown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.clickOpenQuest then
         -- Try modern Map/Quest Log
         if QuestMapFrame_OpenToQuestDetails then
             -- Make sure the frame is shown first
@@ -163,14 +182,15 @@ end
 -- Item Factories
 local function AcquireItem()
     for _, btn in ipairs(itemPool) do
-        if not btn:IsShown() then
+        if btn.released then
+            btn.released = false
             return btn
         end
     end
 
     local btn = CreateFrame("Button", nil, scrollChild)
     btn:SetHeight(20)
-    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(14, 14) -- Slightly smaller than text height
@@ -190,9 +210,9 @@ local function AcquireItem()
     btn.ToggleBtn = toggleBtn
 
     -- Quest Item Button (Hidden by default)
-    local itemBtn = CreateFrame("Button", nil, btn, "SecureActionButtonTemplate")
+    -- Parent to UIParent so no frame in the tracker hierarchy becomes tainted
+    local itemBtn = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
     itemBtn:SetSize(20, 20)
-    itemBtn:SetPoint("RIGHT", -2, 0)
     itemBtn:Hide()
     itemBtn:RegisterForClicks("AnyUp", "AnyDown")
     itemBtn:SetFrameLevel(btn:GetFrameLevel() + 2)
@@ -225,21 +245,21 @@ local function AcquireItem()
 end
 
 local function ReleaseItems()
+    local inCombat = InCombatLockdown()
     for _, btn in ipairs(itemPool) do
+        btn.released = true
         btn:Hide()
         btn:SetScript("OnClick", nil)
         btn:SetScript("OnEnter", nil)
         btn:SetScript("OnLeave", nil)
         btn.Icon:Hide()
-        btn.Text:ClearAllPoints() -- Reset points to ensure clean state
+        btn.Text:SetText("")
         if btn.ToggleBtn then btn.ToggleBtn:Hide() end
-        if btn.ItemBtn then
+        if btn.ItemBtn and not inCombat then
+            btn.ItemBtn:ClearAllPoints()
             btn.ItemBtn:Hide()
-            -- Only modify secure attributes out of combat to prevent taint
-            if not InCombatLockdown() then
-                btn.ItemBtn:SetAttribute("type", nil)
-                btn.ItemBtn:SetAttribute("item", nil)
-            end
+            btn.ItemBtn:SetAttribute("type", nil)
+            btn.ItemBtn:SetAttribute("item", nil)
         end
         if btn.ProgressBar then btn.ProgressBar:Hide() end
     end
@@ -274,6 +294,7 @@ local questsByZone = {}
 -- Quest/objective completion sound tracking
 local prevObjectiveState = {} -- [questID] = { [objIndex] = { finished = bool, text = string } }
 local prevQuestComplete = {}  -- [questID] = bool
+local tooltipMembers = {}     -- Reusable table for tooltip party member list
 
 local function CheckQuestSounds(questID, playQuestSound, playObjSound)
     local isComplete = C_QuestLog.IsComplete(questID)
@@ -484,23 +505,33 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                     local questItemLink, questItemIcon = GetQuestLogSpecialItemInfo(questLogIndex)
                     if questItemLink and questItemIcon then
                         btn.ItemBtn.iconTex:SetTexture(questItemIcon)
-                        -- Only modify secure attributes out of combat to prevent taint
                         if not InCombatLockdown() then
+                            -- Position absolutely so no anchor dependency taints btn
+                            local right = btn:GetRight()
+                            local cy = select(2, btn:GetCenter())
+                            if right and cy then
+                                btn.ItemBtn:ClearAllPoints()
+                                btn.ItemBtn:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", right - 2, cy)
+                            end
                             btn.ItemBtn:SetAttribute("type", "item")
                             btn.ItemBtn:SetAttribute("item", questItemLink)
+                            btn.ItemBtn:Show()
                         end
-                        btn.ItemBtn:Show()
                     else
-                        btn.ItemBtn:Hide()
+                        if not InCombatLockdown() then
+                            btn.ItemBtn:Hide()
+                        end
                     end
                 else
-                    btn.ItemBtn:Hide()
+                    if not InCombatLockdown() then
+                        btn.ItemBtn:Hide()
+                    end
                 end
             else
                 btn.Icon:Hide()
                 btn.Text:SetPoint("LEFT", 19, 0)
                 if achieID then btn:EnableMouse(true) else btn:EnableMouse(false) end
-                if btn.ItemBtn then btn.ItemBtn:Hide() end
+                if btn.ItemBtn and not InCombatLockdown() then btn.ItemBtn:Hide() end
             end
 
             -- Tooltip preview on hover
@@ -512,7 +543,7 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                         GameTooltip:SetHyperlink("quest:" .. self.questID)
                         -- Show party members on the same quest
                         if IsInGroup() then
-                            local members = {}
+                            wipe(tooltipMembers)
                             local maxUnit = IsInRaid() and 40 or 4
                             local prefix = IsInRaid() and "raid" or "party"
                             for i = 1, maxUnit do
@@ -523,43 +554,28 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                                         local _, class = UnitClass(unit)
                                         local color = RAID_CLASS_COLORS[class]
                                         if color and name then
-                                            table.insert(members, color:WrapTextInColorCode(name))
+                                            table.insert(tooltipMembers, color:WrapTextInColorCode(name))
                                         elseif name then
-                                            table.insert(members, name)
+                                            table.insert(tooltipMembers, name)
                                         end
                                     end
                                 end
                             end
-                            if #members > 0 then
+                            if #tooltipMembers > 0 then
                                 GameTooltip:AddLine(" ")
                                 GameTooltip:AddLine("Party Members on Quest:")
-                                for _, name in ipairs(members) do
+                                for _, name in ipairs(tooltipMembers) do
                                     GameTooltip:AddLine("  " .. name)
                                 end
                             end
                         end
 
-                        -- Add interaction hints
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine("|cFFFFFFFFClick:|r Open Quest Log", 0.5, 0.5, 0.5)
-                        if UIThingsDB.tracker.shiftClickUntrack then
-                            GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Quest", 0.5, 0.5, 0.5)
-                        end
-                        if UIThingsDB.tracker.rightClickSuperTrack then
-                            GameTooltip:AddLine("|cFFFFFFFFRight-Click:|r Toggle Super Track", 0.5, 0.5, 0.5)
-                        end
                         GameTooltip:Show()
                     elseif self.achieID then
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
                         GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0)
                         GameTooltip:SetHyperlink("achievement:" .. self.achieID)
 
-                        -- Add interaction hints
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine("|cFFFFFFFFClick:|r Open Achievement UI", 0.5, 0.5, 0.5)
-                        if UIThingsDB.tracker.shiftClickUntrack then
-                            GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Achievement", 0.5, 0.5, 0.5)
-                        end
                         GameTooltip:Show()
                     elseif self.perksActivityID then
                         GameTooltip:SetOwner(self, "ANCHOR_NONE")
@@ -590,12 +606,6 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                                                 GameTooltip:AddLine(req.requirementText, r, g, b)
                                             end
                                         end
-                                    end
-
-                                    -- Add interaction hints
-                                    if UIThingsDB.tracker.shiftClickUntrack then
-                                        GameTooltip:AddLine(" ")
-                                        GameTooltip:AddLine("|cFFFFFFFFShift-Click:|r Untrack Activity", 0.5, 0.5, 0.5)
                                     end
 
                                     break
@@ -1058,7 +1068,7 @@ local function RenderQuests()
                     btn:EnableMouse(false)
                     btn:SetScript("OnEnter", nil)
                     btn:SetScript("OnLeave", nil)
-                    if btn.ItemBtn then btn.ItemBtn:Hide() end
+                    if btn.ItemBtn and not InCombatLockdown() then btn.ItemBtn:Hide() end
 
                     btn.ToggleBtn:Show()
                     btn.ToggleBtn:SetScript("OnClick", function(self, button)
@@ -1326,25 +1336,28 @@ end
 UpdateContent = function()
     if not trackerFrame then return end
 
-    -- Guard against combat execution (prevents taint on secure items)
-    if InCombatLockdown() then return end
+    local inCombat = InCombatLockdown()
 
     -- Check if disabled or should forcefully hide (M+)
     local enabled = UIThingsDB.tracker.enabled
     local shouldHideMPlus = enabled and (UIThingsDB.tracker.hideInMPlus and C_ChallengeMode.IsChallengeModeActive())
 
     if not enabled or shouldHideMPlus then
-        UnregisterStateDriver(trackerFrame, "visibility")
-        trackerFrame:Hide()
+        if not inCombat then
+            UnregisterStateDriver(trackerFrame, "visibility")
+            trackerFrame:Hide()
+        end
         return
     end
 
-    -- Handle Combat Visibility securely via State Driver
-    if UIThingsDB.tracker.hideInCombat then
-        RegisterStateDriver(trackerFrame, "visibility", "[combat] hide; show")
-    else
-        UnregisterStateDriver(trackerFrame, "visibility")
-        trackerFrame:Show()
+    -- Handle Combat Visibility securely via State Driver (only out of combat)
+    if not inCombat then
+        if UIThingsDB.tracker.hideInCombat then
+            RegisterStateDriver(trackerFrame, "visibility", "[combat] hide; show")
+        else
+            UnregisterStateDriver(trackerFrame, "visibility")
+            trackerFrame:Show()
+        end
     end
 
     ReleaseItems()
@@ -1361,6 +1374,8 @@ UpdateContent = function()
     ucState.detailFont = UIThingsDB.tracker.detailFont or "Fonts\\FRIZQT__.TTF"
     ucState.detailSize = UIThingsDB.tracker.detailFontSize or 12
     ucState.questPadding = UIThingsDB.tracker.questPadding or 2
+    SECTION_SPACING = UIThingsDB.tracker.sectionSpacing or 10
+    ITEM_SPACING = UIThingsDB.tracker.itemSpacing or 5
     ucState.sectionHeaderFont = UIThingsDB.tracker.sectionHeaderFont or "Fonts\\FRIZQT__.TTF"
     ucState.sectionHeaderSize = UIThingsDB.tracker.sectionHeaderFontSize or 14
     ucState.sectionHeaderColor = UIThingsDB.tracker.sectionHeaderColor or { r = 1, g = 0.82, b = 0, a = 1 }
@@ -1424,8 +1439,10 @@ UpdateContent = function()
 
     -- Auto-hide when empty and locked (deferred check avoids redundant pre-counting)
     if ucState.yOffset == -5 and UIThingsDB.tracker.locked then
-        UnregisterStateDriver(trackerFrame, "visibility")
-        trackerFrame:Hide()
+        if not inCombat then
+            UnregisterStateDriver(trackerFrame, "visibility")
+            trackerFrame:Hide()
+        end
         return
     end
 
@@ -1566,7 +1583,7 @@ local function SetupCustomTracker()
     -- Event Registry
     RegisterTrackerEvents(trackerFrame)
 
-    trackerFrame:SetScript("OnEvent", function(self, event)
+    trackerFrame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD" then
             C_Timer.After(2, UpdateContent)
         elseif event == "PLAYER_REGEN_DISABLED" then
@@ -1576,9 +1593,16 @@ local function SetupCustomTracker()
                 pendingQuestItemUpdate = nil
                 UpdateQuestItemButton()
             end
-            ScheduleUpdateContent()
+            UpdateContent()
         elseif event == "SUPER_TRACKING_CHANGED" then
             UpdateQuestItemButton()
+            ScheduleUpdateContent()
+        elseif event == "QUEST_REMOVED" then
+            local questID = ...
+            if questID then
+                prevObjectiveState[questID] = nil
+                prevQuestComplete[questID] = nil
+            end
             ScheduleUpdateContent()
         else
             -- Check for completion sounds before updating display

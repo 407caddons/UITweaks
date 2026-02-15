@@ -29,7 +29,7 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 620)
+    child:SetSize(600, 900)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -170,4 +170,120 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     buttonInfo:SetJustifyH("LEFT")
     buttonInfo:SetText(
         "C: Copy chat content\nS: Open Social/Friends window\nH: Open Chat channels menu\nL: Open Language/Chat menu\n\nURLs in chat messages are automatically detected and highlighted. Click a URL to copy it.")
+
+    -- Keyword Highlights Section
+    Helpers.CreateSectionHeader(child, "Keyword Highlights", -570)
+
+    local kwDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    kwDesc:SetPoint("TOPLEFT", 20, -600)
+    kwDesc:SetWidth(560)
+    kwDesc:SetJustifyH("LEFT")
+    kwDesc:SetText("Highlight messages containing specific keywords. Your character name is a good default.")
+
+    -- Highlight color swatch
+    Helpers.CreateColorSwatch(child, "Highlight Color:", UIThingsDB.chatSkin.highlightColor, function() end, 20, -625,
+        false)
+
+    -- Sound checkbox
+    local soundBtn = CreateFrame("CheckButton", "UIThingsChatSkinHighlightSound", child,
+        "ChatConfigCheckButtonTemplate")
+    soundBtn:SetPoint("TOPLEFT", 200, -622)
+    soundBtn:SetHitRectInsets(0, -100, 0, 0)
+    _G[soundBtn:GetName() .. "Text"]:SetText("Play Sound on Match")
+    soundBtn:SetChecked(UIThingsDB.chatSkin.highlightSound)
+    soundBtn:SetScript("OnClick", function(self)
+        UIThingsDB.chatSkin.highlightSound = self:GetChecked()
+    end)
+
+    -- Keyword list container
+    local kwListFrame = CreateFrame("Frame", nil, child)
+    kwListFrame:SetPoint("TOPLEFT", 20, -655)
+    kwListFrame:SetSize(560, 200)
+
+    local kwRows = {}
+
+    local function RefreshKeywordList()
+        -- Clear existing rows
+        for _, row in ipairs(kwRows) do
+            row:Hide()
+        end
+
+        local keywords = UIThingsDB.chatSkin.highlightKeywords
+        local yOff = 0
+        for i, keyword in ipairs(keywords) do
+            local row = kwRows[i]
+            if not row then
+                row = CreateFrame("Frame", nil, kwListFrame)
+                row:SetSize(400, 22)
+
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                row.text:SetPoint("LEFT", 5, 0)
+                row.text:SetJustifyH("LEFT")
+
+                row.removeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                row.removeBtn:SetSize(20, 20)
+                row.removeBtn:SetPoint("RIGHT", -2, 0)
+                row.removeBtn:SetText("X")
+                row.removeBtn:SetScript("OnClick", function(self)
+                    table.remove(UIThingsDB.chatSkin.highlightKeywords, self:GetParent().index)
+                    RefreshKeywordList()
+                end)
+
+                kwRows[i] = row
+            end
+
+            row:SetPoint("TOPLEFT", kwListFrame, "TOPLEFT", 0, yOff)
+            row.text:SetText(keyword)
+            row.index = i
+            row:Show()
+            yOff = yOff - 24
+        end
+    end
+
+    -- Add keyword input
+    local addLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    addLabel:SetPoint("TOPLEFT", 20, -650)
+    addLabel:SetText("Add Keyword:")
+
+    local addEdit = CreateFrame("EditBox", nil, child, "InputBoxTemplate")
+    addEdit:SetSize(200, 20)
+    addEdit:SetPoint("LEFT", addLabel, "RIGHT", 10, 0)
+    addEdit:SetAutoFocus(false)
+
+    -- Default to character name if list is empty
+    if #UIThingsDB.chatSkin.highlightKeywords == 0 then
+        local playerName = UnitName("player")
+        if playerName then
+            addEdit:SetText(playerName)
+        end
+    end
+
+    local addBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 22)
+    addBtn:SetPoint("LEFT", addEdit, "RIGHT", 5, 0)
+    addBtn:SetText("Add")
+    addBtn:SetScript("OnClick", function()
+        local text = addEdit:GetText():trim()
+        if text ~= "" then
+            table.insert(UIThingsDB.chatSkin.highlightKeywords, text)
+            addEdit:SetText("")
+            addEdit:ClearFocus()
+            RefreshKeywordList()
+        end
+    end)
+
+    addEdit:SetScript("OnEnterPressed", function(self)
+        local text = self:GetText():trim()
+        if text ~= "" then
+            table.insert(UIThingsDB.chatSkin.highlightKeywords, text)
+            self:SetText("")
+            self:ClearFocus()
+            RefreshKeywordList()
+        end
+    end)
+
+    -- Move keyword list below the add row
+    kwListFrame:SetPoint("TOPLEFT", 20, -680)
+
+    RefreshKeywordList()
 end

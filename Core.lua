@@ -85,6 +85,8 @@ local function OnEvent(self, event, ...)
                 sectionHeaderFontSize = 14,
                 sectionHeaderColor = { r = 1, g = 0.82, b = 0, a = 1 },
                 questPadding = 2,
+                sectionSpacing = 10,
+                itemSpacing = 5,
                 sectionOrderList = {
                     "scenarios",
                     "tempObjectives",
@@ -106,6 +108,9 @@ local function OnEvent(self, event, ...)
                 autoTrackQuests = false,
                 rightClickSuperTrack = true,
                 shiftClickUntrack = true,
+                clickOpenQuest = true,
+                shiftClickLink = true,
+                middleClickShare = true,
                 backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 strata = "LOW",
                 showWorldQuestTimer = true,
@@ -167,6 +172,7 @@ local function OnEvent(self, event, ...)
                 showCurrency = false,
                 showGold = false,
                 minGoldAmount = 10000, -- copper (1 gold = 10000 copper)
+                showItemLevel = true,
             },
             combat = {
                 enabled = false,
@@ -324,7 +330,8 @@ local function OnEvent(self, event, ...)
                 vault = { enabled = false, point = "CENTER", x = 0, y = -400 },
                 darkmoonFaire = { enabled = false, point = "CENTER", x = 0, y = -420 },
                 mail = { enabled = false, point = "CENTER", x = 0, y = -440 },
-                pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460 }
+                pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460 },
+                hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480 }
             },
             kick = {
                 enabled = false,
@@ -352,6 +359,9 @@ local function OnEvent(self, event, ...)
                 chatHeight = 200,
                 timestamps = "none",
                 pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
+                highlightKeywords = {},
+                highlightColor = { r = 1, g = 1, b = 0 },
+                highlightSound = false,
             },
             addonComm = {
                 hideFromWorld = false,

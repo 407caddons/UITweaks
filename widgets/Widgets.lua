@@ -148,30 +148,46 @@ function Widgets.Initialize()
     end
 end
 
-local function UpdateAnchoredLayouts()
-    local db = UIThingsDB.widgets
-    if not db or not db.enabled then return end
-    if InCombatLockdown() then return end
+-- Cached anchor lookup tables, rebuilt only when frames change
+local cachedAnchorLookup = {}
+local cachedAnchorData = {}
+local anchorCacheDirty = true
 
-    local anchorLookup = {}
-    local anchorData = {}
+function Widgets.InvalidateAnchorCache()
+    anchorCacheDirty = true
+end
+
+local function RebuildAnchorCache()
+    wipe(cachedAnchorLookup)
+    wipe(cachedAnchorData)
     if UIThingsDB.frames and UIThingsDB.frames.list then
         for i, data in ipairs(UIThingsDB.frames.list) do
             if data.isAnchor then
                 local f = _G["UIThingsCustomFrame" .. i]
                 if f then
-                    anchorLookup[data.name] = f
-                    anchorData[data.name] = data
+                    cachedAnchorLookup[data.name] = f
+                    cachedAnchorData[data.name] = data
                 end
             end
         end
+    end
+    anchorCacheDirty = false
+end
+
+local function UpdateAnchoredLayouts()
+    local db = UIThingsDB.widgets
+    if not db or not db.enabled then return end
+    if InCombatLockdown() then return end
+
+    if anchorCacheDirty then
+        RebuildAnchorCache()
     end
 
     local anchoredWidgets = {}
     for key, frame in pairs(frames) do
         if frame:IsShown() and db[key] then
             local anchorName = db[key].anchor
-            if anchorName and anchorLookup[anchorName] then
+            if anchorName and cachedAnchorLookup[anchorName] then
                 if not anchoredWidgets[anchorName] then anchoredWidgets[anchorName] = {} end
                 table.insert(anchoredWidgets[anchorName], { key = key, frame = frame })
             end
@@ -179,7 +195,7 @@ local function UpdateAnchoredLayouts()
     end
 
     for anchorName, items in pairs(anchoredWidgets) do
-        local anchorFrame = anchorLookup[anchorName]
+        local anchorFrame = cachedAnchorLookup[anchorName]
 
         table.sort(items, function(a, b)
             local orderA = db[a.key].order or 0
@@ -193,7 +209,8 @@ local function UpdateAnchoredLayouts()
         if anchorFrame then
             local count = #items
             if count > 0 then
-                local direction = anchorData[anchorName] and anchorData[anchorName].dockDirection or "horizontal"
+                local direction = cachedAnchorData[anchorName] and cachedAnchorData[anchorName].dockDirection or
+                "horizontal"
                 local isVertical = (direction == "vertical")
 
                 -- Measure content size along the dock axis
