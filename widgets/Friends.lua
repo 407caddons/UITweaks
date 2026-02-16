@@ -12,9 +12,11 @@ table.insert(Widgets.moduleInits, function()
 
         -- WoW Friends
         local numFriends = C_FriendList.GetNumFriends()
+        local hasWoWFriends = false
         for i = 1, numFriends do
             local info = C_FriendList.GetFriendInfoByIndex(i)
             if info and info.connected then
+                hasWoWFriends = true
                 local classColor = C_ClassColor.GetClassColor(info.className)
                 local nameText = info.name
                 local rightText = ""
@@ -22,16 +24,22 @@ table.insert(Widgets.moduleInits, function()
                     rightText = "Lvl " .. info.level
                 end
 
+                local r, g, b = 1, 1, 1
                 if classColor then
-                    GameTooltip:AddDoubleLine(nameText, rightText, classColor.r, classColor.g, classColor.b, 1, 1, 1)
-                else
-                    GameTooltip:AddDoubleLine(nameText, rightText, 1, 1, 1, 1, 1, 1)
+                    r, g, b = classColor.r, classColor.g, classColor.b
+                end
+                GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 1, 1, 1)
+
+                -- Zone/area info
+                if info.area and info.area ~= "" then
+                    GameTooltip:AddLine("  " .. info.area, 0.6, 0.6, 0.6)
                 end
             end
         end
 
         -- Battle.Net Friends
         local numBNet = BNGetNumFriends()
+        local hasBNetFriends = false
         for i = 1, numBNet do
             local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
             if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
@@ -44,6 +52,11 @@ table.insert(Widgets.moduleInits, function()
                 end
 
                 if show then
+                    if not hasBNetFriends and hasWoWFriends then
+                        GameTooltip:AddLine(" ")
+                    end
+                    hasBNetFriends = true
+
                     local nameText = accountInfo.accountName
                     if gameAccount.characterName then
                         nameText = nameText .. " (" .. gameAccount.characterName .. ")"
@@ -65,6 +78,16 @@ table.insert(Widgets.moduleInits, function()
                     end
 
                     GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 1, 1, 1)
+
+                    -- Zone/activity info for WoW friends
+                    if gameAccount.clientProgram == BNET_CLIENT_WOW then
+                        local areaName = gameAccount.areaName
+                        if areaName and areaName ~= "" then
+                            GameTooltip:AddLine("  " .. areaName, 0.6, 0.6, 0.6)
+                        end
+                    elseif gameAccount.richPresence and gameAccount.richPresence ~= "" then
+                        GameTooltip:AddLine("  " .. gameAccount.richPresence, 0.6, 0.6, 0.6)
+                    end
                 end
             end
         end

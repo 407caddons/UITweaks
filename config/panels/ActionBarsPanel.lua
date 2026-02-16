@@ -630,9 +630,9 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
     CreateSliderEditBox(panel, btnSizeSlider, 0, 64, true, conflictAddon)
     yPos = yPos - 55
 
-    -- Per-bar position offsets
-    if not UIThingsDB.actionBars.barOffsets then
-        UIThingsDB.actionBars.barOffsets = {}
+    -- Per-bar position (absolute, relative to UIParent CENTER)
+    if not UIThingsDB.actionBars.barPositions then
+        UIThingsDB.actionBars.barPositions = {}
     end
 
     local AB = addonTable.ActionBars
@@ -643,10 +643,21 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
 
     for _, barName in ipairs(OFFSET_BARS) do
         local displayName = displayNames[barName] or barName
-        if not UIThingsDB.actionBars.barOffsets[barName] then
-            UIThingsDB.actionBars.barOffsets[barName] = { x = 0, y = 0 }
+        -- Show the bar's actual current position in the sliders:
+        -- prefer live position from the frame, fall back to stored position
+        local absPos = UIThingsDB.actionBars.barPositions[barName]
+        local displayX = absPos and absPos.x or 0
+        local displayY = absPos and absPos.y or 0
+        if AB and AB.FrameToUIParentPosition then
+            local barFrame = _G[barName]
+            if barFrame then
+                local curPos = AB.FrameToUIParentPosition(barFrame)
+                if curPos then
+                    displayX = curPos.x
+                    displayY = curPos.y
+                end
+            end
         end
-        local offsets = UIThingsDB.actionBars.barOffsets[barName]
 
         -- Bar name label — highlights the bar on hover
         local barHeaderText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -697,55 +708,66 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
             end)
         end
 
-        -- X Offset
+        -- X Position
         local xSlider = CreateFrame("Slider", "UIThingsAB_" .. barName .. "_X", panel, "OptionsSliderTemplate")
         xSlider:SetPoint("TOPLEFT", 20, yPos - 25)
         xSlider:SetWidth(180)
-        xSlider:SetMinMaxValues(-500, 500)
+        xSlider:SetMinMaxValues(-2000, 2000)
         xSlider:SetValueStep(1)
         xSlider:SetObeyStepOnDrag(true)
-        xSlider:SetValue(offsets.x)
-        _G[xSlider:GetName() .. "Low"]:SetText("-500")
-        _G[xSlider:GetName() .. "High"]:SetText("500")
-        _G[xSlider:GetName() .. "Text"]:SetText("X: " .. offsets.x)
+        xSlider:SetValue(displayX)
+        _G[xSlider:GetName() .. "Low"]:SetText("")
+        _G[xSlider:GetName() .. "High"]:SetText("")
+        _G[xSlider:GetName() .. "Text"]:SetText("X: " .. displayX)
         if conflictAddon then
             xSlider:Disable()
         else
             xSlider:SetScript("OnValueChanged", function(self, value)
                 value = math.floor(value + 0.5)
-                UIThingsDB.actionBars.barOffsets[barName].x = value
+                if not UIThingsDB.actionBars.barPositions[barName] then
+                    -- Seed from current position
+                    local barFrame = _G[barName]
+                    local cur = barFrame and AB and AB.FrameToUIParentPosition(barFrame)
+                    UIThingsDB.actionBars.barPositions[barName] = cur or { point = "CENTER", x = 0, y = 0 }
+                end
+                UIThingsDB.actionBars.barPositions[barName].x = value
                 _G[self:GetName() .. "Text"]:SetText("X: " .. value)
-                if addonTable.ActionBars and addonTable.ActionBars.UpdateSkin then
-                    addonTable.ActionBars.UpdateSkin()
+                if AB and AB.UpdateSkin then
+                    AB.UpdateSkin()
                 end
             end)
         end
-        CreateSliderEditBox(panel, xSlider, -500, 500, true, conflictAddon)
+        CreateSliderEditBox(panel, xSlider, -2000, 2000, true, conflictAddon)
 
-        -- Y Offset
+        -- Y Position
         local ySlider = CreateFrame("Slider", "UIThingsAB_" .. barName .. "_Y", panel, "OptionsSliderTemplate")
         ySlider:SetPoint("TOPLEFT", 300, yPos - 25)
         ySlider:SetWidth(180)
-        ySlider:SetMinMaxValues(-500, 500)
+        ySlider:SetMinMaxValues(-2000, 2000)
         ySlider:SetValueStep(1)
         ySlider:SetObeyStepOnDrag(true)
-        ySlider:SetValue(offsets.y)
-        _G[ySlider:GetName() .. "Low"]:SetText("-500")
-        _G[ySlider:GetName() .. "High"]:SetText("500")
-        _G[ySlider:GetName() .. "Text"]:SetText("Y: " .. offsets.y)
+        ySlider:SetValue(displayY)
+        _G[ySlider:GetName() .. "Low"]:SetText("")
+        _G[ySlider:GetName() .. "High"]:SetText("")
+        _G[ySlider:GetName() .. "Text"]:SetText("Y: " .. displayY)
         if conflictAddon then
             ySlider:Disable()
         else
             ySlider:SetScript("OnValueChanged", function(self, value)
                 value = math.floor(value + 0.5)
-                UIThingsDB.actionBars.barOffsets[barName].y = value
+                if not UIThingsDB.actionBars.barPositions[barName] then
+                    local barFrame = _G[barName]
+                    local cur = barFrame and AB and AB.FrameToUIParentPosition(barFrame)
+                    UIThingsDB.actionBars.barPositions[barName] = cur or { point = "CENTER", x = 0, y = 0 }
+                end
+                UIThingsDB.actionBars.barPositions[barName].y = value
                 _G[self:GetName() .. "Text"]:SetText("Y: " .. value)
-                if addonTable.ActionBars and addonTable.ActionBars.UpdateSkin then
-                    addonTable.ActionBars.UpdateSkin()
+                if AB and AB.UpdateSkin then
+                    AB.UpdateSkin()
                 end
             end)
         end
-        CreateSliderEditBox(panel, ySlider, -500, 500, true, conflictAddon)
+        CreateSliderEditBox(panel, ySlider, -2000, 2000, true, conflictAddon)
 
         barSliders[barName] = { x = xSlider, y = ySlider }
 
@@ -754,11 +776,11 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
 
     -- Register drag callback so dragging a bar updates the sliders in real time
     if AB then
-        AB.onBarDragUpdate = function(barName, offsetX, offsetY)
+        AB.onBarDragUpdate = function(barName, newPos)
             local sliders = barSliders[barName]
-            if sliders then
-                sliders.x:SetValue(offsetX)
-                sliders.y:SetValue(offsetY)
+            if sliders and newPos then
+                sliders.x:SetValue(newPos.x)
+                sliders.y:SetValue(newPos.y)
             end
         end
     end

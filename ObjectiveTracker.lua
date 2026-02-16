@@ -25,9 +25,11 @@ questItemButton:RegisterForClicks("AnyUp", "AnyDown")
 -- Binding display name
 BINDING_HEADER_LUNAUITWEAKS = "Luna's UI Tweaks"
 _G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"] = "Use Quest Item (Super Tracked)"
+_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"] = "Toggle Objective Tracker"
 
 -- Pending item update for when we leave combat
 local pendingQuestItemUpdate = nil
+local trackerHiddenByKeybind = false
 
 local function UpdateQuestItemButton()
     if InCombatLockdown() then
@@ -290,6 +292,9 @@ local filteredIndices = {}
 local validAchievements = {}
 local zoneOrder = {}
 local questsByZone = {}
+local campaignOrder = {}
+local questsByCampaign = {}
+local nonCampaignQuests = {}
 
 -- Quest/objective completion sound tracking
 local prevObjectiveState = {} -- [questID] = { [objIndex] = { finished = bool, text = string } }
@@ -759,6 +764,57 @@ local function GetDistanceString(questID)
     end
 end
 
+--- Returns questline progress string e.g. " |cFF888888(3/7)|r" or ""
+local questLineCache = {} -- [questID] = { str, expiry }
+local function GetQuestLineString(questID)
+    if not UIThingsDB.tracker.showQuestLineProgress then return "" end
+    if not C_QuestLine or not C_QuestLine.GetQuestLineInfo then return "" end
+
+    -- Cache to avoid repeated API calls per update cycle
+    local cached = questLineCache[questID]
+    if cached and cached.expiry > GetTime() then
+        return cached.str
+    end
+
+    local mapID = C_Map.GetBestMapForUnit("player")
+    local lineInfo = C_QuestLine.GetQuestLineInfo(questID, mapID)
+    if not lineInfo or not lineInfo.questLineID then
+        questLineCache[questID] = { str = "", expiry = GetTime() + 30 }
+        return ""
+    end
+
+    local quests = C_QuestLine.GetQuestLineQuests(lineInfo.questLineID)
+    if not quests or #quests == 0 then
+        questLineCache[questID] = { str = "", expiry = GetTime() + 30 }
+        return ""
+    end
+
+    -- Find current quest's position and count completed
+    local currentStep = 0
+    local totalSteps = #quests
+    for i, qID in ipairs(quests) do
+        if qID == questID then
+            currentStep = i
+            break
+        end
+    end
+
+    -- If we couldn't find the quest in the list, count completed + 1 as fallback
+    if currentStep == 0 then
+        local completed = 0
+        for _, qID in ipairs(quests) do
+            if C_QuestLog.IsQuestFlaggedCompleted(qID) then
+                completed = completed + 1
+            end
+        end
+        currentStep = completed + 1
+    end
+
+    local str = string.format(" |cFF888888(%d/%d)|r", currentStep, totalSteps)
+    questLineCache[questID] = { str = str, expiry = GetTime() + 30 }
+    return str
+end
+
 --- Renders a single World Quest entry
 local function RenderSingleWQ(questID, superTrackedQuestID)
     if not displayedIDs[questID] then
@@ -984,7 +1040,8 @@ local function RenderQuests()
                 if extraIndent then ucState.indent = extraIndent end
                 local title = C_QuestLog.GetTitleForQuestID(questID)
                 if title then
-                    title = GetQuestTypePrefix(questID) .. title .. GetDistanceString(questID)
+                    title = GetQuestTypePrefix(questID) ..
+                        title .. GetQuestLineString(questID) .. GetDistanceString(questID)
 
                     local color = nil
                     if questID == superTrackedQuestID then
@@ -1013,23 +1070,63 @@ local function RenderQuests()
                 if extraIndent then ucState.indent = 0 end
             end
 
-            if UIThingsDB.tracker.groupQuestsByZone then
-                -- Render super-tracked quest first (above zone groups)
-                local superRendered = false
-                if superTrackedIndex then
-                    local stQuestID = C_QuestLog.GetQuestIDForQuestWatchIndex(superTrackedIndex)
-                    if stQuestID then
-                        RenderSingleQuest(stQuestID)
-                        superRendered = true
+            -- Helper to render a collapsible sub-header with quest list
+            local function RenderGroupHeader(groupKey, label, quests, colorR, colorG, colorB)
+                local isCollapsed = UIThingsDB.tracker.collapsed[groupKey]
+
+                local btn = AcquireItem()
+                btn:Show()
+                btn.questID = nil
+                btn.achieID = nil
+                btn:SetScript("OnClick", nil)
+                btn:SetWidth(ucState.width)
+                btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
+                btn.Text:SetFont(ucState.questNameFont, ucState.questNameSize, "OUTLINE")
+                btn.Text:SetText(label .. " (" .. #quests .. ")")
+                btn.Text:SetTextColor(colorR, colorG, colorB)
+                btn.Icon:Hide()
+                btn.Text:SetPoint("LEFT", 10, 0)
+                btn:EnableMouse(false)
+                btn:SetScript("OnEnter", nil)
+                btn:SetScript("OnLeave", nil)
+                if btn.ItemBtn and not InCombatLockdown() then btn.ItemBtn:Hide() end
+
+                btn.ToggleBtn:Show()
+                btn.ToggleBtn:SetScript("OnClick", function(self, button)
+                    if InCombatLockdown() and button == "LeftButton" then return end
+                    UIThingsDB.tracker.collapsed[groupKey] = not isCollapsed
+                    UpdateContent()
+                end)
+                btn.ToggleBtn.Text:SetText(isCollapsed and "+" or "-")
+                local textWidth = btn.Text:GetStringWidth()
+                btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
+
+                ucState.yOffset = ucState.yOffset - (ucState.questNameSize + 4)
+
+                if not isCollapsed then
+                    for _, questID in ipairs(quests) do
+                        RenderSingleQuest(questID, 10)
                     end
                 end
+                ucState.yOffset = ucState.yOffset - ITEM_SPACING
+            end
 
-                -- Group remaining quests by zone
+            -- Helper to render a flat list of quest watch indices
+            local function RenderFlatQuests(indices)
+                for _, i in ipairs(indices) do
+                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                    if questID then
+                        RenderSingleQuest(questID)
+                    end
+                end
+            end
+
+            -- Helper to group quest IDs by zone and render with sub-headers
+            local function RenderByZone(questIDs)
                 wipe(zoneOrder)
                 wipe(questsByZone)
-                for _, i in ipairs(filteredIndices) do
-                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-                    if questID and not displayedIDs[questID] then
+                for _, questID in ipairs(questIDs) do
+                    if not displayedIDs[questID] then
                         local zoneName = "Other"
                         local headerIndex = C_QuestLog.GetHeaderIndexForQuest(questID)
                         if headerIndex then
@@ -1046,7 +1143,6 @@ local function RenderQuests()
                     end
                 end
 
-                -- Sort quests within each zone by distance if enabled
                 if UIThingsDB.tracker.sortQuestsByDistance then
                     for _, zoneName in ipairs(zoneOrder) do
                         table.sort(questsByZone[zoneName], function(a, b)
@@ -1057,56 +1153,88 @@ local function RenderQuests()
                     end
                 end
 
-                -- Render each zone group with collapsible sub-headers
                 for _, zoneName in ipairs(zoneOrder) do
-                    local zoneKey = "zone_" .. zoneName
-                    local isCollapsed = UIThingsDB.tracker.collapsed[zoneKey]
-
-                    -- Zone sub-header with toggle button
-                    local btn = AcquireItem()
-                    btn:Show()
-                    btn.questID = nil
-                    btn.achieID = nil
-                    btn:SetScript("OnClick", nil)
-                    btn:SetWidth(ucState.width)
-                    btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
-                    btn.Text:SetFont(ucState.questNameFont, ucState.questNameSize, "OUTLINE")
-                    btn.Text:SetText(zoneName .. " (" .. #questsByZone[zoneName] .. ")")
-                    btn.Text:SetTextColor(0.7, 0.85, 1.0)
-                    btn.Icon:Hide()
-                    btn.Text:SetPoint("LEFT", 10, 0)
-                    btn:EnableMouse(false)
-                    btn:SetScript("OnEnter", nil)
-                    btn:SetScript("OnLeave", nil)
-                    if btn.ItemBtn and not InCombatLockdown() then btn.ItemBtn:Hide() end
-
-                    btn.ToggleBtn:Show()
-                    btn.ToggleBtn:SetScript("OnClick", function(self, button)
-                        if InCombatLockdown() and button == "LeftButton" then return end
-                        UIThingsDB.tracker.collapsed[zoneKey] = not isCollapsed
-                        UpdateContent()
-                    end)
-                    btn.ToggleBtn.Text:SetText(isCollapsed and "+" or "-")
-                    local textWidth = btn.Text:GetStringWidth()
-                    btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
-
-                    ucState.yOffset = ucState.yOffset - (ucState.questNameSize + 4)
-
-                    if not isCollapsed then
-                        for _, questID in ipairs(questsByZone[zoneName]) do
-                            RenderSingleQuest(questID, 10)
-                        end
-                    end
-                    ucState.yOffset = ucState.yOffset - ITEM_SPACING
+                    RenderGroupHeader("zone_" .. zoneName, zoneName, questsByZone[zoneName], 0.7, 0.85, 1.0)
                 end
-            else
-                -- Flat rendering (original behavior)
+            end
+
+            -- Render super-tracked quest first when using any grouping mode
+            local useCampaignGroup = UIThingsDB.tracker.groupQuestsByCampaign
+            local useZoneGroup = UIThingsDB.tracker.groupQuestsByZone
+
+            if useCampaignGroup or useZoneGroup then
+                if superTrackedIndex then
+                    local stQuestID = C_QuestLog.GetQuestIDForQuestWatchIndex(superTrackedIndex)
+                    if stQuestID then
+                        RenderSingleQuest(stQuestID)
+                    end
+                end
+            end
+
+            if useCampaignGroup then
+                -- Separate campaign quests from non-campaign quests
+                wipe(campaignOrder)
+                wipe(questsByCampaign)
+                wipe(nonCampaignQuests)
+
                 for _, i in ipairs(filteredIndices) do
                     local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-                    if questID then
-                        RenderSingleQuest(questID)
+                    if questID and not displayedIDs[questID] then
+                        local campaignID = C_CampaignInfo.GetCampaignID(questID)
+                        if campaignID and campaignID > 0 then
+                            local campaignInfo = C_CampaignInfo.GetCampaignInfo(campaignID)
+                            local campaignName = campaignInfo and campaignInfo.name or ("Campaign " .. campaignID)
+                            if not questsByCampaign[campaignName] then
+                                questsByCampaign[campaignName] = {}
+                                table.insert(campaignOrder, campaignName)
+                            end
+                            table.insert(questsByCampaign[campaignName], questID)
+                        else
+                            table.insert(nonCampaignQuests, questID)
+                        end
                     end
                 end
+
+                -- Sort within each campaign by distance if enabled
+                if UIThingsDB.tracker.sortQuestsByDistance then
+                    for _, name in ipairs(campaignOrder) do
+                        table.sort(questsByCampaign[name], function(a, b)
+                            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
+                            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
+                            return distA < distB
+                        end)
+                    end
+                end
+
+                -- Render campaign groups (gold color to match campaign quest highlighting)
+                for _, campaignName in ipairs(campaignOrder) do
+                    RenderGroupHeader("campaign_" .. campaignName, campaignName, questsByCampaign[campaignName], 0.9, 0.7,
+                        0.2)
+                end
+
+                -- Render non-campaign quests (by zone or flat)
+                if #nonCampaignQuests > 0 then
+                    if useZoneGroup then
+                        RenderByZone(nonCampaignQuests)
+                    else
+                        for _, questID in ipairs(nonCampaignQuests) do
+                            RenderSingleQuest(questID)
+                        end
+                    end
+                end
+            elseif useZoneGroup then
+                -- Zone grouping only (collect quest IDs from indices)
+                local questIDs = {}
+                for _, i in ipairs(filteredIndices) do
+                    local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                    if questID and not displayedIDs[questID] then
+                        table.insert(questIDs, questID)
+                    end
+                end
+                RenderByZone(questIDs)
+            else
+                -- Flat rendering (original behavior)
+                RenderFlatQuests(filteredIndices)
             end
             ucState.yOffset = ucState.yOffset - SECTION_SPACING
         end
@@ -1118,19 +1246,70 @@ local function RenderScenarios()
     if not C_ScenarioInfo then return end
 
     local scenarioInfo = C_ScenarioInfo.GetScenarioInfo()
-
     if not scenarioInfo or not scenarioInfo.name or scenarioInfo.name == "" then return end
 
-    AddLine("Scenario: " .. scenarioInfo.name, true, "scenario")
+    -- Header with step progress
+    local headerText = "Scenario: " .. scenarioInfo.name
+    if scenarioInfo.numStages and scenarioInfo.numStages > 1 then
+        headerText = headerText ..
+            string.format(" |cFFAAAAAA(%d/%d)|r", scenarioInfo.currentStage or 1, scenarioInfo.numStages)
+    end
+
+    AddLine(headerText, true, "scenario")
 
     if UIThingsDB.tracker.collapsed["scenario"] then
         ucState.yOffset = ucState.yOffset - ITEM_SPACING
         return
     end
 
-    if C_ScenarioInfo.GetCriteriaInfo then
+    -- Get step info for the current stage
+    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo and C_ScenarioInfo.GetScenarioStepInfo() or nil
+
+    -- Show step title if it differs from the scenario name
+    if stepInfo and stepInfo.title and stepInfo.title ~= "" and stepInfo.title ~= scenarioInfo.name then
+        AddLine("|cFFFFD100" .. stepInfo.title .. "|r", false, nil, nil, true)
+    end
+
+    -- Show step description if available
+    if stepInfo and stepInfo.description and stepInfo.description ~= "" then
+        AddLine("|cFFBBBBBB" .. stepInfo.description .. "|r", false, nil, nil, true)
+    end
+
+    -- Weighted progress (overall step progress percentage)
+    if stepInfo and stepInfo.weightedProgress and stepInfo.weightedProgress > 0 then
+        local pct = math.floor(stepInfo.weightedProgress)
+        local color = pct >= 100 and "00FF00" or "FFFF00"
+        AddLine(string.format("|cFF%s%d%% Complete|r", color, pct), false, nil, nil, true)
+    end
+
+    -- Render criteria for the current step
+    local numCriteria = stepInfo and stepInfo.numCriteria or 0
+    if numCriteria > 0 then
+        for i = 1, numCriteria do
+            local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(i)
+            if not criteriaInfo then break end
+
+            local text = criteriaInfo.description or ""
+            if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+                text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
+            end
+
+            if criteriaInfo.failed then
+                text = "|cFFFF0000" .. text .. " (Failed)|r"
+            elseif criteriaInfo.completed then
+                text = FormatCompletedObjective(text)
+            end
+
+            if criteriaInfo.isWeightedProgress then
+                text = "|cFF00FFFF[Bonus]|r " .. text
+            end
+
+            AddLine(text, false, nil, nil, true)
+        end
+    elseif C_ScenarioInfo.GetCriteriaInfo then
+        -- Fallback: iterate criteria without a count (legacy path)
         local criteriaIndex = 1
-        while true do
+        while criteriaIndex <= 50 do
             local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
             if not criteriaInfo then break end
 
@@ -1138,19 +1317,39 @@ local function RenderScenarios()
             if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
                 text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
             end
-            if criteriaInfo.completed then
-                text = "|cFF00FF00" .. text .. "|r"
+            if criteriaInfo.failed then
+                text = "|cFFFF0000" .. text .. " (Failed)|r"
+            elseif criteriaInfo.completed then
+                text = FormatCompletedObjective(text)
             end
-
-            local isBonus = criteriaInfo.isWeightedProgress or false
-            if isBonus then
-                text = "|cFF00FFFF[Bonus] " .. text .. "|r"
+            if criteriaInfo.isWeightedProgress then
+                text = "|cFF00FFFF[Bonus]|r " .. text
             end
 
             AddLine(text, false, nil, nil, true)
             criteriaIndex = criteriaIndex + 1
+        end
+    end
 
-            if criteriaIndex > 50 then break end
+    -- Show bonus steps if present
+    if stepInfo and stepInfo.shouldShowBonusObjective then
+        -- Check for bonus criteria beyond the main step
+        local bonusIndex = numCriteria + 1
+        while bonusIndex <= numCriteria + 20 do
+            local bonusCriteria = C_ScenarioInfo.GetCriteriaInfo(bonusIndex)
+            if not bonusCriteria then break end
+
+            local text = bonusCriteria.description or ""
+            if bonusCriteria.quantity and bonusCriteria.totalQuantity and bonusCriteria.totalQuantity > 1 then
+                text = text .. " (" .. bonusCriteria.quantity .. "/" .. bonusCriteria.totalQuantity .. ")"
+            end
+            if bonusCriteria.completed then
+                text = FormatCompletedObjective(text)
+            end
+            text = "|cFF00FFFF[Bonus]|r " .. text
+
+            AddLine(text, false, nil, nil, true)
+            bonusIndex = bonusIndex + 1
         end
     end
 
@@ -1345,6 +1544,7 @@ end
 
 UpdateContent = function()
     if not trackerFrame then return end
+    if trackerHiddenByKeybind then return end
 
     local inCombat = InCombatLockdown()
 
@@ -1559,6 +1759,9 @@ local function RegisterTrackerEvents(frame)
     frame:RegisterEvent("QUEST_REMOVED")
     frame:RegisterEvent("PERKS_ACTIVITIES_TRACKED_LIST_CHANGED")
     frame:RegisterEvent("PERKS_ACTIVITIES_TRACKED_UPDATED")
+    frame:RegisterEvent("SCENARIO_UPDATE")
+    frame:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
+    frame:RegisterEvent("SCENARIO_COMPLETED")
 end
 
 local function SetupCustomTracker()
@@ -1849,6 +2052,21 @@ function addonTable.ObjectiveTracker.UpdateSettings()
 end
 
 addonTable.ObjectiveTracker.UpdateContent = UpdateContent
+
+-- Keybind toggle: temporarily show/hide the tracker without changing the enabled setting
+function LunaUITweaks_ToggleTracker()
+    if not trackerFrame or not UIThingsDB.tracker.enabled then return end
+    if InCombatLockdown() then return end
+
+    if trackerHiddenByKeybind then
+        trackerHiddenByKeybind = false
+        UpdateContent()
+    else
+        trackerHiddenByKeybind = true
+        UnregisterStateDriver(trackerFrame, "visibility")
+        trackerFrame:Hide()
+    end
+end
 
 -- Hook into startup
 local f = CreateFrame("Frame")

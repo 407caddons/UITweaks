@@ -9,7 +9,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 650)
+    child:SetSize(650, 700)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -106,35 +106,53 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
         UpdateCastBar()
     end)
 
+    -- Bar Texture Dropdown
+    Helpers.CreateTextureDropdown(
+        child,
+        "UIThingsCastBarTextureDropdown",
+        "Bar Texture:",
+        UIThingsDB.castBar.barTexture,
+        function(texturePath, textureName)
+            UIThingsDB.castBar.barTexture = texturePath
+            UpdateCastBar()
+        end,
+        260,
+        -170
+    )
+
     -- == Position ==
     -- X Position
     local xLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    xLabel:SetPoint("TOPLEFT", 20, -215)
+    xLabel:SetPoint("TOPLEFT", 20, -260)
     xLabel:SetText("X Position:")
+
+    local function RoundCoord(val)
+        return math.floor(val * 10 + 0.5) / 10
+    end
 
     local xEditBox = CreateFrame("EditBox", "UIThingsCastBarPosX", child, "InputBoxTemplate")
     xEditBox:SetSize(60, 20)
     xEditBox:SetPoint("LEFT", xLabel, "RIGHT", 8, 0)
     xEditBox:SetAutoFocus(false)
     xEditBox:SetNumeric(false)
-    xEditBox:SetText(tostring(UIThingsDB.castBar.pos.x or 0))
+    xEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.x or 0)))
     xEditBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
         if val then
-            UIThingsDB.castBar.pos.x = math.floor(val)
+            UIThingsDB.castBar.pos.x = RoundCoord(val)
             self:SetText(tostring(UIThingsDB.castBar.pos.x))
             UpdateCastBar()
         end
         self:ClearFocus()
     end)
     xEditBox:SetScript("OnEscapePressed", function(self)
-        self:SetText(tostring(UIThingsDB.castBar.pos.x or 0))
+        self:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.x or 0)))
         self:ClearFocus()
     end)
 
     -- Y Position
     local yLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    yLabel:SetPoint("TOPLEFT", 200, -215)
+    yLabel:SetPoint("TOPLEFT", 200, -260)
     yLabel:SetText("Y Position:")
 
     local yEditBox = CreateFrame("EditBox", "UIThingsCastBarPosY", child, "InputBoxTemplate")
@@ -142,24 +160,24 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     yEditBox:SetPoint("LEFT", yLabel, "RIGHT", 8, 0)
     yEditBox:SetAutoFocus(false)
     yEditBox:SetNumeric(false)
-    yEditBox:SetText(tostring(UIThingsDB.castBar.pos.y or 0))
+    yEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.y or 0)))
     yEditBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
         if val then
-            UIThingsDB.castBar.pos.y = math.floor(val)
+            UIThingsDB.castBar.pos.y = RoundCoord(val)
             self:SetText(tostring(UIThingsDB.castBar.pos.y))
             UpdateCastBar()
         end
         self:ClearFocus()
     end)
     yEditBox:SetScript("OnEscapePressed", function(self)
-        self:SetText(tostring(UIThingsDB.castBar.pos.y or 0))
+        self:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.y or 0)))
         self:ClearFocus()
     end)
 
     -- Anchor Point Dropdown
     local anchorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    anchorLabel:SetPoint("TOPLEFT", 380, -215)
+    anchorLabel:SetPoint("TOPLEFT", 380, -260)
     anchorLabel:SetText("Anchor:")
 
     local anchorDropdown = CreateFrame("Frame", "UIThingsCastBarAnchorDropdown", child, "UIDropDownMenuTemplate")
@@ -178,8 +196,8 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
                 UIDropDownMenu_SetText(anchorDropdown, point)
                 UpdateCastBar()
                 -- Update edit boxes to reflect new position
-                xEditBox:SetText(tostring(UIThingsDB.castBar.pos.x or 0))
-                yEditBox:SetText(tostring(UIThingsDB.castBar.pos.y or 0))
+                xEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.x or 0)))
+                yEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.pos.y or 0)))
             end
             info.checked = (UIThingsDB.castBar.pos.point == point)
             UIDropDownMenu_AddButton(info)
@@ -188,12 +206,12 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     UIDropDownMenu_SetText(anchorDropdown, UIThingsDB.castBar.pos.point or "CENTER")
 
     -- == Colors ==
-    Helpers.CreateSectionHeader(child, "Colors", -250)
+    Helpers.CreateSectionHeader(child, "Colors", -295)
 
     -- Use Class Color
     local classColorBtn = CreateFrame("CheckButton", "UIThingsCastBarClassColor", child,
         "ChatConfigCheckButtonTemplate")
-    classColorBtn:SetPoint("TOPLEFT", 20, -280)
+    classColorBtn:SetPoint("TOPLEFT", 20, -325)
     _G[classColorBtn:GetName() .. "Text"]:SetText("Use Class Color")
     classColorBtn:SetChecked(UIThingsDB.castBar.useClassColor)
     classColorBtn:SetScript("OnClick", function(self)
@@ -201,16 +219,16 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
         UpdateCastBar()
     end)
 
-    Helpers.CreateColorSwatch(child, "Bar Color", UIThingsDB.castBar.barColor, UpdateCastBar, 20, -310)
-    Helpers.CreateColorSwatch(child, "Background", UIThingsDB.castBar.bgColor, UpdateCastBar, 250, -310, true)
-    Helpers.CreateColorSwatch(child, "Border Color", UIThingsDB.castBar.borderColor, UpdateCastBar, 20, -340)
-    Helpers.CreateColorSwatch(child, "Channel Color", UIThingsDB.castBar.channelColor, UpdateCastBar, 250, -340)
+    Helpers.CreateColorSwatch(child, "Bar Color", UIThingsDB.castBar.barColor, UpdateCastBar, 20, -355)
+    Helpers.CreateColorSwatch(child, "Background", UIThingsDB.castBar.bgColor, UpdateCastBar, 250, -355, true)
+    Helpers.CreateColorSwatch(child, "Border Color", UIThingsDB.castBar.borderColor, UpdateCastBar, 20, -385)
+    Helpers.CreateColorSwatch(child, "Channel Color", UIThingsDB.castBar.channelColor, UpdateCastBar, 250, -385)
     Helpers.CreateColorSwatch(child, "Non-Interruptible", UIThingsDB.castBar.nonInterruptibleColor, UpdateCastBar, 20,
-        -370)
-    Helpers.CreateColorSwatch(child, "Failed/Interrupted", UIThingsDB.castBar.failedColor, UpdateCastBar, 250, -370)
+        -415)
+    Helpers.CreateColorSwatch(child, "Failed/Interrupted", UIThingsDB.castBar.failedColor, UpdateCastBar, 250, -415)
 
     -- == Text & Icon ==
-    Helpers.CreateSectionHeader(child, "Text & Icon", -405)
+    Helpers.CreateSectionHeader(child, "Text & Icon", -450)
 
     -- Font Dropdown
     Helpers.CreateFontDropdown(
@@ -223,12 +241,12 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
             UpdateCastBar()
         end,
         20,
-        -435
+        -480
     )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsCastBarFontSize", child, "OptionsSliderTemplate")
-    fontSizeSlider:SetPoint("TOPLEFT", 260, -435)
+    fontSizeSlider:SetPoint("TOPLEFT", 260, -480)
     fontSizeSlider:SetMinMaxValues(8, 24)
     fontSizeSlider:SetValueStep(1)
     fontSizeSlider:SetObeyStepOnDrag(true)
@@ -246,7 +264,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- Show Icon
     local iconBtn = CreateFrame("CheckButton", "UIThingsCastBarIcon", child, "ChatConfigCheckButtonTemplate")
-    iconBtn:SetPoint("TOPLEFT", 20, -485)
+    iconBtn:SetPoint("TOPLEFT", 20, -530)
     _G[iconBtn:GetName() .. "Text"]:SetText("Show Spell Icon")
     iconBtn:SetChecked(UIThingsDB.castBar.showIcon)
     iconBtn:SetScript("OnClick", function(self)
@@ -256,7 +274,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- Show Spell Name
     local nameBtn = CreateFrame("CheckButton", "UIThingsCastBarName", child, "ChatConfigCheckButtonTemplate")
-    nameBtn:SetPoint("TOPLEFT", 180, -485)
+    nameBtn:SetPoint("TOPLEFT", 180, -530)
     _G[nameBtn:GetName() .. "Text"]:SetText("Show Spell Name")
     nameBtn:SetChecked(UIThingsDB.castBar.showSpellName)
     nameBtn:SetScript("OnClick", function(self)
@@ -266,7 +284,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- Show Cast Time
     local timeBtn = CreateFrame("CheckButton", "UIThingsCastBarTime", child, "ChatConfigCheckButtonTemplate")
-    timeBtn:SetPoint("TOPLEFT", 370, -485)
+    timeBtn:SetPoint("TOPLEFT", 370, -530)
     _G[timeBtn:GetName() .. "Text"]:SetText("Show Cast Time")
     timeBtn:SetChecked(UIThingsDB.castBar.showCastTime)
     timeBtn:SetScript("OnClick", function(self)
@@ -276,7 +294,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- Show Spark
     local sparkBtn = CreateFrame("CheckButton", "UIThingsCastBarSpark", child, "ChatConfigCheckButtonTemplate")
-    sparkBtn:SetPoint("TOPLEFT", 20, -510)
+    sparkBtn:SetPoint("TOPLEFT", 20, -555)
     _G[sparkBtn:GetName() .. "Text"]:SetText("Show Spark")
     sparkBtn:SetChecked(UIThingsDB.castBar.showSpark)
     sparkBtn:SetScript("OnClick", function(self)

@@ -182,9 +182,20 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end)
 
+    local campaignGroupCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCampaignGroupCheckbox", panel,
+        "ChatConfigCheckButtonTemplate")
+    campaignGroupCheckbox:SetPoint("TOPLEFT", 300, -120)
+    campaignGroupCheckbox:SetHitRectInsets(0, -130, 0, 0)
+    _G[campaignGroupCheckbox:GetName() .. "Text"]:SetText("Group Quests by Campaign")
+    campaignGroupCheckbox:SetChecked(UIThingsDB.tracker.groupQuestsByCampaign)
+    campaignGroupCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.tracker.groupQuestsByCampaign = self:GetChecked()
+        UpdateTracker()
+    end)
+
     local showDistCheckbox = CreateFrame("CheckButton", "UIThingsTrackerShowDistCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    showDistCheckbox:SetPoint("TOPLEFT", 300, -120)
+    showDistCheckbox:SetPoint("TOPLEFT", 300, -145)
     showDistCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[showDistCheckbox:GetName() .. "Text"]:SetText("Show Distance on Quests")
     showDistCheckbox:SetChecked(UIThingsDB.tracker.showQuestDistance)
@@ -195,7 +206,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local questDistCheckbox = CreateFrame("CheckButton", "UIThingsTrackerQuestDistCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    questDistCheckbox:SetPoint("TOPLEFT", 300, -145)
+    questDistCheckbox:SetPoint("TOPLEFT", 300, -170)
     questDistCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[questDistCheckbox:GetName() .. "Text"]:SetText("Sort Quests by Distance")
     questDistCheckbox:SetChecked(UIThingsDB.tracker.sortQuestsByDistance)
@@ -206,7 +217,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local distIntervalSlider = CreateFrame("Slider", "UIThingsTrackerDistIntervalSlider", panel,
         "OptionsSliderTemplate")
-    distIntervalSlider:SetPoint("TOPLEFT", 300, -190)
+    distIntervalSlider:SetPoint("TOPLEFT", 300, -215)
     distIntervalSlider:SetMinMaxValues(0, 30)
     distIntervalSlider:SetValueStep(1)
     distIntervalSlider:SetObeyStepOnDrag(true)
@@ -227,7 +238,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local wqActiveCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQActiveCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    wqActiveCheckbox:SetPoint("TOPLEFT", 300, -225)
+    wqActiveCheckbox:SetPoint("TOPLEFT", 300, -250)
     wqActiveCheckbox:SetHitRectInsets(0, -130, 0, 0)
     _G[wqActiveCheckbox:GetName() .. "Text"]:SetText("Only Active World Quests")
     wqActiveCheckbox:SetChecked(UIThingsDB.tracker.onlyActiveWorldQuests)
@@ -237,7 +248,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     end)
 
     local wqSortLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    wqSortLabel:SetPoint("TOPLEFT", 300, -255)
+    wqSortLabel:SetPoint("TOPLEFT", 300, -280)
     wqSortLabel:SetText("Sort World Quests:")
 
     local wqSortDropdown = CreateFrame("Frame", "UIThingsTrackerWQSortDropdown", panel, "UIDropDownMenuTemplate")
@@ -292,7 +303,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local wqRewardCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQRewardCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    wqRewardCheckbox:SetPoint("TOPLEFT", 300, -335)
+    wqRewardCheckbox:SetPoint("TOPLEFT", 300, -360)
     wqRewardCheckbox:SetHitRectInsets(0, -160, 0, 0)
     _G[wqRewardCheckbox:GetName() .. "Text"]:SetText("Show WQ Reward Icons")
     wqRewardCheckbox:SetChecked(UIThingsDB.tracker.showWQRewardIcons)
@@ -314,7 +325,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local checkmarkCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCheckmarkCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    checkmarkCheckbox:SetPoint("TOPLEFT", 300, -360)
+    checkmarkCheckbox:SetPoint("TOPLEFT", 300, -385)
     checkmarkCheckbox:SetHitRectInsets(0, -180, 0, 0)
     _G[checkmarkCheckbox:GetName() .. "Text"]:SetText("Checkmark on Completed Objectives")
     checkmarkCheckbox:SetChecked(UIThingsDB.tracker.completedObjectiveCheckmark)
@@ -336,12 +347,23 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
 
     local questTypeCheckbox = CreateFrame("CheckButton", "UIThingsTrackerQuestTypeCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    questTypeCheckbox:SetPoint("TOPLEFT", 300, -385)
+    questTypeCheckbox:SetPoint("TOPLEFT", 300, -410)
     questTypeCheckbox:SetHitRectInsets(0, -180, 0, 0)
     _G[questTypeCheckbox:GetName() .. "Text"]:SetText("Show Daily/Weekly Indicators")
     questTypeCheckbox:SetChecked(UIThingsDB.tracker.showQuestTypeIndicators)
     questTypeCheckbox:SetScript("OnClick", function(self)
         UIThingsDB.tracker.showQuestTypeIndicators = self:GetChecked()
+        UpdateTracker()
+    end)
+
+    local questLineCheckbox = CreateFrame("CheckButton", "UIThingsTrackerQuestLineCheckbox", panel,
+        "ChatConfigCheckButtonTemplate")
+    questLineCheckbox:SetPoint("TOPLEFT", 300, -435)
+    questLineCheckbox:SetHitRectInsets(0, -180, 0, 0)
+    _G[questLineCheckbox:GetName() .. "Text"]:SetText("Show Questline Progress")
+    questLineCheckbox:SetChecked(UIThingsDB.tracker.showQuestLineProgress)
+    questLineCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.tracker.showQuestLineProgress = self:GetChecked()
         UpdateTracker()
     end)
 

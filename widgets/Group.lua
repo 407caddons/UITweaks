@@ -409,6 +409,37 @@ table.insert(Widgets.moduleInits, function()
         else
             GameTooltip:AddLine("Not in a group")
         end
+
+        -- Ready check overlay
+        if readyCheckActive and next(readyCheckResponses) then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Ready Check", 1, 0.82, 0)
+            -- Sort: waiting first, then not ready, then ready
+            local sorted = {}
+            for name, status in pairs(readyCheckResponses) do
+                table.insert(sorted, { name = name, status = status })
+            end
+            table.sort(sorted, function(a, b)
+                local order = { waiting = 1, notready = 2, ready = 3 }
+                if order[a.status] ~= order[b.status] then
+                    return order[a.status] < order[b.status]
+                end
+                return a.name < b.name
+            end)
+            for _, entry in ipairs(sorted) do
+                local r, g, b = 1, 1, 0 -- waiting = yellow
+                local label = "Waiting"
+                if entry.status == "ready" then
+                    r, g, b = 0, 1, 0
+                    label = "Ready"
+                elseif entry.status == "notready" then
+                    r, g, b = 1, 0, 0
+                    label = "Not Ready"
+                end
+                GameTooltip:AddDoubleLine(entry.name, label, 1, 1, 1, r, g, b)
+            end
+        end
+
         GameTooltip:Show()
     end)
     groupFrame:SetScript("OnLeave", GameTooltip_Hide)
@@ -427,6 +458,10 @@ table.insert(Widgets.moduleInits, function()
             end)
         end
     end)
+
+    -- Ready check state
+    local readyCheckActive = false
+    local readyCheckResponses = {} -- unit -> "ready" | "notready" | "waiting"
 
     -- Cached group composition (updated on events, not every second)
     local cachedTanks, cachedHealers, cachedDps, cachedMembers = 0, 0, 0, 0
@@ -460,8 +495,36 @@ table.insert(Widgets.moduleInits, function()
     groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
-    groupEventFrame:SetScript("OnEvent", function()
-        RefreshGroupCache()
+    groupEventFrame:RegisterEvent("READY_CHECK")
+    groupEventFrame:RegisterEvent("READY_CHECK_CONFIRM")
+    groupEventFrame:RegisterEvent("READY_CHECK_FINISHED")
+    groupEventFrame:SetScript("OnEvent", function(self, event, ...)
+        if event == "READY_CHECK" then
+            readyCheckActive = true
+            wipe(readyCheckResponses)
+            -- Initialize all members as waiting
+            local members = GetNumGroupMembers()
+            if members > 0 then
+                for i = 1, members do
+                    local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
+                    readyCheckResponses[UnitName(unit) or unit] = "waiting"
+                end
+            end
+        elseif event == "READY_CHECK_CONFIRM" then
+            local unit, isReady = ...
+            local name = UnitName(unit)
+            if name then
+                readyCheckResponses[name] = isReady and "ready" or "notready"
+            end
+        elseif event == "READY_CHECK_FINISHED" then
+            -- Keep showing results for 5 seconds after finish
+            C_Timer.After(5, function()
+                readyCheckActive = false
+                wipe(readyCheckResponses)
+            end)
+        else
+            RefreshGroupCache()
+        end
     end)
 
     groupFrame.eventFrame = groupEventFrame
@@ -470,12 +533,36 @@ table.insert(Widgets.moduleInits, function()
             groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
             groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
             groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
+            groupEventFrame:RegisterEvent("READY_CHECK")
+            groupEventFrame:RegisterEvent("READY_CHECK_CONFIRM")
+            groupEventFrame:RegisterEvent("READY_CHECK_FINISHED")
         else
             groupEventFrame:UnregisterAllEvents()
         end
     end
 
     groupFrame.UpdateContent = function(self)
-        self.text:SetText(cachedText)
+        if readyCheckActive then
+            local ready, notReady, waiting = 0, 0, 0
+            for _, status in pairs(readyCheckResponses) do
+                if status == "ready" then
+                    ready = ready + 1
+                elseif status == "notready" then
+                    notReady = notReady + 1
+                else
+                    waiting = waiting + 1
+                end
+            end
+            local total = ready + notReady + waiting
+            if notReady > 0 then
+                self.text:SetFormattedText("|cFFFF0000Ready: %d/%d|r", ready, total)
+            elseif waiting > 0 then
+                self.text:SetFormattedText("|cFFFFFF00Ready: %d/%d|r", ready, total)
+            else
+                self.text:SetFormattedText("|cFF00FF00Ready: %d/%d|r", ready, total)
+            end
+        else
+            self.text:SetText(cachedText)
+        end
     end
 end)

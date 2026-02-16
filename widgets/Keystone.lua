@@ -7,6 +7,135 @@ local KEYSTONE_ITEM_ID = 158923 -- Mythic Keystone
 table.insert(Widgets.moduleInits, function()
     local keystoneFrame = Widgets.CreateWidgetFrame("Keystone", "keystone")
 
+    -- Dungeon teleport detection
+    local cachedTeleportSpells = nil -- mapName -> spellName
+
+    local function BuildTeleportMap()
+        cachedTeleportSpells = {}
+        local numLines = C_SpellBook.GetNumSpellBookSkillLines()
+        for skillLineIdx = 1, numLines do
+            local skillLineInfo = C_SpellBook.GetSpellBookSkillLineInfo(skillLineIdx)
+            if skillLineInfo then
+                local offset = skillLineInfo.itemIndexOffset
+                local numEntries = skillLineInfo.numSpellBookItems
+                for i = offset + 1, offset + numEntries do
+                    local bookItemInfo = C_SpellBook.GetSpellBookItemInfo(i, Enum.SpellBookSpellBank.Player)
+                    if bookItemInfo and bookItemInfo.itemType == Enum.SpellBookItemType.Flyout and bookItemInfo.actionID then
+                        local flyoutID = bookItemInfo.actionID
+                        local flyoutName, _, numSlots = GetFlyoutInfo(flyoutID)
+                        if flyoutName and numSlots and numSlots > 0 then
+                            for slot = 1, numSlots do
+                                local spellID, _, isKnown, spellName = GetFlyoutSlotInfo(flyoutID, slot)
+                                if isKnown and spellName then
+                                    -- Try to match spell destination to dungeon names
+                                    local tooltipData = C_TooltipInfo.GetSpellByID(spellID)
+                                    if tooltipData then
+                                        for _, line in ipairs(tooltipData.lines) do
+                                            if line.leftText then
+                                                local dest = line.leftText:match("to (.+)%.?")
+                                                if dest then
+                                                    dest = dest:gsub("%.$", "")
+                                                    dest = dest:gsub("^the entrance to ", "")
+                                                    dest = dest:gsub("^entrance to ", "")
+                                                    dest = dest:gsub("^the ", "")
+                                                    cachedTeleportSpells[dest] = spellName
+                                                    -- Also store without "The " prefix/with it
+                                                    if dest:find("^The ") then
+                                                        cachedTeleportSpells[dest:sub(5)] = spellName
+                                                    else
+                                                        cachedTeleportSpells["The " .. dest] = spellName
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                    -- Also key by spell name parts
+                                    local cleanName = spellName:gsub("^Hero's Path: ", ""):gsub("^Teleport: ", ""):gsub(
+                                        "^Path of ", "")
+                                    cachedTeleportSpells[cleanName] = spellName
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local function FindTeleportForDungeon(dungeonName)
+        if not dungeonName then return nil end
+        if not cachedTeleportSpells then BuildTeleportMap() end
+        -- Direct match
+        if cachedTeleportSpells[dungeonName] then return cachedTeleportSpells[dungeonName] end
+        -- Try without "The "
+        if dungeonName:find("^The ") then
+            local short = dungeonName:sub(5)
+            if cachedTeleportSpells[short] then return cachedTeleportSpells[short] end
+        end
+        -- Substring match
+        for dest, spell in pairs(cachedTeleportSpells) do
+            if dungeonName:find(dest, 1, true) or dest:find(dungeonName, 1, true) then
+                return spell
+            end
+        end
+        return nil
+    end
+
+    -- Secure overlay button for click-to-teleport
+    local secureBtn = CreateFrame("Button", "LunaUITweaks_KeystoneSecure", keystoneFrame, "SecureActionButtonTemplate")
+    secureBtn:SetAllPoints(keystoneFrame)
+    secureBtn:RegisterForClicks("AnyDown", "AnyUp")
+    secureBtn:RegisterForDrag("LeftButton")
+    secureBtn:SetAttribute("type", "spell")
+    secureBtn:SetAttribute("spell", "")
+    local currentTeleportSpell = nil
+
+    -- Pass through drag to parent
+    secureBtn:SetScript("OnDragStart", function()
+        if not UIThingsDB.widgets.locked then
+            keystoneFrame:StartMoving()
+            keystoneFrame.isMoving = true
+        end
+    end)
+    secureBtn:SetScript("OnDragStop", function()
+        keystoneFrame:StopMovingOrSizing()
+        keystoneFrame.isMoving = false
+        local cx, cy = keystoneFrame:GetCenter()
+        local pcx, pcy = UIParent:GetCenter()
+        if cx and pcx then
+            UIThingsDB.widgets.keystone.pos = { x = cx - pcx, y = cy - pcy }
+        end
+    end)
+
+    -- Pass through tooltip
+    secureBtn:SetScript("OnEnter", function(self)
+        local onEnter = keystoneFrame:GetScript("OnEnter")
+        if onEnter then onEnter(keystoneFrame) end
+    end)
+    secureBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    local function UpdateTeleportButton(dungeonName)
+        if InCombatLockdown() then return end
+        local spell = FindTeleportForDungeon(dungeonName)
+        currentTeleportSpell = spell
+        if spell then
+            secureBtn:SetAttribute("spell", spell)
+            secureBtn:Show()
+        else
+            secureBtn:SetAttribute("spell", "")
+            secureBtn:Hide()
+        end
+    end
+
+    -- Invalidate teleport cache when spells change
+    local teleportCacheFrame = CreateFrame("Frame")
+    teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
+    teleportCacheFrame:SetScript("OnEvent", function()
+        cachedTeleportSpells = nil
+    end)
+
     -- Helper function to get keystone info from item link
     local function GetKeystoneInfo(itemLink)
         if not itemLink then return nil end
@@ -81,8 +210,49 @@ table.insert(Widgets.moduleInits, function()
                 else
                     GameTooltip:AddDoubleLine(keyLine, "no upgrade", 0, 1, 0, 0.5, 0.5, 0.5)
                 end
+
+                -- Best run comparison
+                local intimeInfo, overtimeInfo = C_MythicPlus.GetSeasonBestForMap(keyMapID)
+                local bestInfo = intimeInfo or overtimeInfo
+                if bestInfo and bestInfo.level then
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine("Your Best Run", 1, 0.82, 0)
+                    local timed = (intimeInfo and intimeInfo.level) and true or false
+                    local bestLevel = bestInfo.level
+                    local bestDuration = bestInfo.durationSec
+                    local timedText = timed and "|cFF00FF00Timed|r" or "|cFFFF0000Overtime|r"
+                    if bestDuration then
+                        local mins = math.floor(bestDuration / 60)
+                        local secs = bestDuration % 60
+                        GameTooltip:AddDoubleLine(
+                            string.format("+%d (%s)", bestLevel, timedText),
+                            string.format("%d:%02d", mins, secs),
+                            1, 1, 1, 1, 1, 1)
+                    else
+                        GameTooltip:AddLine(string.format("+%d (%s)", bestLevel, timedText), 1, 1, 1)
+                    end
+
+                    -- Show the level difference
+                    local diff = keyLevel - bestLevel
+                    if diff > 0 then
+                        GameTooltip:AddLine(string.format("+%d above your best", diff), 1, 0.5, 0)
+                    elseif diff < 0 then
+                        GameTooltip:AddLine(string.format("%d below your best", diff), 0.5, 0.5, 0.5)
+                    else
+                        GameTooltip:AddLine("Same level as your best", 1, 1, 0)
+                    end
+                else
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine("No previous run for this dungeon", 0.5, 0.5, 0.5)
+                end
             else
                 GameTooltip:AddLine(keyLine, 0, 1, 0)
+            end
+
+            -- Teleport info
+            if currentTeleportSpell then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddDoubleLine("Click to teleport:", currentTeleportSpell, 1, 0.82, 0, 0.4, 0.78, 1)
             end
         else
             GameTooltip:AddLine("No keystone found", 0.7, 0.7, 0.7)
@@ -139,6 +309,8 @@ table.insert(Widgets.moduleInits, function()
         GameTooltip:Hide()
     end)
 
+    local lastKeystoneName = nil
+
     keystoneFrame.UpdateContent = function(self)
         local keyName, keyLevel = GetPlayerKeystone()
 
@@ -148,8 +320,18 @@ table.insert(Widgets.moduleInits, function()
                 shortName = keyName:sub(1, 17) .. "..."
             end
             self.text:SetText(string.format("Key: %s +%d", shortName, keyLevel))
+
+            -- Update teleport button when keystone changes
+            if keyName ~= lastKeystoneName then
+                lastKeystoneName = keyName
+                UpdateTeleportButton(keyName)
+            end
         else
             self.text:SetText("Key: None")
+            if lastKeystoneName then
+                lastKeystoneName = nil
+                UpdateTeleportButton(nil)
+            end
         end
     end
 

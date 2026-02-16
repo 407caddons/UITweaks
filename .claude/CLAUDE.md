@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon that provides UI enhancements: a custom objective tracker, talent change reminders, auto-repair/durability warnings, loot toast notifications, a combat timer, custom layout frames, personal order alerts, and AH filtering. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon that provides UI enhancements: a custom objective tracker, talent change reminders, auto-repair/durability warnings, loot toast notifications, a combat timer, custom layout frames, personal order alerts, AH filtering, action bar skinning, a custom cast bar, chat skinning, an interrupt cooldown tracker, info widgets, and addon version checking. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
@@ -31,9 +31,10 @@ The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** a
 
 ### Saved Variables
 
-Two persistent tables declared in the TOC:
-- **`UIThingsDB`** — All module settings, organized by module key (`tracker`, `vendor`, `loot`, `combat`, `frames`, `misc`, `minimap`, `talentReminders`)
+Three persistent tables declared in the TOC:
+- **`UIThingsDB`** — All module settings, organized by module key (`tracker`, `vendor`, `loot`, `combat`, `frames`, `misc`, `minimap`, `talentReminders`, `widgets`, `kick`, `chatSkin`, `castBar`, `actionBars`, `addonComm`, `reagents`)
 - **`LunaUITweaks_TalentReminders`** — User-created talent reminder definitions (separate so they survive settings resets)
+- **`LunaUITweaks_ReagentData`** — Cross-character reagent inventory data (separate so accumulated scan data survives settings resets)
 
 Settings are accessed directly (e.g., `UIThingsDB.vendor.autoRepair`). Defaults are defined in Core.lua's `DEFAULTS` table and merged via `ApplyDefaults()`, which skips keys that already exist and treats tables with an `r` field as color values (not recursed into).
 
@@ -49,7 +50,7 @@ frame:SetScript("OnEvent", function(self, event, ...) ... end)
 
 ### Settings Update Flow
 
-Config.lua contains the full settings UI (~133KB). When a user changes a setting, Config writes to `UIThingsDB` and calls the module's `UpdateSettings()` function to apply changes immediately without reload.
+The config system is split across multiple files: `config/ConfigMain.lua` creates the window and tab navigation, `config/Helpers.lua` provides shared UI factories, and `config/panels/*.lua` contain individual module settings panels (one file per tab). Each panel's setup function is registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. When a user changes a setting, the panel writes to `UIThingsDB` and calls the module's `UpdateSettings()` function to apply changes immediately without reload.
 
 ### Frame Pooling
 
@@ -65,15 +66,27 @@ Loot.lua and Frames.lua use object pools — frames are hidden and recycled via 
 | File | Module Key | Purpose |
 |---|---|---|
 | Core.lua | `Core` | Initialization, defaults, logging, timer utility |
-| Config.lua | `Config` | Full settings UI with tabs, color pickers, sliders |
-| ObjectiveTracker.lua | `ObjectiveTracker` | Custom quest/WQ/achievement tracker |
+| config/ConfigMain.lua | `Config` | Config window shell, tab navigation, panel wiring |
+| config/Helpers.lua | `ConfigHelpers` | Shared UI helpers (font dropdowns, section headers, color swatches) |
+| config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module |
+| ObjectiveTracker.lua | `ObjectiveTracker` | Custom quest/WQ/achievement tracker with super-track restore |
 | MinimapButton.lua | `Minimap` | Draggable minimap button |
+| MinimapCustom.lua | — | Custom minimap frame (shape, border, zone text, clock) |
 | Vendor.lua | `Vendor` | Auto-repair, sell greys, durability warnings |
-| Loot.lua | `Loot` | Loot toast notifications with quality filtering |
-| CombatTimer.lua | `Combat` | In-combat duration display (MM:SS) |
-| Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter |
+| Loot.lua | `Loot` | Loot toast notifications with quality filtering and item level |
+| Combat.lua | `Combat` | In-combat duration display (MM:SS) |
+| Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, SCT, auto-invite |
 | Frames.lua | `Frames` | User-created colored rectangles for UI layout |
 | TalentReminder.lua | `TalentReminder` | Zone-based talent/spec change alerts |
+| ActionBars.lua | `ActionBars` | Action bar skinning, button spacing/sizing, bar offsets |
+| CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
+| ChatSkin.lua | `ChatSkin` | Chat frame skinning, keyword highlighting, timestamps |
+| Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
+| AddonComm.lua | `AddonComm` | Centralized addon communication message bus |
+| Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
+| AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
+| widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
+| widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
 
 ## TalentReminder Module Details
 
@@ -148,6 +161,10 @@ Run `ApplySkin()` immediately on `PLAYER_ENTERING_WORLD` (not delayed) to beat c
 - Addon-created frames (not inheriting from secure templates) are safe to position anytime.
 - Use `RegisterStateDriver(frame, "visibility", "hide"/"show")` for combat-safe show/hide — but the `RegisterStateDriver` call itself must happen out of combat.
 
+### Config Navigation Order
+
+The config window tabs in `ConfigMain.lua` are ordered by module ID. **Addon Versions must always remain the last tab** in the navigation list. When adding new modules, insert them before Addon Versions and increment its ID accordingly.
+
 ## Key Conventions
 
 - Color values are stored as tables with `r`, `g`, `b` (and optional `a`) fields — `ApplyDefaults` treats these as leaf values, not subtables to recurse into.
@@ -174,3 +191,7 @@ Each of these prompts may have been done already today, if so could you not remo
 3. Can you give me 20 ideas for widgets and improvements to existing ones, give an estimation of ease of use. Write the results to .clause\widgets.md
 
 4. Could you write a short bulleted change log, for the last release no need to get to detailed don't include any minor fixes. Write the results and replace .claude\changeLog.md
+
+## Next features (completed)
+
+1. ~~Implement a way to track reagents across multiple characters~~ — Done. Added `Reagents.lua` module with tooltip display, bag/bank/warband scanning, and config panel with character management.

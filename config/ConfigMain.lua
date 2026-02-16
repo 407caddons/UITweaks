@@ -96,8 +96,9 @@ function addonTable.Config.Initialize()
             { id = 11, name = "Kick CDs",       key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
             { id = 12, name = "Action Bars",    key = "actionBars",    icon = "Interface\\Icons\\Inv_Misc_Desecrated_PlateChest" },
             { id = 13, name = "Notifications",  key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
-            { id = 14, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
-            { id = 15, name = "Cast Bar",       key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = 14, name = "Cast Bar",       key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = 15, name = "Reagents",       key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
+            { id = 16, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -170,6 +171,10 @@ function addonTable.Config.Initialize()
         castBarPanel:SetAllPoints()
         castBarPanel:Hide()
 
+        local reagentsPanel = CreateFrame("Frame", nil, contentContainer)
+        reagentsPanel:SetAllPoints()
+        reagentsPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -186,6 +191,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.actionBars = actionBarsPanel
         addonTable.ConfigPanels.notifications = notificationsPanel
         addonTable.ConfigPanels.castBar = castBarPanel
+        addonTable.ConfigPanels.reagents = reagentsPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -202,8 +208,9 @@ function addonTable.Config.Initialize()
             [11] = kickPanel,
             [12] = actionBarsPanel,
             [13] = notificationsPanel,
-            [14] = addonVersionsPanel,
-            [15] = castBarPanel,
+            [14] = castBarPanel,
+            [15] = reagentsPanel,
+            [16] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -240,6 +247,9 @@ function addonTable.Config.Initialize()
             -- Special OnShow logic (e.g., refreshing lists)
             if id == 8 and addonTable.Config.RefreshTalentReminderList then
                 addonTable.Config.RefreshTalentReminderList()
+            end
+            if id == 15 and addonTable.Config.RefreshReagentsList then
+                addonTable.Config.RefreshReagentsList()
             end
         end
 
@@ -326,11 +336,14 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Notifications then
                 addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[13], configWindow)
             end
-            if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[14], configWindow)
-            end
             if addonTable.ConfigSetup.CastBar then
-                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[15], configWindow)
+                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[14], configWindow)
+            end
+            if addonTable.ConfigSetup.Reagents then
+                addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[15], configWindow)
+            end
+            if addonTable.ConfigSetup.AddonVersions then
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[16], configWindow)
             end
         end
         ----------------------------------------------------

@@ -230,7 +230,17 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     nameEdit:SetAutoFocus(false)
     nameEdit:SetScript("OnEnterPressed", function(self)
         if selectedFrameIndex then
-            UIThingsDB.frames.list[selectedFrameIndex].name = self:GetText()
+            local oldName = UIThingsDB.frames.list[selectedFrameIndex].name
+            local newName = self:GetText()
+            UIThingsDB.frames.list[selectedFrameIndex].name = newName
+            -- Update any widgets anchored to the old name
+            if oldName ~= newName and UIThingsDB.widgets then
+                for key, wData in pairs(UIThingsDB.widgets) do
+                    if type(wData) == "table" and wData.anchor == oldName then
+                        wData.anchor = newName
+                    end
+                end
+            end
             self:ClearFocus()
             UpdateDropdownText()
             UpdateFrames()

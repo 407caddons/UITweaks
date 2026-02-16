@@ -258,11 +258,20 @@ end
 
 -- == Blizzard Cast Bar ==
 
--- Hide Blizzard's cast bar by pushing it off-screen with alpha 0.
--- We avoid UnregisterAllEvents/Hide which taints internal mixin state
--- and causes "secret string value" errors in Blizzard's CastingBarFrame code.
+-- Hide Blizzard's cast bar using RegisterStateDriver for combat-safe visibility
+-- and a SetPoint hook to keep it off-screen when Blizzard re-layouts.
 local blizzBarHidden = false
-local blizzBarOrigPoints = nil
+local blizzBarHooked = false
+
+local function ForceBlizzBarOffScreen()
+    if not PlayerCastingBarFrame then return end
+    if InCombatLockdown() then return end
+    PlayerCastingBarFrame:SetAlpha(0)
+    local clearPoints = PlayerCastingBarFrame.ClearAllPointsBase or PlayerCastingBarFrame.ClearAllPoints
+    local setPoint = PlayerCastingBarFrame.SetPointBase or PlayerCastingBarFrame.SetPoint
+    clearPoints(PlayerCastingBarFrame)
+    setPoint(PlayerCastingBarFrame, "TOP", UIParent, "BOTTOM", 0, -500)
+end
 
 function CastBar.HideBlizzardCastBar()
     if not UIThingsDB.castBar.enabled then
@@ -271,33 +280,52 @@ function CastBar.HideBlizzardCastBar()
     end
     if not PlayerCastingBarFrame then return end
     if blizzBarHidden then return end
-
-    -- Save original position
-    if not blizzBarOrigPoints then
-        blizzBarOrigPoints = {}
-        for i = 1, PlayerCastingBarFrame:GetNumPoints() do
-            blizzBarOrigPoints[i] = { PlayerCastingBarFrame:GetPoint(i) }
-        end
+    if InCombatLockdown() then
+        -- Defer to out-of-combat
+        local waitFrame = CreateFrame("Frame")
+        waitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        waitFrame:SetScript("OnEvent", function(self)
+            self:UnregisterAllEvents()
+            CastBar.HideBlizzardCastBar()
+        end)
+        return
     end
 
-    -- Move off-screen and make invisible without tainting internals
+    -- Use RegisterStateDriver for combat-safe hiding
+    RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")
     PlayerCastingBarFrame:SetAlpha(0)
-    PlayerCastingBarFrame:ClearAllPoints()
-    PlayerCastingBarFrame:SetPoint("TOP", UIParent, "BOTTOM", 0, -500)
+    ForceBlizzBarOffScreen()
+
+    -- Hook SetPointBase so Blizzard re-layouts don't undo our positioning
+    if not blizzBarHooked then
+        local hookTarget = PlayerCastingBarFrame.SetPointBase and "SetPointBase" or "SetPoint"
+        hooksecurefunc(PlayerCastingBarFrame, hookTarget, function()
+            if blizzBarHidden and not InCombatLockdown() then
+                PlayerCastingBarFrame:SetAlpha(0)
+            end
+        end)
+        blizzBarHooked = true
+    end
+
     blizzBarHidden = true
 end
 
 function CastBar.RestoreBlizzardCastBar()
     if not PlayerCastingBarFrame then return end
     if not blizzBarHidden then return end
-
-    PlayerCastingBarFrame:SetAlpha(1)
-    if blizzBarOrigPoints then
-        PlayerCastingBarFrame:ClearAllPoints()
-        for _, pt in ipairs(blizzBarOrigPoints) do
-            PlayerCastingBarFrame:SetPoint(unpack(pt))
-        end
+    if InCombatLockdown() then
+        local waitFrame = CreateFrame("Frame")
+        waitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        waitFrame:SetScript("OnEvent", function(self)
+            self:UnregisterAllEvents()
+            CastBar.RestoreBlizzardCastBar()
+        end)
+        return
     end
+
+    UnregisterStateDriver(PlayerCastingBarFrame, "visibility")
+    PlayerCastingBarFrame:SetAlpha(1)
+    PlayerCastingBarFrame:Show()
     blizzBarHidden = false
 end
 
@@ -410,6 +438,11 @@ function CastBar.UpdateSettings()
     statusBar:SetPoint("RIGHT", castBarFrame, "RIGHT", 0, 0)
     statusBar:SetHeight(barHeight)
 
+    -- Bar texture
+    local texturePath = settings.barTexture or "Interface\\TargetingFrame\\UI-StatusBar"
+    statusBar:SetStatusBarTexture(texturePath)
+    statusBar.bg:SetTexture(texturePath)
+
     -- Bar color
     ApplyBarColor()
 
@@ -481,13 +514,15 @@ local function Init()
     castBarFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, _, x, y = self:GetPoint()
-        UIThingsDB.castBar.pos = { point = point, x = math.floor(x + 0.5), y = math.floor(y + 0.5) }
+        x = math.floor(x * 10 + 0.5) / 10
+        y = math.floor(y * 10 + 0.5) / 10
+        UIThingsDB.castBar.pos = { point = point, x = x, y = y }
         -- Update config panel edit boxes if open
         local xBox = _G["UIThingsCastBarPosX"]
         local yBox = _G["UIThingsCastBarPosY"]
         local anchorDD = _G["UIThingsCastBarAnchorDropdown"]
-        if xBox then xBox:SetText(tostring(UIThingsDB.castBar.pos.x)) end
-        if yBox then yBox:SetText(tostring(UIThingsDB.castBar.pos.y)) end
+        if xBox then xBox:SetText(tostring(x)) end
+        if yBox then yBox:SetText(tostring(y)) end
         if anchorDD then UIDropDownMenu_SetText(anchorDD, point) end
     end)
 

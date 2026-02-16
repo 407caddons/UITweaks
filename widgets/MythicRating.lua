@@ -28,7 +28,11 @@ table.insert(Widgets.moduleInits, function()
     ratingEventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     ratingEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     ratingEventFrame:RegisterEvent("MYTHIC_PLUS_NEW_WEEKLY_RECORD")
-    ratingEventFrame:SetScript("OnEvent", function()
+    ratingEventFrame:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_ENTERING_WORLD" then
+            -- Request map data so CHALLENGE_MODE_MAPS_UPDATE fires with real scores
+            C_MythicPlus.RequestMapInfo()
+        end
         RefreshRatingCache()
     end)
 

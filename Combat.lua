@@ -302,12 +302,18 @@ end
 -- Weapon enchant detection via GetWeaponEnchantInfo()
 local function HasWeaponBuff()
     local hasMainHandEnchant, _, _, _, hasOffHandEnchant = GetWeaponEnchantInfo()
-    local hasOffHandWeapon = GetInventoryItemLink("player", 17) ~= nil
+    local offHandID = GetInventoryItemID("player", 17)
+    local offHandIsWeapon = false
+    if offHandID then
+        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(offHandID)
+        -- classID 2 = Weapon; shields (4) and holdables (4) are Armor, not valid buff targets
+        offHandIsWeapon = (classID == 2)
+    end
 
-    if hasOffHandWeapon then
+    if offHandIsWeapon then
         return hasMainHandEnchant and hasOffHandEnchant, hasMainHandEnchant, hasOffHandEnchant
     else
-        return hasMainHandEnchant, hasMainHandEnchant, true -- Treat OH as true if not equipped
+        return hasMainHandEnchant, hasMainHandEnchant, true -- Treat OH as true if not a weapon
     end
 end
 

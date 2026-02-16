@@ -1196,6 +1196,11 @@ end
 
 -- == EVENT HANDLING ==
 
+-- Forward declarations (defined further below, but called from OnEvent)
+local RegisterPartyWatcher
+local UnregisterPartyWatcher
+local AutoRegisterPartyByClass
+
 local function OnEvent(self, event, ...)
     if not UIThingsDB.kick then return end
 
@@ -1342,7 +1347,7 @@ end
 local partyWatcherRegistered = false
 
 -- Auto-register party members by class (for non-addon users)
-local function AutoRegisterPartyByClass()
+AutoRegisterPartyByClass = function()
     if not UIThingsDB.kick.trackNonAddonUsers then return end
     if not IsInGroup() then return end
 
@@ -1504,7 +1509,7 @@ for i = 1, 4 do
     end)
 end
 
-local function RegisterPartyWatcher()
+RegisterPartyWatcher = function()
     addonTable.Core.Log("Kick", string.format("RegisterPartyWatcher: registered=%s, trackNonAddon=%s, inGroup=%s",
         tostring(partyWatcherRegistered),
         tostring(UIThingsDB.kick.trackNonAddonUsers),
@@ -1542,7 +1547,7 @@ local function RegisterPartyWatcher()
     end
 end
 
-local function UnregisterPartyWatcher()
+UnregisterPartyWatcher = function()
     if not partyWatcherRegistered then return end
     for i = 1, 4 do
         partyWatcherFrames[i]:UnregisterAllEvents()

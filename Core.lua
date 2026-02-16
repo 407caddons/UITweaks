@@ -116,6 +116,7 @@ local function OnEvent(self, event, ...)
                 showWorldQuestTimer = true,
                 hideCompletedSubtasks = false,
                 groupQuestsByZone = false,
+                groupQuestsByCampaign = false,
                 worldQuestSortBy = "time",
                 showQuestDistance = true,
                 sortQuestsByDistance = false,
@@ -127,6 +128,7 @@ local function OnEvent(self, event, ...)
                 highlightCampaignQuests = true,
                 campaignQuestColor = { r = 0.9, g = 0.7, b = 0.2, a = 1 },
                 showQuestTypeIndicators = true,
+                showQuestLineProgress = true,
                 questCompletionSound = true,
                 questCompletionSoundID = 6199,
                 objectiveCompletionSound = false,
@@ -388,6 +390,7 @@ local function OnEvent(self, event, ...)
                 width = 250,
                 height = 20,
                 pos = { point = "CENTER", x = 0, y = -200 },
+                barTexture = "Interface\\TargetingFrame\\UI-StatusBar",
                 useClassColor = false,
                 barColor = { r = 1, g = 0.7, b = 0, a = 1 },
                 bgColor = { r = 0, g = 0, b = 0, a = 0.7 },
@@ -425,10 +428,14 @@ local function OnEvent(self, event, ...)
                 skinButtonSpacing = 2,
                 skinButtonSize = 0,
                 barOffsets = {},
+                barPositions = {},
             },
             addonComm = {
                 hideFromWorld = false,
                 debugMode = false
+            },
+            reagents = {
+                enabled = false
             }
         }
 

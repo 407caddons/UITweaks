@@ -331,3 +331,148 @@ function Helpers.CreateFontDropdown(parent, name, labelText, currentFontPath, on
 
     return dropdown
 end
+
+--- Build status bar texture list
+-- Uses known working texture paths and dynamically discovered fileIDs from existing StatusBar frames
+-- @return table Array of {name, path} tables where path is a string path or numeric fileID
+local function BuildTextureList()
+    local textures = {}
+    local seen = {}
+
+    local function AddTexture(name, path)
+        -- Normalise key: uppercase for strings, tostring for numbers
+        local key = type(path) == "string" and path:upper() or tostring(path)
+        if not seen[key] then
+            seen[key] = true
+            table.insert(textures, { name = name, path = path })
+        end
+    end
+
+    -- Known working WoW status bar textures
+    AddTexture("Blizzard", "Interface\\TargetingFrame\\UI-StatusBar")
+    AddTexture("Blizzard Character", "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar")
+    AddTexture("Blizzard Raid", "Interface\\RaidFrame\\Raid-Bar-Hp-Fill")
+    AddTexture("Blizzard Party", "Interface\\RaidFrame\\Raid-Bar-Resource-Fill")
+    AddTexture("Solid", "Interface\\Buttons\\WHITE8X8")
+    AddTexture("NamePlate", "Interface\\TargetingFrame\\UI-TargetingFrame-BarFill")
+
+    -- Dynamically discover textures from existing StatusBar frames
+    -- Modern WoW often returns numeric fileIDs from GetTexture(), which are valid for SetStatusBarTexture
+    local statusBarNames = {
+        "PlayerCastingBarFrame",
+        "MirrorTimer1StatusBar",
+    }
+
+    for _, frameName in ipairs(statusBarNames) do
+        local frame = _G[frameName]
+        if frame and frame.GetStatusBarTexture then
+            pcall(function()
+                local tex = frame:GetStatusBarTexture()
+                if tex and tex.GetTexture then
+                    local texVal = tex:GetTexture()
+                    if texVal and texVal ~= "" then
+                        if type(texVal) == "string" then
+                            local friendlyName = texVal:match("([^\\]+)$") or texVal
+                            friendlyName = friendlyName:gsub("%.%w+$", ""):gsub("UI%-", ""):gsub("%-", " ")
+                            AddTexture(frameName .. " (" .. friendlyName .. ")", texVal)
+                        elseif type(texVal) == "number" then
+                            AddTexture(frameName .. " (ID " .. texVal .. ")", texVal)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    -- Sort alphabetically by name
+    table.sort(textures, function(a, b) return a.name < b.name end)
+
+    return textures
+end
+
+-- Shared texture list (built once on load)
+Helpers.textures = BuildTextureList()
+
+--- Helper: Create Texture Dropdown with visual texture preview
+-- @param parent frame Parent frame
+-- @param name string Unique name for the dropdown
+-- @param labelText string Label text above dropdown
+-- @param currentTexturePath string Currently selected texture path
+-- @param onSelectFunc function Callback when texture is selected, receives (texturePath, textureName)
+-- @param xOffset number X offset from TOPLEFT (default 20)
+-- @param yOffset number Y offset from TOPLEFT
+-- @return frame The dropdown frame, and a preview texture
+function Helpers.CreateTextureDropdown(parent, name, labelText, currentTexturePath, onSelectFunc, xOffset, yOffset)
+    xOffset = xOffset or 20
+
+    -- Label
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", xOffset, yOffset)
+    label:SetText(labelText)
+
+    -- Preview bar showing current texture
+    local previewFrame = CreateFrame("Frame", nil, parent)
+    previewFrame:SetSize(200, 16)
+    previewFrame:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
+
+    local previewBg = previewFrame:CreateTexture(nil, "BACKGROUND")
+    previewBg:SetAllPoints()
+    previewBg:SetColorTexture(0, 0, 0, 0.8)
+
+    local previewTex = previewFrame:CreateTexture(nil, "ARTWORK")
+    previewTex:SetPoint("TOPLEFT", 1, -1)
+    previewTex:SetPoint("BOTTOMRIGHT", -1, 1)
+    previewTex:SetTexture(currentTexturePath)
+    previewTex:SetVertexColor(0.4, 0.8, 1, 1)
+
+    -- Dropdown
+    local dropdown = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    dropdown:SetPoint("TOPLEFT", previewFrame, "BOTTOMLEFT", -15, -2)
+
+    local selectedPath = currentTexturePath
+
+    local function OnClick(self)
+        selectedPath = self.value
+        UIDropDownMenu_SetSelectedID(dropdown, self:GetID())
+        UIDropDownMenu_SetText(dropdown, self.textureName)
+        previewTex:SetTexture(self.value)
+        if onSelectFunc then
+            onSelectFunc(self.value, self.textureName)
+        end
+    end
+
+    local function Initialize(self, level)
+        for i, texData in ipairs(Helpers.textures) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = texData.name
+            info.value = texData.path
+            info.textureName = texData.name
+            info.func = OnClick
+
+            -- Add a colored texture icon to the left of each entry
+            info.icon = texData.path
+            info.tCoordLeft = 0
+            info.tCoordRight = 1
+            info.tCoordTop = 0
+            info.tCoordBottom = 1
+
+            info.checked = (texData.path == selectedPath)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(dropdown, Initialize)
+    UIDropDownMenu_SetWidth(dropdown, 180)
+
+    -- Set initial selected texture name
+    local selectedName = "Select Texture"
+    for _, t in ipairs(Helpers.textures) do
+        if t.path == currentTexturePath then
+            selectedName = t.name
+            break
+        end
+    end
+    UIDropDownMenu_SetText(dropdown, selectedName)
+
+    return dropdown, previewTex
+end

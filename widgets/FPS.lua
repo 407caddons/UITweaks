@@ -10,6 +10,11 @@ table.insert(Widgets.moduleInits, function()
     local lastMemUpdateTime = 0
     local MEM_UPDATE_INTERVAL = 15 -- seconds between expensive UpdateAddOnMemoryUsage calls
 
+    -- Latency history for jitter calculation
+    local JITTER_SAMPLES = 30
+    local latencyHistory = {}
+    local latencyIndex = 0
+
     local function GetMemEntry()
         local t = table.remove(addonMemPool)
         if not t then t = {} end
@@ -50,9 +55,33 @@ table.insert(Widgets.moduleInits, function()
         local bandwidthIn, bandwidthOut, latencyHome, latencyWorld = GetNetStats()
         local fps = GetFramerate()
 
+        -- Calculate jitter from latency history
+        local jitter = 0
+        if #latencyHistory >= 2 then
+            local sum = 0
+            for i = 1, #latencyHistory do sum = sum + latencyHistory[i] end
+            local avg = sum / #latencyHistory
+            local variance = 0
+            for i = 1, #latencyHistory do
+                local diff = latencyHistory[i] - avg
+                variance = variance + diff * diff
+            end
+            jitter = math.sqrt(variance / #latencyHistory)
+        end
+
+        local jr, jg, jb = 0, 1, 0
+        if jitter > 50 then
+            jr, jg, jb = 1, 0, 0
+        elseif jitter > 20 then
+            jr, jg, jb = 1, 1, 0
+        end
+
         GameTooltip:SetText("Performance")
         GameTooltip:AddDoubleLine("Home MS:", latencyHome, 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("World MS:", latencyWorld, 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Jitter:", string.format("%.0f ms", jitter), 1, 1, 1, jr, jg, jb)
+        GameTooltip:AddDoubleLine("Bandwidth In:", string.format("%.1f KB/s", bandwidthIn), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Bandwidth Out:", string.format("%.1f KB/s", bandwidthOut), 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("FPS:", string.format("%.0f", fps), 1, 1, 1, 1, 1, 1)
 
         -- Throttle expensive memory scan to once per MEM_UPDATE_INTERVAL seconds
@@ -93,5 +122,9 @@ table.insert(Widgets.moduleInits, function()
         local _, _, latencyHome, _ = GetNetStats()
         local fps = GetFramerate()
         self.text:SetFormattedText("%d ms / %.0f fps", latencyHome, fps)
+
+        -- Sample latency for jitter calculation
+        latencyIndex = (latencyIndex % JITTER_SAMPLES) + 1
+        latencyHistory[latencyIndex] = latencyHome
     end
 end)

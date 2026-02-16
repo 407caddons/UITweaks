@@ -58,9 +58,12 @@ local collectedSet = {}     -- [button] = true, for fast lookup
 local drawerHooked = false
 local inEditMode = false
 
--- Forward declarations for functions defined later but called from hooks
+-- Forward declarations for functions/tables defined later but referenced from hooks
 local RestoreBarPositions
 local RestoreButtonSpacing
+local blizzardDefaultPositions = {}                            -- [barName] = { point, relTo, relPoint, x, y } captured before our overrides
+local originalButtonPositions = {}                             -- saved original button positions for restore
+ActionBars.blizzardDefaultPositions = blizzardDefaultPositions -- exposed for config panel
 
 local TOGGLE_BTN_WIDTH = 16
 
@@ -596,9 +599,9 @@ function ActionBars.SetupDrawer()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "Show", function()
                 inEditMode = true
-                -- Undo all our layout overrides so edit mode sees the real Blizzard layout
+                -- Undo all our layout overrides so edit mode sees Blizzard's layout
                 if UIThingsDB.actionBars and UIThingsDB.actionBars.skinEnabled then
-                    RestoreBarPositions(false)
+                    RestoreBarPositions()
                     RestoreButtonSpacing(false)
                     -- Hide skin overlays
                     if skinnedBars then
@@ -622,7 +625,6 @@ function ActionBars.SetupDrawer()
                 if drawerToggleBtn then drawerToggleBtn:Hide() end
             end)
             hooksecurefunc(EditModeManagerFrame, "Hide", function()
-                inEditMode = false
                 if UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
                     C_Timer.After(0.5, function()
                         if drawerFrame then drawerFrame:Show() end
@@ -630,15 +632,21 @@ function ActionBars.SetupDrawer()
                         SuppressMicroLayout(CollectMicroButtons)
                     end)
                 end
-                -- Fully remove then re-apply skin so positions are recaptured fresh
+                -- Wipe Blizzard defaults and button positions so they get recaptured
+                -- fresh (user may have moved bars in edit mode)
+                wipe(blizzardDefaultPositions)
+                wipe(originalButtonPositions)
                 if UIThingsDB.actionBars and UIThingsDB.actionBars.skinEnabled then
-                    ActionBars.RemoveSkin()
+                    -- Keep inEditMode true until Blizzard finishes repositioning
                     C_Timer.After(1, function()
+                        inEditMode = false
+                        if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+                            return -- Re-opened edit mode during delay
+                        end
                         ActionBars.ApplySkin()
                     end)
                 else
-                    wipe(originalBarPositions)
-                    wipe(originalButtonPositions)
+                    inEditMode = false
                 end
             end)
         end
@@ -731,7 +739,14 @@ local function SkinButton(button)
     local overlay = button.lunaSkinOverlay
     overlay:SetFrameLevel(button:GetFrameLevel() + 2)
 
-    if borderSize > 0 then
+    -- Hide border on empty slots
+    local hasAction = button.HasAction and button:HasAction()
+    if hasAction == nil then
+        -- Fallback: check if icon texture is visible
+        hasAction = button.icon and button.icon:IsShown()
+    end
+
+    if borderSize > 0 and hasAction then
         overlay:SetBackdrop({
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = borderSize,
@@ -849,8 +864,7 @@ local function SkinBar(barFrame)
     overlay:Show()
 end
 
-local originalBarPositions = {}    -- saved original bar positions for restore
-local originalButtonPositions = {} -- saved original button positions for restore
+-- blizzardDefaultPositions and originalButtonPositions are forward-declared near the top of the file
 
 local function ApplyButtonSpacing(barInfo)
     local settings = UIThingsDB.actionBars
@@ -957,47 +971,80 @@ local function ApplyButtonSpacing(barInfo)
     end
 end
 
--- == Secure Handler Bar Positioning ==
+-- == Secure Handler Bar Positioning (Absolute) ==
 -- Uses SecureHandlerStateTemplate so that bar repositioning works even in combat.
--- The restricted Lua environment inside secure handler snippets can call SetPoint(),
--- ClearAllPoints() on protected frame handles — something insecure addon code cannot.
---
--- How it works:
--- 1. We create a secure handler "anchor" frame per bar (out of combat)
--- 2. SetFrameRef gives the snippet a handle to the bar
--- 3. We store the original anchor info + offsets as attributes on the anchor frame
--- 4. A restricted snippet reads these attributes and calls SetPoint on the bar handle
--- 5. We trigger the snippet via SetAttribute (out of combat) or state driver (in combat)
--- 6. A state driver on "combat" ensures the snippet re-fires on combat transitions,
---    which catches Blizzard resetting positions on zone/instance changes during combat
+-- Stores absolute positions anchored to UIParent — no need to track Blizzard's "originals".
 
 local secureAnchors = {}   -- [barName] = secure handler frame
 local hookedBars = {}      -- [barName] = true, tracks which bars have SetPoint hooks
 local suppressHook = false -- prevents recursive hook firing
 
--- The restricted Lua snippet that repositions a bar.
--- Reads attributes from self: origPoint, origRelPoint, origX, origY, offsetX, offsetY
--- and the bar frame ref "bar".
+-- Convert a frame's current screen position to UIParent-relative CENTER coordinates
+local function FrameToUIParentPosition(frame)
+    local cx, cy = frame:GetCenter()
+    if not cx or not cy then return nil end
+    local scale = frame:GetEffectiveScale()
+    local uiScale = UIParent:GetEffectiveScale()
+    -- Convert to UIParent coordinate space
+    cx = cx * scale / uiScale
+    cy = cy * scale / uiScale
+    -- Make relative to UIParent center
+    local uiCx, uiCy = UIParent:GetCenter()
+    return { point = "CENTER", x = math.floor(cx - uiCx + 0.5), y = math.floor(cy - uiCy + 0.5) }
+end
+ActionBars.FrameToUIParentPosition = FrameToUIParentPosition
+
+-- Migrate old barOffsets format to new barPositions format
+local barOffsetsMigrated = false
+local function MigrateBarOffsets()
+    if barOffsetsMigrated then return end
+    barOffsetsMigrated = true
+    local settings = UIThingsDB.actionBars
+    if not settings or not settings.barOffsets then return end
+
+    local hasOffsets = false
+    for barName, offsets in pairs(settings.barOffsets) do
+        if offsets.x ~= 0 or offsets.y ~= 0 then
+            hasOffsets = true
+            break
+        end
+    end
+    if not hasOffsets then return end
+
+    if not settings.barPositions then settings.barPositions = {} end
+
+    for barName, offsets in pairs(settings.barOffsets) do
+        if (offsets.x ~= 0 or offsets.y ~= 0) and not settings.barPositions[barName] then
+            -- The bar is currently at its offset position, capture it as absolute
+            local barFrame = _G[barName]
+            if barFrame then
+                local absPos = FrameToUIParentPosition(barFrame)
+                if absPos then
+                    settings.barPositions[barName] = absPos
+                end
+            end
+        end
+    end
+    -- Clear old offsets
+    settings.barOffsets = {}
+end
+
+-- The restricted Lua snippet that repositions a bar using absolute coordinates.
+-- Reads absPoint, absX, absY attributes and the "uiparent" frame ref.
 local REPOSITION_SNIPPET = [=[
     local bar = self:GetFrameRef("bar")
-    if not bar then return end
-
-    local origPoint = self:GetAttribute("origPoint")
-    local origRelPoint = self:GetAttribute("origRelPoint")
-    local origX = self:GetAttribute("origX") or 0
-    local origY = self:GetAttribute("origY") or 0
-    local offsetX = self:GetAttribute("offsetX") or 0
-    local offsetY = self:GetAttribute("offsetY") or 0
-
-    if origPoint and origRelPoint then
-        local relFrame = self:GetFrameRef("origRelFrame") or self:GetParent()
+    local uip = self:GetFrameRef("uiparent")
+    local pt = self:GetAttribute("absPoint")
+    local ax = self:GetAttribute("absX") or 0
+    local ay = self:GetAttribute("absY") or 0
+    if bar and pt and uip then
         bar:ClearAllPoints()
-        bar:SetPoint(origPoint, relFrame, origRelPoint, origX + offsetX, origY + offsetY)
+        bar:SetPoint(pt, uip, pt, ax, ay)
     end
 ]=]
 
 -- Set up a secure anchor for a bar (must be called out of combat)
-local function SetupSecureAnchor(barName, barFrame)
+local function SetupSecureAnchor(barName, barFrame, absPos)
     if secureAnchors[barName] then return secureAnchors[barName] end
     if InCombatLockdown() then return nil end
 
@@ -1005,22 +1052,14 @@ local function SetupSecureAnchor(barName, barFrame)
     anchor:SetSize(1, 1)
     anchor:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 
-    -- Give the snippet a handle to the bar
+    -- Give the snippet handles to the bar and UIParent
     anchor:SetFrameRef("bar", barFrame)
+    anchor:SetFrameRef("uiparent", UIParent)
 
-    -- Save the bar's original position as attributes
-    local point, relativeTo, relPoint, x, y = barFrame:GetPoint(1)
-    anchor:SetAttribute("origPoint", point)
-    anchor:SetAttribute("origRelPoint", relPoint)
-    anchor:SetAttribute("origX", x)
-    anchor:SetAttribute("origY", y)
-    anchor:SetAttribute("offsetX", 0)
-    anchor:SetAttribute("offsetY", 0)
-
-    -- Store the relativeTo frame as a frame ref so the snippet can use it
-    if relativeTo then
-        anchor:SetFrameRef("origRelFrame", relativeTo)
-    end
+    -- Store absolute position as attributes
+    anchor:SetAttribute("absPoint", absPos.point)
+    anchor:SetAttribute("absX", absPos.x)
+    anchor:SetAttribute("absY", absPos.y)
 
     -- When "applypos" attribute changes, run the reposition snippet
     anchor:SetAttribute("_onattributechanged", [=[
@@ -1029,117 +1068,60 @@ local function SetupSecureAnchor(barName, barFrame)
         end
     ]=])
 
-    -- State driver: re-apply position on combat state transitions.
-    -- This catches Blizzard resetting bars on zone changes during combat.
+    -- State driver: re-apply position on combat state transitions
     RegisterStateDriver(anchor, "reposition", "[combat] combat; nocombat")
     anchor:SetAttribute("_onstate-reposition", REPOSITION_SNIPPET)
 
     secureAnchors[barName] = anchor
-
-    -- Save original position for edit mode restore
-    if not originalBarPositions[barFrame] then
-        local origPoints = {}
-        for p = 1, barFrame:GetNumPoints() do
-            origPoints[p] = { barFrame:GetPoint(p) }
-        end
-        originalBarPositions[barFrame] = origPoints
-    end
-
     return anchor
 end
 
-local function ApplyBarOffset(barName, barFrame)
+-- Apply an absolute position to a bar
+local function ApplyBarPosition(barName, barFrame)
     local settings = UIThingsDB.actionBars
     if not settings or not settings.skinEnabled then return end
-    local offsets = settings.barOffsets and settings.barOffsets[barName]
-    local offsetX = offsets and offsets.x or 0
-    local offsetY = offsets and offsets.y or 0
+    local absPos = settings.barPositions and settings.barPositions[barName]
+    if not absPos then return end -- no stored position, let Blizzard handle it
 
-    if offsetX == 0 and offsetY == 0 then return end
-
-    -- Save original position before any modifications
-    if not originalBarPositions[barFrame] then
-        local origPoints = {}
-        for p = 1, barFrame:GetNumPoints() do
-            origPoints[p] = { barFrame:GetPoint(p) }
-        end
-        originalBarPositions[barFrame] = origPoints
-    end
-
-    -- Set up secure anchor for combat-safe repositioning via state driver
+    -- Create or update secure anchor for combat-safe repositioning
     local anchor = secureAnchors[barName]
     if not anchor then
-        anchor = SetupSecureAnchor(barName, barFrame)
+        anchor = SetupSecureAnchor(barName, barFrame, absPos)
+    elseif not InCombatLockdown() then
+        anchor:SetAttribute("absPoint", absPos.point)
+        anchor:SetAttribute("absX", absPos.x)
+        anchor:SetAttribute("absY", absPos.y)
     end
 
-    if anchor and not InCombatLockdown() then
-        anchor:SetAttribute("offsetX", offsetX)
-        anchor:SetAttribute("offsetY", offsetY)
-    end
-
-    -- Edit mode system frames override SetPoint/ClearAllPoints with secure versions.
-    -- Use the "Base" variants (SetPointBase/ClearAllPointsBase) to bypass the edit mode
-    -- layer and directly position the frame. Fall back to standard methods if Base doesn't exist.
-    local hasBase = barFrame.SetPointBase ~= nil
-    local clearPoints = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
-    local setPoint = barFrame.SetPointBase or barFrame.SetPoint
-
-    -- Out of combat: directly reposition the bar
+    -- Out of combat: directly reposition the bar using absolute coordinates
     if not InCombatLockdown() then
-        local origPoints = originalBarPositions[barFrame]
-        if origPoints then
-            suppressHook = true
-            clearPoints(barFrame)
-            for _, pt in ipairs(origPoints) do
-                local point, relativeTo, relPoint, x, y = unpack(pt)
-                setPoint(barFrame, point, relativeTo, relPoint, x + offsetX, y + offsetY)
-            end
-            suppressHook = false
-        end
+        local clearPoints = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
+        local setPoint = barFrame.SetPointBase or barFrame.SetPoint
+        suppressHook = true
+        clearPoints(barFrame)
+        setPoint(barFrame, absPos.point, UIParent, absPos.point, absPos.x, absPos.y)
+        suppressHook = false
     end
 
-    -- Hook SetPointBase (or SetPoint) on this bar so that when Blizzard re-layouts it
-    -- (edit mode system, zone changes, etc.) we re-apply our offset on top.
+    -- Hook SetPointBase so when Blizzard re-layouts, we re-apply our absolute position
     if not hookedBars[barName] then
         hookedBars[barName] = true
+        local hasBase = barFrame.SetPointBase ~= nil
         local hookTarget = hasBase and "SetPointBase" or "SetPoint"
         hooksecurefunc(barFrame, hookTarget, function()
             if suppressHook then return end
             if InCombatLockdown() then return end
+            if inEditMode then return end
             local s = UIThingsDB.actionBars
             if not s or not s.skinEnabled then return end
-            local offs = s.barOffsets and s.barOffsets[barName]
-            if not offs then return end
-            local ox, oy = offs.x or 0, offs.y or 0
-            if ox == 0 and oy == 0 then return end
-
-            -- Blizzard just set the bar's position — re-read it as the new "original"
-            local origPts = {}
-            for p = 1, barFrame:GetNumPoints() do
-                origPts[p] = { barFrame:GetPoint(p) }
-            end
-            originalBarPositions[barFrame] = origPts
-
-            -- Update secure anchor attributes with new original position
-            local anch = secureAnchors[barName]
-            if anch then
-                local pt, relTo, relPt, px, py = barFrame:GetPoint(1)
-                anch:SetAttribute("origPoint", pt)
-                anch:SetAttribute("origRelPoint", relPt)
-                anch:SetAttribute("origX", px)
-                anch:SetAttribute("origY", py)
-                if relTo then
-                    anch:SetFrameRef("origRelFrame", relTo)
-                end
-            end
-
-            -- Re-apply with offset using Base methods
+            local pos = s.barPositions and s.barPositions[barName]
+            if not pos then return end
+            -- Re-apply our absolute position
+            local clr = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
+            local sp = barFrame.SetPointBase or barFrame.SetPoint
             suppressHook = true
-            clearPoints(barFrame)
-            for _, p in ipairs(origPts) do
-                local point, relativeTo, relPoint, x, y = unpack(p)
-                setPoint(barFrame, point, relativeTo, relPoint, x + ox, y + oy)
-            end
+            clr(barFrame)
+            sp(barFrame, pos.point, UIParent, pos.point, pos.x, pos.y)
             suppressHook = false
         end)
     end
@@ -1148,18 +1130,33 @@ end
 local function RemoveSecureAnchors()
     if InCombatLockdown() then return end
     for barName, anchor in pairs(secureAnchors) do
-        -- Unregister state driver so the snippet stops firing
         UnregisterStateDriver(anchor, "reposition")
-        -- Restore bar to original position by setting offsets to 0 and triggering
-        anchor:SetAttribute("offsetX", 0)
-        anchor:SetAttribute("offsetY", 0)
-        anchor:SetAttribute("applypos", GetTime())
         anchor:Hide()
     end
     wipe(secureAnchors)
 end
 
+-- Restore bars to Blizzard default positions (for edit mode)
+RestoreBarPositions = function()
+    if InCombatLockdown() then return end
+    RemoveSecureAnchors()
+    suppressHook = true
+    for barName, defPos in pairs(blizzardDefaultPositions) do
+        local barFrame = _G[barName]
+        if barFrame then
+            local clearPoints = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
+            local setPoint = barFrame.SetPointBase or barFrame.SetPoint
+            clearPoints(barFrame)
+            -- relTo may be nil for some bars, use UIParent as fallback
+            local relTo = defPos.relTo or UIParent
+            setPoint(barFrame, defPos.point, relTo, defPos.relPoint, defPos.x, defPos.y)
+        end
+    end
+    suppressHook = false
+end
+
 RestoreButtonSpacing = function(andWipe)
+    if InCombatLockdown() then return end
     for btn, points in pairs(originalButtonPositions) do
         local clearPts = btn.ClearAllPointsBase or btn.ClearAllPoints
         local setPt = btn.SetPointBase or btn.SetPoint
@@ -1170,14 +1167,6 @@ RestoreButtonSpacing = function(andWipe)
     end
     if andWipe ~= false then
         wipe(originalButtonPositions)
-    end
-end
-
-RestoreBarPositions = function(andWipe)
-    -- Remove secure anchors to restore bars to original positions
-    RemoveSecureAnchors()
-    if andWipe ~= false then
-        wipe(originalBarPositions)
     end
 end
 
@@ -1201,7 +1190,31 @@ function ActionBars.ApplySkin()
     -- If in combat, skip everything — the deferred call will handle it all
     if inCombat then return end
 
-    -- Skin each bar and its buttons, apply spacing and offsets
+    -- Migrate old barOffsets to barPositions on first run
+    MigrateBarOffsets()
+
+    -- Capture Blizzard's default positions BEFORE we apply our overrides
+    -- (only for bars we haven't captured yet or after edit mode wipe)
+    suppressHook = true
+    for _, barInfo in ipairs(ACTION_BARS) do
+        local barFrame = _G[barInfo.bar]
+        if barFrame and not blizzardDefaultPositions[barInfo.bar] then
+            local numPoints = barFrame:GetNumPoints()
+            if numPoints > 0 then
+                local point, relTo, relPoint, x, y = barFrame:GetPoint(1)
+                blizzardDefaultPositions[barInfo.bar] = {
+                    point = point,
+                    relTo = relTo,
+                    relPoint = relPoint,
+                    x = x,
+                    y = y
+                }
+            end
+        end
+    end
+    suppressHook = false
+
+    -- Skin each bar and its buttons, apply spacing and absolute positions
     for _, barInfo in ipairs(ACTION_BARS) do
         local barFrame = _G[barInfo.bar]
         if barFrame then
@@ -1213,7 +1226,7 @@ function ActionBars.ApplySkin()
                 end
             end
             ApplyButtonSpacing(barInfo)
-            ApplyBarOffset(barInfo.bar, barFrame)
+            ApplyBarPosition(barInfo.bar, barFrame)
         end
     end
 
@@ -1444,19 +1457,20 @@ function ActionBars.StartBarDrag(barName)
             local deltaX = math.floor((endCX - (self.startCX or endCX)) + 0.5)
             local deltaY = math.floor((endCY - (self.startCY or endCY)) + 0.5)
 
-            -- Add delta to existing offsets
-            if not UIThingsDB.actionBars.barOffsets then
-                UIThingsDB.actionBars.barOffsets = {}
+            -- Get current absolute position and add delta
+            if not UIThingsDB.actionBars.barPositions then
+                UIThingsDB.actionBars.barPositions = {}
             end
-            if not UIThingsDB.actionBars.barOffsets[barName] then
-                UIThingsDB.actionBars.barOffsets[barName] = { x = 0, y = 0 }
+            local curPos = UIThingsDB.actionBars.barPositions[barName]
+            if not curPos then
+                curPos = FrameToUIParentPosition(barFrame)
+                if not curPos then curPos = { point = "CENTER", x = 0, y = 0 } end
             end
-            local offsets = UIThingsDB.actionBars.barOffsets[barName]
-            offsets.x = offsets.x + deltaX
-            offsets.y = offsets.y + deltaY
+            local newPos = { point = "CENTER", x = curPos.x + deltaX, y = curPos.y + deltaY }
+            UIThingsDB.actionBars.barPositions[barName] = newPos
 
-            -- Apply the new offsets via secure anchor (or fallback)
-            ApplyBarOffset(barName, barFrame)
+            -- Apply the new absolute position
+            ApplyBarPosition(barName, barFrame)
 
             -- Snap overlay back on top of bar's new position
             self:ClearAllPoints()
@@ -1465,7 +1479,7 @@ function ActionBars.StartBarDrag(barName)
 
             -- Notify config panel to update sliders
             if ActionBars.onBarDragUpdate then
-                ActionBars.onBarDragUpdate(barName, offsets.x, offsets.y)
+                ActionBars.onBarDragUpdate(barName, newPos)
             end
         end)
 
@@ -1521,7 +1535,7 @@ initFrame:SetScript("OnEvent", function(self, event)
                     f:RegisterEvent("PLAYER_REGEN_ENABLED")
                     f:SetScript("OnEvent", function(self)
                         self:UnregisterAllEvents()
-                        wipe(originalBarPositions)
+                        wipe(blizzardDefaultPositions)
                         wipe(originalButtonPositions)
                         ActionBars.ApplySkin()
                     end)
