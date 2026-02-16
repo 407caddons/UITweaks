@@ -515,7 +515,7 @@ local function GetChatContent()
     for i = 1, numMessages do
         if selectedFrame.GetMessageInfo then
             local ok, msg = pcall(selectedFrame.GetMessageInfo, selectedFrame, i)
-            if ok and msg and msg ~= "" then
+            if ok and msg and not issecretvalue(msg) and msg ~= "" then
                 -- Strip all WoW UI escape sequences for clean copyable text
                 local clean = msg
                 clean = clean:gsub("|T.-|t", "")

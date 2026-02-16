@@ -42,6 +42,11 @@ function addonTable.Config.Initialize()
                 addonTable.Loot.LockAnchor()
             end
 
+            -- Auto-lock SCT Anchors
+            if addonTable.Misc and addonTable.Misc.LockSCTAnchors then
+                addonTable.Misc.LockSCTAnchors()
+            end
+
             -- Auto-lock Widgets
             if UIThingsDB.widgets then
                 UIThingsDB.widgets.locked = true
@@ -83,13 +88,16 @@ function addonTable.Config.Initialize()
             { id = 3,  name = "Combat",         key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
             { id = 4,  name = "Frames",         key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
             { id = 5,  name = "Loot",           key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 6,  name = "Misc",           key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 6,  name = "General UI",     key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
             { id = 7,  name = "Minimap",        key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
             { id = 8,  name = "Talents",        key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
             { id = 9,  name = "Widgets",        key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 10, name = "Chat",           key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
             { id = 11, name = "Kick CDs",       key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
-            { id = 12, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 12, name = "Action Bars",    key = "actionBars",    icon = "Interface\\Icons\\Inv_Misc_Desecrated_PlateChest" },
+            { id = 13, name = "Notifications",  key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
+            { id = 14, name = "Addon Versions", key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 15, name = "Cast Bar",       key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
         }
 
         local navButtons = {}
@@ -150,6 +158,18 @@ function addonTable.Config.Initialize()
         addonVersionsPanel:SetAllPoints()
         addonVersionsPanel:Hide()
 
+        local actionBarsPanel = CreateFrame("Frame", nil, contentContainer)
+        actionBarsPanel:SetAllPoints()
+        actionBarsPanel:Hide()
+
+        local notificationsPanel = CreateFrame("Frame", nil, contentContainer)
+        notificationsPanel:SetAllPoints()
+        notificationsPanel:Hide()
+
+        local castBarPanel = CreateFrame("Frame", nil, contentContainer)
+        castBarPanel:SetAllPoints()
+        castBarPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -163,6 +183,9 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.kick = kickPanel
         addonTable.ConfigPanels.chatSkin = chatSkinPanel
         addonTable.ConfigPanels.addonVersions = addonVersionsPanel
+        addonTable.ConfigPanels.actionBars = actionBarsPanel
+        addonTable.ConfigPanels.notifications = notificationsPanel
+        addonTable.ConfigPanels.castBar = castBarPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -177,7 +200,10 @@ function addonTable.Config.Initialize()
             [9] = widgetsPanel,
             [10] = chatSkinPanel,
             [11] = kickPanel,
-            [12] = addonVersionsPanel,
+            [12] = actionBarsPanel,
+            [13] = notificationsPanel,
+            [14] = addonVersionsPanel,
+            [15] = castBarPanel,
         }
 
         ----------------------------------------------------
@@ -294,8 +320,17 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Kick then
                 addonTable.ConfigSetup.Kick(kickPanel, navButtons[11], configWindow)
             end
+            if addonTable.ConfigSetup.ActionBars then
+                addonTable.ConfigSetup.ActionBars(actionBarsPanel, navButtons[12], configWindow)
+            end
+            if addonTable.ConfigSetup.Notifications then
+                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[13], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[12], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[14], configWindow)
+            end
+            if addonTable.ConfigSetup.CastBar then
+                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[15], configWindow)
             end
         end
         ----------------------------------------------------

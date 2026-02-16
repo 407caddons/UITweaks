@@ -123,6 +123,31 @@ The `CompareTalents()` function returns mismatches categorized as:
 - `lastZone` - Tracks previous zone to detect zone changes
 - `alertFrame` - The popup alert frame (created once, reused)
 
+## Combat-Safe Frame Positioning (ActionBars Pattern)
+
+Blizzard's edit mode system frames (action bars, chat frames, etc.) have fully protected positioning methods during `InCombatLockdown()`. The addon uses a three-layer strategy developed in ActionBars.lua:
+
+### Layer 1: SetPointBase / ClearAllPointsBase
+Edit mode system frames override `SetPoint`/`ClearAllPoints` with secure versions. Use the `Base` variants (`SetPointBase`/`ClearAllPointsBase`) to bypass the edit mode layer and directly position the frame. Fall back to standard methods if Base doesn't exist:
+```lua
+local clearPoints = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
+local setPoint = barFrame.SetPointBase or barFrame.SetPoint
+```
+
+### Layer 2: hooksecurefunc on SetPointBase
+Hook the bar's `SetPointBase` method so that whenever Blizzard re-layouts the frame (edit mode, zone changes, etc.), the hook fires and re-applies our offset on top. Use a `suppressHook` flag to prevent infinite recursion from our own positioning calls.
+
+### Layer 3: SecureHandlerStateTemplate
+Create a `SecureHandlerStateTemplate` frame per bar with `SetFrameRef` pointing to the protected frame. Store original position + offsets as attributes. Register a state driver (`[combat] combat; nocombat`) that fires a restricted Lua snippet on combat transitions. The restricted environment can call `SetPoint`/`ClearAllPoints` on protected frame handles even during combat.
+
+### Initialization Timing
+Run `ApplySkin()` immediately on `PLAYER_ENTERING_WORLD` (not delayed) to beat combat start. Then run again after 1.5s as a followup to catch bars Blizzard laid out late. If reloading in combat, defer everything to `PLAYER_REGEN_ENABLED` and wipe stale `originalBarPositions`/`originalButtonPositions` so fresh positions are captured.
+
+### General Rules for Protected Frames
+- Always check `InCombatLockdown()` before calling `SetPoint`, `ClearAllPoints`, `SetParent`, `SetSize`, `Show`, `Hide`, `RegisterStateDriver`, or `UnregisterStateDriver` on Blizzard-owned frames.
+- Addon-created frames (not inheriting from secure templates) are safe to position anytime.
+- Use `RegisterStateDriver(frame, "visibility", "hide"/"show")` for combat-safe show/hide — but the `RegisterStateDriver` call itself must happen out of combat.
+
 ## Key Conventions
 
 - Color values are stored as tables with `r`, `g`, `b` (and optional `a`) fields — `ApplyDefaults` treats these as leaf values, not subtables to recurse into.

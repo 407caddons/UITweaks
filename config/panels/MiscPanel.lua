@@ -6,13 +6,11 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 -- Get helpers
 local Helpers = addonTable.ConfigHelpers
 
--- Define the setup function for Misc panel
+-- Define the setup function for General UI panel (formerly Misc)
 function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
-    local fonts = Helpers.fonts
-
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Miscellaneous")
+    title:SetText("General UI")
 
     -- Create scroll frame for the settings
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsMiscScroll", panel, "UIPanelScrollFrameTemplate")
@@ -20,12 +18,9 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 970) -- Matches content height
+    scrollChild:SetSize(panel:GetWidth() - 30, 920)
     scrollFrame:SetScrollChild(scrollChild)
 
-
-
-    -- Auto-adjust width
     scrollFrame:SetScript("OnShow", function()
         scrollChild:SetWidth(scrollFrame:GetWidth())
     end)
@@ -33,12 +28,10 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     -- Update panel reference to scrollChild for all child elements
     panel = scrollChild
 
-
-
     -- Enable Checkbox
     local enableBtn = CreateFrame("CheckButton", "UIThingsMiscEnable", panel, "ChatConfigCheckButtonTemplate")
     enableBtn:SetPoint("TOPLEFT", 20, -10)
-    _G[enableBtn:GetName() .. "Text"]:SetText("Enable Misc Module")
+    _G[enableBtn:GetName() .. "Text"]:SetText("Enable General UI Module")
     enableBtn:SetChecked(UIThingsDB.misc.enabled)
     enableBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.enabled = self:GetChecked()
@@ -58,347 +51,13 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         UIThingsDB.misc.ahFilter = self:GetChecked()
     end)
 
-    -- Personal Orders Header
-    Helpers.CreateSectionHeader(panel, "Personal Orders", -80)
-
-    -- Personal Orders Checkbox
-    local ordersBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersCheck", panel,
-        "ChatConfigCheckButtonTemplate")
-    ordersBtn:SetPoint("TOPLEFT", 20, -110)
-    _G[ordersBtn:GetName() .. "Text"]:SetText("Enable Personal Order Detection")
-    ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
-    ordersBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.personalOrders = self:GetChecked()
-    end)
-
-    -- Check at Logon Checkbox
-    local logonCheckBtn = CreateFrame("CheckButton", "UIThingsMiscOrdersLogonCheck", panel,
-        "ChatConfigCheckButtonTemplate")
-    logonCheckBtn:SetPoint("TOPLEFT", 280, -110)
-    _G[logonCheckBtn:GetName() .. "Text"]:SetText("Check at Logon")
-    logonCheckBtn:SetChecked(UIThingsDB.misc.personalOrdersCheckAtLogon)
-    logonCheckBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.personalOrdersCheckAtLogon = self:GetChecked()
-    end)
-
-    -- Alert Duration Slider
-    local durSlider = CreateFrame("Slider", "UIThingsMiscAlertDur", panel, "OptionsSliderTemplate")
-    durSlider:SetPoint("TOPLEFT", 40, -150)
-    durSlider:SetMinMaxValues(1, 10)
-    durSlider:SetValueStep(1)
-    durSlider:SetObeyStepOnDrag(true)
-    durSlider:SetWidth(200)
-    _G[durSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.alertDuration .. "s")
-    _G[durSlider:GetName() .. 'Low']:SetText("1s")
-    _G[durSlider:GetName() .. 'High']:SetText("10s")
-    durSlider:SetValue(UIThingsDB.misc.alertDuration)
-    durSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        UIThingsDB.misc.alertDuration = value
-        _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
-    end)
-
-    -- Alert Color Picker
-    local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    colorLabel:SetPoint("TOPLEFT", 40, -190)
-    colorLabel:SetText("Alert Color:")
-
-    local colorSwatch = CreateFrame("Button", nil, panel)
-    colorSwatch:SetSize(20, 20)
-    colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, 0)
-
-    colorSwatch.tex = colorSwatch:CreateTexture(nil, "OVERLAY")
-    colorSwatch.tex:SetAllPoints()
-    local c = UIThingsDB.misc.alertColor
-    colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a or 1)
-
-    Mixin(colorSwatch, BackdropTemplateMixin)
-    colorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    colorSwatch:SetBackdropBorderColor(1, 1, 1)
-
-    colorSwatch:SetScript("OnClick", function()
-        local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
-
-        if ColorPickerFrame.SetupColorPickerAndShow then
-            ColorPickerFrame:SetupColorPickerAndShow({
-                r = c.r,
-                g = c.g,
-                b = c.b,
-                opacity = c.a,
-                hasOpacity = true,
-                swatchFunc = function()
-                    local r, g, b = ColorPickerFrame:GetColorRGB()
-                    local a = ColorPickerFrame:GetColorAlpha()
-                    c.r, c.g, c.b, c.a = r, g, b, a
-                    colorSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.alertColor = c
-                end,
-                opacityFunc = function()
-                    local a = ColorPickerFrame:GetColorAlpha()
-                    local r, g, b = ColorPickerFrame:GetColorRGB()
-                    c.r, c.g, c.b, c.a = r, g, b, a
-                    colorSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.alertColor = c
-                end,
-                cancelFunc = function(restore)
-                    c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
-                    colorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-                    UIThingsDB.misc.alertColor = c
-                end
-            })
-        else
-            -- Fallback for older APIs
-            ColorPickerFrame:SetColorRGB(c.r, c.g, c.b)
-            ColorPickerFrame.hasOpacity = true
-            ColorPickerFrame.opacity = c.a
-            ColorPickerFrame.func = function()
-                local r, g, b = ColorPickerFrame:GetColorRGB()
-                local a = ColorPickerFrame:GetOpacity()
-                c.r, c.g, c.b, c.a = r, g, b, a
-                colorSwatch.tex:SetColorTexture(r, g, b, a)
-                UIThingsDB.misc.alertColor = c
-            end
-            ColorPickerFrame:Show()
-        end
-    end)
-
-    -- TTS Enable Checkbox
-    local ttsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscTTSEnable", panel,
-        "ChatConfigCheckButtonTemplate")
-    ttsEnableBtn:SetPoint("TOPLEFT", 20, -230)
-    _G[ttsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
-    ttsEnableBtn:SetChecked(UIThingsDB.misc.ttsEnabled)
-    ttsEnableBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.ttsEnabled = self:GetChecked()
-    end)
-
-    -- TTS Message
-    local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    ttsLabel:SetPoint("TOPLEFT", 40, -270)
-    ttsLabel:SetText("TTS Message:")
-
-    local ttsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    ttsEdit:SetSize(250, 20)
-    ttsEdit:SetPoint("LEFT", ttsLabel, "RIGHT", 10, 0)
-    ttsEdit:SetAutoFocus(false)
-    ttsEdit:SetText(UIThingsDB.misc.ttsMessage)
-    ttsEdit:SetScript("OnEnterPressed", function(self)
-        UIThingsDB.misc.ttsMessage = self:GetText()
-        self:ClearFocus()
-    end)
-
-    -- Test Button (shows full alert)
-    local testTTSBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    testTTSBtn:SetSize(60, 22)
-    testTTSBtn:SetPoint("LEFT", ttsEdit, "RIGHT", 5, 0)
-    testTTSBtn:SetText("Test")
-    testTTSBtn:SetScript("OnClick", function()
-        -- Save current text first
-        UIThingsDB.misc.ttsMessage = ttsEdit:GetText()
-        -- Show full alert (banner + TTS)
-        if addonTable.Misc and addonTable.Misc.ShowAlert then
-            addonTable.Misc.ShowAlert()
-        end
-    end)
-
-    -- TTS Voice Dropdown
-    local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    voiceLabel:SetPoint("TOPLEFT", 40, -310)
-    voiceLabel:SetText("Voice Type:")
-
-    local voiceDropdown = CreateFrame("Frame", "UIThingsMiscVoiceDropdown", panel, "UIDropDownMenuTemplate")
-    voiceDropdown:SetPoint("LEFT", voiceLabel, "RIGHT", -15, -3)
-
-    local voiceOptions = {
-        { text = "Standard",    value = 0 },
-        { text = "Alternate 1", value = 1 }
-    }
-
-    UIDropDownMenu_SetWidth(voiceDropdown, 120)
-    UIDropDownMenu_Initialize(voiceDropdown, function(self, level)
-        for _, option in ipairs(voiceOptions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = option.text
-            info.value = option.value
-            info.func = function(btn)
-                UIThingsDB.misc.ttsVoice = btn.value
-                UIDropDownMenu_SetSelectedValue(voiceDropdown, btn.value)
-            end
-            info.checked = (UIThingsDB.misc.ttsVoice == option.value)
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
-    UIDropDownMenu_SetSelectedValue(voiceDropdown, UIThingsDB.misc.ttsVoice or 0)
-
-    -- Mail Notification Section Header
-    Helpers.CreateSectionHeader(panel, "Mail Notification", -360)
-
-    -- Mail Notification Checkbox
-    local mailBtn = CreateFrame("CheckButton", "UIThingsMiscMailCheck", panel,
-        "ChatConfigCheckButtonTemplate")
-    mailBtn:SetPoint("TOPLEFT", 20, -390)
-    _G[mailBtn:GetName() .. "Text"]:SetText("Enable Mail Notification")
-    mailBtn:SetChecked(UIThingsDB.misc.mailNotification)
-    mailBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.mailNotification = self:GetChecked()
-        if addonTable.Misc and addonTable.Misc.ApplyEvents then
-            addonTable.Misc.ApplyEvents()
-        end
-    end)
-
-    -- Mail Alert Duration Slider
-    local mailDurSlider = CreateFrame("Slider", "UIThingsMiscMailAlertDur", panel, "OptionsSliderTemplate")
-    mailDurSlider:SetPoint("TOPLEFT", 40, -430)
-    mailDurSlider:SetMinMaxValues(1, 10)
-    mailDurSlider:SetValueStep(1)
-    mailDurSlider:SetObeyStepOnDrag(true)
-    mailDurSlider:SetWidth(200)
-    _G[mailDurSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.mailAlertDuration .. "s")
-    _G[mailDurSlider:GetName() .. 'Low']:SetText("1s")
-    _G[mailDurSlider:GetName() .. 'High']:SetText("10s")
-    mailDurSlider:SetValue(UIThingsDB.misc.mailAlertDuration)
-    mailDurSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        UIThingsDB.misc.mailAlertDuration = value
-        _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
-    end)
-
-    -- Mail Alert Color Picker
-    local mailColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    mailColorLabel:SetPoint("TOPLEFT", 40, -470)
-    mailColorLabel:SetText("Alert Color:")
-
-    local mailColorSwatch = CreateFrame("Button", nil, panel)
-    mailColorSwatch:SetSize(20, 20)
-    mailColorSwatch:SetPoint("LEFT", mailColorLabel, "RIGHT", 10, 0)
-
-    mailColorSwatch.tex = mailColorSwatch:CreateTexture(nil, "OVERLAY")
-    mailColorSwatch.tex:SetAllPoints()
-    local mc = UIThingsDB.misc.mailAlertColor
-    mailColorSwatch.tex:SetColorTexture(mc.r, mc.g, mc.b, mc.a or 1)
-
-    Mixin(mailColorSwatch, BackdropTemplateMixin)
-    mailColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    mailColorSwatch:SetBackdropBorderColor(1, 1, 1)
-
-    mailColorSwatch:SetScript("OnClick", function()
-        local prevR, prevG, prevB, prevA = mc.r, mc.g, mc.b, mc.a
-
-        if ColorPickerFrame.SetupColorPickerAndShow then
-            ColorPickerFrame:SetupColorPickerAndShow({
-                r = mc.r,
-                g = mc.g,
-                b = mc.b,
-                opacity = mc.a,
-                hasOpacity = true,
-                swatchFunc = function()
-                    local r, g, b = ColorPickerFrame:GetColorRGB()
-                    local a = ColorPickerFrame:GetColorAlpha()
-                    mc.r, mc.g, mc.b, mc.a = r, g, b, a
-                    mailColorSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.mailAlertColor = mc
-                end,
-                opacityFunc = function()
-                    local a = ColorPickerFrame:GetColorAlpha()
-                    local r, g, b = ColorPickerFrame:GetColorRGB()
-                    mc.r, mc.g, mc.b, mc.a = r, g, b, a
-                    mailColorSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.mailAlertColor = mc
-                end,
-                cancelFunc = function(restore)
-                    mc.r, mc.g, mc.b, mc.a = prevR, prevG, prevB, prevA
-                    mailColorSwatch.tex:SetColorTexture(mc.r, mc.g, mc.b, mc.a)
-                    UIThingsDB.misc.mailAlertColor = mc
-                end
-            })
-        else
-            ColorPickerFrame:SetColorRGB(mc.r, mc.g, mc.b)
-            ColorPickerFrame.hasOpacity = true
-            ColorPickerFrame.opacity = mc.a
-            ColorPickerFrame.func = function()
-                local r, g, b = ColorPickerFrame:GetColorRGB()
-                local a = ColorPickerFrame:GetOpacity()
-                mc.r, mc.g, mc.b, mc.a = r, g, b, a
-                mailColorSwatch.tex:SetColorTexture(r, g, b, a)
-                UIThingsDB.misc.mailAlertColor = mc
-            end
-            ColorPickerFrame:Show()
-        end
-    end)
-
-    -- Mail TTS Enable Checkbox
-    local mailTtsEnableBtn = CreateFrame("CheckButton", "UIThingsMiscMailTTSEnable", panel,
-        "ChatConfigCheckButtonTemplate")
-    mailTtsEnableBtn:SetPoint("TOPLEFT", 20, -510)
-    _G[mailTtsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
-    mailTtsEnableBtn:SetChecked(UIThingsDB.misc.mailTtsEnabled)
-    mailTtsEnableBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.mailTtsEnabled = self:GetChecked()
-    end)
-
-    -- Mail TTS Message
-    local mailTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    mailTtsLabel:SetPoint("TOPLEFT", 40, -550)
-    mailTtsLabel:SetText("TTS Message:")
-
-    local mailTtsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    mailTtsEdit:SetSize(250, 20)
-    mailTtsEdit:SetPoint("LEFT", mailTtsLabel, "RIGHT", 10, 0)
-    mailTtsEdit:SetAutoFocus(false)
-    mailTtsEdit:SetText(UIThingsDB.misc.mailTtsMessage)
-    mailTtsEdit:SetScript("OnEnterPressed", function(self)
-        UIThingsDB.misc.mailTtsMessage = self:GetText()
-        self:ClearFocus()
-    end)
-
-    -- Mail Test Button
-    local testMailBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    testMailBtn:SetSize(60, 22)
-    testMailBtn:SetPoint("LEFT", mailTtsEdit, "RIGHT", 5, 0)
-    testMailBtn:SetText("Test")
-    testMailBtn:SetScript("OnClick", function()
-        UIThingsDB.misc.mailTtsMessage = mailTtsEdit:GetText()
-        if addonTable.Misc and addonTable.Misc.ShowMailAlert then
-            addonTable.Misc.ShowMailAlert()
-        end
-    end)
-
-    -- Mail TTS Voice Dropdown
-    local mailVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    mailVoiceLabel:SetPoint("TOPLEFT", 40, -590)
-    mailVoiceLabel:SetText("Voice Type:")
-
-    local mailVoiceDropdown = CreateFrame("Frame", "UIThingsMiscMailVoiceDropdown", panel, "UIDropDownMenuTemplate")
-    mailVoiceDropdown:SetPoint("LEFT", mailVoiceLabel, "RIGHT", -15, -3)
-
-    local mailVoiceOptions = {
-        { text = "Standard",    value = 0 },
-        { text = "Alternate 1", value = 1 }
-    }
-
-    UIDropDownMenu_SetWidth(mailVoiceDropdown, 120)
-    UIDropDownMenu_Initialize(mailVoiceDropdown, function(self, level)
-        for _, option in ipairs(mailVoiceOptions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = option.text
-            info.value = option.value
-            info.func = function(btn)
-                UIThingsDB.misc.mailTtsVoice = btn.value
-                UIDropDownMenu_SetSelectedValue(mailVoiceDropdown, btn.value)
-            end
-            info.checked = (UIThingsDB.misc.mailTtsVoice == option.value)
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
-    UIDropDownMenu_SetSelectedValue(mailVoiceDropdown, UIThingsDB.misc.mailTtsVoice or 0)
-
-    -- General UI Section Header
-    Helpers.CreateSectionHeader(panel, "General UI", -640)
+    -- UI Scale Section
+    Helpers.CreateSectionHeader(panel, "UI Scale", -80)
 
     -- UI Scale Enable Checkbox
     local uiScaleBtn = CreateFrame("CheckButton", "UIThingsMiscUIScaleEnable", panel,
         "ChatConfigCheckButtonTemplate")
-    uiScaleBtn:SetPoint("TOPLEFT", 20, -670)
+    uiScaleBtn:SetPoint("TOPLEFT", 20, -110)
     _G[uiScaleBtn:GetName() .. "Text"]:SetText("Enable UI Scaling")
     uiScaleBtn:SetChecked(UIThingsDB.misc.uiScaleEnabled)
     uiScaleBtn:SetScript("OnClick", function(self)
@@ -412,7 +71,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
     local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
 
-    scaleSlider:SetPoint("TOPLEFT", 40, -710)
+    scaleSlider:SetPoint("TOPLEFT", 40, -150)
     scaleSlider:SetMinMaxValues(0.4, 1.25)
     scaleSlider:SetValueStep(0.001)
     scaleSlider:SetObeyStepOnDrag(true)
@@ -442,7 +101,6 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end
 
     scaleSlider:SetScript("OnValueChanged", function(self, value)
-        -- Only update if the value actually changed (to prevent potential loops)
         local rounded = tonumber(string.format("%.3f", value))
         if UIThingsDB.misc.uiScale ~= rounded then
             UpdateScaleUI(value, true)
@@ -477,13 +135,11 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         UpdateScaleUI(0.711)
     end)
 
-    -- Invite Automation
-    local inviteHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    inviteHeader:SetPoint("TOPLEFT", 20, -760)
-    inviteHeader:SetText("Invite Automation:")
+    -- Invite Automation Section
+    Helpers.CreateSectionHeader(panel, "Invite Automation", -190)
 
     local friendsBtn = CreateFrame("CheckButton", "UIThingsMiscAutoFriends", panel, "ChatConfigCheckButtonTemplate")
-    friendsBtn:SetPoint("TOPLEFT", 20, -785)
+    friendsBtn:SetPoint("TOPLEFT", 20, -220)
     _G[friendsBtn:GetName() .. "Text"]:SetText("Auto-Accept: Friends")
     friendsBtn:SetChecked(UIThingsDB.misc.autoAcceptFriends)
     friendsBtn:SetScript("OnClick", function(self)
@@ -491,7 +147,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local guildBtn = CreateFrame("CheckButton", "UIThingsMiscAutoGuild", panel, "ChatConfigCheckButtonTemplate")
-    guildBtn:SetPoint("TOPLEFT", 180, -785)
+    guildBtn:SetPoint("TOPLEFT", 180, -220)
     _G[guildBtn:GetName() .. "Text"]:SetText("Auto-Accept: Guild")
     guildBtn:SetChecked(UIThingsDB.misc.autoAcceptGuild)
     guildBtn:SetScript("OnClick", function(self)
@@ -499,7 +155,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local everyoneBtn = CreateFrame("CheckButton", "UIThingsMiscAutoEveryone", panel, "ChatConfigCheckButtonTemplate")
-    everyoneBtn:SetPoint("TOPLEFT", 340, -785)
+    everyoneBtn:SetPoint("TOPLEFT", 340, -220)
     _G[everyoneBtn:GetName() .. "Text"]:SetText("Auto-Accept: Everyone")
     everyoneBtn:SetChecked(UIThingsDB.misc.autoAcceptEveryone)
     everyoneBtn:SetScript("OnClick", function(self)
@@ -508,7 +164,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Invite by Whisper
     local whisperBtn = CreateFrame("CheckButton", "UIThingsMiscAutoInvite", panel, "ChatConfigCheckButtonTemplate")
-    whisperBtn:SetPoint("TOPLEFT", 20, -820)
+    whisperBtn:SetPoint("TOPLEFT", 20, -255)
     _G[whisperBtn:GetName() .. "Text"]:SetText("Enable Invite by Whisper")
     whisperBtn:SetChecked(UIThingsDB.misc.autoInviteEnabled)
     whisperBtn:SetScript("OnClick", function(self)
@@ -517,12 +173,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    kwLabel:SetPoint("TOPLEFT", 40, -850)
+    kwLabel:SetPoint("TOPLEFT", 40, -285)
     kwLabel:SetText("Keywords (comma separated):")
 
     local kwEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     kwEdit:SetSize(200, 20)
-    kwEdit:SetPoint("TOPLEFT", 40, -865)
+    kwEdit:SetPoint("TOPLEFT", 40, -300)
     kwEdit:SetText(UIThingsDB.misc.autoInviteKeywords or "inv,invite")
     kwEdit:SetAutoFocus(false)
     kwEdit:SetScript("OnEnterPressed", function(self)
@@ -535,9 +191,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         if addonTable.Misc and addonTable.Misc.UpdateAutoInviteKeywords then addonTable.Misc.UpdateAutoInviteKeywords() end
     end)
 
+    -- Convenience Section
+    Helpers.CreateSectionHeader(panel, "Convenience", -340)
+
     -- Reload UI Checkbox
     local rlBtn = CreateFrame("CheckButton", "UIThingsMiscAllowRL", panel, "ChatConfigCheckButtonTemplate")
-    rlBtn:SetPoint("TOPLEFT", 20, -900)
+    rlBtn:SetPoint("TOPLEFT", 20, -370)
     _G[rlBtn:GetName() .. "Text"]:SetText("Allow /rl to Reload UI")
     rlBtn:SetChecked(UIThingsDB.misc.allowRL)
     rlBtn:SetScript("OnClick", function(self)
@@ -546,7 +205,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Quick Item Destroy Checkbox
     local qdBtn = CreateFrame("CheckButton", "UIThingsMiscQuickDestroy", panel, "ChatConfigCheckButtonTemplate")
-    qdBtn:SetPoint("TOPLEFT", 20, -930)
+    qdBtn:SetPoint("TOPLEFT", 20, -400)
     _G[qdBtn:GetName() .. "Text"]:SetText("Quick Item Destroy (Red Button)")
     qdBtn:SetChecked(UIThingsDB.misc.quickDestroy)
     qdBtn:SetScript("OnClick", function(self)
@@ -555,4 +214,152 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
             addonTable.Misc.ToggleQuickDestroy(UIThingsDB.misc.quickDestroy)
         end
     end)
+
+    -- Scrolling Combat Text Section
+    Helpers.CreateSectionHeader(panel, "Scrolling Combat Text", -440)
+
+    local sctEnable = CreateFrame("CheckButton", "UIThingsMiscSCTEnable", panel, "ChatConfigCheckButtonTemplate")
+    sctEnable:SetPoint("TOPLEFT", 20, -470)
+    _G[sctEnable:GetName() .. "Text"]:SetText("Enable Floating Combat Text")
+    sctEnable:SetChecked(UIThingsDB.misc.sct.enabled)
+    sctEnable:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.enabled = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+    end)
+
+    local sctCapture = CreateFrame("CheckButton", "UIThingsMiscSCTCapture", panel, "ChatConfigCheckButtonTemplate")
+    sctCapture:SetPoint("TOPLEFT", 280, -470)
+    _G[sctCapture:GetName() .. "Text"]:SetText("Capture to Frames")
+    sctCapture:SetChecked(UIThingsDB.misc.sct.captureToFrames)
+    sctCapture:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.captureToFrames = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+    end)
+
+    local sctDmg = CreateFrame("CheckButton", "UIThingsMiscSCTDamage", panel, "ChatConfigCheckButtonTemplate")
+    sctDmg:SetPoint("TOPLEFT", 20, -500)
+    _G[sctDmg:GetName() .. "Text"]:SetText("Show Damage")
+    sctDmg:SetChecked(UIThingsDB.misc.sct.showDamage)
+    sctDmg:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.showDamage = self:GetChecked()
+    end)
+
+    local sctHeal = CreateFrame("CheckButton", "UIThingsMiscSCTHealing", panel, "ChatConfigCheckButtonTemplate")
+    sctHeal:SetPoint("TOPLEFT", 200, -500)
+    _G[sctHeal:GetName() .. "Text"]:SetText("Show Healing")
+    sctHeal:SetChecked(UIThingsDB.misc.sct.showHealing)
+    sctHeal:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.showHealing = self:GetChecked()
+    end)
+
+    local sctTargetDmg = CreateFrame("CheckButton", "UIThingsMiscSCTTargetDmg", panel, "ChatConfigCheckButtonTemplate")
+    sctTargetDmg:SetPoint("TOPLEFT", 20, -530)
+    _G[sctTargetDmg:GetName() .. "Text"]:SetText("Show Target Name (Damage)")
+    sctTargetDmg:SetChecked(UIThingsDB.misc.sct.showTargetDamage)
+    sctTargetDmg:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.showTargetDamage = self:GetChecked()
+    end)
+
+    local sctTargetHeal = CreateFrame("CheckButton", "UIThingsMiscSCTTargetHeal", panel, "ChatConfigCheckButtonTemplate")
+    sctTargetHeal:SetPoint("TOPLEFT", 280, -530)
+    _G[sctTargetHeal:GetName() .. "Text"]:SetText("Show Target Name (Healing)")
+    sctTargetHeal:SetChecked(UIThingsDB.misc.sct.showTargetHealing)
+    sctTargetHeal:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.showTargetHealing = self:GetChecked()
+    end)
+
+    -- Font Size Slider
+    local fontSlider = CreateFrame("Slider", "UIThingsMiscSCTFontSize", panel, "OptionsSliderTemplate")
+    fontSlider:SetPoint("TOPLEFT", 40, -570)
+    fontSlider:SetMinMaxValues(10, 48)
+    fontSlider:SetValueStep(1)
+    fontSlider:SetObeyStepOnDrag(true)
+    fontSlider:SetWidth(200)
+    _G[fontSlider:GetName() .. 'Text']:SetText("Font Size: " .. UIThingsDB.misc.sct.fontSize)
+    _G[fontSlider:GetName() .. 'Low']:SetText("10")
+    _G[fontSlider:GetName() .. 'High']:SetText("48")
+    fontSlider:SetValue(UIThingsDB.misc.sct.fontSize)
+    fontSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        UIThingsDB.misc.sct.fontSize = value
+        _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
+    end)
+
+    -- Duration Slider
+    local durSlider = CreateFrame("Slider", "UIThingsMiscSCTDuration", panel, "OptionsSliderTemplate")
+    durSlider:SetPoint("TOPLEFT", 40, -620)
+    durSlider:SetMinMaxValues(0.5, 5.0)
+    durSlider:SetValueStep(0.1)
+    durSlider:SetObeyStepOnDrag(true)
+    durSlider:SetWidth(200)
+    _G[durSlider:GetName() .. 'Text']:SetText("Duration: " .. string.format("%.1f", UIThingsDB.misc.sct.duration) .. "s")
+    _G[durSlider:GetName() .. 'Low']:SetText("0.5")
+    _G[durSlider:GetName() .. 'High']:SetText("5.0")
+    durSlider:SetValue(UIThingsDB.misc.sct.duration)
+    durSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * 10 + 0.5) / 10
+        UIThingsDB.misc.sct.duration = value
+        _G[self:GetName() .. 'Text']:SetText("Duration: " .. string.format("%.1f", value) .. "s")
+    end)
+
+    -- Crit Scale Slider
+    local critSlider = CreateFrame("Slider", "UIThingsMiscSCTCritScale", panel, "OptionsSliderTemplate")
+    critSlider:SetPoint("TOPLEFT", 40, -670)
+    critSlider:SetMinMaxValues(1.0, 3.0)
+    critSlider:SetValueStep(0.1)
+    critSlider:SetObeyStepOnDrag(true)
+    critSlider:SetWidth(200)
+    _G[critSlider:GetName() .. 'Text']:SetText("Crit Scale: " ..
+        string.format("%.1f", UIThingsDB.misc.sct.critScale) .. "x")
+    _G[critSlider:GetName() .. 'Low']:SetText("1.0")
+    _G[critSlider:GetName() .. 'High']:SetText("3.0")
+    critSlider:SetValue(UIThingsDB.misc.sct.critScale)
+    critSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * 10 + 0.5) / 10
+        UIThingsDB.misc.sct.critScale = value
+        _G[self:GetName() .. 'Text']:SetText("Crit Scale: " .. string.format("%.1f", value) .. "x")
+    end)
+
+    -- Scroll Distance Slider
+    local distSlider = CreateFrame("Slider", "UIThingsMiscSCTDistance", panel, "OptionsSliderTemplate")
+    distSlider:SetPoint("TOPLEFT", 40, -720)
+    distSlider:SetMinMaxValues(50, 300)
+    distSlider:SetValueStep(10)
+    distSlider:SetObeyStepOnDrag(true)
+    distSlider:SetWidth(200)
+    _G[distSlider:GetName() .. 'Text']:SetText("Scroll Distance: " .. UIThingsDB.misc.sct.scrollDistance)
+    _G[distSlider:GetName() .. 'Low']:SetText("50")
+    _G[distSlider:GetName() .. 'High']:SetText("300")
+    distSlider:SetValue(UIThingsDB.misc.sct.scrollDistance)
+    distSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 10 + 0.5) * 10
+        UIThingsDB.misc.sct.scrollDistance = value
+        _G[self:GetName() .. 'Text']:SetText("Scroll Distance: " .. value)
+    end)
+
+    -- Color Pickers
+    Helpers.CreateColorSwatch(panel, "Damage Color", UIThingsDB.misc.sct.damageColor, nil, 20, -760, false)
+    Helpers.CreateColorSwatch(panel, "Healing Color", UIThingsDB.misc.sct.healingColor, nil, 200, -760, false)
+
+    -- Lock/Unlock Anchors Button
+    local sctLockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    sctLockBtn:SetSize(160, 24)
+    sctLockBtn:SetPoint("TOPLEFT", 20, -800)
+    sctLockBtn:SetText(UIThingsDB.misc.sct.locked and "Unlock Anchors" or "Lock Anchors")
+    sctLockBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.sct.locked = not UIThingsDB.misc.sct.locked
+        self:SetText(UIThingsDB.misc.sct.locked and "Unlock Anchors" or "Lock Anchors")
+        if addonTable.Misc and addonTable.Misc.UpdateSCTSettings then
+            addonTable.Misc.UpdateSCTSettings()
+        end
+    end)
+
+    local sctNote = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sctNote:SetPoint("TOPLEFT", 20, -830)
+    sctNote:SetText("Unlock to drag the damage (right) and healing (left) anchor frames.")
+    sctNote:SetTextColor(0.7, 0.7, 0.7)
 end

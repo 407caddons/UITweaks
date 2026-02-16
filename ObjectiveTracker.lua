@@ -296,6 +296,10 @@ local prevObjectiveState = {} -- [questID] = { [objIndex] = { finished = bool, t
 local prevQuestComplete = {}  -- [questID] = bool
 local tooltipMembers = {}     -- Reusable table for tooltip party member list
 
+-- Super-track restore: remember the user's manually tracked quest when a WQ takes over
+local savedSuperTrackedQuestID = nil
+local lastKnownSuperTrackedQuestID = nil
+
 local function CheckQuestSounds(questID, playQuestSound, playObjSound)
     local isComplete = C_QuestLog.IsComplete(questID)
     local wasComplete = prevQuestComplete[questID]
@@ -463,7 +467,10 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                 end
             end
 
-            ucState.yOffset = ucState.yOffset - (currentSize + ucState.questPadding)
+            local textHeight = btn.Text:GetStringHeight() or currentSize
+            local lineHeight = math.max(textHeight, currentSize)
+            btn:SetHeight(lineHeight + 2)
+            ucState.yOffset = ucState.yOffset - (lineHeight + ucState.questPadding)
         else
             local currentSize = ucState.questNameSize
 
@@ -622,7 +629,10 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
                 btn:SetScript("OnLeave", nil)
             end
 
-            ucState.yOffset = ucState.yOffset - (currentSize + 4)
+            local textHeight = btn.Text:GetStringHeight() or currentSize
+            local lineHeight = math.max(textHeight, currentSize)
+            btn:SetHeight(lineHeight + 2)
+            ucState.yOffset = ucState.yOffset - (lineHeight + 4)
         end
     end
 end
@@ -915,12 +925,12 @@ local function RenderQuests()
                             end
                         end
                     end
-                    ucState.yOffset = ucState.yOffset - 5
+                    ucState.yOffset = ucState.yOffset - ITEM_SPACING
                 end
             end
-            ucState.yOffset = ucState.yOffset - 10
+            ucState.yOffset = ucState.yOffset - SECTION_SPACING
         else
-            ucState.yOffset = ucState.yOffset - 5
+            ucState.yOffset = ucState.yOffset - ITEM_SPACING
         end
     end
 
@@ -965,7 +975,7 @@ local function RenderQuests()
             AddLine("Quests (" .. #filteredIndices .. ")", true, "quests")
 
             if UIThingsDB.tracker.collapsed["quests"] then
-                ucState.yOffset = ucState.yOffset - 5
+                ucState.yOffset = ucState.yOffset - ITEM_SPACING
                 return
             end
 
@@ -998,7 +1008,7 @@ local function RenderQuests()
                             end
                         end
                     end
-                    ucState.yOffset = ucState.yOffset - 5
+                    ucState.yOffset = ucState.yOffset - ITEM_SPACING
                 end
                 if extraIndent then ucState.indent = 0 end
             end
@@ -1098,7 +1108,7 @@ local function RenderQuests()
                     end
                 end
             end
-            ucState.yOffset = ucState.yOffset - 10
+            ucState.yOffset = ucState.yOffset - SECTION_SPACING
         end
     end
 end
@@ -1162,7 +1172,7 @@ local function RenderAchievements()
         AddLine("Achievements", true, "achievements")
 
         if UIThingsDB.tracker.collapsed["achievements"] then
-            ucState.yOffset = ucState.yOffset - 5
+            ucState.yOffset = ucState.yOffset - ITEM_SPACING
             return
         end
 
@@ -1201,10 +1211,10 @@ local function RenderAchievements()
                         end
                     end
                 end
-                ucState.yOffset = ucState.yOffset - 5
+                ucState.yOffset = ucState.yOffset - ITEM_SPACING
             end
         end
-        ucState.yOffset = ucState.yOffset - 10
+        ucState.yOffset = ucState.yOffset - SECTION_SPACING
     end
 end
 
@@ -1246,7 +1256,7 @@ local function RenderTravelersLog()
     AddLine("Traveler's Log (" .. #trackedActivities .. ")", true, "travelersLog")
 
     if UIThingsDB.tracker.collapsed["travelersLog"] then
-        ucState.yOffset = ucState.yOffset - 5
+        ucState.yOffset = ucState.yOffset - ITEM_SPACING
         return
     end
 
@@ -1302,7 +1312,7 @@ local function RenderTravelersLog()
                     end
                 end
 
-                ucState.yOffset = ucState.yOffset - 5
+                ucState.yOffset = ucState.yOffset - ITEM_SPACING
             end
         end
     end
@@ -1454,6 +1464,66 @@ UpdateContent = function()
     UpdateQuestItemButton()
 end
 
+-- Super-track restore logic
+local function HandleSuperTrackChanged()
+    if not UIThingsDB.tracker.restoreSuperTrack then
+        savedSuperTrackedQuestID = nil
+        lastKnownSuperTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+        return
+    end
+
+    local currentST = C_SuperTrack.GetSuperTrackedQuestID()
+    local isCurrentWQ = currentST and currentST ~= 0 and
+        (C_QuestLog.IsWorldQuest(currentST) or (C_QuestLog.IsQuestTask(currentST) and not C_QuestLog.GetQuestWatchType(currentST)))
+
+    -- If we just switched TO a world/task quest, save the previous non-WQ super-tracked quest
+    if isCurrentWQ and lastKnownSuperTrackedQuestID and lastKnownSuperTrackedQuestID ~= 0 then
+        local wasWQ = C_QuestLog.IsWorldQuest(lastKnownSuperTrackedQuestID) or
+            (C_QuestLog.IsQuestTask(lastKnownSuperTrackedQuestID) and not C_QuestLog.GetQuestWatchType(lastKnownSuperTrackedQuestID))
+        if not wasWQ then
+            savedSuperTrackedQuestID = lastKnownSuperTrackedQuestID
+        end
+    end
+
+    -- If super-track was cleared or moved to nothing, try to restore
+    if (not currentST or currentST == 0) and savedSuperTrackedQuestID then
+        -- Verify the saved quest is still valid and tracked
+        if C_QuestLog.IsOnQuest(savedSuperTrackedQuestID) and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
+            C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
+            savedSuperTrackedQuestID = nil
+        else
+            savedSuperTrackedQuestID = nil
+        end
+    end
+
+    lastKnownSuperTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+end
+
+-- Check if we should restore super-track after leaving a WQ area
+local function CheckRestoreSuperTrack()
+    if not UIThingsDB.tracker.restoreSuperTrack or not savedSuperTrackedQuestID then return end
+
+    local currentST = C_SuperTrack.GetSuperTrackedQuestID()
+    if not currentST or currentST == 0 then
+        -- Super-track is empty, restore saved quest
+        if C_QuestLog.IsOnQuest(savedSuperTrackedQuestID) and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
+            C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
+        end
+        savedSuperTrackedQuestID = nil
+        return
+    end
+
+    -- If current super-track is a WQ that we're no longer on (left the area), restore
+    local isCurrentWQ = C_QuestLog.IsWorldQuest(currentST) or
+        (C_QuestLog.IsQuestTask(currentST) and not C_QuestLog.GetQuestWatchType(currentST))
+    if isCurrentWQ and not C_QuestLog.IsOnQuest(currentST) then
+        if C_QuestLog.IsOnQuest(savedSuperTrackedQuestID) and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
+            C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
+        end
+        savedSuperTrackedQuestID = nil
+    end
+end
+
 -- Aggressive Hide Hook for Blizzard tracker
 local blizzardTrackerHooked = false
 local function HookBlizzardTracker()
@@ -1595,13 +1665,20 @@ local function SetupCustomTracker()
             end
             UpdateContent()
         elseif event == "SUPER_TRACKING_CHANGED" then
+            HandleSuperTrackChanged()
             UpdateQuestItemButton()
+            ScheduleUpdateContent()
+        elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" then
+            CheckRestoreSuperTrack()
             ScheduleUpdateContent()
         elseif event == "QUEST_REMOVED" then
             local questID = ...
             if questID then
                 prevObjectiveState[questID] = nil
                 prevQuestComplete[questID] = nil
+                if savedSuperTrackedQuestID == questID then
+                    savedSuperTrackedQuestID = nil
+                end
             end
             ScheduleUpdateContent()
         else
@@ -1779,6 +1856,7 @@ f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
+        lastKnownSuperTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
         addonTable.ObjectiveTracker.UpdateSettings()
     else
         -- Force update shortly after entering world to override Blizzard's show logic

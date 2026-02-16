@@ -16,7 +16,11 @@
       "WebFetch(domain:www.mmo-champion.com)",
       "WebFetch(domain:dotesports.com)",
       "WebFetch(domain:wowpedia.fandom.com)",
-      "WebFetch(domain:www.wowace.com)"
+      "WebFetch(domain:www.wowace.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:www.iriel.org)",
+      "WebFetch(domain:us.forums.blizzard.com)",
+      "WebFetch(domain:addonstudio.org)"
     ]
   }
 }

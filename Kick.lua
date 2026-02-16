@@ -517,12 +517,16 @@ local function FindUnitFrame(unit)
 end
 
 -- Create a simple attached frame that shows on party/raid frames
-local ICON_SIZE = 28
 local ICON_SPACING = 2
 
+local function GetIconSize()
+    return UIThingsDB.kick.attachIconSize or 28
+end
+
 local function CreateAttachedIcon(parent, index)
+    local iconSize = GetIconSize()
     local icon = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    icon:SetSize(ICON_SIZE, ICON_SIZE)
+    icon:SetSize(iconSize, iconSize)
 
     icon:SetBackdrop({
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -602,12 +606,13 @@ local function CreateAttachedFrame(guid, unit)
     -- Determine layout direction based on anchor point
     local anchorPoint = UIThingsDB.kick.attachAnchorPoint or "BOTTOM"
     local horizontal = (anchorPoint == "BOTTOM" or anchorPoint == "TOP")
+    local iconSize = GetIconSize()
 
     -- Size the container to fit all icons
     if horizontal then
-        frame:SetSize(numSpells * ICON_SIZE + (numSpells - 1) * ICON_SPACING, ICON_SIZE)
+        frame:SetSize(numSpells * iconSize + (numSpells - 1) * ICON_SPACING, iconSize)
     else
-        frame:SetSize(ICON_SIZE, numSpells * ICON_SIZE + (numSpells - 1) * ICON_SPACING)
+        frame:SetSize(iconSize, numSpells * iconSize + (numSpells - 1) * ICON_SPACING)
     end
 
     -- Create/reuse icon sub-frames and position them
@@ -616,12 +621,13 @@ local function CreateAttachedFrame(guid, unit)
             frame.icons[i] = CreateAttachedIcon(frame, i)
         end
         local iconFrame = frame.icons[i]
+        iconFrame:SetSize(iconSize, iconSize)
         iconFrame:ClearAllPoints()
 
         if horizontal then
-            iconFrame:SetPoint("LEFT", (i - 1) * (ICON_SIZE + ICON_SPACING), 0)
+            iconFrame:SetPoint("LEFT", (i - 1) * (iconSize + ICON_SPACING), 0)
         else
-            iconFrame:SetPoint("TOP", 0, -((i - 1) * (ICON_SIZE + ICON_SPACING)))
+            iconFrame:SetPoint("TOP", 0, -((i - 1) * (iconSize + ICON_SPACING)))
         end
 
         local spellTexture = C_Spell.GetSpellTexture(spellID)

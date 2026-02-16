@@ -38,6 +38,9 @@ config\panels\WidgetsPanel.lua
 config\panels\KickPanel.lua
 config\panels\ChatSkinPanel.lua
 config\panels\AddonVersionsPanel.lua
+config\panels\ActionBarsPanel.lua
+config\panels\NotificationsPanel.lua
+config\panels\CastBarPanel.lua
 config\ConfigMain.lua
 
 # Feature modules
@@ -53,6 +56,8 @@ TalentReminder.lua
 AddonComm.lua
 Kick.lua
 ChatSkin.lua
+ActionBars.lua
+CastBar.lua
 AddonVersions.lua
 widgets\Widgets.lua
 widgets\Time.lua
