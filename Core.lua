@@ -16,6 +16,20 @@ function addonTable.Core.SafeAfter(delay, func)
     end
 end
 
+--- Speak a TTS message using the best available API
+-- @param message string Text to speak
+-- @param voiceType number Voice index (0 = Standard, 1 = Alternate)
+function addonTable.Core.SpeakTTS(message, voiceType)
+    if not message then return end
+    voiceType = voiceType or 0
+    if TextToSpeech_Speak then
+        local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
+        pcall(TextToSpeech_Speak, message, voiceID)
+    elseif C_VoiceChat and C_VoiceChat.SpeakText then
+        pcall(C_VoiceChat.SpeakText, 0, message, voiceType, 1.0, false)
+    end
+end
+
 --- Recursively applies default values to a settings table
 -- Only sets values that are currently nil (preserves existing user settings)
 -- @param db table The settings table to populate

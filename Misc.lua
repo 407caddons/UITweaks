@@ -22,21 +22,12 @@ local function ShowAlert()
 
     alertFrame:Show()
 
-    -- TTS using correct API (only if enabled)
+    -- TTS (only if enabled)
     if UIThingsDB.misc.ttsEnabled then
-        local message = UIThingsDB.misc.ttsMessage or "Personal order arrived"
-        local voiceType = UIThingsDB.misc.ttsVoice or 0
-
-        if TextToSpeech_Speak then
-            local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
-            pcall(function()
-                TextToSpeech_Speak(message, voiceID)
-            end)
-        elseif C_VoiceChat and C_VoiceChat.SpeakText then
-            pcall(function()
-                C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
-            end)
-        end
+        addonTable.Core.SpeakTTS(
+            UIThingsDB.misc.ttsMessage or "Personal order arrived",
+            UIThingsDB.misc.ttsVoice or 0
+        )
     end
 
     -- Hide after duration
@@ -65,19 +56,10 @@ mailAlertFrame.text:SetText("New mail arrived")
 
 local function PlayMailTTS()
     if not UIThingsDB.misc.mailTtsEnabled then return end
-    local message = UIThingsDB.misc.mailTtsMessage or "You've got mail"
-    local voiceType = UIThingsDB.misc.mailTtsVoice or 0
-
-    if TextToSpeech_Speak then
-        local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
-        pcall(function()
-            TextToSpeech_Speak(message, voiceID)
-        end)
-    elseif C_VoiceChat and C_VoiceChat.SpeakText then
-        pcall(function()
-            C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
-        end)
-    end
+    addonTable.Core.SpeakTTS(
+        UIThingsDB.misc.mailTtsMessage or "You've got mail",
+        UIThingsDB.misc.mailTtsVoice or 0
+    )
 end
 
 local function ShowMailAlert()
@@ -147,24 +129,10 @@ end
 
 -- Expose for testing
 function Misc.TestTTS()
-    local message = UIThingsDB.misc.ttsMessage or "Personal order arrived"
-    local voiceType = UIThingsDB.misc.ttsVoice or 0
-
-    -- Method 1: Try TextToSpeech_Speak (global function)
-    if TextToSpeech_Speak then
-        local voiceID = TextToSpeech_GetSelectedVoice and TextToSpeech_GetSelectedVoice(voiceType) or nil
-        pcall(function()
-            TextToSpeech_Speak(message, voiceID)
-        end)
-        return
-    end
-
-    -- Method 2: Try C_VoiceChat.SpeakText
-    if C_VoiceChat and C_VoiceChat.SpeakText then
-        pcall(function()
-            C_VoiceChat.SpeakText(0, message, voiceType, 1.0, false)
-        end)
-    end
+    addonTable.Core.SpeakTTS(
+        UIThingsDB.misc.ttsMessage or "Personal order arrived",
+        UIThingsDB.misc.ttsVoice or 0
+    )
 end
 
 -- == AH FILTER ==

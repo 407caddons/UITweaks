@@ -1,19 +1,21 @@
 # Changelog
 
-## v1.9.0
+## v1.10.0
 
-- Added action bar skinning module with custom button borders, bar backgrounds, button spacing/sizing, keybind/macro text toggles, and per-bar position offsets
-- Added custom player cast bar replacing Blizzard's default, with configurable size, colors, spell icon, and cast time display
-- Added scrolling combat text (SCT) with separate damage and healing anchors, configurable font size, crit scaling, and scroll distance
-- Added Hearthstone widget that randomly selects from collected hearthstone toys, shows cooldown and bound location
-- Added chat keyword highlighting with custom color and optional sound alerts
-- Added Notifications config tab, splitting personal orders and mail alerts out of the General UI panel
-- Loot toasts now show item level with color-coded upgrade comparison against equipped gear
-- Loot toasts now show gold gains (switched to PLAYER_MONEY event for locale-independent detection)
-- Objective tracker now supports configurable click interactions: left-click opens quest log, shift-click links in chat, ctrl-click untracks, middle-click shares with party
-- Objective tracker restores super-tracking to your previous quest after a world quest takes over tracking
-- Great Vault widget updated for Season 2 API categories (Mythic+, Raid, Delves)
-- Kick tracker now automatically disables in raids (party-only)
-- Kick tracker icon size is now configurable
-- Custom layout frames now save positions on logout to prevent loss from disconnects
-- Widget anchor cache is now invalidated only when frames change, improving performance
+- Added cross-character reagent tracking module with tooltip display, bag/bank/warband scanning, and per-character management
+- Added objective tracker keybind to toggle visibility without changing the enabled setting
+- Added quest line progress display showing step position (e.g. 3/7) next to quest names
+- Added campaign-based quest grouping with collapsible campaign sub-headers
+- Added scenario step progress, step titles, descriptions, weighted progress, and bonus objective tracking to the objective tracker
+- Overhauled action bar positioning from relative offsets to absolute UIParent-anchored coordinates with automatic migration from the old format
+- Action bar skin now hides button borders on empty slots
+- Action bar position sliders expanded from +/-500 to +/-2000 range
+- Cast bar now supports configurable bar textures via a new texture dropdown with visual preview
+- Cast bar Blizzard hiding reworked to use RegisterStateDriver for combat-safe visibility
+- Cast bar position now saves with sub-pixel precision
+- Improved weapon buff detection to distinguish actual weapons from shields/holdables
+- Kick tracker fixed forward declaration issues for party watcher functions
+- Custom layout frame renames now propagate to any widgets anchored by name
+- Loot panel converted to scrollable layout
+- Keystone widget added with dungeon info and key level display
+- Widget framework improvements to FPS, Durability, Friends, Group, and Mythic Rating widgets
