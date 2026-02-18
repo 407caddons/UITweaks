@@ -296,6 +296,27 @@ local campaignOrder = {}
 local questsByCampaign = {}
 local nonCampaignQuests = {}
 
+-- Pre-defined sort comparators (avoid closure allocation in hot paths)
+local function sortByDistanceSq(a, b)
+    local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
+    local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
+    return distA < distB
+end
+
+local function sortByTimeLeft(a, b)
+    local timeA = C_TaskQuest.GetQuestTimeLeftMinutes(a) or 99999
+    local timeB = C_TaskQuest.GetQuestTimeLeftMinutes(b) or 99999
+    return timeA < timeB
+end
+
+local function sortWatchIndexByDistance(a, b)
+    local qA = C_QuestLog.GetQuestIDForQuestWatchIndex(a)
+    local qB = C_QuestLog.GetQuestIDForQuestWatchIndex(b)
+    local distA = qA and C_QuestLog.GetDistanceSqToQuest(qA) or 99999999
+    local distB = qB and C_QuestLog.GetDistanceSqToQuest(qB) or 99999999
+    return distA < distB
+end
+
 -- Quest/objective completion sound tracking
 local prevObjectiveState = {} -- [questID] = { [objIndex] = { finished = bool, text = string } }
 local prevQuestComplete = {}  -- [questID] = bool
@@ -902,19 +923,9 @@ local function RenderWorldQuests()
     -- Sort world quests by chosen method
     local wqSortBy = UIThingsDB.tracker.worldQuestSortBy or "time"
     if wqSortBy == "distance" then
-        local function sortByDistance(a, b)
-            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
-            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
-            return distA < distB
-        end
-        table.sort(activeWQs, sortByDistance)
-        table.sort(otherWQs, sortByDistance)
+        table.sort(activeWQs, sortByDistanceSq)
+        table.sort(otherWQs, sortByDistanceSq)
     else
-        local function sortByTimeLeft(a, b)
-            local timeA = C_TaskQuest.GetQuestTimeLeftMinutes(a) or 99999
-            local timeB = C_TaskQuest.GetQuestTimeLeftMinutes(b) or 99999
-            return timeA < timeB
-        end
         table.sort(activeWQs, sortByTimeLeft)
         table.sort(otherWQs, sortByTimeLeft)
     end
@@ -1014,13 +1025,7 @@ local function RenderQuests()
 
         -- Sort quests by distance if enabled
         if UIThingsDB.tracker.sortQuestsByDistance then
-            table.sort(filteredIndices, function(a, b)
-                local qA = C_QuestLog.GetQuestIDForQuestWatchIndex(a)
-                local qB = C_QuestLog.GetQuestIDForQuestWatchIndex(b)
-                local distA = qA and C_QuestLog.GetDistanceSqToQuest(qA) or 99999999
-                local distB = qB and C_QuestLog.GetDistanceSqToQuest(qB) or 99999999
-                return distA < distB
-            end)
+            table.sort(filteredIndices, sortWatchIndexByDistance)
         end
 
         if superTrackedIndex then
@@ -1145,11 +1150,7 @@ local function RenderQuests()
 
                 if UIThingsDB.tracker.sortQuestsByDistance then
                     for _, zoneName in ipairs(zoneOrder) do
-                        table.sort(questsByZone[zoneName], function(a, b)
-                            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
-                            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
-                            return distA < distB
-                        end)
+                        table.sort(questsByZone[zoneName], sortByDistanceSq)
                     end
                 end
 
@@ -1198,11 +1199,7 @@ local function RenderQuests()
                 -- Sort within each campaign by distance if enabled
                 if UIThingsDB.tracker.sortQuestsByDistance then
                     for _, name in ipairs(campaignOrder) do
-                        table.sort(questsByCampaign[name], function(a, b)
-                            local distA = C_QuestLog.GetDistanceSqToQuest(a) or 99999999
-                            local distB = C_QuestLog.GetDistanceSqToQuest(b) or 99999999
-                            return distA < distB
-                        end)
+                        table.sort(questsByCampaign[name], sortByDistanceSq)
                     end
                 end
 
@@ -1873,6 +1870,24 @@ local function SetupCustomTracker()
             ScheduleUpdateContent()
         elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" then
             CheckRestoreSuperTrack()
+            -- Prune stale sound-tracking and quest line cache entries on zone change
+            local trackedQuestIDs = {}
+            for i = 1, C_QuestLog.GetNumQuestWatches() do
+                local qid = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+                if qid then trackedQuestIDs[qid] = true end
+            end
+            for qid in pairs(prevObjectiveState) do
+                if not trackedQuestIDs[qid] then
+                    prevObjectiveState[qid] = nil
+                    prevQuestComplete[qid] = nil
+                end
+            end
+            local now = GetTime()
+            for qid, cached in pairs(questLineCache) do
+                if cached.expiry < now then
+                    questLineCache[qid] = nil
+                end
+            end
             ScheduleUpdateContent()
         elseif event == "QUEST_REMOVED" then
             local questID = ...

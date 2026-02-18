@@ -5,7 +5,11 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
-    Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.misc.enabled)
+    local function UpdateNavColor()
+        local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification
+        Helpers.UpdateModuleVisuals(panel, navButton, anyEnabled)
+    end
+    UpdateNavColor()
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
@@ -43,6 +47,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     ordersBtn:SetChecked(UIThingsDB.misc.personalOrders)
     ordersBtn:SetScript("OnClick", function(self)
         UIThingsDB.misc.personalOrders = self:GetChecked()
+        UpdateNavColor()
     end)
 
     local logonCheckBtn = CreateFrame("CheckButton", "UIThingsNotifOrdersLogonCheck", panel,
@@ -193,6 +198,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
         if addonTable.Misc and addonTable.Misc.ApplyEvents then
             addonTable.Misc.ApplyEvents()
         end
+        UpdateNavColor()
     end)
 
     -- Mail Alert Duration Slider

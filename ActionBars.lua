@@ -134,8 +134,8 @@ local function PatchMicroMenuLayout()
         return
     end
 
-    local mt = getmetatable(container)
-    local idx = mt and rawget(mt, "__index")
+    mt = getmetatable(container)
+    idx = mt and rawget(mt, "__index")
     if type(idx) == "table" then
         orig = rawget(idx, "Layout")
         if orig then

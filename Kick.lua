@@ -761,7 +761,6 @@ local function CreatePartyFrame(guid, unit)
 
     -- Get all interrupt spells for this unit
     local unitSpells = GetUnitKickSpells(unit)
-    local guid = UnitGUID(unit)
     if #unitSpells == 0 and not UnitIsUnit(unit, "player") and not (guid and knownSpells[guid] ~= nil) then
         -- Only use fallback for other players without explicit data (not for self)
         local fallback = GetUnitKickSpell(unit)

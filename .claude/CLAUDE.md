@@ -180,7 +180,7 @@ The config window tabs in `ConfigMain.lua` are ordered by module ID. **Addon Ver
 
 The `docs/` folder contains WoW API documentation extracted directly from the in-game client. **Always consult `docs/index.md` and the linked files in the `docs/` folder first for all WoW API lookups and research.** This is the most accurate source of information as it was taken from in-game documentation and reflects the actual available API for the current client version.
 
-## Daily prompts (4)
+## Daily prompts (3)
 
 Each of these prompts may have been done already today, if so could you not remove them and use them as a baseline for your review. If anything has fixed or been changed mark it as such in the file.
 
@@ -189,9 +189,3 @@ Each of these prompts may have been done already today, if so could you not remo
 2. Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results to .clause\features.md
 
 3. Can you give me 20 ideas for widgets and improvements to existing ones, give an estimation of ease of use. Write the results to .clause\widgets.md
-
-4. Could you write a short bulleted change log, for the last release no need to get to detailed don't include any minor fixes. Write the results and replace .claude\changeLog.md
-
-## Next features (completed)
-
-1. ~~Implement a way to track reagents across multiple characters~~ — Done. Added `Reagents.lua` module with tooltip display, bag/bank/warband scanning, and config panel with character management.

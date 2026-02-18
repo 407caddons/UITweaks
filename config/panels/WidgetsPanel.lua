@@ -206,6 +206,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "mail",          label = "Mail Indicator" },
         { key = "pullCounter",   label = "Pull Counter" },
         { key = "hearthstone",   label = "Hearthstone" },
+        { key = "currency",      label = "Currency Tracker" },
     }
 
     local yOffset = -250

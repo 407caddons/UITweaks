@@ -2,9 +2,10 @@ local addonName, addonTable = ...
 addonTable.TalentReminder = {}
 
 local TalentReminder = addonTable.TalentReminder
-local alertFrame     -- Popup alert frame
+local alertFrame        -- Popup alert frame
 local currentInstanceID, currentDifficultyID
-local lastZone = nil -- Track last zone for zone change detection
+local lastZone = nil    -- Track last zone mapID for zone change detection
+local lastSubZone = nil -- Track last subzone text (fires on ZONE_CHANGED even when mapID stays the same)
 
 -- Initialize saved variables
 function TalentReminder.Initialize()
@@ -88,6 +89,9 @@ function TalentReminder.CleanupSavedVariables()
     if count > 0 then
         addonTable.Core.Log("TalentReminder", "Cleaned up " .. count .. " unused fields from saved variables", 0)
     end
+
+    -- Note: String zone keys are now intentional (subzone text for boss-area granularity).
+    -- The old migration that converted string keys to 0 has been removed.
 end
 
 -- Event handler
@@ -103,6 +107,7 @@ function TalentReminder.OnEvent(self, event, ...)
             currentInstanceID = instanceID
             currentDifficultyID = difficultyID
             lastZone = nil -- Force zone re-evaluation
+            lastSubZone = nil
             TalentReminder.CheckTalentsInInstance()
         end)
     elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
@@ -122,12 +127,17 @@ function TalentReminder.OnZoneChanged()
     end
 
     local currentZone = TalentReminder.GetCurrentZone()
+    local currentSubZone = GetSubZoneText() or ""
 
-    -- Only check if zone actually changed
-    if currentZone and currentZone ~= lastZone then
-        addonTable.Core.Log("TalentReminder", string.format("Zone changed: '%s' -> '%s'",
-            lastZone or "nil", currentZone), 0)
+    -- Check if zone actually changed — use both mapID and subzone text,
+    -- since ZONE_CHANGED fires on subzone text changes but mapID may stay the same
+    local zoneChanged = (currentZone and currentZone ~= lastZone) or (currentSubZone ~= lastSubZone)
+    if zoneChanged then
+        addonTable.Core.Log("TalentReminder", string.format("Zone changed: mapID %s -> %s, subzone '%s' -> '%s'",
+            tostring(lastZone or "nil"), tostring(currentZone),
+            tostring(lastSubZone or ""), currentSubZone), 0)
         lastZone = currentZone
+        lastSubZone = currentSubZone
 
         -- Check talents for new zone after a short delay
         addonTable.Core.SafeAfter(0.5, function()
@@ -150,6 +160,7 @@ function TalentReminder.OnEnteringWorld()
 
     -- Reset last zone when entering new world/instance
     lastZone = nil
+    lastSubZone = nil
 
     -- Hide alert when not in a dungeon/raid instance
     if instanceType == "none" and alertFrame and alertFrame:IsShown() then
@@ -210,54 +221,67 @@ function TalentReminder.CheckTalentsInInstance()
         return
     end
 
-    -- Detect current zone
+    -- Detect current zone (both mapID and subzone text for matching)
     local currentZone = TalentReminder.GetCurrentZone()
+    local currentSubZone = GetSubZoneText() or ""
 
     -- Debug logging
-    addonTable.Core.Log("TalentReminder", string.format("CheckTalentsInInstance: Current zone = '%s'",
-        currentZone or "nil"), 0) -- DEBUG level
+    addonTable.Core.Log("TalentReminder", string.format(
+        "CheckTalentsInInstance: mapID=%s, subZone='%s'",
+        tostring(currentZone), currentSubZone), 0)
 
-    -- Build priority list: zone-specific first, then general
+    -- Build priority list from ALL builds for this instance/difficulty
+    -- Priority 1: exact zone match, Priority 2: instance-wide (key 0 or copies 900000+)
     local priorityList = {}
-
-    -- If we have a detected zone, prioritize zone-specific reminder
-    if currentZone and currentZone ~= "" then
-        -- Check for exact zone match
-        local zoneReminder = reminders[currentDifficultyID][currentZone]
-        if zoneReminder and not zoneReminder.disabled then
-            addonTable.Core.Log("TalentReminder", string.format("Found zone-specific reminder for '%s'", currentZone), 0)
-            table.insert(priorityList, {
-                zoneKey = currentZone,
-                reminder = zoneReminder,
-                priority = 1
-            })
-        else
-            addonTable.Core.Log("TalentReminder", string.format("No zone-specific reminder for '%s'", currentZone), 0)
-            -- Debug: Show what zone keys exist
-            for zoneKey, _ in pairs(reminders[currentDifficultyID]) do
-                addonTable.Core.Log("TalentReminder", string.format("  Available zone key: '%s'", zoneKey), 0)
+    for zoneKey, reminder in pairs(reminders[currentDifficultyID]) do
+        if reminder and not reminder.disabled then
+            local priority
+            if type(zoneKey) == "string" and zoneKey ~= "" then
+                -- String zone key (subzone text) — match against current subzone
+                if currentSubZone ~= "" and zoneKey == currentSubZone then
+                    priority = 1
+                else
+                    priority = nil -- Different subzone, skip
+                end
+            else
+                local numKey = tonumber(zoneKey) or 0
+                if currentZone and currentZone ~= 0 and numKey == currentZone then
+                    -- Exact mapID match (legacy numeric zone keys)
+                    priority = 1
+                elseif numKey == 0 or numKey >= 900000 then
+                    -- Instance-wide (0) or copy (900000+) — lower priority
+                    priority = 2
+                else
+                    -- Different zone-specific build — skip
+                    priority = nil
+                end
+            end
+            if priority then
+                addonTable.Core.Log("TalentReminder",
+                    string.format("Adding build '%s' (zoneKey=%s, priority=%d)",
+                        reminder.name or "Unnamed", tostring(zoneKey), priority), 0)
+                table.insert(priorityList, {
+                    zoneKey = zoneKey,
+                    reminder = reminder,
+                    priority = priority
+                })
             end
         end
-    end
-
-    -- Add general reminder with lower priority
-    local generalReminder = reminders[currentDifficultyID]["general"]
-    if generalReminder and not generalReminder.disabled then
-        addonTable.Core.Log("TalentReminder", "Adding general reminder to priority list", 0)
-        table.insert(priorityList, {
-            zoneKey = "general",
-            reminder = generalReminder,
-            priority = 2
-        })
     end
 
     -- Sort by priority (lower number = higher priority)
     table.sort(priorityList, function(a, b) return a.priority < b.priority end)
 
-    -- Check reminders in priority order
-    local foundMismatch = false
+    -- Check reminders in priority order.
+    -- Zone-specific builds (priority 1) take precedence over instance-wide (priority 2).
+    -- Within the same priority level, if ANY build matches perfectly → no alert for that level.
+    -- A lower-priority perfect match does NOT suppress a higher-priority mismatch.
+    local bestPriority = nil
+    local bestMismatchEntry = nil
+    local bestMismatches = nil
+    local bestPriorityMatched = false -- true if any build at bestPriority had 0 mismatches
+
     for _, entry in ipairs(priorityList) do
-        local zoneKey = entry.zoneKey
         local reminder = entry.reminder
 
         -- Skip if reminder doesn't match current class/spec
@@ -266,18 +290,29 @@ function TalentReminder.CheckTalentsInInstance()
         elseif reminder.specID and reminder.specID ~= specID then
             -- Different spec, skip
         else
+            -- If we've moved to a lower priority level and already found results, stop
+            if bestPriority and entry.priority > bestPriority then
+                break
+            end
+            bestPriority = entry.priority
+
             local mismatches = TalentReminder.CompareTalents(reminder.talents)
-            if #mismatches > 0 then
-                -- Talents mismatch - show alert
-                TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
-                foundMismatch = true
-                break -- Only show one alert at a time
+            if #mismatches == 0 then
+                -- Perfect match at this priority level — no alert needed
+                bestPriorityMatched = true
+                bestMismatchEntry = nil
+                bestMismatches = nil
+            elseif not bestPriorityMatched and not bestMismatchEntry then
+                -- First mismatch at this priority level
+                bestMismatchEntry = entry
+                bestMismatches = mismatches
             end
         end
     end
 
-    -- If no mismatches found, dismiss any open alert
-    if not foundMismatch and alertFrame and alertFrame:IsShown() then
+    if bestMismatchEntry and not bestPriorityMatched then
+        TalentReminder.ShowAlert(bestMismatchEntry.reminder, bestMismatches, bestMismatchEntry.zoneKey)
+    elseif alertFrame and alertFrame:IsShown() then
         TalentReminder.ReleaseAlertFrame()
     end
 end
@@ -303,43 +338,50 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
         return
     end
 
-    -- Detect current zone
+    -- Detect current zone (both mapID and subzone text)
     local currentZone = TalentReminder.GetCurrentZone()
+    local currentSubZone = GetSubZoneText() or ""
 
-    -- Build priority list: zone-specific first, then general
+    -- Build priority list from ALL builds for this instance/difficulty
     local priorityList = {}
-
-    -- If we have a detected zone, prioritize zone-specific reminder
-    if currentZone and currentZone ~= "" then
-        local zoneReminder = reminders[currentDifficultyID][currentZone]
-        if zoneReminder and not zoneReminder.disabled then
-            table.insert(priorityList, {
-                zoneKey = currentZone,
-                reminder = zoneReminder,
-                priority = 1
-            })
+    for zoneKey, reminder in pairs(reminders[currentDifficultyID]) do
+        if reminder and not reminder.disabled then
+            local priority
+            if type(zoneKey) == "string" and zoneKey ~= "" then
+                if currentSubZone ~= "" and zoneKey == currentSubZone then
+                    priority = 1
+                else
+                    priority = nil
+                end
+            else
+                local numKey = tonumber(zoneKey) or 0
+                if currentZone and currentZone ~= 0 and numKey == currentZone then
+                    priority = 1
+                elseif numKey == 0 or numKey >= 900000 then
+                    priority = 2
+                else
+                    priority = nil
+                end
+            end
+            if priority then
+                table.insert(priorityList, {
+                    zoneKey = zoneKey,
+                    reminder = reminder,
+                    priority = priority
+                })
+            end
         end
-    end
-
-    -- Add general reminder with lower priority
-    local generalReminder = reminders[currentDifficultyID]["general"]
-    if generalReminder and not generalReminder.disabled then
-        table.insert(priorityList, {
-            zoneKey = "general",
-            reminder = generalReminder,
-            priority = 2
-        })
     end
 
     -- Sort by priority (lower number = higher priority)
     table.sort(priorityList, function(a, b) return a.priority < b.priority end)
 
-    -- Gather all mismatches from priority reminders
+    -- Check all matching builds — if ANY has zero mismatches, no alert needed
     local allMismatches = {}
     local reminderName = nil
+    local perfectMatch = false
 
     for _, entry in ipairs(priorityList) do
-        local zoneKey = entry.zoneKey
         local reminder = entry.reminder
 
         -- Skip if reminder doesn't match current class/spec
@@ -349,8 +391,12 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
             -- Different spec, skip
         else
             local mismatches = TalentReminder.CompareTalents(reminder.talents)
-            if #mismatches > 0 then
-                reminderName = reminder.name
+            if #mismatches == 0 then
+                -- Perfect match found — no alert needed
+                perfectMatch = true
+                break
+            else
+                reminderName = reminderName or reminder.name
                 for _, mismatch in ipairs(mismatches) do
                     table.insert(allMismatches, mismatch)
                 end
@@ -358,13 +404,12 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
         end
     end
 
-    if #allMismatches > 0 then
-        -- Create a cumulative reminder
+    if not perfectMatch and #allMismatches > 0 then
         local cumulativeReminder = {
             name = reminderName or "Mythic+ Entry Check",
             note = "Multiple reminders detected for this instance",
         }
-        TalentReminder.ShowAlert(cumulativeReminder, allMismatches, "general")
+        TalentReminder.ShowAlert(cumulativeReminder, allMismatches, 0)
     end
 end
 
@@ -600,21 +645,13 @@ function TalentReminder.GetClassSpecString(reminder)
     return string.format("|c%s%s|r - %s", classColor, reminder.specName, reminder.className)
 end
 
--- Get current zone/subzone (used for boss area detection)
+-- Get current zone as a numeric uiMapID (used for zone-based detection)
 function TalentReminder.GetCurrentZone()
-    local subZone = GetSubZoneText()
-    local minimapZone = GetMinimapZoneText()
-    local result = nil
-
-    if subZone and subZone ~= "" then
-        result = subZone
-    elseif minimapZone and minimapZone ~= "" then
-        result = minimapZone
-    end
+    local mapID = C_Map.GetBestMapForUnit("player")
+    local result = mapID or 0
 
     -- Debug logging
-    addonTable.Core.Log("TalentReminder", string.format("GetCurrentZone: subZone='%s', minimapZone='%s', result='%s'",
-        subZone or "nil", minimapZone or "nil", result or "nil"), 0)
+    addonTable.Core.Log("TalentReminder", string.format("GetCurrentZone: mapID=%s", tostring(result)), 0)
 
     return result
 end
@@ -1164,37 +1201,10 @@ function TalentReminder.UpdateVisuals()
     end
 
     -- Apply visual settings (Backdrop)
-    local showBorder = UIThingsDB.talentReminders.showBorder
-    local showBackground = UIThingsDB.talentReminders.showBackground
-
-    if showBorder or showBackground then
-        alertFrame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            tile = false,
-            tileSize = 0,
-            edgeSize = 1,
-            insets = { left = 1, right = 1, top = 1, bottom = 1 }
-        })
-
-        -- Background
-        if showBackground then
-            local c = UIThingsDB.talentReminders.backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
-            alertFrame:SetBackdropColor(c.r, c.g, c.b, c.a)
-        else
-            alertFrame:SetBackdropColor(0, 0, 0, 0)
-        end
-
-        -- Border
-        if showBorder then
-            local bc = UIThingsDB.talentReminders.borderColor or { r = 1, g = 1, b = 1, a = 1 }
-            alertFrame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
-        else
-            alertFrame:SetBackdropBorderColor(0, 0, 0, 0)
-        end
-    else
-        alertFrame:SetBackdrop(nil)
-    end
+    local Helpers = addonTable.ConfigHelpers
+    Helpers.ApplyFrameBackdrop(alertFrame,
+        UIThingsDB.talentReminders.showBorder, UIThingsDB.talentReminders.borderColor,
+        UIThingsDB.talentReminders.showBackground, UIThingsDB.talentReminders.backgroundColor)
 
     -- Always show all three buttons
     if alertFrame.applyTalentsBtn then
@@ -1494,8 +1504,11 @@ function TalentReminder.GetCurrentLocation()
     local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
     local difficultyName = GetDifficultyInfo(difficultyID) or "Unknown"
 
-    -- Use zone/subzone text as the boss area identifier
-    local zoneName = TalentReminder.GetCurrentZone()
+    -- Get numeric uiMapID for zone identification
+    local zoneMapID = TalentReminder.GetCurrentZone()
+
+    -- Get subzone text for boss-area granularity (raids have multiple boss areas on the same mapID)
+    local subZone = GetSubZoneText() or ""
 
     return {
         instanceID = instanceID,
@@ -1503,6 +1516,7 @@ function TalentReminder.GetCurrentLocation()
         instanceType = instanceType,
         difficultyID = difficultyID,
         difficultyName = difficultyName,
-        zoneName = zoneName
+        zoneMapID = zoneMapID,
+        subZone = subZone
     }
 end

@@ -71,6 +71,360 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     debugTooltip:SetTextColor(0.7, 0.7, 0.7)
     debugTooltip:SetText("Shows detailed debug messages in chat for addon communication and module activity")
 
+    -- ============================================================
+    -- Settings Serialization (Import / Export)
+    -- ============================================================
+
+    local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+    local function Base64Encode(data)
+        local out = {}
+        local len = #data
+        for i = 1, len, 3 do
+            local b1 = data:byte(i)
+            local b2 = (i + 1 <= len) and data:byte(i + 1) or 0
+            local b3 = (i + 2 <= len) and data:byte(i + 2) or 0
+            local n = b1 * 65536 + b2 * 256 + b3
+            out[#out + 1] = B64_CHARS:sub(math.floor(n / 262144) + 1, math.floor(n / 262144) + 1)
+            out[#out + 1] = B64_CHARS:sub(math.floor(n / 4096) % 64 + 1, math.floor(n / 4096) % 64 + 1)
+            out[#out + 1] = (i + 1 <= len) and B64_CHARS:sub(math.floor(n / 64) % 64 + 1, math.floor(n / 64) % 64 + 1) or
+                "="
+            out[#out + 1] = (i + 2 <= len) and B64_CHARS:sub(n % 64 + 1, n % 64 + 1) or "="
+        end
+        return table.concat(out)
+    end
+
+    local function Base64Decode(data)
+        data = data:gsub("[^A-Za-z0-9+/=]", "")
+        local lookup = {}
+        for i = 1, 64 do lookup[B64_CHARS:sub(i, i)] = i - 1 end
+        local out = {}
+        for i = 1, #data, 4 do
+            local c1 = lookup[data:sub(i, i)] or 0
+            local c2 = lookup[data:sub(i + 1, i + 1)] or 0
+            local c3 = lookup[data:sub(i + 2, i + 2)] or 0
+            local c4 = lookup[data:sub(i + 3, i + 3)] or 0
+            local n = c1 * 262144 + c2 * 4096 + c3 * 64 + c4
+            out[#out + 1] = string.char(math.floor(n / 65536) % 256)
+            if data:sub(i + 2, i + 2) ~= "=" then
+                out[#out + 1] = string.char(math.floor(n / 256) % 256)
+            end
+            if data:sub(i + 3, i + 3) ~= "=" then
+                out[#out + 1] = string.char(n % 256)
+            end
+        end
+        return table.concat(out)
+    end
+
+    local function SerializeValue(val, depth)
+        depth = depth or 0
+        if depth > 20 then return "nil" end
+        local t = type(val)
+        if t == "string" then
+            return string.format("%q", val)
+        elseif t == "number" then
+            return tostring(val)
+        elseif t == "boolean" then
+            return val and "true" or "false"
+        elseif t == "table" then
+            local parts = {}
+            -- Check for array portion
+            local isArray = true
+            local maxN = 0
+            for k in pairs(val) do
+                if type(k) == "number" and k == math.floor(k) and k > 0 then
+                    if k > maxN then maxN = k end
+                else
+                    isArray = false
+                end
+            end
+            if isArray and maxN > 0 and maxN == #val then
+                for i = 1, maxN do
+                    parts[#parts + 1] = SerializeValue(val[i], depth + 1)
+                end
+            else
+                -- Sort keys for deterministic output
+                local keys = {}
+                for k in pairs(val) do keys[#keys + 1] = k end
+                table.sort(keys, function(a, b)
+                    if type(a) ~= type(b) then return type(a) < type(b) end
+                    return a < b
+                end)
+                for _, k in ipairs(keys) do
+                    local keyStr
+                    if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+                        keyStr = k
+                    else
+                        keyStr = "[" .. SerializeValue(k, depth + 1) .. "]"
+                    end
+                    parts[#parts + 1] = keyStr .. "=" .. SerializeValue(val[k], depth + 1)
+                end
+            end
+            return "{" .. table.concat(parts, ",") .. "}"
+        else
+            return "nil"
+        end
+    end
+
+    local function DeserializeString(str)
+        -- Safely deserialize a Lua table string
+        if not str or str == "" then return nil, "Empty string" end
+        local func, err = loadstring("return " .. str)
+        if not func then return nil, "Parse error: " .. (err or "unknown") end
+        -- Sandbox: no access to globals
+        setfenv(func, {})
+        local ok, result = pcall(func)
+        if not ok then return nil, "Execution error: " .. tostring(result) end
+        if type(result) ~= "table" then return nil, "Expected table, got " .. type(result) end
+        return result
+    end
+
+    local function BuildExportString(includeSettings, includeTalentBuilds)
+        local exportData = {}
+        if includeSettings and UIThingsDB then
+            exportData.settings = UIThingsDB
+        end
+        if includeTalentBuilds and LunaUITweaks_TalentReminders then
+            exportData.talentBuilds = LunaUITweaks_TalentReminders
+        end
+        exportData.version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
+        exportData.exportDate = date("%Y-%m-%d %H:%M:%S")
+
+        local serialized = SerializeValue(exportData)
+        return "LUIT1:" .. Base64Encode(serialized)
+    end
+
+    local function ParseImportString(importStr)
+        if not importStr or importStr == "" then
+            return nil, "Empty import string"
+        end
+        importStr = importStr:gsub("%s+", "")
+
+        -- Check prefix
+        if not importStr:match("^LUIT1:") then
+            return nil, "Invalid format - not a LunaUITweaks export string"
+        end
+
+        local b64Data = importStr:sub(7)
+        local decoded = Base64Decode(b64Data)
+        if not decoded or decoded == "" then
+            return nil, "Failed to decode data"
+        end
+
+        local data, err = DeserializeString(decoded)
+        if not data then
+            return nil, err
+        end
+
+        return data
+    end
+
+    local function ApplyImportData(data)
+        local count = 0
+        if data.settings and type(data.settings) == "table" then
+            -- Deep copy imported settings into UIThingsDB
+            local function DeepMerge(target, source)
+                for k, v in pairs(source) do
+                    if type(v) == "table" and type(target[k]) == "table" then
+                        -- Check if it's a color table (has 'r' field)
+                        if v.r ~= nil then
+                            target[k] = v
+                        else
+                            DeepMerge(target[k], v)
+                        end
+                    else
+                        target[k] = v
+                    end
+                end
+            end
+            DeepMerge(UIThingsDB, data.settings)
+            count = count + 1
+        end
+        if data.talentBuilds and type(data.talentBuilds) == "table" then
+            LunaUITweaks_TalentReminders = data.talentBuilds
+            count = count + 1
+        end
+        return count
+    end
+
+    -- Export dialog
+    local function ShowExportDialog()
+        local f = CreateFrame("Frame", "LunaSettingsExportFrame", UIParent, "BackdropTemplate")
+        f:SetSize(500, 380)
+        f:SetPoint("CENTER")
+        f:SetFrameStrata("DIALOG")
+        f:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        f:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        f:EnableMouse(true)
+        f:SetMovable(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+
+        local titleText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        titleText:SetPoint("TOP", 0, -12)
+        titleText:SetText("Export Settings")
+
+        -- Checkboxes
+        local settingsCheck = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
+        settingsCheck:SetPoint("TOPLEFT", 15, -45)
+        settingsCheck.Text:SetText("Include Settings (UIThingsDB)")
+        settingsCheck.Text:SetFontObject("GameFontHighlight")
+        settingsCheck:SetChecked(true)
+
+        local talentCheck = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
+        talentCheck:SetPoint("TOPLEFT", 15, -70)
+        talentCheck.Text:SetText("Include Talent Builds")
+        talentCheck.Text:SetFontObject("GameFontHighlight")
+        talentCheck:SetChecked(false)
+
+        -- Generate button
+        local generateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        generateBtn:SetSize(100, 22)
+        generateBtn:SetPoint("TOPLEFT", 15, -100)
+        generateBtn:SetText("Generate")
+
+        -- Scroll + EditBox
+        local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 10, -130)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
+
+        local editBox = CreateFrame("EditBox", nil, scrollFrame)
+        editBox:SetMultiLine(true)
+        editBox:SetAutoFocus(false)
+        editBox:SetFontObject("ChatFontNormal")
+        editBox:SetWidth(450)
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scrollFrame:SetScrollChild(editBox)
+
+        generateBtn:SetScript("OnClick", function()
+            local includeSettings = settingsCheck:GetChecked()
+            local includeTalents = talentCheck:GetChecked()
+            if not includeSettings and not includeTalents then
+                editBox:SetText("Please select at least one option to export.")
+                return
+            end
+            local exportStr = BuildExportString(includeSettings, includeTalents)
+            editBox:SetText(exportStr)
+            editBox:HighlightText()
+            editBox:SetFocus()
+        end)
+
+        -- Close button
+        local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        closeBtn:SetSize(80, 22)
+        closeBtn:SetPoint("BOTTOMRIGHT", -10, 10)
+        closeBtn:SetText("Close")
+        closeBtn:SetScript("OnClick", function()
+            f:Hide(); f:SetParent(nil)
+        end)
+
+        f:Show()
+    end
+
+    -- Import dialog
+    local function ShowImportDialog()
+        local f = CreateFrame("Frame", "LunaSettingsImportFrame", UIParent, "BackdropTemplate")
+        f:SetSize(500, 320)
+        f:SetPoint("CENTER")
+        f:SetFrameStrata("DIALOG")
+        f:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        f:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        f:EnableMouse(true)
+        f:SetMovable(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+
+        local titleText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        titleText:SetPoint("TOP", 0, -12)
+        titleText:SetText("Import Settings")
+
+        local helpText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        helpText:SetPoint("TOPLEFT", 15, -40)
+        helpText:SetWidth(470)
+        helpText:SetJustifyH("LEFT")
+        helpText:SetTextColor(0.7, 0.7, 0.7)
+        helpText:SetText("Paste an export string below and click Import. A /reload will be performed to apply changes.")
+
+        -- Scroll + EditBox
+        local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 10, -65)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
+
+        local editBox = CreateFrame("EditBox", nil, scrollFrame)
+        editBox:SetMultiLine(true)
+        editBox:SetAutoFocus(true)
+        editBox:SetFontObject("ChatFontNormal")
+        editBox:SetWidth(450)
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scrollFrame:SetScrollChild(editBox)
+
+        -- Import button
+        local importBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        importBtn:SetSize(80, 22)
+        importBtn:SetPoint("BOTTOMRIGHT", -100, 10)
+        importBtn:SetText("Import")
+        importBtn:SetScript("OnClick", function()
+            local importStr = editBox:GetText()
+            local data, err = ParseImportString(importStr)
+            if not data then
+                editBox:SetText("Error: " .. (err or "Unknown error"))
+                return
+            end
+
+            local what = {}
+            if data.settings then table.insert(what, "settings") end
+            if data.talentBuilds then table.insert(what, "talent builds") end
+            local desc = table.concat(what, " and ")
+            if data.version then desc = desc .. " (from v" .. data.version .. ")" end
+
+            StaticPopup_Show("LUNA_IMPORT_CONFIRM", desc, nil, { data = data, frame = f })
+        end)
+
+        -- Cancel button
+        local cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        cancelBtn:SetSize(80, 22)
+        cancelBtn:SetPoint("BOTTOMRIGHT", -10, 10)
+        cancelBtn:SetText("Cancel")
+        cancelBtn:SetScript("OnClick", function()
+            f:Hide(); f:SetParent(nil)
+        end)
+
+        f:Show()
+    end
+
+    StaticPopupDialogs["LUNA_IMPORT_CONFIRM"] = {
+        text = "Import %s?\n\nThis will overwrite your current settings and /reload the UI.",
+        button1 = "Import & Reload",
+        button2 = "Cancel",
+        OnAccept = function(self, popupData)
+            ApplyImportData(popupData.data)
+            if popupData.frame then
+                popupData.frame:Hide(); popupData.frame:SetParent(nil)
+            end
+            ReloadUI()
+        end,
+        OnCancel = function(self, popupData)
+            -- Do nothing
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+
     -- Refresh button
     local refreshBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     refreshBtn:SetSize(120, 24)
@@ -81,6 +435,20 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             addonTable.AddonVersions.RefreshVersions()
         end
     end)
+
+    -- Import button
+    local importSettingsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    importSettingsBtn:SetSize(120, 24)
+    importSettingsBtn:SetPoint("LEFT", refreshBtn, "RIGHT", 5, 0)
+    importSettingsBtn:SetText("Import")
+    importSettingsBtn:SetScript("OnClick", ShowImportDialog)
+
+    -- Export button
+    local exportSettingsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    exportSettingsBtn:SetSize(120, 24)
+    exportSettingsBtn:SetPoint("LEFT", importSettingsBtn, "RIGHT", 5, 0)
+    exportSettingsBtn:SetText("Export")
+    exportSettingsBtn:SetScript("OnClick", ShowExportDialog)
 
     -- Column headers
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")

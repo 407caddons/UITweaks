@@ -2,20 +2,19 @@
 
 ## v1.10.0
 
-- Added cross-character reagent tracking module with tooltip display, bag/bank/warband scanning, and per-character management
-- Added objective tracker keybind to toggle visibility without changing the enabled setting
-- Added quest line progress display showing step position (e.g. 3/7) next to quest names
-- Added campaign-based quest grouping with collapsible campaign sub-headers
-- Added scenario step progress, step titles, descriptions, weighted progress, and bonus objective tracking to the objective tracker
-- Overhauled action bar positioning from relative offsets to absolute UIParent-anchored coordinates with automatic migration from the old format
-- Action bar skin now hides button borders on empty slots
-- Action bar position sliders expanded from +/-500 to +/-2000 range
-- Cast bar now supports configurable bar textures via a new texture dropdown with visual preview
-- Cast bar Blizzard hiding reworked to use RegisterStateDriver for combat-safe visibility
-- Cast bar position now saves with sub-pixel precision
-- Improved weapon buff detection to distinguish actual weapons from shields/holdables
-- Kick tracker fixed forward declaration issues for party watcher functions
-- Custom layout frame renames now propagate to any widgets anchored by name
-- Loot panel converted to scrollable layout
-- Keystone widget added with dungeon info and key level display
-- Widget framework improvements to FPS, Durability, Friends, Group, and Mythic Rating widgets
+- Added cross-character Reagent Tracking module with tooltip display, bag/bank/warband scanning, and config panel for managing characters
+- Objective Tracker: quest line progress indicator (e.g. "3/7") shown next to quest names
+- Objective Tracker: new campaign quest grouping mode in addition to zone grouping
+- Objective Tracker: keybind to toggle tracker visibility
+- ActionBars: reworked bar positioning to absolute UIParent-anchored coordinates with automatic migration from old offset format
+- ActionBars: positions recaptured cleanly after exiting edit mode
+- ActionBars: skin borders hidden on empty action button slots
+- Keystone widget: click-to-teleport using dungeon teleport spells (Hero's Path, etc.)
+- Keystone widget: tooltip shows your best run for the current dungeon
+- FPS widget: tooltip now includes network jitter and bandwidth stats
+- Friends widget: tooltip shows zone/area info for online friends
+- Group widget: ready check tracking with live status display in tooltip
+- Durability widget: tooltip shows repair cost estimate
+- CastBar: added bar texture selection with visual preview dropdown
+- CastBar: improved Blizzard cast bar hiding using combat-safe state driver
+- Config: shared status bar texture picker with live preview

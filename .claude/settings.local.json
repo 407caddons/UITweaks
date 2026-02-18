@@ -20,7 +20,9 @@
       "WebFetch(domain:deepwiki.com)",
       "WebFetch(domain:www.iriel.org)",
       "WebFetch(domain:us.forums.blizzard.com)",
-      "WebFetch(domain:addonstudio.org)"
+      "WebFetch(domain:addonstudio.org)",
+      "WebFetch(domain:git.wowinterface.com)",
+      "WebFetch(domain:www.wowhead.com)"
     ]
   }
 }

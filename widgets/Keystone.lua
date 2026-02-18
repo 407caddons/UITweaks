@@ -12,6 +12,7 @@ table.insert(Widgets.moduleInits, function()
 
     local function BuildTeleportMap()
         cachedTeleportSpells = {}
+        if InCombatLockdown() then return end
         local numLines = C_SpellBook.GetNumSpellBookSkillLines()
         for skillLineIdx = 1, numLines do
             local skillLineInfo = C_SpellBook.GetSpellBookSkillLineInfo(skillLineIdx)
@@ -31,8 +32,9 @@ table.insert(Widgets.moduleInits, function()
                                     local tooltipData = C_TooltipInfo.GetSpellByID(spellID)
                                     if tooltipData then
                                         for _, line in ipairs(tooltipData.lines) do
-                                            if line.leftText then
-                                                local dest = line.leftText:match("to (.+)%.?")
+                                            local ok, text = pcall(function() return line.leftText end)
+                                            if ok and text and not issecretvalue(text) then
+                                                local dest = text:match("to (.+)%.?")
                                                 if dest then
                                                     dest = dest:gsub("%.$", "")
                                                     dest = dest:gsub("^the entrance to ", "")
@@ -62,20 +64,48 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
+    -- Generate name variants for matching (handles mega dungeon wing names, prefixes, etc.)
+    local function GetDungeonNameVariants(name)
+        local variants = { name }
+        -- Strip "The " prefix
+        if name:find("^The ") then
+            table.insert(variants, name:sub(5))
+        end
+        -- Strip "Operation: " prefix
+        if name:find("^Operation: ") then
+            table.insert(variants, name:sub(12))
+        end
+        -- Strip mega dungeon wing suffix
+        -- Handles both " - Wing" (e.g. "Operation: Mechagon - Workshop")
+        -- and ": Wing" (e.g. "Tazavesh: So'leah's Gambit")
+        local base = name:match("^(.+)%s+%-%s+.+$") or name:match("^(.-):%s+.+$")
+        if base and base ~= name then
+            table.insert(variants, base)
+            -- Also strip "Operation: " from the base
+            if base:find("^Operation: ") then
+                table.insert(variants, base:sub(12))
+            end
+        end
+        return variants
+    end
+
     local function FindTeleportForDungeon(dungeonName)
         if not dungeonName then return nil end
         if not cachedTeleportSpells then BuildTeleportMap() end
-        -- Direct match
-        if cachedTeleportSpells[dungeonName] then return cachedTeleportSpells[dungeonName] end
-        -- Try without "The "
-        if dungeonName:find("^The ") then
-            local short = dungeonName:sub(5)
-            if cachedTeleportSpells[short] then return cachedTeleportSpells[short] end
+
+        local variants = GetDungeonNameVariants(dungeonName)
+
+        -- Direct match with all variants
+        for _, variant in ipairs(variants) do
+            if cachedTeleportSpells[variant] then return cachedTeleportSpells[variant] end
         end
-        -- Substring match
+
+        -- Substring match with all variants
         for dest, spell in pairs(cachedTeleportSpells) do
-            if dungeonName:find(dest, 1, true) or dest:find(dungeonName, 1, true) then
-                return spell
+            for _, variant in ipairs(variants) do
+                if variant:find(dest, 1, true) or dest:find(variant, 1, true) then
+                    return spell
+                end
             end
         end
         return nil
@@ -129,9 +159,10 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    -- Invalidate teleport cache when spells change
+    -- Invalidate teleport cache when spells change or leaving combat
     local teleportCacheFrame = CreateFrame("Frame")
     teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
+    teleportCacheFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     teleportCacheFrame:SetScript("OnEvent", function()
         cachedTeleportSpells = nil
     end)

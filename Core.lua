@@ -55,6 +55,13 @@ addonTable.Core.LogLevel = {
 
 addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.INFO
 
+local LOG_COLORS = {
+    [0] = "888888", -- DEBUG (gray)
+    [1] = "00FF00", -- INFO (green)
+    [2] = "FFFF00", -- WARN (yellow)
+    [3] = "FF0000"  -- ERROR (red)
+}
+
 --- Centralized logging function
 -- @param module string Module name (e.g., "Tracker", "Vendor")
 -- @param msg string Message to log
@@ -63,14 +70,7 @@ function addonTable.Core.Log(module, msg, level)
     level = level or addonTable.Core.LogLevel.INFO
     if level < addonTable.Core.currentLogLevel then return end
 
-    local colors = {
-        [0] = "888888", -- DEBUG (gray)
-        [1] = "00FF00", -- INFO (green)
-        [2] = "FFFF00", -- WARN (yellow)
-        [3] = "FF0000"  -- ERROR (red)
-    }
-
-    local prefix = string.format("|cFF%s[Luna %s]|r", colors[level] or "FFFFFF", module or "Core")
+    local prefix = string.format("|cFF%s[Luna %s]|r", LOG_COLORS[level] or "FFFFFF", module or "Core")
     print(prefix .. " " .. tostring(msg))
 end
 
@@ -332,6 +332,18 @@ local function OnEvent(self, event, ...)
                 alertIconSize = 16,
                 alertPos = { point = "CENTER", x = 0, y = 0 }
             },
+            talentManager = {
+                enabled = true,
+                panelWidth = 280,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 11,
+                showBorder = true,
+                borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                showBackground = true,
+                backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.9 },
+                collapsedSections = {},
+                ejCache = {},
+            },
             widgets = {
                 enabled = false,
                 locked = true,
@@ -365,7 +377,8 @@ local function OnEvent(self, event, ...)
                 darkmoonFaire = { enabled = false, point = "CENTER", x = 0, y = -420 },
                 mail = { enabled = false, point = "CENTER", x = 0, y = -440 },
                 pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460 },
-                hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480 }
+                hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480 },
+                currency = { enabled = false, point = "CENTER", x = 0, y = -500 }
             },
             kick = {
                 enabled = false,
@@ -450,6 +463,65 @@ local function OnEvent(self, event, ...)
             },
             reagents = {
                 enabled = false
+            },
+            questAuto = {
+                enabled = false,
+                autoAcceptQuests = true,
+                autoTurnIn = true,
+                acceptTrivial = false,
+                autoGossip = true,
+                shiftToPause = true,
+            },
+            questReminder = {
+                enabled = false,
+                ttsEnabled = true,
+                ttsMessage = "You've got quests",
+                ttsVoice = 0,
+                showPopup = true,
+                showChatMessage = true,
+                playSound = true,
+                popupPos = { point = "CENTER", x = 0, y = 0 },
+                frameWidth = 350,
+                frameHeight = 250,
+                showBorder = true,
+                borderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 },
+                showBackground = true,
+                backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.92 },
+            },
+            mplusTimer = {
+                enabled = false,
+                locked = true,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 12,
+                timerFontSize = 20,
+                pos = { point = "CENTER", x = 0, y = 0 },
+                barWidth = 250,
+                barHeight = 8,
+                showDeaths = true,
+                showAffixes = true,
+                showForces = true,
+                showBosses = true,
+                bgColor = { r = 0, g = 0, b = 0, a = 0.5 },
+                borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                borderSize = 1,
+                autoSlotKeystone = false,
+                -- Text colors
+                timerColor = { r = 1, g = 1, b = 1 },
+                timerWarningColor = { r = 1, g = 1, b = 0.2 },
+                timerDepletedColor = { r = 1, g = 0.2, b = 0.2 },
+                timerSuccessColor = { r = 0.2, g = 1, b = 0.2 },
+                deathColor = { r = 1, g = 0.2, b = 0.2 },
+                keyColor = { r = 1, g = 0.82, b = 0 },
+                affixColor = { r = 0.8, g = 0.8, b = 0.8 },
+                bossCompleteColor = { r = 0, g = 1, b = 0 },
+                bossIncompleteColor = { r = 1, g = 1, b = 1 },
+                -- Bar colors
+                barPlusThreeColor = { r = 0.2, g = 0.8, b = 0.2 },
+                barPlusTwoColor = { r = 0.9, g = 0.9, b = 0.2 },
+                barPlusOneColor = { r = 0.9, g = 0.3, b = 0.2 },
+                forcesBarColor = { r = 0.4, g = 0.6, b = 1.0 },
+                forcesTextColor = { r = 0.4, g = 0.8, b = 1.0 },
+                forcesCompleteColor = { r = 0.2, g = 1, b = 0.2 },
             }
         }
 
@@ -486,6 +558,10 @@ local function OnEvent(self, event, ...)
 
         if addonTable.ChatSkin and addonTable.ChatSkin.Initialize then
             addonTable.ChatSkin.Initialize()
+        end
+
+        if addonTable.QuestReminder and addonTable.QuestReminder.Initialize then
+            addonTable.QuestReminder.Initialize()
         end
 
         -- Slash Commands

@@ -209,59 +209,10 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         end
     end)
 
-    local borderColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    borderColorLabel:SetPoint("TOPLEFT", 140, -283)
-    borderColorLabel:SetText("Color:")
-
-    local borderColorSwatch = CreateFrame("Button", nil, panel)
-    borderColorSwatch:SetSize(20, 20)
-    borderColorSwatch:SetPoint("LEFT", borderColorLabel, "RIGHT", 5, 0)
-
-    borderColorSwatch.tex = borderColorSwatch:CreateTexture(nil, "OVERLAY")
-    borderColorSwatch.tex:SetAllPoints()
-    local bc = UIThingsDB.talentReminders.borderColor or { r = 0, g = 0, b = 0, a = 1 }
-    borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-
-    Mixin(borderColorSwatch, BackdropTemplateMixin)
-    borderColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    borderColorSwatch:SetBackdropBorderColor(1, 1, 1)
-
-    borderColorSwatch:SetScript("OnClick", function(self)
-        local info = UIDropDownMenu_CreateInfo()
-        local prevR, prevG, prevB, prevA = bc.r, bc.g, bc.b, bc.a
-
-        info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
-        info.hasOpacity = true
-        info.opacityFunc = function()
-            local r, g, b = ColorPickerFrame:GetColorRGB()
-            local a = ColorPickerFrame:GetColorAlpha()
-            bc.r, bc.g, bc.b, bc.a = r, g, b, a
-            borderColorSwatch.tex:SetColorTexture(r, g, b, a)
-            UIThingsDB.talentReminders.borderColor = bc
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        info.swatchFunc = function()
-            local r, g, b = ColorPickerFrame:GetColorRGB()
-            local a = ColorPickerFrame:GetColorAlpha()
-            bc.r, bc.g, bc.b, bc.a = r, g, b, a
-            borderColorSwatch.tex:SetColorTexture(r, g, b, a)
-            UIThingsDB.talentReminders.borderColor = bc
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        info.cancelFunc = function(previousValues)
-            bc.r, bc.g, bc.b, bc.a = prevR, prevG, prevB, prevA
-            borderColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-            UIThingsDB.talentReminders.borderColor = bc
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        ColorPickerFrame:SetupColorPickerAndShow(info)
-    end)
+    Helpers.CreateColorSwatch(panel, "Color:",
+        UIThingsDB.talentReminders.borderColor,
+        function() if addonTable.TalentReminder then addonTable.TalentReminder.UpdateVisuals() end end,
+        140, -283)
 
     -- Row 2: Background
     local bgCheckbox = CreateFrame("CheckButton", "UIThingsTalentBgCheckbox", panel,
@@ -277,59 +228,10 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         end
     end)
 
-    local bgColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    bgColorLabel:SetPoint("TOPLEFT", 165, -308)
-    bgColorLabel:SetText("Color:")
-
-    local bgColorSwatch = CreateFrame("Button", nil, panel)
-    bgColorSwatch:SetSize(20, 20)
-    bgColorSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 5, 0)
-
-    bgColorSwatch.tex = bgColorSwatch:CreateTexture(nil, "OVERLAY")
-    bgColorSwatch.tex:SetAllPoints()
-    local c = UIThingsDB.talentReminders.backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
-    bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-
-    Mixin(bgColorSwatch, BackdropTemplateMixin)
-    bgColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    bgColorSwatch:SetBackdropBorderColor(1, 1, 1)
-
-    bgColorSwatch:SetScript("OnClick", function(self)
-        local info = UIDropDownMenu_CreateInfo()
-        local prevR, prevG, prevB, prevA = c.r, c.g, c.b, c.a
-
-        info.r, info.g, info.b, info.opacity = prevR, prevG, prevB, prevA
-        info.hasOpacity = true
-        info.opacityFunc = function()
-            local r, g, b = ColorPickerFrame:GetColorRGB()
-            local a = ColorPickerFrame:GetColorAlpha()
-            c.r, c.g, c.b, c.a = r, g, b, a
-            bgColorSwatch.tex:SetColorTexture(r, g, b, a)
-            UIThingsDB.talentReminders.backgroundColor = c
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        info.swatchFunc = function()
-            local r, g, b = ColorPickerFrame:GetColorRGB()
-            local a = ColorPickerFrame:GetColorAlpha()
-            c.r, c.g, c.b, c.a = r, g, b, a
-            bgColorSwatch.tex:SetColorTexture(r, g, b, a)
-            UIThingsDB.talentReminders.backgroundColor = c
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        info.cancelFunc = function(previousValues)
-            c.r, c.g, c.b, c.a = prevR, prevG, prevB, prevA
-            bgColorSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-            UIThingsDB.talentReminders.backgroundColor = c
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end
-        ColorPickerFrame:SetupColorPickerAndShow(info)
-    end)
+    Helpers.CreateColorSwatch(panel, "Color:",
+        UIThingsDB.talentReminders.backgroundColor,
+        function() if addonTable.TalentReminder then addonTable.TalentReminder.UpdateVisuals() end end,
+        165, -308)
 
     -- Difficulty Filter Section
     Helpers.CreateSectionHeader(panel, "Alert Only On These Difficulties", -335)
@@ -516,6 +418,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
         -- Get current zone for zone-specific highlighting
         local currentZone = addonTable.TalentReminder and addonTable.TalentReminder.GetCurrentZone() or nil
+        local currentSubZone = GetSubZoneText() or ""
 
         -- Hide all existing rows first
         for _, row in ipairs(reminderRows) do
@@ -563,11 +466,16 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                             -- Check if this reminder matches current instance/difficulty/zone
                             local isCurrentZone = false
                             if currentInstanceID and currentInstanceID ~= 0 and
-                                currentDifficultyID and
-                                currentZone and currentZone ~= "" then
-                                isCurrentZone = (tonumber(instanceID) == tonumber(currentInstanceID) and
-                                    tonumber(diffID) == tonumber(currentDifficultyID) and
-                                    zoneKey == currentZone)
+                                currentDifficultyID then
+                                local instMatch = tonumber(instanceID) == tonumber(currentInstanceID)
+                                local diffMatch = tonumber(diffID) == tonumber(currentDifficultyID)
+                                local zoneMatch = false
+                                if type(zoneKey) == "string" and zoneKey ~= "" then
+                                    zoneMatch = (zoneKey == currentSubZone)
+                                elseif currentZone then
+                                    zoneMatch = ((tonumber(zoneKey) or 0) == currentZone)
+                                end
+                                isCurrentZone = instMatch and diffMatch and zoneMatch
                             end
 
                             -- Try to find existing entry with same instance, zone, and talents
@@ -579,7 +487,8 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                                     -- Same build - add this difficulty to the list
                                     table.insert(existing.difficulties, {
                                         diffID = diffID,
-                                        difficultyName = reminder.difficulty or "Unknown",
+                                        difficultyName = reminder.difficulty or GetDifficultyInfo(tonumber(diffID)) or
+                                            "Unknown",
                                         isCurrentZone = isCurrentZone
                                     })
                                     -- Update overall isCurrentZone if any difficulty matches
@@ -598,10 +507,48 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                                     isCurrentZone = isCurrentZone,
                                     difficulties = { {
                                         diffID = diffID,
-                                        difficultyName = reminder.difficulty or "Unknown",
+                                        difficultyName = reminder.difficulty or GetDifficultyInfo(tonumber(diffID)) or
+                                            "Unknown",
                                         isCurrentZone = isCurrentZone
                                     } }
                                 })
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- If no zone-specific build matched the current zone, highlight instance-wide
+            -- builds (zone key 0) as the active fallback for that instance/difficulty
+            if currentInstanceID and currentInstanceID ~= 0 and currentDifficultyID then
+                local hasZoneMatch = false
+                for _, entry in ipairs(sortedReminders) do
+                    if entry.isCurrentZone and tonumber(entry.instanceID) == tonumber(currentInstanceID) then
+                        -- Check if any difficulty in this entry matches and is zone-specific
+                        local entryZoneKey = entry.zoneKey
+                        local isZoneSpecific = (type(entryZoneKey) == "string" and entryZoneKey ~= "") or
+                            (type(entryZoneKey) == "number" and entryZoneKey ~= 0 and entryZoneKey < 900000)
+                        if isZoneSpecific then
+                            hasZoneMatch = true
+                            break
+                        end
+                    end
+                end
+
+                if not hasZoneMatch then
+                    -- No zone-specific build matched — promote instance-wide builds
+                    for _, entry in ipairs(sortedReminders) do
+                        if tonumber(entry.instanceID) == tonumber(currentInstanceID) then
+                            local numKey = tonumber(entry.zoneKey) or -1
+                            if numKey == 0 then
+                                -- Check if any of its difficulties match
+                                for _, diff in ipairs(entry.difficulties) do
+                                    if tonumber(diff.diffID) == tonumber(currentDifficultyID) then
+                                        entry.isCurrentZone = true
+                                        diff.isCurrentZone = true
+                                        break
+                                    end
+                                end
                             end
                         end
                     end
@@ -775,8 +722,26 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             end
 
             -- Show zone and "CURRENT ZONE" indicator
+            -- Resolve instance name: saved data → EJ cache → current instance → fallback
+            local displayInstName = reminder.instanceName
+                or (addonTable.TalentManager and addonTable.TalentManager.FindInstanceInCache
+                    and addonTable.TalentManager.FindInstanceInCache(instanceID))
+            if not displayInstName then
+                -- If player is inside this instance, use GetInstanceInfo() as fallback
+                local _, _, _, _, _, _, _, currentInstID = GetInstanceInfo()
+                if currentInstID and tonumber(instanceID) == currentInstID then
+                    local instName = select(1, GetInstanceInfo())
+                    if instName and instName ~= "" then
+                        displayInstName = instName
+                        -- Backfill so it persists
+                        reminder.instanceName = instName
+                    end
+                end
+            end
+            displayInstName = displayInstName
+                or (tonumber(instanceID) ~= 0 and ("Instance " .. tostring(instanceID)) or "Uncategorized")
             local infoText = string.format("Instance: %s | Diff: %s",
-                reminder.instanceName or "Unknown",
+                displayInstName,
                 difficultyText)
             if isCurrentZone then
                 infoText = infoText .. " |cFF00FF00- CURRENT ZONE|r"
@@ -922,19 +887,28 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             return
         end
 
-        local zoneName = location.zoneName or "general"
+        -- Use subzone text as zone key for zone-specific builds (provides boss-area granularity)
+        -- Fall back to 0 (instance-wide) if subzone is empty
+        local subZone = location.subZone or ""
+        local zoneKey = (subZone ~= "") and subZone or 0
+
+        addonTable.Core.Log("TalentReminder", string.format(
+            "Snapshot: instance=%s (%d), diff=%s (%d), subZone='%s', zoneKey=%s, mapID=%s",
+            location.instanceName, location.instanceID,
+            location.difficultyName, location.difficultyID,
+            subZone, tostring(zoneKey), tostring(location.zoneMapID)), 1)
 
         local name
-        if zoneName == "general" or not zoneName then
+        if zoneKey == 0 then
             name = string.format("%s (%s)", location.instanceName, location.difficultyName)
         else
-            name = string.format("%s - %s (%s)", location.instanceName, zoneName, location.difficultyName)
+            name = string.format("%s - %s (%s)", location.instanceName, subZone, location.difficultyName)
         end
 
         local success, err, count = addonTable.TalentReminder.SaveReminder(
             location.instanceID,
             location.difficultyID,
-            zoneName,
+            zoneKey,
             name,
             location.instanceName,
             location.difficultyName,
@@ -942,7 +916,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         )
 
         if success then
+            addonTable.Core.Log("TalentReminder", string.format(
+                "Snapshot saved: '%s' with zoneKey='%s'", name, tostring(zoneKey)), 1)
             RefreshReminderList()
+        else
+            addonTable.Core.Log("TalentReminder", string.format(
+                "Snapshot failed: %s", err or "unknown error"), 2)
         end
     end)
 
@@ -959,8 +938,16 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         local currentZone = addonTable.TalentReminder.GetCurrentZone()
         local location = addonTable.TalentReminder.GetCurrentLocation()
 
+        local zoneDisplayName = "Unknown"
+        if currentZone and currentZone ~= 0 then
+            local mapInfo = C_Map.GetMapInfo(currentZone)
+            zoneDisplayName = mapInfo and mapInfo.name or ("MapID " .. tostring(currentZone))
+        else
+            zoneDisplayName = "None (instance-wide)"
+        end
+
         print("|cFF00FF00[Talent Reminder Test]|r")
-        print(string.format("  Current Zone: |cFFFFFF00%s|r", currentZone or "nil"))
+        print(string.format("  Current Zone: |cFFFFFF00%s|r (mapID: %s)", zoneDisplayName, tostring(currentZone)))
         print(string.format("  Instance: |cFFFFFF00%s|r (ID: %s)",
             location and location.instanceName or "Unknown",
             location and location.instanceID or "nil"))
@@ -987,13 +974,13 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
             local priorityList = {}
 
-            if currentZone and currentZone ~= "" and zoneReminders[currentZone] then
+            if currentZone and currentZone ~= 0 and zoneReminders[currentZone] then
                 table.insert(priorityList,
                     { zoneKey = currentZone, reminder = zoneReminders[currentZone], priority = 1 })
             end
 
-            if zoneReminders["general"] then
-                table.insert(priorityList, { zoneKey = "general", reminder = zoneReminders["general"], priority = 2 })
+            if zoneReminders[0] then
+                table.insert(priorityList, { zoneKey = 0, reminder = zoneReminders[0], priority = 2 })
             end
 
             table.sort(priorityList, function(a, b) return a.priority < b.priority end)
@@ -1009,8 +996,18 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 else
                     checkedCount = checkedCount + 1
 
+                    local zoneDisplay = "Instance-wide"
+                    if type(zoneKey) == "string" and zoneKey ~= "" then
+                        zoneDisplay = zoneKey
+                    else
+                        local numZK = tonumber(zoneKey) or 0
+                        if numZK ~= 0 and numZK < 900000 then
+                            local mi = C_Map.GetMapInfo(numZK)
+                            zoneDisplay = mi and mi.name or ("MapID " .. tostring(numZK))
+                        end
+                    end
                     print(string.format("    - Reminder: |cFFFFAA00%s|r (Zone: |cFFFFFF00%s|r)",
-                        reminder.name or "Unknown", zoneKey))
+                        reminder.name or "Unknown", zoneDisplay))
 
                     local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
                     if #mismatches > 0 then

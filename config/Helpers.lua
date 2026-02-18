@@ -3,6 +3,62 @@ addonTable.ConfigHelpers = {}
 
 local Helpers = addonTable.ConfigHelpers
 
+-- ============================================================
+-- Shared Difficulty Constants
+-- ============================================================
+Helpers.RAID_DIFFICULTIES = { [17] = "LFR", [14] = "Normal", [15] = "Heroic", [16] = "Mythic" }
+Helpers.DUNGEON_DIFFICULTIES = { [1] = "Normal", [2] = "Heroic", [23] = "Mythic", [8] = "Mythic Keystone" }
+Helpers.RAID_DIFF_ORDER = { 17, 14, 15, 16 }
+Helpers.DUNGEON_DIFF_ORDER = { 1, 2, 23, 8 }
+
+function Helpers.IsRaidDifficulty(diffID)
+    return Helpers.RAID_DIFFICULTIES[tonumber(diffID)] ~= nil
+end
+
+function Helpers.IsDungeonDifficulty(diffID)
+    return Helpers.DUNGEON_DIFFICULTIES[tonumber(diffID)] ~= nil
+end
+
+-- ============================================================
+-- Shared Utilities
+-- ============================================================
+
+function Helpers.DeepCopy(t)
+    if type(t) ~= "table" then return t end
+    local copy = {}
+    for k, v in pairs(t) do
+        copy[k] = Helpers.DeepCopy(v)
+    end
+    return copy
+end
+
+function Helpers.ApplyFrameBackdrop(frame, showBorder, borderColor, showBackground, backgroundColor)
+    if showBorder or showBackground then
+        frame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            tile = false,
+            tileSize = 0,
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        if showBackground then
+            local c = backgroundColor or { r = 0, g = 0, b = 0, a = 0.8 }
+            frame:SetBackdropColor(c.r, c.g, c.b, c.a)
+        else
+            frame:SetBackdropColor(0, 0, 0, 0)
+        end
+        if showBorder then
+            local bc = borderColor or { r = 1, g = 1, b = 1, a = 1 }
+            frame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
+        else
+            frame:SetBackdropBorderColor(0, 0, 0, 0)
+        end
+    else
+        frame:SetBackdrop(nil)
+    end
+end
+
 --- Build comprehensive font list
 -- Combines known default fonts with dynamically discovered fonts from GetFonts()
 -- @return table Array of {name, path} tables

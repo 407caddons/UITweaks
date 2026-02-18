@@ -324,6 +324,10 @@ local DPS_ICON = CreateAtlasMarkup("roleicon-tiny-dps")
 table.insert(Widgets.moduleInits, function()
     local groupFrame = Widgets.CreateWidgetFrame("Group", "group")
 
+    -- Ready check state (must be declared before OnEnter closure)
+    local readyCheckActive = false
+    local readyCheckResponses = {} -- unit -> "ready" | "notready" | "waiting"
+
     groupFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
         Widgets.SmartAnchorTooltip(self)
@@ -386,14 +390,14 @@ table.insert(Widgets.moduleInits, function()
                             if IsGuildMember(UnitGUID(data.unit)) then relationship = relationship .. "(G)" end
                         end
 
-                        -- Role Icon
+                        -- Role Icon (use cached constants)
                         local roleIcon = ""
                         if data.role == "TANK" then
-                            roleIcon = CreateAtlasMarkup("roleicon-tiny-tank") .. " "
+                            roleIcon = TANK_ICON .. " "
                         elseif data.role == "HEALER" then
-                            roleIcon = CreateAtlasMarkup("roleicon-tiny-healer") .. " "
+                            roleIcon = HEALER_ICON .. " "
                         elseif data.role == "DAMAGER" then
-                            roleIcon = CreateAtlasMarkup("roleicon-tiny-dps") .. " "
+                            roleIcon = DPS_ICON .. " "
                         end
 
                         if classColor then
@@ -458,10 +462,6 @@ table.insert(Widgets.moduleInits, function()
             end)
         end
     end)
-
-    -- Ready check state
-    local readyCheckActive = false
-    local readyCheckResponses = {} -- unit -> "ready" | "notready" | "waiting"
 
     -- Cached group composition (updated on events, not every second)
     local cachedTanks, cachedHealers, cachedDps, cachedMembers = 0, 0, 0, 0

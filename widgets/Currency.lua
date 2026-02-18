@@ -1,15 +1,14 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 
--- Common currencies (TWW Season 1)
+-- Common currencies (TWW Season 3)
 local DEFAULT_CURRENCIES = {
-    3089, -- Resonance Crystals
-    2917, -- Valorstones
-    2914, -- Weathered Harbinger Crest
-    2915, -- Carved Harbinger Crest
-    2916, -- Runed Harbinger Crest
-    2245, -- Flightstones (if still used)
-    2806, -- Whelpling's Awakened Crest (example)
+    3008, -- Valorstones
+    3056, -- Kej
+    3285, -- Weathered Ethereal Crest
+    3287, -- Carved Ethereal Crest
+    3289, -- Runed Ethereal Crest
+    3290, -- Gilded Ethereal Crest
 }
 
 table.insert(Widgets.moduleInits, function()
