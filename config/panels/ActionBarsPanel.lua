@@ -69,6 +69,7 @@ local OFFSET_BARS = {
 }
 
 function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
+    Helpers.CreateResetButton(panel, "actionBars")
     Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.actionBars.enabled)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")

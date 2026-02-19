@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local durabilityFrame = Widgets.CreateWidgetFrame("Durability", "durability")
@@ -8,30 +9,32 @@ table.insert(Widgets.moduleInits, function()
     local cachedRepairCost = nil
     local merchantOpen = false
 
-    local repairEventFrame = CreateFrame("Frame")
-    repairEventFrame:RegisterEvent("MERCHANT_SHOW")
-    repairEventFrame:RegisterEvent("MERCHANT_CLOSED")
-    repairEventFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-    repairEventFrame:SetScript("OnEvent", function(self, event)
-        if event == "MERCHANT_SHOW" then
-            merchantOpen = true
-            if CanMerchantRepair() then
-                local cost, canRepair = GetRepairAllCost()
-                if canRepair then
-                    cachedRepairCost = cost
-                end
-            end
-        elseif event == "MERCHANT_CLOSED" then
-            merchantOpen = false
-        elseif event == "UPDATE_INVENTORY_DURABILITY" then
-            if merchantOpen and CanMerchantRepair() then
-                local cost, canRepair = GetRepairAllCost()
-                if canRepair then
-                    cachedRepairCost = cost
-                end
+    local function OnMerchantShow()
+        merchantOpen = true
+        if CanMerchantRepair() then
+            local cost, canRepair = GetRepairAllCost()
+            if canRepair then
+                cachedRepairCost = cost
             end
         end
-    end)
+    end
+
+    local function OnMerchantClosed()
+        merchantOpen = false
+    end
+
+    local function OnInventoryDurability()
+        if merchantOpen and CanMerchantRepair() then
+            local cost, canRepair = GetRepairAllCost()
+            if canRepair then
+                cachedRepairCost = cost
+            end
+        end
+    end
+
+    EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
+    EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
+    EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability)
 
     durabilityFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end

@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local pullFrame = Widgets.CreateWidgetFrame("PullCounter", "pullCounter")
@@ -22,71 +23,69 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("ENCOUNTER_START")
-    eventFrame:RegisterEvent("ENCOUNTER_END")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:SetScript("OnEvent", function(self, event, ...)
+    local function OnEncounterStart(event, encounterID, encounterName)
         if not UIThingsDB.widgets.pullCounter.enabled then return end
+        sessionData.totalPulls = sessionData.totalPulls + 1
 
-        if event == "ENCOUNTER_START" then
-            local encounterID, encounterName, difficultyID, groupSize = ...
-            sessionData.totalPulls = sessionData.totalPulls + 1
-
-            if not sessionData.bosses[encounterID] then
-                sessionData.bosses[encounterID] = {
-                    name = encounterName,
-                    pulls = 0,
-                    kills = 0,
-                    wipes = 0,
-                    bestTime = nil,
-                }
-            end
-
-            local boss = sessionData.bosses[encounterID]
-            boss.pulls = boss.pulls + 1
-            boss.lastPullStart = GetTime()
-
-            sessionData.currentEncounter = {
-                id = encounterID,
+        if not sessionData.bosses[encounterID] then
+            sessionData.bosses[encounterID] = {
                 name = encounterName,
-                startTime = GetTime(),
+                pulls = 0,
+                kills = 0,
+                wipes = 0,
+                bestTime = nil,
             }
-            RefreshCache()
-        elseif event == "ENCOUNTER_END" then
-            local encounterID, encounterName, difficultyID, groupSize, success = ...
-            local boss = sessionData.bosses[encounterID]
-
-            if boss and boss.lastPullStart then
-                local duration = GetTime() - boss.lastPullStart
-                if success == 1 then
-                    boss.kills = boss.kills + 1
-                    if not boss.bestTime or duration < boss.bestTime then
-                        boss.bestTime = duration
-                    end
-                else
-                    boss.wipes = boss.wipes + 1
-                end
-                boss.lastPullStart = nil
-            end
-
-            sessionData.currentEncounter = nil
-            RefreshCache()
-        elseif event == "PLAYER_ENTERING_WORLD" then
-            -- Clear stale encounter on reload (GetTime epoch resets)
-            sessionData.currentEncounter = nil
-            RefreshCache()
         end
-    end)
 
-    pullFrame.eventFrame = eventFrame
+        local boss = sessionData.bosses[encounterID]
+        boss.pulls = boss.pulls + 1
+        boss.lastPullStart = GetTime()
+
+        sessionData.currentEncounter = {
+            id = encounterID,
+            name = encounterName,
+            startTime = GetTime(),
+        }
+        RefreshCache()
+    end
+
+    local function OnEncounterEnd(event, encounterID, encounterName, difficultyID, groupSize, success)
+        if not UIThingsDB.widgets.pullCounter.enabled then return end
+        local boss = sessionData.bosses[encounterID]
+
+        if boss and boss.lastPullStart then
+            local duration = GetTime() - boss.lastPullStart
+            if success == 1 then
+                boss.kills = boss.kills + 1
+                if not boss.bestTime or duration < boss.bestTime then
+                    boss.bestTime = duration
+                end
+            else
+                boss.wipes = boss.wipes + 1
+            end
+            boss.lastPullStart = nil
+        end
+
+        sessionData.currentEncounter = nil
+        RefreshCache()
+    end
+
+    local function OnPullCounterEnteringWorld()
+        if not UIThingsDB.widgets.pullCounter.enabled then return end
+        -- Clear stale encounter on reload (GetTime epoch resets)
+        sessionData.currentEncounter = nil
+        RefreshCache()
+    end
+
     pullFrame.ApplyEvents = function(enabled)
         if enabled then
-            eventFrame:RegisterEvent("ENCOUNTER_START")
-            eventFrame:RegisterEvent("ENCOUNTER_END")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("ENCOUNTER_START", OnEncounterStart)
+            EventBus.Register("ENCOUNTER_END", OnEncounterEnd)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnPullCounterEnteringWorld)
         else
-            eventFrame:UnregisterAllEvents()
+            EventBus.Unregister("ENCOUNTER_START", OnEncounterStart)
+            EventBus.Unregister("ENCOUNTER_END", OnEncounterEnd)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPullCounterEnteringWorld)
         end
     end
 

@@ -3,6 +3,7 @@ local MplusTimer = {}
 addonTable.MplusTimer = MplusTimer
 
 local Log = addonTable.Core.Log
+local OnChallengeEvent
 
 -- ============================================================
 -- Utility
@@ -40,6 +41,7 @@ local state = {
     mapId = nil,
     deathCount = 0,
     deathTimeLost = 0, -- milliseconds
+    deathLog = {},     -- { [playerName] = count }
     currentCount = 0,
     totalCount = 100,
     objectives = {}, -- { name, time, completed }
@@ -64,6 +66,7 @@ local function ResetState()
     state.mapId = nil
     state.deathCount = 0
     state.deathTimeLost = 0
+    wipe(state.deathLog)
     state.currentCount = 0
     state.totalCount = 100
     state.objectives = {}
@@ -77,8 +80,9 @@ end
 -- Frame Creation
 -- ============================================================
 local mainFrame
+local deathsFrame -- invisible hover frame for death tooltip
 local deathsText, timerText, keyText, affixText
-local bars = {} -- bars[1]=+3, bars[2]=+2, bars[3]=+1
+local bars = {}   -- bars[1]=+3, bars[2]=+2, bars[3]=+1
 local barTexts = {}
 local forcesBar, forcesText
 local bossTexts = {}
@@ -140,6 +144,52 @@ local function InitFrames()
     deathsText:SetFont(fontPath, fontSize, "OUTLINE")
     deathsText:SetPoint("TOPLEFT", 10, -8)
     deathsText:SetJustifyH("LEFT")
+
+    -- Invisible frame over deaths text for tooltip
+    deathsFrame = CreateFrame("Frame", nil, mainFrame)
+    deathsFrame:SetPoint("TOPLEFT", deathsText, "TOPLEFT", 0, 0)
+    deathsFrame:SetPoint("BOTTOMRIGHT", deathsText, "BOTTOMRIGHT", 0, 0)
+    deathsFrame:EnableMouse(true)
+    deathsFrame:SetScript("OnEnter", function(self)
+        if state.deathCount == 0 or not next(state.deathLog) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip:SetText("Deaths", 1, 0.2, 0.2)
+        local penaltySec = math.floor(state.deathTimeLost / 1000)
+        GameTooltip:AddLine(string.format("Total: %d (%ds penalty)", state.deathCount, penaltySec), 0.8, 0.8, 0.8)
+        GameTooltip:AddLine(" ")
+        -- Sort by death count descending
+        local sorted = {}
+        for name, count in pairs(state.deathLog) do
+            table.insert(sorted, { name = name, count = count })
+        end
+        table.sort(sorted, function(a, b)
+            if a.count ~= b.count then return a.count > b.count end
+            return a.name < b.name
+        end)
+        for _, entry in ipairs(sorted) do
+            local classColor
+            -- Try to find class color from group
+            for i = 1, GetNumGroupMembers() do
+                local unit = IsInRaid() and "raid" .. i or (i == GetNumGroupMembers() and "player" or "party" .. i)
+                local name = GetUnitName(unit, false)
+                if name == entry.name then
+                    local _, className = UnitClass(unit)
+                    if className then
+                        classColor = C_ClassColor.GetClassColor(className)
+                    end
+                    break
+                end
+            end
+            if classColor then
+                GameTooltip:AddDoubleLine(entry.name, entry.count .. "x", classColor.r, classColor.g, classColor.b, 1, 1,
+                    1)
+            else
+                GameTooltip:AddDoubleLine(entry.name, entry.count .. "x", 1, 1, 1, 1, 1, 1)
+            end
+        end
+        GameTooltip:Show()
+    end)
+    deathsFrame:SetScript("OnLeave", GameTooltip_Hide)
 
     -- Timer text (large, right)
     timerText = mainFrame:CreateFontString(nil, "OVERLAY")
@@ -648,26 +698,25 @@ end
 -- ============================================================
 -- Challenge Mode Management
 -- ============================================================
-local challengeEventFrame
+-- Bridge: OnChallengeEvent uses (self, event, ...) but EventBus uses (event, ...)
+local function OnChallengeEventBus(event, ...) OnChallengeEvent(nil, event, ...) end
 
 local function RegisterChallengeEvents()
-    if not challengeEventFrame then return end
-    challengeEventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-    challengeEventFrame:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
-    challengeEventFrame:RegisterEvent("WORLD_STATE_TIMER_START")
-    challengeEventFrame:RegisterEvent("SCENARIO_POI_UPDATE")
-    challengeEventFrame:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
-    challengeEventFrame:RegisterEvent("ENCOUNTER_END")
+    addonTable.EventBus.Register("CHALLENGE_MODE_COMPLETED", OnChallengeEventBus)
+    addonTable.EventBus.Register("CHALLENGE_MODE_DEATH_COUNT_UPDATED", OnChallengeEventBus)
+    addonTable.EventBus.Register("WORLD_STATE_TIMER_START", OnChallengeEventBus)
+    addonTable.EventBus.Register("SCENARIO_POI_UPDATE", OnChallengeEventBus)
+    addonTable.EventBus.Register("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus)
+    addonTable.EventBus.Register("ENCOUNTER_END", OnChallengeEventBus)
 end
 
 local function UnregisterChallengeEvents()
-    if not challengeEventFrame then return end
-    challengeEventFrame:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
-    challengeEventFrame:UnregisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
-    challengeEventFrame:UnregisterEvent("WORLD_STATE_TIMER_START")
-    challengeEventFrame:UnregisterEvent("SCENARIO_POI_UPDATE")
-    challengeEventFrame:UnregisterEvent("SCENARIO_CRITERIA_UPDATE")
-    challengeEventFrame:UnregisterEvent("ENCOUNTER_END")
+    addonTable.EventBus.Unregister("CHALLENGE_MODE_COMPLETED", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("CHALLENGE_MODE_DEATH_COUNT_UPDATED", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("WORLD_STATE_TIMER_START", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("SCENARIO_POI_UPDATE", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("ENCOUNTER_END", OnChallengeEventBus)
 end
 
 local function EnableChallengeMode()
@@ -747,15 +796,28 @@ end
 -- ============================================================
 -- Event Handling
 -- ============================================================
-local function OnChallengeEvent(self, event, ...)
+OnChallengeEvent = function(self, event, ...)
     if not state.inChallenge and not state.demoMode then return end
 
     if event == "CHALLENGE_MODE_COMPLETED" then
         CompleteChallenge()
     elseif event == "CHALLENGE_MODE_DEATH_COUNT_UPDATED" then
         local deathCount, timeLost = C_ChallengeMode.GetDeathCount()
+        local prevCount = state.deathCount
         state.deathCount = deathCount or 0
         state.deathTimeLost = timeLost or 0
+        -- If death count increased, scan for who is dead
+        if state.deathCount > prevCount then
+            local members = GetNumGroupMembers()
+            for i = 1, members do
+                local unit = "party" .. i
+                if i == members then unit = "player" end
+                local name = GetUnitName(unit, false)
+                if name and UnitIsDeadOrGhost(unit) then
+                    state.deathLog[name] = (state.deathLog[name] or 0) + 1
+                end
+            end
+        end
         RenderDeaths()
     elseif event == "WORLD_STATE_TIMER_START" then
         state.timerStarted = true
@@ -770,7 +832,7 @@ local function OnChallengeEvent(self, event, ...)
     end
 end
 
-local function OnGlobalEvent(self, event, ...)
+local function OnGlobalEvent(event, ...)
     if not UIThingsDB.mplusTimer or not UIThingsDB.mplusTimer.enabled then return end
 
     if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
@@ -814,6 +876,9 @@ function MplusTimer.ToggleDemo()
     state.affixes = { "Ascendance", "Tyrannical", "Fortified", "Peril" }
     state.deathCount = 3
     state.deathTimeLost = 45000 -- 45s in ms
+    wipe(state.deathLog)
+    state.deathLog["DemoTank"] = 1
+    state.deathLog["DemoHealer"] = 2
     state.currentCount = 0
     state.totalCount = 100
     state.objectives = {
@@ -860,54 +925,39 @@ end
 -- ============================================================
 -- Initialization
 -- ============================================================
-local globalFrame = CreateFrame("Frame")
-globalFrame:RegisterEvent("PLAYER_LOGIN")
-globalFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_LOGIN" then
-        self:UnregisterEvent("PLAYER_LOGIN")
+local globalEventsRegistered = false
 
-        C_Timer.After(1, function()
-            if not UIThingsDB.mplusTimer or not UIThingsDB.mplusTimer.enabled then return end
+local function RegisterGlobalEvents()
+    if globalEventsRegistered then return end
+    globalEventsRegistered = true
+    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnGlobalEvent)
+    addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnGlobalEvent)
+    addonTable.EventBus.Register("CHALLENGE_MODE_START", OnGlobalEvent)
+end
 
-            InitFrames()
+local function OnPlayerLogin()
+    addonTable.EventBus.Unregister("PLAYER_LOGIN", OnPlayerLogin)
 
-            -- Challenge event frame
-            challengeEventFrame = CreateFrame("Frame")
-            challengeEventFrame:SetScript("OnEvent", OnChallengeEvent)
-
-            -- Global events
-            self:RegisterEvent("PLAYER_ENTERING_WORLD")
-            self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-            self:RegisterEvent("CHALLENGE_MODE_START")
-            self:SetScript("OnEvent", OnGlobalEvent)
-
-            CheckForChallengeMode()
-        end)
-    end
-end)
+    C_Timer.After(1, function()
+        if not UIThingsDB.mplusTimer or not UIThingsDB.mplusTimer.enabled then return end
+        InitFrames()
+        RegisterGlobalEvents()
+        CheckForChallengeMode()
+    end)
+end
+addonTable.EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
 
 -- Ensure frames are created even if enabled later via config
 function MplusTimer.EnsureInit()
     InitFrames()
-    if not challengeEventFrame then
-        challengeEventFrame = CreateFrame("Frame")
-        challengeEventFrame:SetScript("OnEvent", OnChallengeEvent)
-    end
-
-    globalFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    globalFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    globalFrame:RegisterEvent("CHALLENGE_MODE_START")
-    globalFrame:SetScript("OnEvent", OnGlobalEvent)
-
+    RegisterGlobalEvents()
     CheckForChallengeMode()
 end
 
 -- ============================================================
 -- Auto-Slot Keystone (always active, independent of timer)
 -- ============================================================
-local keystoneSlotFrame = CreateFrame("Frame")
-keystoneSlotFrame:RegisterEvent("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
-keystoneSlotFrame:SetScript("OnEvent", function()
+addonTable.EventBus.Register("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN", function()
     if not UIThingsDB or not UIThingsDB.mplusTimer or not UIThingsDB.mplusTimer.autoSlotKeystone then return end
 
     local difficulty = select(3, GetInstanceInfo())

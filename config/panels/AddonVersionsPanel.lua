@@ -450,6 +450,10 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     exportSettingsBtn:SetText("Export")
     exportSettingsBtn:SetScript("OnClick", ShowExportDialog)
 
+    -- Reset All button
+    local resetAllBtn = Helpers.CreateResetAllButton(panel)
+    resetAllBtn:SetPoint("LEFT", exportSettingsBtn, "RIGHT", 5, 0)
+
     -- Column headers
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     nameHeader:SetPoint("TOPLEFT", refreshBtn, "BOTTOMLEFT", 0, -10)

@@ -3,8 +3,7 @@ local QuestAuto = {}
 addonTable.QuestAuto = QuestAuto
 
 local Log = addonTable.Core.Log
-
-local frame = CreateFrame("Frame")
+local EventBus = addonTable.EventBus
 
 -- Track gossip selections to prevent loops within the same NPC interaction
 local lastGossipOptionID = nil
@@ -20,9 +19,12 @@ end
 
 -- GOSSIP_SHOW: NPC gossip window
 local function HandleGossipShow()
-    local settings = UIThingsDB.questAuto
+    local settings     = UIThingsDB.questAuto
+    local numActive    = C_GossipInfo.GetNumActiveQuests()
+    local numAvailable = C_GossipInfo.GetNumAvailableQuests()
+    local options      = C_GossipInfo.GetOptions()
 
-    -- Handle quest lists on gossip NPCs (turn-in and accept)
+    -- Turn in completed quests first (highest priority)
     if settings.autoTurnIn then
         for _, questInfo in pairs(C_GossipInfo.GetActiveQuests()) do
             if questInfo.isComplete then
@@ -32,6 +34,7 @@ local function HandleGossipShow()
         end
     end
 
+    -- Accept available quests next
     if settings.autoAcceptQuests then
         for _, questInfo in pairs(C_GossipInfo.GetAvailableQuests()) do
             if ShouldAcceptQuest(questInfo.questID) then
@@ -41,19 +44,11 @@ local function HandleGossipShow()
         end
     end
 
-    -- Handle gossip options: auto-select if exactly one option
+    -- Only auto-select a gossip option if there are no quests on this NPC
     if settings.autoGossip then
-        -- Don't auto-select gossip if the NPC also has quests
-        if (C_GossipInfo.GetNumActiveQuests() + C_GossipInfo.GetNumAvailableQuests()) > 0 then
-            return
-        end
-
-        local options = C_GossipInfo.GetOptions()
+        if numActive + numAvailable > 0 then return end
         if #options == 1 and options[1].gossipOptionID then
-            -- Skip if we already selected this option (prevents loop)
-            if options[1].gossipOptionID == lastGossipOptionID then
-                return
-            end
+            if options[1].gossipOptionID == lastGossipOptionID then return end
             lastGossipOptionID = options[1].gossipOptionID
             C_GossipInfo.SelectOption(options[1].gossipOptionID)
         end
@@ -128,68 +123,81 @@ local function HandleQuestComplete()
     end
 end
 
--- Event handler
-local function OnEvent(self, event, ...)
+-- Named callbacks for EventBus registration/unregistration
+local function OnGossipShow()
     if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
-
-    -- Hold Shift to pause all automation for this interaction
     if UIThingsDB.questAuto.shiftToPause and IsShiftKeyDown() then return end
-
-    if event == "GOSSIP_SHOW" then
-        HandleGossipShow()
-    elseif event == "GOSSIP_CLOSED" then
-        lastGossipOptionID = nil
-    elseif event == "QUEST_GREETING" then
-        HandleQuestGreeting()
-    elseif event == "QUEST_DETAIL" then
-        HandleQuestDetail()
-    elseif event == "QUEST_PROGRESS" then
-        HandleQuestProgress()
-    elseif event == "QUEST_COMPLETE" then
-        HandleQuestComplete()
-    end
+    HandleGossipShow()
 end
 
-frame:SetScript("OnEvent", OnEvent)
+local function OnGossipClosed()
+    if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
+    lastGossipOptionID = nil
+end
+
+local function OnQuestGreeting()
+    if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
+    if UIThingsDB.questAuto.shiftToPause and IsShiftKeyDown() then return end
+    HandleQuestGreeting()
+end
+
+local function OnQuestDetail()
+    if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
+    if UIThingsDB.questAuto.shiftToPause and IsShiftKeyDown() then return end
+    HandleQuestDetail()
+end
+
+local function OnQuestProgress()
+    if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
+    if UIThingsDB.questAuto.shiftToPause and IsShiftKeyDown() then return end
+    HandleQuestProgress()
+end
+
+local function OnQuestComplete()
+    if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then return end
+    if UIThingsDB.questAuto.shiftToPause and IsShiftKeyDown() then return end
+    HandleQuestComplete()
+end
 
 -- Apply event registration based on settings
 local function ApplyEvents()
     if not UIThingsDB.questAuto or not UIThingsDB.questAuto.enabled then
-        frame:UnregisterEvent("GOSSIP_SHOW")
-        frame:UnregisterEvent("QUEST_GREETING")
-        frame:UnregisterEvent("QUEST_DETAIL")
-        frame:UnregisterEvent("QUEST_PROGRESS")
-        frame:UnregisterEvent("QUEST_COMPLETE")
+        EventBus.Unregister("GOSSIP_SHOW", OnGossipShow)
+        EventBus.Unregister("GOSSIP_CLOSED", OnGossipClosed)
+        EventBus.Unregister("QUEST_GREETING", OnQuestGreeting)
+        EventBus.Unregister("QUEST_DETAIL", OnQuestDetail)
+        EventBus.Unregister("QUEST_PROGRESS", OnQuestProgress)
+        EventBus.Unregister("QUEST_COMPLETE", OnQuestComplete)
         return
     end
 
     if UIThingsDB.questAuto.autoGossip or UIThingsDB.questAuto.autoAcceptQuests or UIThingsDB.questAuto.autoTurnIn then
-        frame:RegisterEvent("GOSSIP_SHOW")
-        frame:RegisterEvent("GOSSIP_CLOSED")
+        EventBus.Register("GOSSIP_SHOW", OnGossipShow)
+        EventBus.Register("GOSSIP_CLOSED", OnGossipClosed)
     else
-        frame:UnregisterEvent("GOSSIP_SHOW")
-        frame:UnregisterEvent("GOSSIP_CLOSED")
+        EventBus.Unregister("GOSSIP_SHOW", OnGossipShow)
+        EventBus.Unregister("GOSSIP_CLOSED", OnGossipClosed)
         lastGossipOptionID = nil
     end
 
     if UIThingsDB.questAuto.autoAcceptQuests or UIThingsDB.questAuto.autoTurnIn then
-        frame:RegisterEvent("QUEST_GREETING")
+        EventBus.Register("QUEST_GREETING", OnQuestGreeting)
     else
-        frame:UnregisterEvent("QUEST_GREETING")
+        EventBus.Unregister("QUEST_GREETING", OnQuestGreeting)
     end
 
     if UIThingsDB.questAuto.autoAcceptQuests then
-        frame:RegisterEvent("QUEST_DETAIL")
+        EventBus.Register("QUEST_DETAIL", OnQuestDetail)
     else
-        frame:UnregisterEvent("QUEST_DETAIL")
+        EventBus.Unregister("QUEST_DETAIL", OnQuestDetail)
     end
 
     if UIThingsDB.questAuto.autoTurnIn then
-        frame:RegisterEvent("QUEST_PROGRESS")
-        frame:RegisterEvent("QUEST_COMPLETE")
+        EventBus.Register("QUEST_PROGRESS", OnQuestProgress)
+        EventBus.Register("QUEST_COMPLETE", OnQuestComplete)
     else
-        frame:UnregisterEvent("QUEST_PROGRESS")
-        frame:UnregisterEvent("QUEST_COMPLETE")
+        EventBus.Unregister("QUEST_PROGRESS", OnQuestProgress)
+        EventBus.Unregister("QUEST_COMPLETE", OnQuestComplete)
     end
 end
 
@@ -197,10 +205,9 @@ function QuestAuto.UpdateSettings()
     ApplyEvents()
 end
 
--- Initialize on PLAYER_ENTERING_WORLD
-local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-initFrame:SetScript("OnEvent", function(self)
-    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+-- Initialize on PLAYER_ENTERING_WORLD (one-shot)
+local function OnInitEnteringWorld()
+    EventBus.Unregister("PLAYER_ENTERING_WORLD", OnInitEnteringWorld)
     ApplyEvents()
-end)
+end
+EventBus.Register("PLAYER_ENTERING_WORLD", OnInitEnteringWorld)

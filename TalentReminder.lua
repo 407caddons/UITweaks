@@ -26,8 +26,6 @@ function TalentReminder.Initialize()
 
     TalentReminder.CreateAlertFrame()
 
-    TalentReminder.eventFrame = CreateFrame("Frame")
-    TalentReminder.eventFrame:SetScript("OnEvent", TalentReminder.OnEvent)
     TalentReminder.ApplyEvents()
 
     -- Clean up legacy data
@@ -35,85 +33,68 @@ function TalentReminder.Initialize()
 end
 
 function TalentReminder.ApplyEvents()
-    if not TalentReminder.eventFrame then return end
+    local EventBus = addonTable.EventBus
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
-        TalentReminder.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        TalentReminder.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        TalentReminder.eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
-        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED")
-        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-        TalentReminder.eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        EventBus.Register("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent)
+        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent)
+        EventBus.Register("TRAIT_CONFIG_UPDATED", TalentReminder.OnTalentChangeEvent)
+        EventBus.Register("ZONE_CHANGED", TalentReminder.OnZoneChangedEvent)
+        EventBus.Register("ZONE_CHANGED_INDOORS", TalentReminder.OnZoneChangedEvent)
+        EventBus.Register("ZONE_CHANGED_NEW_AREA", TalentReminder.OnZoneChangedEvent)
     else
-        TalentReminder.eventFrame:UnregisterAllEvents()
+        EventBus.Unregister("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent)
+        EventBus.Unregister("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent)
+        EventBus.Unregister("TRAIT_CONFIG_UPDATED", TalentReminder.OnTalentChangeEvent)
+        EventBus.Unregister("ZONE_CHANGED", TalentReminder.OnZoneChangedEvent)
+        EventBus.Unregister("ZONE_CHANGED_INDOORS", TalentReminder.OnZoneChangedEvent)
+        EventBus.Unregister("ZONE_CHANGED_NEW_AREA", TalentReminder.OnZoneChangedEvent)
         if alertFrame and alertFrame:IsShown() then
             TalentReminder.ReleaseAlertFrame()
         end
     end
 end
 
--- Cleanup legacy fields from saved variables
+-- Cleanup legacy data and convert to array format
 function TalentReminder.CleanupSavedVariables()
     if not LunaUITweaks_TalentReminders or not LunaUITweaks_TalentReminders.reminders then return end
 
-    local count = 0
-    for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
-        for difficultyID, difficulties in pairs(reminders) do
-            for bossID, reminder in pairs(difficulties) do
-                -- Remove unused top-level fields
-                if reminder.instanceName then
-                    reminder.instanceName = nil
-                    count = count + 1
-                end
-                if reminder.difficulty then
-                    reminder.difficulty = nil
-                    count = count + 1
-                end
-                if reminder.minKeystoneLevel then
-                    reminder.minKeystoneLevel = nil
-                    count = count + 1
-                end
-
-                -- Remove 'row' from talents
-                if reminder.talents then
-                    for _, talent in pairs(reminder.talents) do
-                        if talent.row then
-                            talent.row = nil
-                            count = count + 1
-                        end
-                    end
+    local migrated = 0
+    for instanceID, diffs in pairs(LunaUITweaks_TalentReminders.reminders) do
+        for diffID, zones in pairs(diffs) do
+            for zoneKey, value in pairs(zones) do
+                if type(value) == "table" and value.talents then
+                    -- Old format (single object, not array) — wrap in array
+                    zones[zoneKey] = { value }
+                    migrated = migrated + 1
                 end
             end
         end
     end
 
-    if count > 0 then
-        addonTable.Core.Log("TalentReminder", "Cleaned up " .. count .. " unused fields from saved variables", 0)
+    if migrated > 0 then
+        addonTable.Core.Log("TalentReminder",
+            "Migrated " .. migrated .. " talent builds to new format", 1)
     end
-
-    -- Note: String zone keys are now intentional (subzone text for boss-area granularity).
-    -- The old migration that converted string keys to 0 has been removed.
 end
 
--- Event handler
-function TalentReminder.OnEvent(self, event, ...)
-    if event == "PLAYER_ENTERING_WORLD" then
-        local isInitialLogin, isReloadingUi = ...
-        TalentReminder.OnEnteringWorld()
-    elseif event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
-        -- Re-check talents after a delay to let talent data update
-        addonTable.Core.SafeAfter(1.0, function()
-            -- Update instance info in case it changed
-            local _, _, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
-            currentInstanceID = instanceID
-            currentDifficultyID = difficultyID
-            lastZone = nil -- Force zone re-evaluation
-            lastSubZone = nil
-            TalentReminder.CheckTalentsInInstance()
-        end)
-    elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
-        -- Zone changed - check if we need to show an alert
-        TalentReminder.OnZoneChanged()
-    end
+-- Named callbacks for EventBus
+function TalentReminder.OnEnteringWorldEvent()
+    TalentReminder.OnEnteringWorld()
+end
+
+function TalentReminder.OnTalentChangeEvent()
+    addonTable.Core.SafeAfter(1.0, function()
+        local _, _, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
+        currentInstanceID = instanceID
+        currentDifficultyID = difficultyID
+        lastZone = nil
+        lastSubZone = nil
+        TalentReminder.CheckTalentsInInstance()
+    end)
+end
+
+function TalentReminder.OnZoneChangedEvent()
+    TalentReminder.OnZoneChanged()
 end
 
 -- On zone changed
@@ -231,40 +212,39 @@ function TalentReminder.CheckTalentsInInstance()
         tostring(currentZone), currentSubZone), 0)
 
     -- Build priority list from ALL builds for this instance/difficulty
-    -- Priority 1: exact zone match, Priority 2: instance-wide (key 0 or copies 900000+)
+    -- Priority 1: exact zone match, Priority 2: instance-wide (key 0)
     local priorityList = {}
-    for zoneKey, reminder in pairs(reminders[currentDifficultyID]) do
-        if reminder and not reminder.disabled then
-            local priority
-            if type(zoneKey) == "string" and zoneKey ~= "" then
-                -- String zone key (subzone text) — match against current subzone
-                if currentSubZone ~= "" and zoneKey == currentSubZone then
-                    priority = 1
-                else
-                    priority = nil -- Different subzone, skip
+    for zoneKey, builds in pairs(reminders[currentDifficultyID]) do
+        if type(builds) == "table" then
+            for buildIndex, reminder in ipairs(builds) do
+                if reminder and not reminder.disabled then
+                    local priority
+                    if type(zoneKey) == "string" and zoneKey ~= "" then
+                        if currentSubZone ~= "" and zoneKey == currentSubZone then
+                            priority = 1
+                        else
+                            priority = nil
+                        end
+                    else
+                        local numKey = tonumber(zoneKey) or 0
+                        if numKey == 0 then
+                            priority = 2
+                        else
+                            priority = nil
+                        end
+                    end
+                    if priority then
+                        addonTable.Core.Log("TalentReminder",
+                            string.format("Adding build '%s' (zoneKey=%s, priority=%d)",
+                                reminder.name or "Unnamed", tostring(zoneKey), priority), 0)
+                        table.insert(priorityList, {
+                            zoneKey = zoneKey,
+                            buildIndex = buildIndex,
+                            reminder = reminder,
+                            priority = priority
+                        })
+                    end
                 end
-            else
-                local numKey = tonumber(zoneKey) or 0
-                if currentZone and currentZone ~= 0 and numKey == currentZone then
-                    -- Exact mapID match (legacy numeric zone keys)
-                    priority = 1
-                elseif numKey == 0 or numKey >= 900000 then
-                    -- Instance-wide (0) or copy (900000+) — lower priority
-                    priority = 2
-                else
-                    -- Different zone-specific build — skip
-                    priority = nil
-                end
-            end
-            if priority then
-                addonTable.Core.Log("TalentReminder",
-                    string.format("Adding build '%s' (zoneKey=%s, priority=%d)",
-                        reminder.name or "Unnamed", tostring(zoneKey), priority), 0)
-                table.insert(priorityList, {
-                    zoneKey = zoneKey,
-                    reminder = reminder,
-                    priority = priority
-                })
             end
         end
     end
@@ -344,31 +324,34 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
 
     -- Build priority list from ALL builds for this instance/difficulty
     local priorityList = {}
-    for zoneKey, reminder in pairs(reminders[currentDifficultyID]) do
-        if reminder and not reminder.disabled then
-            local priority
-            if type(zoneKey) == "string" and zoneKey ~= "" then
-                if currentSubZone ~= "" and zoneKey == currentSubZone then
-                    priority = 1
-                else
-                    priority = nil
+    for zoneKey, builds in pairs(reminders[currentDifficultyID]) do
+        if type(builds) == "table" then
+            for buildIndex, reminder in ipairs(builds) do
+                if reminder and not reminder.disabled then
+                    local priority
+                    if type(zoneKey) == "string" and zoneKey ~= "" then
+                        if currentSubZone ~= "" and zoneKey == currentSubZone then
+                            priority = 1
+                        else
+                            priority = nil
+                        end
+                    else
+                        local numKey = tonumber(zoneKey) or 0
+                        if numKey == 0 then
+                            priority = 2
+                        else
+                            priority = nil
+                        end
+                    end
+                    if priority then
+                        table.insert(priorityList, {
+                            zoneKey = zoneKey,
+                            buildIndex = buildIndex,
+                            reminder = reminder,
+                            priority = priority
+                        })
+                    end
                 end
-            else
-                local numKey = tonumber(zoneKey) or 0
-                if currentZone and currentZone ~= 0 and numKey == currentZone then
-                    priority = 1
-                elseif numKey == 0 or numKey >= 900000 then
-                    priority = 2
-                else
-                    priority = nil
-                end
-            end
-            if priority then
-                table.insert(priorityList, {
-                    zoneKey = zoneKey,
-                    reminder = reminder,
-                    priority = priority
-                })
             end
         end
     end
@@ -820,8 +803,10 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
     LunaUITweaks_TalentReminders.reminders[instanceID] = LunaUITweaks_TalentReminders.reminders[instanceID] or {}
     LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID] = LunaUITweaks_TalentReminders.reminders
         [instanceID][difficultyID] or {}
+    LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] =
+        LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] or {}
 
-    LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID] = {
+    table.insert(LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][bossID], {
         name = name,
         instanceName = instanceName,
         difficulty = difficulty,
@@ -833,7 +818,7 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
         className = classSpecInfo.className,
         specID = classSpecInfo.specID,
         specName = classSpecInfo.specName
-    }
+    })
 
     -- Auto-enable the difficulty filter for the saved difficulty
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.alertOnDifficulties then
@@ -874,11 +859,27 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
     return true, nil, count
 end
 
--- Delete reminder
-function TalentReminder.DeleteReminder(instanceID, difficultyID, zoneKey)
-    if LunaUITweaks_TalentReminders.reminders[instanceID] and
-        LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID] then
+-- Delete reminder by build index within the zone key array
+function TalentReminder.DeleteReminder(instanceID, difficultyID, zoneKey, buildIndex)
+    if not LunaUITweaks_TalentReminders.reminders[instanceID] then return end
+    if not LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID] then return end
+
+    local builds = LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][zoneKey]
+    if not builds then return end
+
+    if buildIndex and buildIndex >= 1 and buildIndex <= #builds then
+        table.remove(builds, buildIndex)
+    end
+
+    -- Clean up empty tables
+    if #builds == 0 then
         LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][zoneKey] = nil
+    end
+    if not next(LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID]) then
+        LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID] = nil
+    end
+    if not next(LunaUITweaks_TalentReminders.reminders[instanceID]) then
+        LunaUITweaks_TalentReminders.reminders[instanceID] = nil
     end
 end
 

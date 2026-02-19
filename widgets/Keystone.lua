@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Keystone Item ID
 local KEYSTONE_ITEM_ID = 158923 -- Mythic Keystone
@@ -160,12 +161,11 @@ table.insert(Widgets.moduleInits, function()
     end
 
     -- Invalidate teleport cache when spells change or leaving combat
-    local teleportCacheFrame = CreateFrame("Frame")
-    teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
-    teleportCacheFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    teleportCacheFrame:SetScript("OnEvent", function()
+    local function OnTeleportCacheInvalidate()
         cachedTeleportSpells = nil
-    end)
+    end
+    EventBus.Register("SPELLS_CHANGED", OnTeleportCacheInvalidate)
+    EventBus.Register("PLAYER_REGEN_ENABLED", OnTeleportCacheInvalidate)
 
     -- Helper function to get keystone info from item link
     local function GetKeystoneInfo(itemLink)
@@ -366,48 +366,46 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    -- Event handler for bag updates
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("BAG_UPDATE")
-    eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    -- Event handlers for bag updates
+    local updatePending = false
 
-    keystoneFrame.eventFrame = eventFrame
-    keystoneFrame.ApplyEvents = function(enabled)
-        if enabled then
-            eventFrame:RegisterEvent("BAG_UPDATE")
-            eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-        else
-            eventFrame:UnregisterAllEvents()
+    local function OnBagUpdate()
+        if not UIThingsDB.widgets.keystone.enabled then return end
+        keystoneFrame:UpdateContent()
+        if not updatePending then
+            updatePending = true
+            C_Timer.After(0.5, function()
+                updatePending = false
+                if UIThingsDB.widgets.keystone.enabled then
+                    keystoneFrame:UpdateContent()
+                end
+            end)
         end
     end
 
-    local updatePending = false
-    eventFrame:SetScript("OnEvent", function(self, event, ...)
+    local function OnGetItemInfoReceived(event, itemID)
         if not UIThingsDB.widgets.keystone.enabled then return end
-
-        if event == "BAG_UPDATE" then
-            keystoneFrame:UpdateContent()
-
-            if not updatePending then
-                updatePending = true
-                C_Timer.After(0.5, function()
-                    updatePending = false
-                    if UIThingsDB.widgets.keystone.enabled then
-                        keystoneFrame:UpdateContent()
-                    end
-                end)
-            end
-        elseif event == "GET_ITEM_INFO_RECEIVED" then
-            local itemID = ...
-            if itemID == KEYSTONE_ITEM_ID then
-                keystoneFrame:UpdateContent()
-            end
-        else
+        if itemID == KEYSTONE_ITEM_ID then
             keystoneFrame:UpdateContent()
         end
-    end)
+    end
+
+    local function OnKeystoneWorldUpdate()
+        if not UIThingsDB.widgets.keystone.enabled then return end
+        keystoneFrame:UpdateContent()
+    end
+
+    keystoneFrame.ApplyEvents = function(enabled)
+        if enabled then
+            EventBus.Register("BAG_UPDATE", OnBagUpdate)
+            EventBus.Register("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnKeystoneWorldUpdate)
+            EventBus.Register("GET_ITEM_INFO_RECEIVED", OnGetItemInfoReceived)
+        else
+            EventBus.Unregister("BAG_UPDATE", OnBagUpdate)
+            EventBus.Unregister("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnKeystoneWorldUpdate)
+            EventBus.Unregister("GET_ITEM_INFO_RECEIVED", OnGetItemInfoReceived)
+        end
+    end
 end)

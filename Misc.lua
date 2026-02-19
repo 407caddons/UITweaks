@@ -43,6 +43,7 @@ function Misc.ShowAlert()
 end
 
 -- == MAIL NOTIFICATION ==
+local mailAlertShown = false -- Track if we already alerted for current pending mail
 
 local mailAlertFrame = CreateFrame("Frame", "UIThingsMailAlert", UIParent, "BackdropTemplate")
 mailAlertFrame:SetSize(400, 50)
@@ -491,209 +492,187 @@ if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.quickDestroy then
     Misc.ToggleQuickDestroy(true)
 end
 
+local EventBus = addonTable.EventBus
 local ApplyMiscEvents -- forward declaration
 
-local function OnEvent(self, event, ...)
+-- Named event callbacks
+local function OnPlayerEnteringWorld()
     if not UIThingsDB.misc then return end
-
-    if event == "PLAYER_ENTERING_WORLD" then
-        ApplyMiscEvents()
-        if UIThingsDB.misc.enabled then
-            ApplyUIScale()
-            Misc.UpdateAutoInviteKeywords()
-            InitSCTAnchors()
-
-            -- Init Quick Destroy Hook
-            if UIThingsDB.misc.quickDestroy then
-                Misc.ToggleQuickDestroy(true)
-            end
-
-            -- Check for personal orders after a delay (to ensure API is ready)
-            addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
+    ApplyMiscEvents()
+    if UIThingsDB.misc.enabled then
+        ApplyUIScale()
+        Misc.UpdateAutoInviteKeywords()
+        InitSCTAnchors()
+        if UIThingsDB.misc.quickDestroy then
+            Misc.ToggleQuickDestroy(true)
         end
-    elseif event == "AUCTION_HOUSE_SHOW" then
-        if not UIThingsDB.misc.enabled then return end
-        -- Apply once initially
-        addonTable.Core.SafeAfter(0.5, ApplyAHFilter)
-    elseif event == "CHAT_MSG_SYSTEM" then
-        if not UIThingsDB.misc.enabled then return end
-        if not UIThingsDB.misc.personalOrders then return end
-        local msg = ...
-        if issecretvalue(msg) then return end
-        -- Parse for "Personal Work Order" or similar text
-        if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
-            ShowAlert()
-        end
-    elseif event == "UPDATE_PENDING_MAIL" then
-        if not UIThingsDB.misc.enabled then return end
-        if not UIThingsDB.misc.mailNotification then return end
-        if HasNewMail() then
-            ShowMailAlert()
-        end
-    elseif event == "PARTY_INVITE_REQUEST" then
-        if not UIThingsDB.misc.enabled then return end
-        local name, isTank, isHealer, isDamage, isNativeRealm, allowMultipleRoles, inviterGUID = ...
-        local settings = UIThingsDB.misc
-
-        if settings.autoAcceptEveryone then
-            AcceptGroup()
-            StaticPopup_Hide("PARTY_INVITE")
-            return
-        end
-
-        local isFriend = false
-        if settings.autoAcceptFriends then
-            if inviterGUID and C_FriendList.IsFriend(inviterGUID) then
-                isFriend = true
-            end
-            if not isFriend then
-                -- Check BNet Friends
-                local numBNet = BNGetNumFriends()
-                for i = 1, numBNet do
-                    local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-                    if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.playerGuid == inviterGUID then
-                        isFriend = true
-                        break
-                    end
-                end
-            end
-        end
-
-        local isGuildMember = false
-        if settings.autoAcceptGuild and name then
-            if C_GuildInfo.MemberExistsByName(name) then
-                isGuildMember = true
-            end
-        end
-
-        if isFriend or isGuildMember then
-            AcceptGroup()
-            StaticPopup_Hide("PARTY_INVITE")
-        end
-    elseif event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
-        if not UIThingsDB.misc.enabled then return end
-        local settings = UIThingsDB.misc
-        if not settings.autoInviteEnabled or not keywordCache or #keywordCache == 0 then return end
-
-        local msg, sender = ...
-        if event == "CHAT_MSG_BN_WHISPER" then
-            -- For BN whispers, sender is the presenceID, we need to get the character name/presence
-            -- However, C_PartyInfo.InviteUnit usually wants a name-realm or UnitTag.
-            -- BN whispers are tricky for auto-invites unless we resolve the character.
-            -- For now, let's focus on character whispers first as they are more common for group formation.
-            return
-        end
-
-        local lowerMsg = msg:trim():lower()
-        local match = false
-        for _, kw in ipairs(keywordCache) do
-            if lowerMsg == kw then
-                match = true
-                break
-            end
-        end
-
-        if match then
-            -- Can we invite? (Must be leader or not in group)
-            if not IsInGroup() or UnitIsGroupLeader("player") then
-                C_PartyInfo.InviteUnit(sender)
-            end
-        end
-    elseif event == "UNIT_COMBAT" then
-        if not UIThingsDB.misc.enabled then return end
-        local sctSettings = UIThingsDB.misc.sct
-        if not sctSettings or not sctSettings.captureToFrames then return end
-        local unitTarget, combatEvent, flagText, amount, schoolMask = ...
-        if not amount or issecretvalue(amount) then return end
-        if amount == 0 then return end
-        local isCrit = (not issecretvalue(flagText) and flagText == "CRITICAL")
-
-        if unitTarget == "player" then
-            -- Incoming healing to the player
-            if combatEvent == "HEAL" then
-                local targetName = nil
-                if sctSettings.showTargetHealing then
-                    targetName = UnitName("target")
-                end
-                SpawnSCTText(amount, isCrit, "healing", targetName)
-            end
-        elseif string.find(unitTarget, "nameplate") then
-            -- Use nameplates only for outgoing to avoid duplicates (target/softfriend fire too)
-            if combatEvent == "WOUND" then
-                local targetName = nil
-                if sctSettings.showTargetDamage then
-                    targetName = UnitName(unitTarget)
-                end
-                SpawnSCTText(amount, isCrit, "damage", targetName)
-            end
-        end
+        addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
     end
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
-frame:SetScript("OnEvent", OnEvent)
+local function OnAuctionHouseShow()
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    addonTable.Core.SafeAfter(0.5, ApplyAHFilter)
+end
 
-ApplyMiscEvents = function()
-    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then
-        frame:UnregisterEvent("AUCTION_HOUSE_SHOW")
-        frame:UnregisterEvent("CHAT_MSG_SYSTEM")
-        frame:UnregisterEvent("PARTY_INVITE_REQUEST")
-        frame:UnregisterEvent("CHAT_MSG_WHISPER")
-        frame:UnregisterEvent("CHAT_MSG_BN_WHISPER")
-        frame:UnregisterEvent("UNIT_COMBAT")
+local function OnChatMsgSystem(event, msg)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    if not UIThingsDB.misc.personalOrders then return end
+    if issecretvalue(msg) then return end
+    if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
+        ShowAlert()
+    end
+end
+
+local function OnUpdatePendingMail()
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    if not UIThingsDB.misc.mailNotification then return end
+    if HasNewMail() then
+        if not mailAlertShown then
+            mailAlertShown = true
+            ShowMailAlert()
+        end
+    else
+        mailAlertShown = false
+    end
+end
+
+local function OnPartyInviteRequest(event, name, isTank, isHealer, isDamage, isNativeRealm, allowMultipleRoles,
+                                    inviterGUID)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    local settings = UIThingsDB.misc
+
+    if settings.autoAcceptEveryone then
+        AcceptGroup()
+        StaticPopup_Hide("PARTY_INVITE")
         return
     end
 
-    -- AH filter
-    if UIThingsDB.misc.ahFilter then
-        frame:RegisterEvent("AUCTION_HOUSE_SHOW")
-    else
-        frame:UnregisterEvent("AUCTION_HOUSE_SHOW")
+    local isFriend = false
+    if settings.autoAcceptFriends then
+        if inviterGUID and C_FriendList.IsFriend(inviterGUID) then
+            isFriend = true
+        end
+        if not isFriend then
+            local numBNet = BNGetNumFriends()
+            for i = 1, numBNet do
+                local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
+                if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.playerGuid == inviterGUID then
+                    isFriend = true
+                    break
+                end
+            end
+        end
     end
 
-    -- Personal orders
-    if UIThingsDB.misc.personalOrders then
-        frame:RegisterEvent("CHAT_MSG_SYSTEM")
-    else
-        frame:UnregisterEvent("CHAT_MSG_SYSTEM")
+    local isGuildMember = false
+    if settings.autoAcceptGuild and name then
+        if C_GuildInfo.MemberExistsByName(name) then
+            isGuildMember = true
+        end
     end
 
-    -- Mail notification
-    if UIThingsDB.misc.mailNotification then
-        frame:RegisterEvent("UPDATE_PENDING_MAIL")
-    else
-        frame:UnregisterEvent("UPDATE_PENDING_MAIL")
+    if isFriend or isGuildMember then
+        AcceptGroup()
+        StaticPopup_Hide("PARTY_INVITE")
     end
+end
 
-    -- Auto-accept invites
-    if UIThingsDB.misc.autoAcceptFriends or UIThingsDB.misc.autoAcceptGuild or UIThingsDB.misc.autoAcceptEveryone then
-        frame:RegisterEvent("PARTY_INVITE_REQUEST")
-    else
-        frame:UnregisterEvent("PARTY_INVITE_REQUEST")
+local function OnChatMsgWhisper(event, msg, sender)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    local settings = UIThingsDB.misc
+    if not settings.autoInviteEnabled or not keywordCache or #keywordCache == 0 then return end
+    local lowerMsg = msg:trim():lower()
+    local match = false
+    for _, kw in ipairs(keywordCache) do
+        if lowerMsg == kw then
+            match = true; break
+        end
     end
-
-    -- Auto-invite on whisper
-    if UIThingsDB.misc.autoInviteEnabled then
-        frame:RegisterEvent("CHAT_MSG_WHISPER")
-        frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
-    else
-        frame:UnregisterEvent("CHAT_MSG_WHISPER")
-        frame:UnregisterEvent("CHAT_MSG_BN_WHISPER")
-    end
-
-    -- Scrolling Combat Text
-    if UIThingsDB.misc.sct then
-        -- Enable/disable Blizzard's floating combat text via CVar
-        SetCVar("enableFloatingCombatText", UIThingsDB.misc.sct.enabled and 1 or 0)
-        -- Capture to our custom frames
-        if UIThingsDB.misc.sct.captureToFrames then
-            frame:RegisterEvent("UNIT_COMBAT")
-        else
-            frame:UnregisterEvent("UNIT_COMBAT")
+    if match then
+        if not IsInGroup() or UnitIsGroupLeader("player") then
+            C_PartyInfo.InviteUnit(sender)
         end
     end
 end
+
+local function OnUnitCombat(event, unitTarget, combatEvent, flagText, amount, schoolMask)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    local sctSettings = UIThingsDB.misc.sct
+    if not sctSettings or not sctSettings.captureToFrames then return end
+    if not amount or issecretvalue(amount) then return end
+    if amount == 0 then return end
+    local isCrit = (not issecretvalue(flagText) and flagText == "CRITICAL")
+
+    if unitTarget == "player" then
+        if combatEvent == "HEAL" then
+            local targetName = sctSettings.showTargetHealing and UnitName("target") or nil
+            SpawnSCTText(amount, isCrit, "healing", targetName)
+        end
+    elseif string.find(unitTarget, "nameplate") then
+        if combatEvent == "WOUND" then
+            local targetName = sctSettings.showTargetDamage and UnitName(unitTarget) or nil
+            SpawnSCTText(amount, isCrit, "damage", targetName)
+        end
+    end
+end
+
+ApplyMiscEvents = function()
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then
+        EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+        EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+        EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+        EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
+        EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
+        EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+        EventBus.Unregister("UNIT_COMBAT", OnUnitCombat)
+        return
+    end
+
+    if UIThingsDB.misc.ahFilter then
+        EventBus.Register("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+    else
+        EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+    end
+
+    if UIThingsDB.misc.personalOrders then
+        EventBus.Register("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+    else
+        EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+    end
+
+    if UIThingsDB.misc.mailNotification then
+        EventBus.Register("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+    else
+        EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+    end
+
+    if UIThingsDB.misc.autoAcceptFriends or UIThingsDB.misc.autoAcceptGuild or UIThingsDB.misc.autoAcceptEveryone then
+        EventBus.Register("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
+    else
+        EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
+    end
+
+    if UIThingsDB.misc.autoInviteEnabled then
+        EventBus.Register("CHAT_MSG_WHISPER", OnChatMsgWhisper)
+        -- BN whispers not supported for auto-invite; keep unregistered
+        EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+    else
+        EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
+        EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+    end
+
+    if UIThingsDB.misc.sct then
+        SetCVar("enableFloatingCombatText", UIThingsDB.misc.sct.enabled and 1 or 0)
+        if UIThingsDB.misc.sct.captureToFrames then
+            EventBus.Register("UNIT_COMBAT", OnUnitCombat)
+        else
+            EventBus.Unregister("UNIT_COMBAT", OnUnitCombat)
+        end
+    end
+end
+
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
 
 function Misc.ApplyEvents()
     ApplyMiscEvents()

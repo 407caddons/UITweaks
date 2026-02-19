@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for General UI panel (formerly Misc)
 function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "misc")
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("General UI")

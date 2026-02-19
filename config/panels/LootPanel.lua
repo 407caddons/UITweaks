@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Loot panel
 function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "loot")
     local fonts = Helpers.fonts
 
     -- Create ScrollFrame

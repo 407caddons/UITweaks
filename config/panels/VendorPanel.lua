@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Vendor panel
 function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "vendor")
     local fonts = Helpers.fonts
 
     -- Panel Title

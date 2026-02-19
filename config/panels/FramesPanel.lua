@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Frames panel
 function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "frames")
     local fonts = Helpers.fonts
 
     local selectedFrameIndex = nil

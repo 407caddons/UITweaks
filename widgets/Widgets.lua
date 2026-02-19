@@ -210,7 +210,7 @@ local function UpdateAnchoredLayouts()
             local count = #items
             if count > 0 then
                 local direction = cachedAnchorData[anchorName] and cachedAnchorData[anchorName].dockDirection or
-                "horizontal"
+                    "horizontal"
                 local isVertical = (direction == "vertical")
 
                 -- Measure content size along the dock axis
@@ -364,6 +364,9 @@ function Widgets.UpdateVisuals()
 
     -- Position anchored widgets
     UpdateAnchoredLayouts()
+
+    -- Apply per-widget visibility conditions on top of enabled state
+    Widgets.UpdateConditions()
 end
 
 function Widgets.UpdateContent()
@@ -385,3 +388,72 @@ function Widgets.UpdateContent()
         UpdateAnchoredLayouts()
     end
 end
+
+-- ============================================================
+-- Visibility Conditions
+-- ============================================================
+
+-- Evaluate whether a condition string is currently satisfied.
+-- Returns true if the widget should be visible.
+local function EvaluateCondition(condition)
+    if not condition or condition == "always" then
+        return true
+    end
+    if condition == "combat" then
+        return UnitAffectingCombat("player") == true
+    elseif condition == "nocombat" then
+        return not UnitAffectingCombat("player")
+    elseif condition == "group" then
+        return IsInGroup() or IsInRaid()
+    elseif condition == "solo" then
+        return not IsInGroup() and not IsInRaid()
+    elseif condition == "instance" then
+        local _, instanceType = GetInstanceInfo()
+        return instanceType ~= "none"
+    elseif condition == "world" then
+        local _, instanceType = GetInstanceInfo()
+        return instanceType == "none"
+    end
+    return true
+end
+
+-- Show/hide each enabled widget frame based on its saved condition.
+-- Does NOT change the enabled flag — only the frame visibility.
+function Widgets.UpdateConditions()
+    local db = UIThingsDB.widgets
+    if not db or not db.enabled then return end
+
+    for key, frame in pairs(frames) do
+        if db[key] and db[key].enabled then
+            local condition = db[key].condition
+            if EvaluateCondition(condition) then
+                if not frame:IsShown() then
+                    frame:Show()
+                    if frame.ApplyEvents then frame.ApplyEvents(true) end
+                end
+            else
+                if frame:IsShown() then
+                    frame:Hide()
+                    if frame.ApplyEvents then frame.ApplyEvents(false) end
+                end
+            end
+        end
+    end
+end
+
+-- Single handler for all state transitions relevant to widget conditions.
+local function OnConditionEvent()
+    if UIThingsDB and UIThingsDB.widgets and UIThingsDB.widgets.enabled then
+        Widgets.UpdateConditions()
+    end
+end
+
+local EventBus = addonTable.EventBus
+EventBus.Register("PLAYER_REGEN_DISABLED", OnConditionEvent)
+EventBus.Register("PLAYER_REGEN_ENABLED", OnConditionEvent)
+EventBus.Register("GROUP_JOINED", OnConditionEvent)
+EventBus.Register("GROUP_LEFT", OnConditionEvent)
+EventBus.Register("GROUP_ROSTER_UPDATE", OnConditionEvent)
+EventBus.Register("RAID_ROSTER_UPDATE", OnConditionEvent)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnConditionEvent)
+EventBus.Register("ZONE_CHANGED_NEW_AREA", OnConditionEvent)

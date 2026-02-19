@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Common currencies (TWW Season 3)
 local DEFAULT_CURRENCIES = {
@@ -237,24 +238,21 @@ table.insert(Widgets.moduleInits, function()
     end
 
     -- Event handler for currency updates
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-    eventFrame:RegisterEvent("PLAYER_MONEY")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:SetScript("OnEvent", function(self, event)
+    local function OnCurrencyUpdate()
         if UIThingsDB.widgets.currency.enabled then
             currencyFrame:UpdateContent()
         end
-    end)
+    end
 
-    currencyFrame.eventFrame = eventFrame
     currencyFrame.ApplyEvents = function(enabled)
         if enabled then
-            eventFrame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-            eventFrame:RegisterEvent("PLAYER_MONEY")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyUpdate)
+            EventBus.Register("PLAYER_MONEY", OnCurrencyUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnCurrencyUpdate)
         else
-            eventFrame:UnregisterAllEvents()
+            EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyUpdate)
+            EventBus.Unregister("PLAYER_MONEY", OnCurrencyUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnCurrencyUpdate)
         end
     end
 end)

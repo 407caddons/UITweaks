@@ -5,6 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
+    Helpers.CreateResetButton(panel, "misc")
     local function UpdateNavColor()
         local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification
         Helpers.UpdateModuleVisuals(panel, navButton, anyEnabled)

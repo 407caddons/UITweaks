@@ -3,6 +3,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "castBar")
     -- Create ScrollFrame
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsCastBarScroll", panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 0, 0)

@@ -62,8 +62,7 @@ local function SellGreys()
     end
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_LOGIN") -- Always needed for initialization
+local EventBus = addonTable.EventBus
 
 -- Warning Frame
 local warningFrame = CreateFrame("Frame", "UIThingsRepairWarning", UIParent, "BackdropTemplate")
@@ -208,23 +207,49 @@ end
 
 local SafeAfter = addonTable.Core.SafeAfter
 
+-- Named event callbacks
+local function OnMerchantShow()
+    if not UIThingsDB.vendor.warningLocked then return end
+    warningFrame:Hide()
+    bagWarningFrame:Hide()
+    SafeAfter(0.1, function()
+        AutoRepair()
+        SellGreys()
+    end)
+end
+
+local function OnBagUpdateDelayed()
+    CheckBagSpace()
+end
+
+local function OnVendorRegenOrMove()
+    StartDurabilityCheck(1)
+    CheckBagSpace()
+end
+
+local function OnRegenDisabled()
+    if not UIThingsDB.vendor.warningLocked then return end
+    warningFrame:Hide()
+    bagWarningFrame:Hide()
+end
+
 local function ApplyVendorEvents()
     if UIThingsDB.vendor.enabled then
-        frame:RegisterEvent("MERCHANT_SHOW")
-        frame:RegisterEvent("MERCHANT_CLOSED")
-        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        frame:RegisterEvent("PLAYER_REGEN_DISABLED")
-        frame:RegisterEvent("PLAYER_UNGHOST")
-        frame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-        frame:RegisterEvent("BAG_UPDATE_DELAYED")
+        EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
+        EventBus.Register("MERCHANT_CLOSED", OnVendorRegenOrMove)
+        EventBus.Register("PLAYER_REGEN_ENABLED", OnVendorRegenOrMove)
+        EventBus.Register("PLAYER_REGEN_DISABLED", OnRegenDisabled)
+        EventBus.Register("PLAYER_UNGHOST", OnVendorRegenOrMove)
+        EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnVendorRegenOrMove)
+        EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
     else
-        frame:UnregisterEvent("MERCHANT_SHOW")
-        frame:UnregisterEvent("MERCHANT_CLOSED")
-        frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        frame:UnregisterEvent("PLAYER_REGEN_DISABLED")
-        frame:UnregisterEvent("PLAYER_UNGHOST")
-        frame:UnregisterEvent("UPDATE_INVENTORY_DURABILITY")
-        frame:UnregisterEvent("BAG_UPDATE_DELAYED")
+        EventBus.Unregister("MERCHANT_SHOW", OnMerchantShow)
+        EventBus.Unregister("MERCHANT_CLOSED", OnVendorRegenOrMove)
+        EventBus.Unregister("PLAYER_REGEN_ENABLED", OnVendorRegenOrMove)
+        EventBus.Unregister("PLAYER_REGEN_DISABLED", OnRegenDisabled)
+        EventBus.Unregister("PLAYER_UNGHOST", OnVendorRegenOrMove)
+        EventBus.Unregister("UPDATE_INVENTORY_DURABILITY", OnVendorRegenOrMove)
+        EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
     end
 end
 
@@ -308,40 +333,10 @@ function addonTable.Vendor.UpdateSettings()
     end
 end
 
-frame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_LOGIN" then
-        addonTable.Vendor.UpdateSettings()
-        -- Check both durability and bag space on login
-        StartDurabilityCheck(1)
-        CheckBagSpace()
-        return
-    end
+local function OnPlayerLogin()
+    addonTable.Vendor.UpdateSettings()
+    StartDurabilityCheck(1)
+    CheckBagSpace()
+end
 
-    if not UIThingsDB.vendor.enabled then
-        warningFrame:Hide()
-        bagWarningFrame:Hide()
-        return
-    end
-
-    if event == "MERCHANT_SHOW" then
-        if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
-        warningFrame:Hide()                                    -- Hide when at vendor
-        bagWarningFrame:Hide()                                 -- Hide bag warning too
-        -- Run slightly delayed to ensure merchant interaction is fully ready
-        SafeAfter(0.1, function()
-            AutoRepair()
-            SellGreys()
-        end)
-    elseif event == "BAG_UPDATE_DELAYED" then
-        -- Bag space changed, check if we need to show warning
-        CheckBagSpace()
-    elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" or event == "MERCHANT_CLOSED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "PLAYER_UNGHOST" then
-        -- Run checks slightly delayed to ensure info is ready/state is consistent
-        StartDurabilityCheck(1)
-        CheckBagSpace()
-    elseif event == "PLAYER_REGEN_DISABLED" then
-        if not UIThingsDB.vendor.warningLocked then return end -- Don't hide if moving
-        warningFrame:Hide()                                    -- Hide in combat
-        bagWarningFrame:Hide()                                 -- Hide bag warning in combat
-    end
-end)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)

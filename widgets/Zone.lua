@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local zoneFrame = Widgets.CreateWidgetFrame("Zone", "zone")
@@ -19,24 +20,21 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local zoneEventFrame = CreateFrame("Frame")
-    zoneEventFrame:RegisterEvent("ZONE_CHANGED")
-    zoneEventFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-    zoneEventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    zoneEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    zoneEventFrame:SetScript("OnEvent", function()
+    local function OnZoneUpdate()
         RefreshZoneCache()
-    end)
+    end
 
-    zoneFrame.eventFrame = zoneEventFrame
     zoneFrame.ApplyEvents = function(enabled)
         if enabled then
-            zoneEventFrame:RegisterEvent("ZONE_CHANGED")
-            zoneEventFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-            zoneEventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-            zoneEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("ZONE_CHANGED", OnZoneUpdate)
+            EventBus.Register("ZONE_CHANGED_INDOORS", OnZoneUpdate)
+            EventBus.Register("ZONE_CHANGED_NEW_AREA", OnZoneUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnZoneUpdate)
         else
-            zoneEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("ZONE_CHANGED", OnZoneUpdate)
+            EventBus.Unregister("ZONE_CHANGED_INDOORS", OnZoneUpdate)
+            EventBus.Unregister("ZONE_CHANGED_NEW_AREA", OnZoneUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnZoneUpdate)
         end
     end
 

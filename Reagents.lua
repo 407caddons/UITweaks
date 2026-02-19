@@ -352,18 +352,59 @@ local function UnhookTooltip()
     -- No-op: the callback checks UIThingsDB.reagents.enabled
 end
 
--- Event frame
-local frame = CreateFrame("Frame")
+-- Track bank open state
+local bankOpen = false
+local initialScanDone = false
+
+local EventBus = addonTable.EventBus
+
+-- Named callbacks for EventBus
+local function OnBagUpdateDelayed()
+    if not UIThingsDB.reagents.enabled then return end
+    ScheduleBagScan()
+    if bankOpen then DoFullCharacterScan() end
+end
+
+local function OnBankframeOpened()
+    if not UIThingsDB.reagents.enabled then return end
+    bankOpen = true
+    DoFullCharacterScan()
+    if C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account) then
+        DoWarbandScan()
+    end
+end
+
+local function OnBankframeClosed()
+    bankOpen = false
+end
+
+local function OnPlayerBankslotsChanged()
+    if not UIThingsDB.reagents.enabled then return end
+    if bankOpen then DoFullCharacterScan() end
+end
+
+local function OnAccountBankSlotsChanged()
+    if not UIThingsDB.reagents.enabled then return end
+    if bankOpen then DoWarbandScan() end
+end
+
+local function OnPlayerEnteringWorld()
+    if not UIThingsDB.reagents.enabled then return end
+    if not initialScanDone then
+        initialScanDone = true
+        ScheduleBagScan()
+    end
+end
 
 local function EnableEvents()
     if eventsEnabled then return end
-    frame:RegisterEvent("BAG_UPDATE_DELAYED")
-    frame:RegisterEvent("BANKFRAME_OPENED")
-    frame:RegisterEvent("BANKFRAME_CLOSED")
-    frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
-    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    -- Account bank tab slot changes (warband bank)
-    pcall(frame.RegisterEvent, frame, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
+    EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
+    EventBus.Register("BANKFRAME_OPENED", OnBankframeOpened)
+    EventBus.Register("BANKFRAME_CLOSED", OnBankframeClosed)
+    EventBus.Register("PLAYERBANKSLOTS_CHANGED", OnPlayerBankslotsChanged)
+    EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+    -- PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED may not exist on all clients
+    pcall(EventBus.Register, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", OnAccountBankSlotsChanged)
     eventsEnabled = true
     initialScanDone = false
     Log("Events enabled", addonTable.Core.LogLevel.DEBUG)
@@ -371,12 +412,12 @@ end
 
 local function DisableEvents()
     if not eventsEnabled then return end
-    frame:UnregisterEvent("BAG_UPDATE_DELAYED")
-    frame:UnregisterEvent("BANKFRAME_OPENED")
-    frame:UnregisterEvent("BANKFRAME_CLOSED")
-    frame:UnregisterEvent("PLAYERBANKSLOTS_CHANGED")
-    frame:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    pcall(frame.UnregisterEvent, frame, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
+    EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
+    EventBus.Unregister("BANKFRAME_OPENED", OnBankframeOpened)
+    EventBus.Unregister("BANKFRAME_CLOSED", OnBankframeClosed)
+    EventBus.Unregister("PLAYERBANKSLOTS_CHANGED", OnPlayerBankslotsChanged)
+    EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+    EventBus.Unregister("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", OnAccountBankSlotsChanged)
     eventsEnabled = false
     if scanTimer then
         scanTimer:Cancel()
@@ -385,58 +426,16 @@ local function DisableEvents()
     Log("Events disabled", addonTable.Core.LogLevel.DEBUG)
 end
 
--- Track bank open state
-local bankOpen = false
-local initialScanDone = false
-
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_LOGIN" then
-        EnsureDB()
-        if UIThingsDB.reagents.enabled then
-            EnableEvents()
-            HookTooltip()
-            initialScanDone = false
-        end
-        return
+local function OnPlayerLogin()
+    EnsureDB()
+    if UIThingsDB.reagents.enabled then
+        EnableEvents()
+        HookTooltip()
+        initialScanDone = false
     end
+end
 
-    if not UIThingsDB.reagents.enabled then return end
-
-    if event == "PLAYER_ENTERING_WORLD" then
-        -- Bags are guaranteed loaded at this point — do initial scan
-        if not initialScanDone then
-            initialScanDone = true
-            ScheduleBagScan()
-        end
-        return
-    end
-
-    if event == "BAG_UPDATE_DELAYED" then
-        ScheduleBagScan()
-        -- Also rescan bank if bank is open
-        if bankOpen then
-            DoFullCharacterScan()
-        end
-    elseif event == "BANKFRAME_OPENED" then
-        bankOpen = true
-        DoFullCharacterScan()
-        -- Also scan warband bank if available
-        if C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account) then
-            DoWarbandScan()
-        end
-    elseif event == "BANKFRAME_CLOSED" then
-        bankOpen = false
-    elseif event == "PLAYERBANKSLOTS_CHANGED" then
-        if bankOpen then
-            DoFullCharacterScan()
-        end
-    elseif event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED" then
-        if bankOpen then
-            DoWarbandScan()
-        end
-    end
-end)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
 
 --- Called by config panel when settings change
 function Reagents.UpdateSettings()

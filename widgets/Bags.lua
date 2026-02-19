@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 local function GetCharacterKey()
     local name = UnitName("player")
@@ -21,22 +22,19 @@ table.insert(Widgets.moduleInits, function()
     bagFrame:RegisterForClicks("AnyUp")
 
     -- Save gold on load and when it changes
-    local goldTracker = CreateFrame("Frame")
-    goldTracker:RegisterEvent("PLAYER_MONEY")
-    goldTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
-    goldTracker:SetScript("OnEvent", function()
+    local function OnGoldUpdate()
         if UIThingsDB.widgets.bags.enabled then
             SaveCurrentGold()
         end
-    end)
+    end
 
-    bagFrame.eventFrame = goldTracker
     bagFrame.ApplyEvents = function(enabled)
         if enabled then
-            goldTracker:RegisterEvent("PLAYER_MONEY")
-            goldTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("PLAYER_MONEY", OnGoldUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGoldUpdate)
         else
-            goldTracker:UnregisterAllEvents()
+            EventBus.Unregister("PLAYER_MONEY", OnGoldUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGoldUpdate)
         end
     end
 

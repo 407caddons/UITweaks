@@ -5,6 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "mplusTimer")
     -- Create ScrollFrame
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsMplusTimerScroll", panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 0, 0)

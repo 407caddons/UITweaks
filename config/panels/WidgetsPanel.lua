@@ -7,6 +7,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "widgets")
     local function UpdateWidgets()
         if addonTable.Widgets and addonTable.Widgets.UpdateVisuals then
             addonTable.Widgets.UpdateVisuals()
@@ -207,6 +208,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "pullCounter",   label = "Pull Counter" },
         { key = "hearthstone",   label = "Hearthstone" },
         { key = "currency",      label = "Currency Tracker" },
+        { key = "sessionStats",  label = "Session Stats" },
     }
 
     local yOffset = -250
@@ -234,6 +236,49 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
             "UIDropDownMenuTemplate")
         anchorDropdown:SetPoint("LEFT", cb, "RIGHT", 200, -2)
         UIDropDownMenu_SetWidth(anchorDropdown, 120)
+
+        -- Condition Dropdown
+        local conditionDropdown = CreateFrame("Frame", "UIThingsWidget" .. widget.key .. "ConditionDropdown", panel,
+            "UIDropDownMenuTemplate")
+        conditionDropdown:SetPoint("LEFT", anchorDropdown, "RIGHT", 100, 0)
+        UIDropDownMenu_SetWidth(conditionDropdown, 110)
+
+        local CONDITIONS = {
+            { value = "always",   text = "Always" },
+            { value = "combat",   text = "In Combat" },
+            { value = "nocombat", text = "Out of Combat" },
+            { value = "group",    text = "In Group" },
+            { value = "solo",     text = "Solo" },
+            { value = "instance", text = "In Instance" },
+            { value = "world",    text = "In World" },
+        }
+
+        local function ConditionOnClick(self)
+            UIThingsDB.widgets[widget.key].condition = self.value
+            UIDropDownMenu_SetText(conditionDropdown, self:GetText())
+            CloseDropDownMenus()
+            UpdateWidgets()
+        end
+
+        UIDropDownMenu_Initialize(conditionDropdown, function(self, level)
+            for _, cond in ipairs(CONDITIONS) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = cond.text
+                info.value = cond.value
+                info.notCheckable = true
+                info.func = ConditionOnClick
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+
+        local function GetConditionLabel(value)
+            for _, cond in ipairs(CONDITIONS) do
+                if cond.value == value then return cond.text end
+            end
+            return "Always"
+        end
+        UIDropDownMenu_SetText(conditionDropdown,
+            GetConditionLabel(UIThingsDB.widgets[widget.key].condition or "always"))
 
         -- Swap Logic Helper
         local function SwapOrder(direction)
@@ -284,7 +329,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
 
         -- Left Button
         local leftBtn = CreateFrame("Button", "UIThingsWidget" .. widget.key .. "LeftBtn", panel, "UIPanelButtonTemplate")
-        leftBtn:SetPoint("LEFT", anchorDropdown, "RIGHT", 130, 2)
+        leftBtn:SetPoint("LEFT", conditionDropdown, "RIGHT", 120, 2)
         leftBtn:SetSize(22, 22)
         leftBtn:SetText("<")
         leftBtn:SetScript("OnClick", function() SwapOrder(-1) end)

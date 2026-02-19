@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.11.0 (in progress)
+
+- New M+ Timer module: full mythic+ dungeon timer with boss tracking, death counter, forces progress bar, affix display, and auto keystone slotting
+- New Quest Auto module: automatic quest accept, turn-in, and gossip interaction with shift-to-pause override
+- New Quest Reminders module: zone-based quest availability alerts with TTS, popup, sound, and chat message notifications
+- New Talent Manager module: dedicated talent build management panel with collapsible sections and encounter journal integration
+- New Currency widget showing tracked currencies updated for TWW Season 3 (Valorstones, Kej, Ethereal Crests)
+- Keystone widget: improved dungeon teleport matching for mega dungeon wings and "Operation:" prefixed names
+- Keystone widget: combat-safe teleport map building and secret value protection on tooltip data
+- Group widget: fixed ready check state declaration order to prevent nil reference errors
+- Group widget: uses cached atlas markup constants instead of re-creating them per tooltip line
+- Objective Tracker: sort comparators moved to module scope to avoid closure allocation in hot paths
+- Objective Tracker: stale sound-tracking and quest line cache pruned on zone change
+- Core: log color table hoisted out of the Log function to avoid re-creation per call
+- Kick: removed redundant local variable shadowing for unit GUID
+- ActionBars: fixed local variable scoping in micro menu layout patch
+
 ## v1.10.0
 
 - Added cross-character Reagent Tracking module with tooltip display, bag/bank/warband scanning, and config panel for managing characters

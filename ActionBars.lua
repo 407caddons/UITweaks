@@ -82,78 +82,32 @@ end
 
 -- Permanently make MicroMenuContainer safe when buttons are reparented to our drawer.
 -- Blizzard's Layout() calls GetEdgeButton() which crashes with "compare two nil values"
--- when buttons aren't children of the container. We patch both:
--- 1. GetEdgeButton — return the container itself as a safe fallback (has GetPoint/GetWidth)
--- 2. Layout — wrap in pcall as a safety net for any other internal errors
+-- when buttons aren't children of the container. We suppress UpdateHelpTicketButtonAnchor
+-- while we own the buttons since that is the specific call site that crashes.
 local microMenuPatched = false
 local function PatchMicroMenuLayout()
     if microMenuPatched then return end
     local container = MicroMenuContainer
     if not container then return end
 
-    -- Patch GetEdgeButton to return the container as a safe fallback instead of nil.
-    -- This prevents the "compare two nil values" crash in Layout/UpdateHelpTicketButtonAnchor.
-    -- We patch on the instance AND the metatable __index to ensure all call paths are covered.
-    local function SafeGetEdgeButton(origFunc)
-        return function(self, ...)
-            local ok, result = pcall(origFunc, self, ...)
-            if ok and result then return result end
-            return self -- safe fallback: container has GetPoint/GetWidth methods
+    -- MicroMenuContainer:UpdateHelpTicketButtonAnchor() calls GetEdgeButton() which
+    -- returns nil when our drawer has reparented the buttons away from the container.
+    -- The nil comparison crash happens inside UpdateHelpTicketButtonAnchor at line 161.
+    -- We hook it to bail out early when we own the buttons, since the anchor update
+    -- is irrelevant while buttons are reparented to our drawer.
+    -- hooksecurefunc runs after the original, but we override the method directly so
+    -- the original never runs when we have custody of the buttons.
+    if container.UpdateHelpTicketButtonAnchor then
+        local origAnchor = container.UpdateHelpTicketButtonAnchor
+        container.UpdateHelpTicketButtonAnchor = function(self, ...)
+            -- Only run Blizzard's anchor logic when we don't have the buttons
+            if #collectedButtons == 0 then
+                origAnchor(self, ...)
+            end
         end
     end
 
-    -- Patch on instance
-    local instanceGetEdge = rawget(container, "GetEdgeButton")
-    if instanceGetEdge then
-        rawset(container, "GetEdgeButton", SafeGetEdgeButton(instanceGetEdge))
-    end
-
-    -- Patch on metatable __index
-    local mt = getmetatable(container)
-    local idx = mt and rawget(mt, "__index")
-    if type(idx) == "table" then
-        local mtGetEdge = rawget(idx, "GetEdgeButton")
-        if mtGetEdge and mtGetEdge ~= instanceGetEdge then
-            rawset(idx, "GetEdgeButton", SafeGetEdgeButton(mtGetEdge))
-        end
-    end
-
-    -- Final fallback: if resolved but not found on either, patch the instance
-    if not instanceGetEdge and container.GetEdgeButton then
-        local resolved = container.GetEdgeButton
-        container.GetEdgeButton = SafeGetEdgeButton(resolved)
-    end
-
-    -- Wrap Layout in pcall as a safety net for any remaining errors
-    local orig = rawget(container, "Layout")
-    if orig then
-        rawset(container, "Layout", function(self, ...)
-            local ok, err = pcall(orig, self, ...)
-        end)
-        microMenuPatched = true
-        return
-    end
-
-    mt = getmetatable(container)
-    idx = mt and rawget(mt, "__index")
-    if type(idx) == "table" then
-        orig = rawget(idx, "Layout")
-        if orig then
-            rawset(idx, "Layout", function(self, ...)
-                local ok, err = pcall(orig, self, ...)
-            end)
-            microMenuPatched = true
-            return
-        end
-    end
-
-    if container.Layout then
-        local resolved = container.Layout
-        container.Layout = function(self, ...)
-            local ok, err = pcall(resolved, self, ...)
-        end
-        microMenuPatched = true
-    end
+    microMenuPatched = true
 end
 
 -- No-op wrapper kept for compatibility with existing call sites
@@ -408,6 +362,7 @@ end
 -- == Button Collection ==
 
 local function CollectMicroButtons()
+    if InCombatLockdown() then return end
     wipe(collectedButtons)
     wipe(collectedSet)
 
@@ -438,6 +393,7 @@ end
 -- Re-parent collected buttons back into the drawer after Blizzard repositions them
 local function ReclaimButtons()
     if not drawerFrame or inEditMode then return end
+    if InCombatLockdown() then return end
     local settings = UIThingsDB.actionBars
     if not settings or not settings.enabled then return end
     local btnSize = settings.buttonSize or 32
@@ -507,6 +463,7 @@ local function ReclaimButtons()
 end
 
 local function ReleaseButtons()
+    if InCombatLockdown() then return end
     -- Restore all buttons to original parents/positions
     -- Do NOT call Show() — it triggers MicroMenuContainer:Layout() crash
     -- Just set alpha/mouse and re-parent; Blizzard will show them when needed
@@ -591,10 +548,19 @@ function ActionBars.SetupDrawer()
         if type(UpdateMicroButtons) == "function" then
             hooksecurefunc("UpdateMicroButtons", function()
                 if drawerFrame and not inEditMode and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
+                    -- Guard: SetParent on micro buttons is tainted in combat; defer to post-combat
+                    if InCombatLockdown() then return end
                     C_Timer.After(0, function() SuppressMicroLayout(ReclaimButtons) end)
                 end
             end)
         end
+
+        -- After combat ends, reclaim any buttons Blizzard repositioned during combat
+        addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+            if drawerFrame and not inEditMode and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
+                C_Timer.After(0, function() SuppressMicroLayout(ReclaimButtons) end)
+            end
+        end)
         -- Release buttons when edit mode opens, reclaim when it closes
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "Show", function()

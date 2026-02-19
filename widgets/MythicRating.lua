@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local ratingFrame = Widgets.CreateWidgetFrame("MythicRating", "mythicRating")
@@ -23,28 +24,27 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local ratingEventFrame = CreateFrame("Frame")
-    ratingEventFrame:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE")
-    ratingEventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-    ratingEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    ratingEventFrame:RegisterEvent("MYTHIC_PLUS_NEW_WEEKLY_RECORD")
-    ratingEventFrame:SetScript("OnEvent", function(_, event)
-        if event == "PLAYER_ENTERING_WORLD" then
-            -- Request map data so CHALLENGE_MODE_MAPS_UPDATE fires with real scores
-            C_MythicPlus.RequestMapInfo()
-        end
+    local function OnRatingUpdate()
         RefreshRatingCache()
-    end)
+    end
 
-    ratingFrame.eventFrame = ratingEventFrame
+    local function OnRatingEnteringWorld()
+        -- Request map data so CHALLENGE_MODE_MAPS_UPDATE fires with real scores
+        C_MythicPlus.RequestMapInfo()
+        RefreshRatingCache()
+    end
+
     ratingFrame.ApplyEvents = function(enabled)
         if enabled then
-            ratingEventFrame:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE")
-            ratingEventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-            ratingEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            ratingEventFrame:RegisterEvent("MYTHIC_PLUS_NEW_WEEKLY_RECORD")
+            EventBus.Register("CHALLENGE_MODE_MAPS_UPDATE", OnRatingUpdate)
+            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnRatingUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnRatingEnteringWorld)
+            EventBus.Register("MYTHIC_PLUS_NEW_WEEKLY_RECORD", OnRatingUpdate)
         else
-            ratingEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("CHALLENGE_MODE_MAPS_UPDATE", OnRatingUpdate)
+            EventBus.Unregister("CHALLENGE_MODE_COMPLETED", OnRatingUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnRatingEnteringWorld)
+            EventBus.Unregister("MYTHIC_PLUS_NEW_WEEKLY_RECORD", OnRatingUpdate)
         end
     end
 

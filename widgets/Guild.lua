@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local guildFrame = Widgets.CreateWidgetFrame("Guild", "guild")
@@ -16,21 +17,14 @@ table.insert(Widgets.moduleInits, function()
                 local name, rank, rankIndex, level, class, zone, note, officernote, online, status, classFileName =
                     GetGuildRosterInfo(i)
                 if online then
-                    -- Fix malformed names with repeated realm (e.g. "Name-Realm-Realm-Realm...")
-                    local charName, realm = name:match("^([^-]+)-(.+)$")
-                    local shortName = name
-                    if charName and realm then
-                        realm = realm:match("^([^-]+)") or realm
-                        shortName = charName .. "-" .. realm
-                    end
-                    local rightText = zone or ""
+                    local charName = name:match("^([^-]+)") or name
+                    local rightText = (zone or "") .. "  " .. level
                     local classColor = C_ClassColor.GetClassColor(classFileName)
                     if classColor then
-                        GameTooltip:AddDoubleLine(shortName, rightText, classColor.r, classColor.g, classColor.b, 0.7,
-                            0.7,
+                        GameTooltip:AddDoubleLine(charName, rightText, classColor.r, classColor.g, classColor.b, 0.7, 0.7,
                             0.7)
                     else
-                        GameTooltip:AddDoubleLine(shortName, rightText, 1, 1, 1, 0.7, 0.7, 0.7)
+                        GameTooltip:AddDoubleLine(charName, rightText, 1, 1, 1, 0.7, 0.7, 0.7)
                     end
                 end
             end
@@ -53,22 +47,19 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local guildEventFrame = CreateFrame("Frame")
-    guildEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
-    guildEventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
-    guildEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    guildEventFrame:SetScript("OnEvent", function()
+    local function OnGuildUpdate()
         RefreshGuildCache()
-    end)
+    end
 
-    guildFrame.eventFrame = guildEventFrame
     guildFrame.ApplyEvents = function(enabled)
         if enabled then
-            guildEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
-            guildEventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
-            guildEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("GUILD_ROSTER_UPDATE", OnGuildUpdate)
+            EventBus.Register("PLAYER_GUILD_UPDATE", OnGuildUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGuildUpdate)
         else
-            guildEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("GUILD_ROSTER_UPDATE", OnGuildUpdate)
+            EventBus.Unregister("PLAYER_GUILD_UPDATE", OnGuildUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGuildUpdate)
         end
     end
 

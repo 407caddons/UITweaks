@@ -189,28 +189,26 @@ function AddonVersions.RefreshVersions()
 end
 
 -- Event handling (only GROUP_ROSTER_UPDATE — CHAT_MSG_ADDON handled by AddonComm)
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "GROUP_ROSTER_UPDATE" then
-        if IsInGroup() then
-            UpdatePartyList()
-            ScheduleBroadcast()
-        else
-            addonTable.Comm.CancelThrottle("VER_HELLO")
-            wipe(playerData)
-            local playerName = UnitName("player")
-            local keyName, keyLevel, keyMapID = GetPlayerKeystone()
-            playerData[playerName] = {
-                version = VERSION,
-                keystoneName = keyName,
-                keystoneLevel = keyLevel or 0,
-                playerLevel = UnitLevel("player") or 0,
-                keystoneMapID = keyMapID,
-            }
-        end
-        if AddonVersions.onVersionsUpdated then
-            AddonVersions.onVersionsUpdated()
-        end
+local function OnGroupRosterUpdate()
+    if IsInGroup() then
+        UpdatePartyList()
+        ScheduleBroadcast()
+    else
+        addonTable.Comm.CancelThrottle("VER_HELLO")
+        wipe(playerData)
+        local playerName = UnitName("player")
+        local keyName, keyLevel, keyMapID = GetPlayerKeystone()
+        playerData[playerName] = {
+            version = VERSION,
+            keystoneName = keyName,
+            keystoneLevel = keyLevel or 0,
+            playerLevel = UnitLevel("player") or 0,
+            keystoneMapID = keyMapID,
+        }
     end
-end)
+    if AddonVersions.onVersionsUpdated then
+        AddonVersions.onVersionsUpdated()
+    end
+end
+
+addonTable.EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)

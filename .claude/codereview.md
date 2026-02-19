@@ -1,7 +1,8 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-17 (Second Pass -- Full Re-read)
-**Scope:** All 60+ source files: 20 root .lua modules, 20 config panels, 27 widget files, config framework, TOC, and stub files
+**Review Date:** 2026-02-19 (Sixth Pass -- Full Codebase Audit)
+**Previous Review:** 2026-02-18 (Fifth Pass -- EventBus Optimization & MplusTimer Migration)
+**Scope:** All 62 source files: 22 root .lua modules, 22 config files, 28 widget files, TOC
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
 
 ---
@@ -9,795 +10,759 @@
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
-2. [Per-File Analysis -- Core Modules](#per-file-analysis----core-modules)
-3. [Per-File Analysis -- Config System](#per-file-analysis----config-system)
-4. [Per-File Analysis -- Widget Files](#per-file-analysis----widget-files)
-5. [Cross-Cutting Concerns](#cross-cutting-concerns)
-6. [Priority Recommendations](#priority-recommendations)
+2. [Changes Since Last Review](#changes-since-last-review)
+3. [Per-File Analysis -- Core Modules](#per-file-analysis----core-modules)
+4. [Per-File Analysis -- UI Modules](#per-file-analysis----ui-modules)
+5. [Per-File Analysis -- Config System](#per-file-analysis----config-system)
+6. [Per-File Analysis -- Widget Files](#per-file-analysis----widget-files)
+7. [Cross-Cutting Concerns](#cross-cutting-concerns)
+8. [Priority Recommendations](#priority-recommendations)
 
 ---
 
 ## Executive Summary
 
-LunaUITweaks is a well-structured addon with consistent patterns, good combat lockdown awareness, and effective use of frame pooling. The codebase demonstrates a strong understanding of the WoW API and its restrictions. Key strengths include the three-layer combat-safe positioning in ActionBars, proper event-driven architecture, shared utility patterns (logging, SafeAfter, SpeakTTS), and excellent widget framework design with anchor caching and smart tooltip positioning.
+LunaUITweaks is a well-structured addon with consistent patterns, good combat lockdown awareness, and effective use of frame pooling. The codebase demonstrates strong understanding of the WoW API and its restrictions. Key strengths include the three-layer combat-safe positioning in ActionBars, proper event-driven architecture, shared utility patterns (logging, SafeAfter, SpeakTTS), excellent widget framework design with anchor caching, smart tooltip positioning, and the new widget visibility conditions system.
 
-Since the last review, **two previously high-priority issues have been fixed** (MplusTimer nil guard and Misc.lua inviterGUID guard). Two new modules (**TalentManager** and **QuestReminder**) have been added and are well-integrated. The MplusTimer `ApplyLayout` concern has been downgraded after closer inspection. The widget system (26 files) is consistently patterned with event-driven caching, `ApplyEvents` for clean enable/disable, and proper frame pooling. The config panel system has grown to 20 modules with a sidebar navigation that is well-organized.
+### What Changed Since Last Review (2026-02-18 to 2026-02-19)
 
-**Critical Issues:** 0
-**High Priority:** 1
-**Medium Priority:** 18
-**Low Priority / Polish:** 16
+Two new additions were identified since the previous review:
+
+1. **SessionStats widget** (`widgets/SessionStats.lua`) -- NEW untracked file. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload` via `UIThingsDB.widgets.sessionStats` with `GetTime()` epoch comparison to detect true login vs reload. Right-click resets counters. Uses EventBus for `PLAYER_DEAD` and `CHAT_MSG_LOOT`.
+
+2. **Widget Visibility Conditions** -- `Widgets.lua` now contains `EvaluateCondition()` supporting 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Each widget has a condition dropdown in WidgetsPanel. Conditions re-evaluate on 8 EventBus events (combat transitions, group changes, zone changes). BattleRes and PullCounter default to `instance`; all others default to `always`.
+
+### Issue Counts
+
+**Critical Issues:** ~~1~~ All fixed (MplusTimer forward reference)
+**High Priority:** ~~3~~ All fixed (EventBus dedup, Group.lua IsGuildMember, TalentManager instanceType, TalentReminder migration)
+**Medium Priority:** 29 (2 resolved: SessionStats defaults verified, ChatSkin HighlightKeywords downgraded)
+**Low Priority / Polish:** 26+
+
+---
+
+## Changes Since Last Review
 
 ### Previous Findings Status
 
-#### Fixed Since Last Review (2026-02-17 earlier pass)
+#### All Previously Fixed Items (Confirmed Still Fixed)
 
-- **FIXED:** High #1 -- nil guard for `info.quantityString` in MplusTimer.lua `UpdateObjectives`. Line 570 now reads: `local currentCount = info.quantityString and tonumber(info.quantityString:match("%d+")) or 0`.
-- **FIXED:** High #2 -- nil guard for `inviterGUID` in Misc.lua `PARTY_INVITE_REQUEST`. Line 546 now reads: `if inviterGUID and C_FriendList.IsFriend(inviterGUID) then`.
-- **PARTIALLY FIXED:** Medium #5 -- ChatSkin.lua `FormatURLs` now reuses a module-level `placeholders` table (line 63). However, `HighlightKeywords` (line 139) still creates a local `placeholders` table per call. The `FormatURLs` fix is confirmed; `HighlightKeywords` remains open.
+- **FIXED:** MplusTimer.lua nil guard for `info.quantityString`
+- **FIXED:** Misc.lua nil guard for `inviterGUID`
+- **FIXED:** Group.lua `readyCheckActive`/`readyCheckResponses` scoping
+- **FIXED:** Group.lua tooltip uses cached atlas constants
+- **FIXED:** Currency.lua integrated into addon
+- **FIXED:** ChatSkin.lua `FormatURLs` reuses module-level `placeholders` table
+- **FIXED:** LOG_COLORS table in Core.lua hoisted to module scope
+- **FIXED:** Shadowed `guid` variable in Kick.lua removed
+- **FIXED:** Sort functions in ObjectiveTracker.lua pre-defined as upvalues
+- **FIXED:** Periodic cleanup for ObjectiveTracker caches on zone change
+- **FIXED:** `local mt` shadowing in ActionBars.lua resolved
+- **FIXED:** Keystone widget `BuildTeleportMap` combat guards added
+- **FIXED:** Core.lua defaults include `goldData = {}` subtable for bags widget
+- **FIXED:** EventBus.lua pcall removed from dispatch loop
+- **FIXED:** MplusTimer.lua raw event frames fully migrated to EventBus
 
-#### Fixed in Earlier Reviews (2026-02-16)
+#### Previously Identified Issues Still Open
 
-- **FIXED:** LOG_COLORS table in Core.lua hoisted to module scope.
-- **FIXED:** Shadowed `guid` variable in Kick.lua removed.
-- **FIXED:** Sort functions in ObjectiveTracker.lua pre-defined as upvalues.
-- **FIXED:** Periodic cleanup for ObjectiveTracker caches on zone change.
-- **FIXED:** `local mt` shadowing in ActionBars.lua resolved.
-- **FIXED:** Keystone widget `BuildTeleportMap` combat guards added.
+- **FIXED:** `CleanupSavedVariables()` in TalentReminder.lua now migrates old-format builds by wrapping them in arrays instead of deleting them.
+- All medium and low priority items from the fifth pass remain unless explicitly noted as resolved below.
 
-#### Still Open
+### New Findings Summary
 
-- **STILL OPEN:** High #3 -- `readyCheckActive`/`readyCheckResponses` scoping bug in widgets/Group.lua.
-- **DOWNGRADED:** Previous High #3 (MplusTimer ApplyLayout in RenderObjectives) -- On closer inspection, `RenderObjectives` does NOT call `ApplyLayout`. The `ApplyLayout` calls occur after `RenderBossObjectives` (line 519), after `LoadMapData` (line 558), at dungeon start (line 689), in demo mode (line 832), and in `UpdateSettings` (line 842). These are all event-driven, not per-tick. Downgraded to Low -- no longer a performance concern, though consolidating layout calls to a single post-update hook would simplify the code.
-- **STILL OPEN:** Extract shared border utility (Medium).
-- **STILL OPEN:** `HighlightKeywords` per-call placeholders table in ChatSkin.lua (Medium).
-- **STILL OPEN:** `table.concat` in ObjectiveTracker string building (Medium).
+| Severity | Count | Key Issues |
+|----------|-------|-----------|
+| Critical | ~~1~~ 0 | ~~MplusTimer forward reference to undefined local~~ (FIXED) |
+| High | ~~4~~ 0 | ~~EventBus dedup~~ (FIXED), ~~TalentManager instanceType~~ (FIXED), ~~Group.lua IsGuildMember~~ (FIXED), ~~TalentReminder migration~~ (FIXED) |
+| Medium | ~~31~~ 29 | Combat deferral frame leaks, missing combat guards, config panel issues, widget bugs |
+| Low | 26+ | Performance optimizations, dead code, code quality |
 
 ---
 
 ## Per-File Analysis -- Core Modules
 
-### Core.lua (~529 lines)
+### Core.lua (~585 lines)
 
 **Status:** Clean. No new issues.
 
 - `ApplyDefaults` is recursive but only runs once at `ADDON_LOADED`. No hot-path concern.
-- `SpeakTTS` utility provides centralized TTS with graceful fallbacks. Good.
-- Default tables for `questAuto`, `questReminder`, `mplusTimer`, `talentManager`, and all widget subtables are properly initialized.
-
-**Minor:** `ApplyDefaults` does not guard against `db` being nil at the top level. In practice this is safe because callers always pass `UIThingsDB`, but a defensive `if not db then return end` would be prudent.
+- `SpeakTTS` utility provides centralized TTS with graceful fallbacks.
+- Default tables for all modules properly initialized.
+- **Low:** `DEFAULTS` table is constructed inside the `OnEvent` handler, which runs for every addon's `ADDON_LOADED`. Moving it to file scope would avoid wasted allocations on non-matching calls.
+- **Low:** `ApplyDefaults` does not guard against `db` being nil at the top level. Safe in practice.
 
 ---
 
-### ObjectiveTracker.lua (~2131 lines)
+### EventBus.lua (~72 lines)
 
-**Status:** Previous fixes confirmed. Two medium-priority items remain.
+**Status:** All issues fixed except one medium performance concern.
 
-- Sort comparison functions are now pre-defined as module-level upvalues. Good.
-- Zone change cleanup runs properly. Good.
-- **Medium:** Hot path string concatenation in `GetQuestTypePrefix`, `GetWQRewardIcon`, `GetDistanceString`, `GetTimeLeftString`, and `GetQuestLineString` generates ~90 temporary strings per 30-quest update cycle.
-- **Medium:** Two separate frames register overlapping events (`f` and `hookFrame` both use `PLAYER_LOGIN`/`PLAYER_ENTERING_WORLD`).
+- **FIXED: Duplicate registration vulnerability (lines 30-36).** `EventBus.Register` now scans the existing subscriber array for the same function reference before inserting, preventing duplicate listeners from accumulating when `ApplyEvents()`/`UpdateSettings()` is called multiple times. All affected modules (Vendor, Loot, Misc, QuestAuto, QuestReminder, Durability, etc.) are protected without per-module changes.
+
+- **Medium (NEW): Snapshot allocation per event fire (lines 18-20).** A new `snapshot` table is allocated on every event dispatch. For high-frequency events like `BAG_UPDATE_DELAYED`, `UNIT_AURA`, or `UNIT_COMBAT`, this creates GC pressure. Consider reusing a scratch table.
+
+- `RegisterUnit` (line 63) is a nice abstraction returning the wrapper for later unregistration.
+- Unregister properly cleans up empty listener arrays and unregisters the WoW event.
+
+---
+
+### AddonComm.lua (~225 lines)
+
+**Status:** Clean. No issues.
+
+- Rate limiting, deduplication, and legacy prefix mapping are well-implemented.
+- `CleanupRecentMessages()` is properly amortized at 20-message intervals.
+- `C_ChatInfo.InChatMessagingLockdown` check is good defensive practice.
+
+---
+
+### Vendor.lua (~343 lines)
+
+**Status:** Clean. Previous duplicate registration issue fixed.
+
+- **FIXED:** `ApplyVendorEvents()` duplicate listener accumulation resolved by EventBus deduplication.
+- Timer is properly canceled on re-entry (line 200).
+- `InCombatLockdown()` check correctly gates durability check when `onlyCheckDurabilityOOC` is set.
+
+---
+
+### Loot.lua (~556 lines)
+
+**Status:** One medium issue. One low. Previous duplicate registration fixed.
+
+- **FIXED:** Duplicate EventBus registration pattern resolved by EventBus deduplication.
+- **Medium:** `string.find(msg, "^You receive")` is locale-dependent (line 499). On non-English clients, self-loot detection fails.
+- **Low:** `UpdateLayout` has identical code in `if i == 1` and `else` branches. Redundant.
+- Frame pool (`itemPool`) correctly recycles frames. Good pattern.
+- Roster cache for class color lookups is a nice optimization.
+
+---
+
+### Combat.lua (~1227 lines)
+
+**Status:** Two medium issues. Two low.
+
+- **Medium (NEW):** `TrackConsumableUsage` (line 580) has infinite retry risk. If `GetItemInfo` never returns data for a given `itemID`, the function calls itself via `C_Timer.After(0.5, ...)` indefinitely. Should add a retry counter.
+- **Medium:** `GetItemInfo(itemID)` called twice in `TrackConsumableUsage` (lines 577 and 584). Should consolidate.
+- **Low:** `ApplyReminderLock()` is called twice -- once on line 1048 and again on line 1070.
+- Hybrid event approach (own frame for OnUpdate + timer events, EventBus elsewhere) is intentional and correct.
+- `UpdateReminderFrame` correctly exits early if `InCombatLockdown()`. All SecureActionButtonTemplate operations properly guarded.
+
+---
+
+### Misc.lua (~680 lines)
+
+**Status:** Clean. Previous duplicate registration issue fixed.
+
+- **FIXED:** `ApplyMiscEvents()` duplicate EventBus registration resolved by EventBus deduplication.
+- **FIXED (previous):** `PARTY_INVITE_REQUEST` handler properly guards `inviterGUID`.
+- `mailAlertShown` flag prevents repeated alerts. Clean implementation.
+- SCT `SCT_MAX_ACTIVE = 30` cap prevents frame explosion.
+- `issecretvalue()` checks on `CHAT_MSG_SYSTEM` and `UNIT_COMBAT` data. Good defensive coding.
+- **Low:** SCT `OnUpdate` runs per-frame for each active text (up to 30). `ClearAllPoints()` + `SetPoint()` every frame is expensive. Consider animation groups.
+
+---
+
+### Frames.lua (~325 lines)
+
+**Status:** One low-priority observation. Otherwise clean.
+
+- **Low:** `SetBorder` local function defined inside loop body -- should be hoisted.
+- Frame pool correctly avoids creation/destruction overhead.
+- `SaveAllFramePositions` on `PLAYER_LOGOUT` ensures no position data lost.
+
+---
+
+### QuestAuto.lua (~214 lines)
+
+**Status:** Clean. Previous duplicate registration issue fixed.
+
+- **FIXED:** `ApplyEvents()` duplicate EventBus registration resolved by EventBus deduplication.
+- One-shot initialization pattern using `Unregister` inside callback is elegant.
+- `lastGossipOptionID` anti-loop protection is a good safety measure.
+- Shift-to-pause feature is thoughtful UX.
+
+---
+
+### QuestReminder.lua (~381 lines)
+
+**Status:** Clean. Previous duplicate registration issue fixed.
+
+- **FIXED:** `ApplyEvents()` duplicate EventBus registration resolved by EventBus deduplication.
+- Well-organized with clear section comments.
+- Test popup function is useful for config panel testing.
+
+---
+
+### Reagents.lua (~486 lines)
+
+**Status:** Clean. Exemplary EventBus usage.
+
+- `eventsEnabled` guard (line 400) is the **only module that correctly prevents duplicate EventBus registration**. This pattern should be adopted by all other modules.
+- `TooltipDataProcessor` hook (line 322) is the correct modern WoW API.
+- `IsReagent` optimization: tries `GetItemInfoInstant` first (no cache miss), falls back to `GetItemInfo`.
+- `ScanBags()` properly debounced at 0.5s.
+- **Low:** `GetTrackedCharacters` rebuilds list from saved variable on every call.
+
+---
+
+### AddonVersions.lua (~215 lines)
+
+**Status:** Clean. No issues.
+
+- `ScheduleBroadcast` throttle (3-second delay) prevents spam on rapid roster changes.
+- Backwards-compatible message parsing with three format levels is well-handled.
+
+---
+
+## Per-File Analysis -- UI Modules
+
+### MplusTimer.lua (~974 lines)
+
+**Status:** Critical issue fixed. One low remaining.
+
+- **FIXED: Forward reference to undefined local function (lines 701 and 798).** Added `local OnChallengeEvent` forward declaration at file top (line 6) and changed the definition at line 798 from `local function` to assignment. M+ event processing (deaths, boss times, forces, completion) now works correctly.
+
+- **Low:** Death tooltip `OnEnter` creates a temporary `sorted` table per hover. Negligible for 5-player groups.
+- EventBus migration is otherwise complete and clean.
+- `globalEventsRegistered` flag ensures idempotent registration. Good.
+
+---
+
+### TalentManager.lua (~1521 lines)
+
+**Status:** HIGH priority issue fixed. Three medium remain.
+
+- **FIXED: Undefined `instanceType` variable (lines 1141 and 1156).** Moved the `GetInstanceInfo()` call above the `instanceType == "raid"` check so the zone-specific checkbox now correctly defaults to checked in raids.
+
+- **Medium:** `RefreshBuildList` creates multiple temporary tables per call (`raidBuilds`, `dungeonBuilds`, `uncategorizedBuilds`, sorted arrays). Significant garbage for users with 50+ builds. Use module-level scratch tables with `wipe()`.
+- **Medium:** `EnsureEJCache()` calls `EJ_SelectTier(tierIdx)` which mutates global EJ state, potentially disrupting the user's Encounter Journal view.
+- **Medium:** EJ cache saved to SavedVariables (`settings.ejCache`). Grows with each expansion, bloating `UIThingsDB`.
+- **Low:** Uses deprecated `UIDropDownMenuTemplate` API. Works currently but may break in future patches.
+- **Low:** `SetRowAsBuild` sets `OnClick` scripts every time, creating closures.
+
+---
+
+### TalentReminder.lua (~1531 lines)
+
+**Status:** HIGH priority issue fixed. One medium remains.
+
+- **FIXED:** `CleanupSavedVariables()` now migrates old-format builds by wrapping them in arrays (`zones[zoneKey] = { value }`) instead of deleting them.
+
+- **Medium:** `table.remove` index shifting in `DeleteReminder` is fragile for future maintainers. Currently handled correctly (reverse-sorted deletions in TalentPanel.lua), but poorly documented.
+- `ApplyTalents` correctly checks `InCombatLockdown()`.
+- `ReleaseAlertFrame()` properly clears content references while preserving the frame. Good memory management.
+
+---
+
+### ActionBars.lua (~1516 lines)
+
+**Status:** One medium (new). Two low.
+
+- **Medium (NEW):** Combat deferral frame leak (lines 1147-1154 and 1266-1273). Both `ApplySkin()` and `RemoveSkin()` create a new `CreateFrame("Frame")` when called during combat. Frames persist indefinitely (WoW has no `DestroyFrame`). If called repeatedly during combat, frames accumulate.
+  **Fix:** Use a single module-level deferral frame with a flag.
+
+- Three-layer combat-safe positioning remains exemplary.
+- All `RegisterStateDriver`/`UnregisterStateDriver` calls properly guarded.
+- **Low:** File is 1516 lines. Consider splitting skin vs. drawer logic.
+- **Low:** `SkinButton` calls `button.icon:GetMaskTextures()` every time. Only on skin apply, not hot path.
+
+---
+
+### CastBar.lua (~578 lines)
+
+**Status:** Two medium issues.
+
+- **Medium (NEW):** Same combat deferral frame leak as ActionBars.lua (lines 284-291 and 316-323). `HideBlizzardCastBar()` and `RestoreBlizzardCastBar()` each create a disposable frame during combat.
+- **Medium:** `OnUpdateCasting`/`OnUpdateChanneling` call `string.format("%.1fs", ...)` every frame. Throttle to 0.05s would reduce calls by ~75%.
+- **Low:** `ApplyBarColor` allocates a new color table on every cast start when using class color. Could use a reusable module-level table.
+
+---
+
+### ChatSkin.lua (~1325 lines)
+
+**Status:** One medium issue. One low (downgraded).
+
+- **Low (downgraded):** `HighlightKeywords` creates a local `placeholders` table on every call. Fresh per-invocation is correct design to avoid stale state; not a real performance concern.
+- **Medium:** `SetItemRef` is replaced globally instead of using `hooksecurefunc`. Breaks the addon hook chain.
+- URL detection with `lunaurl:` custom hyperlink type is well-implemented.
+- Copy box with `GetMessageInfo` + fallback is good defense-in-depth.
+
+---
+
+### Kick.lua (~1607 lines)
+
+**Status:** Clean. No new issues.
+
+- `OnUpdateHandler` runs at 0.1s throttle. Good.
+- `issecretvalue(spellID)` checks present.
+- Two display modes (standalone vs party frame attachment) cleanly separated.
+- `RegisterUnitEvent` for per-unit watching reduces event traffic.
+- **Low:** `activeCDs` table churn at 0.1s interval. Negligible for small interrupt lists.
+
+---
+
+### MinimapCustom.lua (~1058 lines)
+
+**Status:** Two medium issues. Two low. Unchanged from previous review.
+
+- **Medium:** `SetDrawerCollapsed` shows/hides collected minimap buttons without `InCombatLockdown()` check. Could taint secure buttons from other addons.
+- **Medium:** `CollectMinimapButtons` iterates all Minimap children on every call. Not cached.
+- **Low:** `GetMinimapShape = nil` for round shape; should be `function() return "ROUND" end`.
+- **Low:** Dead code in zone drag handler: `select(2, Minimap:GetTop(), Minimap:GetTop())`.
+- **Low:** Clock ticker (`C_Timer.NewTicker(1, UpdateClock)`) never cancelled when feature disabled.
+
+---
+
+### ObjectiveTracker.lua (~2129 lines)
+
+**Status:** Two medium items remain. One low. Unchanged.
+
+- **Medium:** Hot path string concatenation generates ~90 temporary strings per 30-quest update cycle.
+- **Medium:** Two separate frames (`f` and `hookFrame`) register overlapping events.
 - **Low:** `OnAchieveClick` does not type-check `self.achieID`.
 
 ---
 
-### Vendor.lua (~347 lines)
+### MinimapButton.lua (~101 lines)
 
 **Status:** Clean. No issues.
-
----
-
-### Loot.lua (~579 lines)
-
-**Status:** One low-priority cleanup.
-
-- **Low:** `UpdateLayout` has identical code in `if i == 1` and `else` branches. The first-iteration special case is redundant.
-
----
-
-### Combat.lua (~1226 lines)
-
-**Status:** One low-priority cleanup.
-
-- `ScanConsumableBuffs` exits early when targets found. Good.
-- `ScanBagConsumables` is properly debounced. Good.
-- **Low:** `TrackConsumableUsage` calls `GetItemInfo(itemID)` twice. Could consolidate.
-
----
-
-### Misc.lua (~700 lines)
-
-**Status:** Clean. Previous issue fixed.
-
-- **FIXED:** `PARTY_INVITE_REQUEST` handler now properly guards `inviterGUID` with `if inviterGUID and C_FriendList.IsFriend(inviterGUID)` at line 546.
-- SCT `SCT_MAX_ACTIVE = 30` cap prevents frame explosion. Good.
-- TTS calls use centralized `Core.SpeakTTS`. Good.
-
----
-
-### Frames.lua (~250 lines)
-
-**Status:** Clean. No issues.
-
----
-
-### TalentReminder.lua (~1526 lines)
-
-**Status:** Clean. No new issues.
-
-- `CompareTalents` is acceptable performance for zone-change frequency.
-- C_Traits API calls have proper existence checks.
-- `ApplyTalents` correctly checks `InCombatLockdown()`.
-- `GetCurrentLocation()` returns comprehensive location info for snapshot UI. Good.
-- `ReleaseAlertFrame()` properly clears content references while preserving the frame for reuse. Good memory management.
-
----
-
-### TalentManager.lua (~1509 lines) -- NEW
-
-**Status:** Two medium-priority concerns, one low-priority note.
-
-This is a new module that provides a side panel anchored to `PlayerSpellsFrame` for managing talent builds. It integrates with TalentReminder for talent comparison and build loading.
-
-**Strengths:**
-- Hooks `PlayerSpellsFrame` show/hide to auto-display the panel. Clean lifecycle management.
-- EJ (Encounter Journal) cache is stored in saved variables with `addonVersion`/`gameBuild` versioning, so it only rebuilds when the game updates. Smart cache invalidation.
-- Build list uses row recycling via `GetOrCreateRow(index)`. Good frame pooling.
-- Collapsible tree view (Category > Instance > Difficulty > Builds) with persistent collapse state. Good UX.
-- Import/export dialog with proper URL prefix stripping for wowhead import strings. Good.
-- StaticPopupDialogs for delete and update confirmation. Correct pattern.
-- `CopyBuild` uses a `DeepCopy` helper for talent data. Correct approach.
-- `RefreshBuildList` filters by current class/spec and shows talent match status. Good integration.
-
-**Issues:**
-
-- **Medium:** `RefreshBuildList` creates temporary tables on every call: `raidBuilds`, `dungeonBuilds`, `uncategorizedBuilds`, and sorted name/diff arrays inside `RenderCategory`. For a user with many builds (50+), this creates significant garbage per refresh. Consider reusing module-level scratch tables with `wipe()`.
-- **Medium:** `EnsureEJCache()` calls `EJ_SelectTier(tierIdx)` which changes the global Encounter Journal tier selection state. While the code saves and restores the original tier, if the EJ UI is open simultaneously, the tier switch could cause a visual flicker. Consider deferring the cache build to `PLAYER_ENTERING_WORLD` when the EJ is unlikely to be open.
-- **Low:** `SetRowAsBuild` sets `OnClick` scripts on the edit/copy/update/delete/load buttons every time the row is reused. These closures capture `instanceID`, `diffID`, `zoneKey`, and `reminder` per refresh. While functionally correct, pre-allocating a single handler that reads from a stored data field on the row would reduce closure creation.
-
----
-
-### QuestReminder.lua (~new) -- NEW
-
-**Status:** Clean. Well-designed.
-
-This module tracks repeatable (daily/weekly) quests and alerts the player on login if any are incomplete.
-
-**Strengths:**
-- Uses `LunaUITweaks_QuestReminders` saved variable (separate from UIThingsDB). Correct for data that should survive settings resets.
-- Auto-tracks accepted repeatable quests via `QUEST_ACCEPTED` event. Smart.
-- Popup alert with scroll frame, TTS, chat message, and sound notification. Comprehensive.
-- `IsQuestRepeatable()` checks both `C_QuestLog.IsRepeatableQuest` and quest frequency. Good.
-- Config panel integration with quest management (add/remove/edit). Good.
-
----
-
-### QuestAuto.lua (~190 lines)
-
-**Status:** Clean. Well-designed.
-
-- `HandleQuestComplete` only auto-completes when `GetNumQuestChoices() <= 1`. Correct safety check.
-- `HandleGossipShow` skips auto-gossip when quests are present. Smart.
-- `lastGossipOptionID` prevents gossip interaction loops. Good defensive coding.
-- Event registration via `ApplyEvents()` is properly segmented by feature flag. Good.
-
----
-
-### MplusTimer.lua (~874 lines)
-
-**Status:** Previous high-priority nil guard fixed. One medium-priority optimization downgraded to low.
-
-- State management via `state` table with `ResetState()` is clean.
-- `OnTimerTick` runs at 0.1s throttle. Good.
-- `InitFrames()` guard prevents double-init. Good.
-- `EnsureInit()` handles late enable. Good.
-- Auto-slot keystone feature operates on an independent event frame. Clean separation.
-- Demo mode for config preview properly creates and cleans up state. Good.
-
-- **FIXED:** `UpdateObjectives` line 570 now reads: `local currentCount = info.quantityString and tonumber(info.quantityString:match("%d+")) or 0`. The nil guard is properly in place.
-- **Low (downgraded from High):** `ApplyLayout()` calls are event-driven (dungeon start, data load, settings change), not per-tick. No performance concern. Consolidating to a single post-update hook would be a minor cleanup.
-
----
-
-### ActionBars.lua (~1552 lines)
-
-**Status:** Previous fixes confirmed. Two low-priority cleanups.
-
-- Three-layer combat-safe positioning remains well-implemented.
-- All `RegisterStateDriver`/`UnregisterStateDriver` calls are properly guarded.
-- Bar position migration from old `barOffsets` format to new absolute `barPositions` is handled gracefully.
-- Edit mode integration (release buttons on enter, reclaim on exit) is thorough.
-- Conflict addon detection (Dominos/Bartender4/ElvUI) prevents conflicts. Good.
-- **Low:** File is 1552 lines; consider splitting skin vs. drawer logic.
-- **Low:** `SkinButton` calls `button.icon:GetMaskTextures()` and iterates results every time it skins a button. This is only called on skin apply (not per-frame), but could be cached.
-
----
-
-### CastBar.lua (~430 lines)
-
-**Status:** One medium-priority optimization.
-
-- `HideBlizzardCastBar` uses `RegisterStateDriver`. Correct.
-- Empower spell support with `UNIT_SPELLCAST_EMPOWER_*` events. Good coverage.
-- **Medium:** `OnUpdateCasting`/`OnUpdateChanneling` call `string.format` every frame for cast time text. Throttle to 0.05s would reduce calls by ~75%.
-
----
-
-### ChatSkin.lua (~1330 lines)
-
-**Status:** One medium-priority optimization remains (partially fixed).
-
-- `FormatURLs` now reuses a module-level `placeholders` table (line 63). **FIXED**.
-- `hooksInstalled` prevents duplicate hooks. Good.
-- URL detection with `lunaurl:` custom hyperlink type is well-implemented.
-- Copy box with `GetMessageInfo` + fallback to visible `FontString` regions. Good defense-in-depth.
-- Container frame with resize grip, drag overlay, and right-click tab unlock. Good UX.
-- `issecretvalue()` check on `GetMessageInfo` results. Correct.
-- **Medium:** `HighlightKeywords` (line 139) still creates a local `placeholders` table on every call. The module-level `placeholders` at line 63 is used by `FormatURLs` but not shared with `HighlightKeywords`. Should reuse a separate module-level table for keyword highlighting with `wipe()`.
-- **Medium (NEW):** `SetItemRef` is replaced globally at line 1037 (`local origSetItemRef = SetItemRef; SetItemRef = function(...)`) instead of using `hooksecurefunc`. This means if another addon also replaces `SetItemRef` after ChatSkin loads, the ChatSkin replacement is lost. Conversely, if another addon replaced it before ChatSkin, that addon's replacement is kept as `origSetItemRef` but the call chain is fragile. Use `hooksecurefunc("SetItemRef", ...)` instead, or at minimum document the limitation.
-- **Medium (NEW):** `Disable()` does not restore the original `SetItemRef`. Once `SetupChatSkin()` runs, the `SetItemRef` override is permanent for the session regardless of the enabled state. The `origSetItemRef` local is captured inside the `if not hooksInstalled then` block and is not accessible from `Disable()`. This means the URL hyperlink handler remains active even when the chat skin is disabled.
-
----
-
-### Kick.lua (~1599 lines)
-
-**Status:** Clean. Previous fixes confirmed.
-
-- `OnUpdateHandler` runs at 0.1s throttle. Good.
-- `issecretvalue(spellID)` checks are present. Good.
-- Cleanup functions properly wipe state tables. Good.
-- Two display modes (standalone container vs party frame attachment) are cleanly separated.
-- `RegisterUnitEvent` for per-unit spell cast watching reduces event traffic. Good.
-
----
-
-### AddonComm.lua (~200 lines)
-
-**Status:** Clean. No issues.
-
-- Rate limiting (MIN_SEND_INTERVAL = 1.0s) and dedup (DEDUP_WINDOW = 1.0s). Good.
-- Legacy prefix support (LunaVer, LunaKick) for backwards compatibility. Good.
-- Periodic cleanup of expired entries. Good.
-
----
-
-### Reagents.lua (~330 lines)
-
-**Status:** One low-priority optimization.
-
-- `ScanBags` is debounced at 0.5s. Good.
-- Live bag count for current character, cached bank data. Good.
-- `TooltipDataProcessor` for tooltip integration. Correct modern API.
-- **Low:** `GetTrackedCharacters` rebuilds list from saved variable on every call. Consider caching with invalidation.
-
----
-
-### AddonVersions.lua (~220 lines)
-
-**Status:** Clean. No issues.
-
-- Uses centralized AddonComm for VER:HELLO and VER:REQ messages. Good.
-- Backwards-compatible message parsing. Good.
-
----
-
-### MinimapButton.lua (~96 lines)
-
-**Status:** Clean. No issues.
-
-- Angle-based positioning around minimap edge works correctly.
-- Tooltip and click handler are straightforward.
-
----
-
-### MinimapCustom.lua (~1067 lines)
-
-**Status:** Two medium-priority issues.
-
-- Complex minimap customization with shape, border, zone text, clock, icon repositioning, and drawer.
-- HybridMinimap support for Blizzard's alternative minimap rendering.
-- Drawer button collection with blacklist filtering, collapse/expand, and lock/unlock. Well-implemented.
-- Three-sided borders on drawer and toggle button for seamless visual join. Good attention to detail.
-- Clock update uses `C_Timer.NewTicker(1, UpdateClock)`. Good for real-time display.
-
-- **Medium:** `CollectMinimapButtons` iterates all children of `Minimap` on every call (including a delayed re-collect 3 seconds after setup). For minimaps with many addon buttons (20+), iterating all children and checking names against the `DRAWER_BLACKLIST` exclusion table is moderately expensive. Consider using a `collectedSet` lookup (already used for dedup) to skip already-processed children.
-- **Medium:** `SetDrawerCollapsed` calls `btn:Show()`/`btn:Hide()` on collected minimap buttons. If any addon creates secure minimap buttons, this could taint during combat. The module does not check `InCombatLockdown()` before showing/hiding collected buttons in the collapse toggle handler. Add a combat lockdown guard.
-- **Low (NEW):** `ApplyMinimapShape` overwrites the global `GetMinimapShape` function (line ~110: `function GetMinimapShape() return "SQUARE" end` or `GetMinimapShape = nil`). This is intentional to communicate the minimap shape to other addons, but setting it to `nil` for round shape means any addon calling `GetMinimapShape()` after that point will get an error instead of the default "ROUND". Consider setting it to `function() return "ROUND" end` instead of nil.
-- **Low (NEW):** In the zone text `OnDragStop` handler (line ~358), there is a redundant `select(2, ...)` call: `local mapCX, mapTop = Minimap:GetCenter(), select(2, Minimap:GetTop(), Minimap:GetTop())`. The `select(2, Minimap:GetTop(), Minimap:GetTop())` just returns `Minimap:GetTop()` again. The next line `mapTop = Minimap:GetTop()` overwrites it anyway, making the first assignment dead code. Clean up to just `local mapTop = Minimap:GetTop()`.
 
 ---
 
 ## Per-File Analysis -- Config System
 
-### config/ConfigMain.lua (~310 lines)
+### config/ConfigMain.lua (~433 lines)
 
-**Status:** Clean. Well-structured.
+**Status:** One low-priority structural concern. Otherwise clean.
 
-- Sidebar navigation for 20 modules. Addon Versions correctly placed last (id=20).
-- Panel creation and setup function wiring is consistent.
-- Blizzard Settings integration via `Settings.RegisterAddOnCategory`. Good.
-- `OnHide` auto-locks frames, loot anchor, SCT anchors, and widgets. Good cleanup.
-- Closes M+ Timer demo on config window close. Good.
-- `UISpecialFrames` registration for ESC-to-close. Good.
+- Sidebar navigation for 20+ modules. Addon Versions correctly placed last.
+- `OnHide` auto-locks frames, loot anchor, SCT anchors, and widgets; closes M+ demo.
+- **Low:** ~180 lines of mechanical boilerplate creating 20 panel frames with identical patterns. Could be replaced with a data-driven loop.
 
 ---
 
-### config/Helpers.lua (~380 lines)
+### config/Helpers.lua (~619 lines)
 
-**Status:** One low-priority observation.
+**Status:** Clean. Well-designed utility library.
 
 - `BuildFontList` discovers fonts from both hardcoded paths and dynamic `GetFonts()` API. Comprehensive.
-- `CreateFontDropdown` caches font objects in `fontObjectCache` for preview rendering. Good.
-- `CreateColorSwatch` with opacity support and proper cancel/restore. Good.
-- `CreateTextureDropdown` with visual preview bar. Nice touch.
-- `BuildTextureList` dynamically discovers textures from existing `StatusBar` frames. Smart approach.
-- **Low:** Font list is built once at load time and never invalidated. If a user installs new fonts via a SharedMedia addon, they will not appear until `/reload`. This is acceptable behavior but could be documented.
+- `CreateColorSwatch` is the canonical color picker implementation. Used correctly by 8 panels.
+- **Low:** Font list built once at load time. New fonts require `/reload`.
 
 ---
 
 ### config/panels/TrackerPanel.lua (~1159 lines)
 
-**Status:** One medium-priority concern.
+**Status:** One medium-priority concern. Unchanged.
 
-- Very large panel file with comprehensive settings for the objective tracker.
-- Color picker inline code is duplicated many times.
-- **Medium:** The color picker pattern is repeated ~15 times in this file with near-identical code. Could be extracted to a `ConfigHelpers.OpenColorPicker()` utility, reducing ~200 lines.
+- **Medium:** 7 inline color swatches (~315 lines) duplicate `Helpers.CreateColorSwatch` functionality. Also uses `UIDropDownMenu_CreateInfo()` for color picker info tables (semantically incorrect).
 
 ---
 
-### config/panels/TalentPanel.lua (~1154 lines)
+### config/panels/TalentPanel.lua (~1142 lines)
 
-**Status:** Clean. Well-structured for a complex feature.
+**Status:** Clean. Updated for array format. Minor dead code.
 
-- Static popup dialogs for delete confirmation are properly defined.
-- Reminder list with zone-based grouping and difficulty filtering.
-- `UpdateButtonStates` event listener correctly fires on `PLAYER_ENTERING_WORLD`.
-
----
-
-### config/panels/TalentManagerPanel.lua -- NEW
-
-**Status:** Clean. Follows established patterns.
-
-- Settings for panel width, font, colors, background, border.
-- Proper `UpdateSettings` callback wiring. Good.
+- `sortedReminders` properly handles new array format with `ipairs(builds)`.
+- Delete operations correctly iterate in reverse for safe `table.remove`.
+- **Low:** ~40 lines of unreachable nil-checks for row elements that are always created in the initialization block above.
 
 ---
 
-### config/panels/QuestReminderPanel.lua -- NEW
+### config/panels/ActionBarsPanel.lua (~792 lines)
 
-**Status:** Clean. Follows established patterns.
+**Status:** One medium concern.
 
-- Quest list management with add/remove/edit.
-- Proper integration with `QuestReminder` module's `UpdateSettings`. Good.
-
----
-
-### config/panels/QuestAutoPanel.lua -- NEW
-
-**Status:** Clean. Follows established patterns.
-
-- Feature flags for auto-accept, auto-complete, auto-gossip with clear descriptions.
-- Proper `ApplyEvents` callback. Good.
+- **Medium:** 5 inline color swatches (~225 lines) duplicate `Helpers.CreateColorSwatch`.
+- Conflicting addon detection and bar drag UX are well-implemented.
 
 ---
 
-### config/panels/MplusTimerPanel.lua -- NEW
+### config/panels/MinimapPanel.lua (~658 lines)
 
-**Status:** Clean. Follows established patterns.
+**Status:** Two medium concerns.
 
-- Demo mode toggle for live preview. Good UX.
-- Auto-slot keystone checkbox with tooltip explanation. Good.
-
----
-
-### config/panels/ActionBarsPanel.lua (~570 lines)
-
-**Status:** One low-priority observation.
-
-- Conflicting addon detection auto-disables skin and shows warning. Smart.
-- `CreateSliderEditBox` helper is well-implemented for synchronized slider+editbox.
-- Per-bar position controls with drag-to-position integration. Good.
-- **Low:** Per-bar X/Y position sliders create many frames, but only once. No leak concern.
+- **Medium:** 5 inline color swatches (~225 lines) duplicate `Helpers.CreateColorSwatch`.
+- **Medium (NEW):** Border color swatch (lines 107-134) missing `opacityFunc` handler. Dragging the opacity slider won't update the border color in real-time.
 
 ---
 
-### config/panels/FramesPanel.lua (~450 lines)
+### config/panels/FramesPanel.lua (~641 lines)
 
-**Status:** Clean. Good use of dynamic panel rebuilding on frame selection change.
+**Status:** Two medium concerns.
 
----
-
-### config/panels/MinimapPanel.lua (~500 lines)
-
-**Status:** Clean. Comprehensive minimap settings.
+- **Medium:** 2 inline color swatches (~90 lines) duplicate `Helpers.CreateColorSwatch`.
+- **Medium (NEW):** Duplicate functions: `CopyTable` (lines 141-151) duplicates `Helpers.DeepCopy`; `NameExists` is defined twice identically.
 
 ---
 
-### config/panels/WidgetsPanel.lua (~350 lines)
+### config/panels/AddonVersionsPanel.lua (~614 lines)
 
-**Status:** One medium-priority observation.
+**Status:** Two medium concerns.
 
-- 25+ individual widget checkboxes with anchor dropdown and order swap buttons.
-- **Medium:** `RefreshWidgetCheckboxes()` rebuilds all widget rows from scratch on every call. Old frames are not explicitly hidden or recycled. Over many config window open/close cycles, this could accumulate orphaned frames. Consider pooling or reusing widget row frames.
+- **Medium:** Export/import dialog frames created per click. WoW frames never garbage collected. Should create once and show/hide.
+- **Medium:** `DeserializeString` uses `loadstring("return " .. str)` with `setfenv` sandboxing but no input length check.
+
+---
+
+### config/panels/LootPanel.lua (~360 lines)
+
+**Status:** One medium concern (new).
+
+- **Medium (NEW):** `addonTable.Loot.UpdateSettings()` called without nil-checking `addonTable.Loot` first (8 occurrences). If Loot module fails to load, any config change crashes.
+
+---
+
+### config/panels/VendorPanel.lua (~185 lines)
+
+**Status:** One medium concern (new).
+
+- **Medium (NEW):** `addonTable.Vendor.UpdateSettings` accessed without nil-checking `addonTable.Vendor` first (6 occurrences). Same crash risk as LootPanel.
+
+---
+
+### config/panels/WidgetsPanel.lua (~413 lines)
+
+**Status:** One medium observation.
+
+- **Medium:** Widget anchor dropdown won't show new frames added while config is open.
+- **Medium:** 1 inline color swatch when `Helpers.CreateColorSwatch` is available.
+
+---
+
+### config/panels/NotificationsPanel.lua (~331 lines)
+
+**Status:** One medium concern.
+
+- **Medium:** 2 inline color swatches (~76 lines) duplicate `Helpers.CreateColorSwatch`.
 
 ---
 
 ### Other Config Panels
 
-**VendorPanel.lua, CombatPanel.lua, LootPanel.lua, MiscPanel.lua, KickPanel.lua, ChatSkinPanel.lua, NotificationsPanel.lua, CastBarPanel.lua, ReagentsPanel.lua, AddonVersionsPanel.lua** -- All clean. Follow established patterns consistently. No issues found.
+**CombatPanel.lua, KickPanel.lua, MiscPanel.lua, CastBarPanel.lua, ChatSkinPanel.lua, QuestReminderPanel.lua, QuestAutoPanel.lua, MplusTimerPanel.lua, TalentManagerPanel.lua, ReagentsPanel.lua** -- All clean. Follow established patterns. MplusTimerPanel.lua's `SwatchRow` helper is the best DRY example with 15 swatches using `CreateColorSwatch`.
 
 ---
 
 ## Per-File Analysis -- Widget Files
 
-### widgets/Widgets.lua (Framework, ~300 lines)
+### widgets/Widgets.lua (Framework, ~460 lines)
 
-**Status:** Well-designed framework. One medium-priority note.
+**Status:** Three medium concerns. One low.
 
-- `CreateWidgetFrame` provides consistent frame creation with drag, position save, and coord display.
-- `SmartAnchorTooltip` adjusts tooltip anchor based on widget position relative to screen center. Smart.
-- Anchor cache (`RebuildAnchorCache`/`InvalidateAnchorCache`) avoids repeated table scans. Good.
-- `UpdateAnchoredLayouts` handles horizontal/vertical docking with even spacing. Good.
-- `EstimateTimedScore`/`EstimateRatingGain` M+ rating helpers are useful shared utilities.
-- Ticker lifecycle management via `StartWidgetTicker`/`StopWidgetTicker` tied to enabled state. Good.
-
-- **Medium:** The widget ticker calls `UpdateContent` on every enabled widget at the configured interval (default 1s). For 25 enabled widgets, this is 25 function calls per second. Many widgets (Mail, Zone, Guild, Friends, Combat, ItemLevel) are purely event-driven. Their `UpdateContent` functions just set text to a cached value. An `eventDriven` flag could skip these from the ticker.
+- **Medium (NEW):** `UpdateAnchoredLayouts` creates fresh temporary tables every 1-second tick. Should cache sorted layout and rebuild only when widgets change.
+- **Medium (NEW):** `UpdateVisuals` (lines 266-274) builds its own anchor lookup, duplicating the cached `RebuildAnchorCache()` system. Should reuse the cache.
+- **Medium (previous):** Widget ticker calls `UpdateContent` on all enabled widgets every second. Many are purely event-driven. An `eventDriven` flag could skip these.
+- **Low (NEW):** `OnUpdate` script on every widget frame fires every render frame (60-144 Hz). Body only executes when `self.isMoving` is true. ~2000+ no-op calls/second across 20+ widgets. Set `OnUpdate` only in `OnDragStart`, clear in `OnDragStop`.
+- NEW: `EvaluateCondition()` with 7 conditions is well-implemented. `SmartAnchorTooltip` adjusts tooltip anchor based on screen position.
 
 ---
 
-### widgets/FPS.lua
+### widgets/Group.lua (~569 lines)
 
-**Status:** One medium-priority concern.
+**Status:** HIGH severity issue fixed.
 
-- Jitter calculation from latency history with circular buffer. Well-implemented.
-- Memory data throttled to `MEM_UPDATE_INTERVAL` (15s). Good.
-- Addon memory pool (`addonMemPool`) recycles table entries. Good.
+- **FIXED: `IsGuildMember()` does not exist (line 391).** Replaced with `IsInGuild()` guard + `C_GuildInfo.MemberExistsByName(shortName)` using the documented API. Name is split on `-` to strip server suffix.
 
-- **Medium:** `UpdateAddOnMemoryUsage()` is an expensive API call. The 15s throttle mitigates this, but the tooltip `OnEnter` handler triggers `RefreshMemoryData` if the interval has elapsed, meaning hovering could cause a frame rate hitch. Consider moving the scan to a background timer.
-
----
-
-### widgets/Bags.lua
-
-**Status:** One low-priority observation.
-
-- Gold tracking across characters with sort and warband bank integration. Good.
-- `ApplyEvents` for clean enable/disable. Good.
-- **Low:** Verify Core.lua defaults include `goldData = {}` subtable for the bags widget.
+- **FIXED (previous):** `readyCheckActive`/`readyCheckResponses` scoping correct.
+- **FIXED (previous):** Cached atlas constants used in tooltip.
 
 ---
 
-### widgets/Group.lua
+### widgets/Teleports.lua (~580 lines)
 
-**Status:** One high-priority bug.
+**Status:** Two medium issues (new).
 
-- Raid sorting logic (odds/evens, split half, healers to last) is comprehensive and well-implemented.
-- Ready check tracking with color-coded status. Good design.
-- `TANK_ICON`, `HEALER_ICON`, `DPS_ICON` are cached atlas markup strings. Good optimization.
-- Cached group composition via `RefreshGroupCache()` updated on events, not every tick. Good.
-- `ApplyEvents(enabled)` properly registers/unregisters all 6 events. Good.
+- **Medium (NEW): FontString inserted into button array causes crash (lines 549-554).** When no teleports are available, a FontString is pushed into `mainButtons`. Later, `ClearMainPanel()` calls `ReleaseButton(btn, btn:IsProtected())` on it. FontStrings have no `IsProtected()` method, causing `attempt to call method 'IsProtected' (a nil value)`.
+  **Fix:** Track the "no spells" FontString separately from the button array.
 
-- **FIXED (was HIGH Bug):** `readyCheckActive` and `readyCheckResponses` declarations moved before the `OnEnter` closure so both the tooltip overlay and `UpdateContent` properly capture them.
-- **FIXED (was Low):** `OnEnter` tooltip handler now uses cached `TANK_ICON`/`HEALER_ICON`/`DPS_ICON` constants instead of calling `CreateAtlasMarkup` per member per hover.
+- **Medium (NEW): `ReleaseButton` SetAttribute during combat (lines 322-336).** When the panel is hidden (ESC, clicking outside), `ClearMainPanel`/`ClearSubPanel` call `ReleaseButton` on secure buttons. `SetAttribute` on a secure frame during `InCombatLockdown()` causes taint. The panel creation guards against opening in combat, but the panel can be hidden at any time.
+  **Fix:** Guard secure operations in `ReleaseButton` with `if not InCombatLockdown() then`.
 
 ---
 
-### widgets/Teleports.lua
+### widgets/Keystone.lua (~411 lines)
 
-**Status:** Clean. Well-implemented.
+**Status:** Two medium issues. One new.
 
-- Spellbook scan cache with invalidation on `SPELLS_CHANGED` and `PLAYER_TALENT_UPDATE`. Good.
-- Button pools for both regular and secure buttons with proper `AcquireButton`/`ReleaseButton`. Good.
-- `InCombatLockdown()` guards on all secure button operations. Good.
-- Current season detection via `C_ChallengeMode.GetMapTable()` and tooltip destination matching. Smart.
-- `tinsert(UISpecialFrames, ...)` for ESC-to-close. Good.
-- Dedup sets prevent hardcoded spells from appearing twice in scan results. Good.
+- **Medium (NEW): Position saved in wrong schema (line 137).** Secure overlay's `OnDragStop` saves to `UIThingsDB.widgets.keystone.pos = {x, y}`, but the framework reads from `UIThingsDB.widgets.keystone.point/relPoint/x/y`. Position is never restored -- widget snaps back after reload.
+  **Fix:** Use the framework's position saving pattern.
 
----
-
-### widgets/Keystone.lua
-
-**Status:** Previous fixes confirmed. Clean.
-
-- `BuildTeleportMap` checks `InCombatLockdown()`. Good.
-- `pcall`/`issecretvalue()` for tooltip text access. Good.
-- Teleport cache invalidated on `SPELLS_CHANGED` and `PLAYER_REGEN_ENABLED`. Good.
-- Dungeon name variant matching handles mega dungeon wings and prefixes. Good.
-- `SecureActionButtonTemplate` for click-to-teleport with proper drag passthrough. Good.
+- **Medium (previous):** Full bag scan every tick in `GetPlayerKeystone()`. Should cache and rescan on `BAG_UPDATE`.
+- **FIXED (previous):** Combat guards on `BuildTeleportMap`.
 
 ---
 
-### widgets/WeeklyReset.lua
+### widgets/SessionStats.lua (~143 lines) -- NEW
 
-**Status:** Clean. No issues.
+**Status:** Clean. Integration verified.
 
----
-
-### widgets/Coordinates.lua
-
-**Status:** Clean. No issues.
-
----
-
-### widgets/BattleRes.lua
-
-**Status:** Clean. No issues.
+- **FIXED: Defaults verified present.** `DEFAULTS.widgets.sessionStats` exists in Core.lua and `widgets/SessionStats.lua` is listed in the TOC.
+- Uses EventBus for `PLAYER_DEAD` and `CHAT_MSG_LOOT`. Clean implementation.
+- Right-click reset is a nice UX touch.
+- `issecretvalue()` check on gold amount (line 73). Good defensive coding.
 
 ---
 
-### widgets/Speed.lua
+### widgets/MythicRating.lua (~174 lines)
 
-**Status:** One low-priority note.
+**Status:** One medium issue (new).
 
-- `C_PlayerInfo.GetGlidingInfo()` for skyriding speed. Good.
-- OnUpdate throttled at 0.5s. Good for real-time speed.
-- **Low:** The OnUpdate handler and the widget ticker's `UpdateContent` call are redundant. The OnUpdate is more responsive (correct for speed data); the ticker call is wasted. Consider making `UpdateContent` a no-op.
+- **Medium (NEW): `bestRunLevel` may be nil (lines 85, 94).** The `MapSeasonBestInfo` table may not have `bestRunLevel` field, causing `string.format("+%d", nil)` error in tooltip. Add nil guard.
 
 ---
 
-### widgets/ItemLevel.lua
+### widgets/Friends.lua (~132 lines)
 
-**Status:** Clean. No issues.
+**Status:** One medium issue (new).
 
----
-
-### widgets/Volume.lua
-
-**Status:** Clean. No issues.
+- **Medium (NEW): `C_ClassColor.GetClassColor` given localized class name (line 22).** `C_FriendList.GetFriendInfoByIndex` returns `className` as localized text. `C_ClassColor.GetClassColor` expects English token. All WoW friend names display white on non-English clients. Not a crash (nil check handles it) but functionally broken.
 
 ---
 
-### widgets/Zone.lua
+### widgets/Durability.lua (~99 lines)
 
-**Status:** Clean. No issues.
+**Status:** One medium issue (new).
 
----
-
-### widgets/PvP.lua
-
-**Status:** Clean. No issues.
+- **FIXED (partial):** Duplicate EventBus registration is now prevented by EventBus deduplication. However, registrations (lines 35-37) still happen unconditionally outside `ApplyEvents` — events fire even when the widget is disabled. Should move into `ApplyEvents`.
 
 ---
 
-### widgets/MythicRating.lua
+### widgets/Vault.lua (~126 lines) and widgets/WeeklyReset.lua (~122 lines)
 
-**Status:** Clean. No issues.
+**Status:** One medium issue each (new).
 
----
-
-### widgets/Vault.lua
-
-**Status:** Clean. No issues.
+- **Medium (NEW):** Both use `ShowUIPanel`/`HideUIPanel` on Blizzard panels (`WeeklyRewardsFrame`, `CalendarFrame`) without `InCombatLockdown()` guard. Will cause taint errors if clicked during combat.
 
 ---
 
-### widgets/DarkmoonFaire.lua
+### widgets/Spec.lua (~74 lines)
 
-**Status:** One low-priority edge case.
+**Status:** Two medium issues.
 
-- **Low:** DMF date calculation uses `time()`/`date("*t")` (system time). Inherent limitation; not fixable.
-
----
-
-### widgets/Mail.lua
-
-**Status:** Clean. No issues.
+- **Medium (NEW):** `SetSpecialization` callable during combat via delayed menu click. If combat begins after the menu opens but before the user clicks, taint error occurs.
+- **Medium (previous):** `UpdateContent` calls `GetSpecialization()`, `GetSpecializationInfo()`, `GetLootSpecialization()`, and `GetSpecializationInfoByID()` every 1-second tick. Should cache and update on spec change events only.
 
 ---
 
-### widgets/PullCounter.lua
+### widgets/FPS.lua (~130 lines)
 
-**Status:** Clean. No issues.
+**Status:** One medium concern. One low. Unchanged.
 
----
-
-### widgets/Hearthstone.lua
-
-**Status:** Clean. Well-implemented.
+- **Medium:** `UpdateAddOnMemoryUsage()` in tooltip `OnEnter`. Expensive call could cause frame hitch.
+- **Low:** Redundant sort of already-sorted addon memory list.
 
 ---
 
-### widgets/Time.lua
+### widgets/Speed.lua (~64 lines)
 
-**Status:** Clean. No issues.
+**Status:** One low note.
 
----
-
-### widgets/Spec.lua
-
-**Status:** Clean. No issues.
+- **Low:** Dual update mechanism: `HookScript("OnUpdate", ...)` at 0.5s + framework ticker at 1s. One call is redundant.
 
 ---
 
-### widgets/Durability.lua
+### widgets/Guild.lua (~69 lines)
 
-**Status:** Clean. No issues.
+**Status:** One low note.
 
----
-
-### widgets/Combat.lua (widget)
-
-**Status:** Clean. Event-driven with no ticker overhead. Good.
+- **Low:** No cap on tooltip members for large guilds. 500+ member guilds could cause rendering issues.
 
 ---
 
-### widgets/Friends.lua
+### widgets/DarkmoonFaire.lua (~133 lines)
 
-**Status:** Clean. No issues.
+**Status:** One low note.
 
----
-
-### widgets/Guild.lua
-
-**Status:** One low-priority note.
-
-- **Low:** `GetGuildRosterInfo` iterates all guild members in the tooltip handler. For large guilds (500+), consider capping display to the first 50 online members.
+- **Low:** `GetDMFInfo()` recalculated every 1-second tick. Result changes once per minute. Could cache for 60 seconds.
 
 ---
 
-### widgets/Currency.lua
+### widgets/Bags.lua (~139 lines)
 
-**Status:** FIXED. Fully integrated.
+**Status:** One low note.
 
-- **FIXED:** Previously orphaned (not in TOC). Now integrated: added to TOC, Core.lua defaults (`currency` widget), and WidgetsPanel.lua. Currency IDs updated from TWW Season 1 (Harbinger Crests) to Season 3 (Ethereal Crests: 3285, 3287, 3289, 3290 + Valorstones 3008, Kej 3056). Frame pooling, scroll panel, and click-to-expand detail view are all functional.
+- **Low:** Full currency list iterated on every tooltip hover. Could cache filtered list.
 
 ---
 
-### Config.lua (stub)
+### widgets/Currency.lua (~258 lines)
 
-**Status:** Clean. Correctly documents the refactoring from monolithic to modular config.
+**Status:** One low note.
+
+- **Low:** `GetCurrencyData` creates a new table per call on hot path. Called 6 times per tick.
+
+---
+
+### widgets/Hearthstone.lua (~195 lines)
+
+**Status:** One low note.
+
+- **Low:** `GetRandomHearthstoneID` called at file load time before `PLAYER_LOGIN`. `PlayerHasToy` may not return accurate data. Correctly rebuilt later in `OnHearthEnteringWorld`.
+
+---
+
+### Clean Widget Files (No Issues)
+
+**Combat.lua** (39 lines), **Mail.lua** (52 lines), **ItemLevel.lua** (96 lines), **Zone.lua** (95 lines), **PullCounter.lua** (155 lines), **Volume.lua** (72 lines), **PvP.lua** (121 lines), **BattleRes.lua** (87 lines), **Coordinates.lua** (55 lines), **Time.lua** (66 lines), **WeeklyReset.lua** (noted above for combat guard) -- All clean and follow established patterns.
 
 ---
 
 ## Cross-Cutting Concerns
 
-### 1. Duplicated Border Drawing Code (Medium Priority)
+### 1. Duplicate EventBus Registration (HIGH Priority -- FIXED)
 
-At least 5 files implement nearly identical border texture creation and positioning logic:
-- `Frames.lua` -- manual border textures
-- `ActionBars.lua` -- `EnsureBorderTextures` + `ApplyThreeSidedBorder`
-- `CastBar.lua` -- `ApplyBorders`
-- `ChatSkin.lua` -- `EnsureBorders` + `UpdateBorders`
-- `MinimapCustom.lua` -- border mask technique + drawer three-sided borders
+**FIXED:** `EventBus.Register` now scans the existing subscriber array for the same function reference before inserting (deduplication at the infrastructure level). This prevents duplicate listeners from accumulating when `ApplyEvents()`/`UpdateSettings()` is called multiple times. All affected modules (Vendor, Loot, Misc, QuestAuto, QuestReminder, Durability, and any future modules) are protected without per-module changes.
 
-**Recommendation:** Extract a shared `CreateBorderTextures(frame)` and `ApplyBorder(frame, size, color, sides)` utility into `Core.lua` or a new `Shared.lua`. This would reduce ~100 lines of duplicated code.
+### 2. Talent Build Data Migration (HIGH Priority -- FIXED)
 
-### 2. String Concatenation in Hot Paths (Medium Priority)
+**FIXED:** `CleanupSavedVariables()` now wraps old-format builds in arrays (`zones[zoneKey] = { value }`) instead of deleting them.
 
-The ObjectiveTracker update cycle builds display strings via repeated concatenation. Each `..` creates an intermediate string. For 30 quests with 3 concatenations each, that is ~90 temporary strings per update.
+### 3. Combat Deferral Frame Accumulation (Medium Priority -- NEW)
 
-**Recommendation:** Use `table.concat` or `string.format` to reduce intermediate allocations.
+ActionBars.lua and CastBar.lua create disposable `CreateFrame("Frame")` instances when called during combat lockdown. WoW frames are never garbage collected. **Fix:** Use a reusable module-level frame.
 
-### 3. Color Picker Boilerplate in Config Panels (Medium Priority)
+### 4. Config Panel Color Swatch Duplication (Medium Priority -- NEW)
 
-The `ColorPickerFrame:SetupColorPickerAndShow(info)` pattern with `swatchFunc`, `opacityFunc`, `cancelFunc` is repeated 15+ times in TrackerPanel.lua alone, and many more times across all 20 panels. Each instance is ~20 lines of nearly identical code.
+~960 lines of duplicated color swatch code across 6 panels (TrackerPanel, ActionBarsPanel, MinimapPanel, NotificationsPanel, FramesPanel, WidgetsPanel) when `Helpers.CreateColorSwatch` already exists. 8 panels already use the helper correctly.
 
-**Recommendation:** Extract to `ConfigHelpers.OpenColorPicker(swatch, colorTable, dbPath, updateFunc)` that handles the three callbacks, previous value restore, and swatch texture update.
+### 5. Config Panel Unguarded Module Access (Medium Priority -- NEW)
 
-### 4. Widget Ticker Efficiency (Medium Priority)
+LootPanel.lua (8 occurrences) and VendorPanel.lua (6 occurrences) access module methods without nil-checking the module first. Will crash if the module fails to load.
 
-The widget framework's shared ticker calls `UpdateContent` on all enabled widgets every second. Many widgets (Mail, Zone, Guild, Friends, Combat, ItemLevel) are purely event-driven and only need their text updated when an event fires.
+### 6. Locale-Dependent String Matching (Medium Priority)
 
-**Recommendation:** Add an `eventDriven = true` flag to widget definitions. Event-driven widgets would update their text in their event handler and skip the ticker entirely.
+- Loot.lua `"^You receive"` pattern fails on non-English clients
+- Friends.lua `C_ClassColor.GetClassColor` given localized class name
 
-### 5. TalentManager Temporary Table Allocation (Medium Priority)
+### 7. Missing Combat Lockdown Guards (Medium Priority)
 
-`TalentManager.RefreshBuildList()` creates multiple temporary tables per call (`raidBuilds`, `dungeonBuilds`, `uncategorizedBuilds`, sorted name arrays). For users with many builds, this creates garbage on every panel refresh.
+- MinimapCustom.lua `SetDrawerCollapsed`
+- Teleports.lua `ReleaseButton` on secure buttons
+- Vault.lua / WeeklyReset.lua `ShowUIPanel`/`HideUIPanel`
+- Spec.lua delayed menu click
 
-**Recommendation:** Use module-level scratch tables with `wipe()` at the start of each refresh.
+### 8. Duplicated Border Drawing Code (Medium Priority)
 
-### 6. Consistent Module Registration Pattern (Low Priority)
+At least 5 files implement nearly identical border texture creation.
 
-Most modules use `local Module = {}; addonTable.Module = Module`. Some widget files rely on closure state instead. The local-variable-then-assign pattern is preferred for performance (upvalue access is faster than table lookups).
+### 9. Widget Ticker Efficiency (Medium Priority)
 
-### 7. Event Frame Proliferation (Low Priority)
+The widget framework's shared ticker calls `UpdateContent` on all enabled widgets every second. Many are purely event-driven.
 
-Several modules create multiple separate event frames when a single frame with conditional event handling would suffice:
-- `Combat.lua` -- 4 frames
-- `ObjectiveTracker.lua` -- 4 frames
-- `MplusTimer.lua` -- 3 frames
-- `TalentManager.lua` -- 1 main + hooks
-- Many widgets create a separate `eventFrame` alongside the widget frame itself
+### 10. Combat Lockdown Handling (Strength)
 
-This is not a performance concern (frames are cheap in WoW) but adds code complexity.
+The codebase is consistently defensive about combat lockdown. The three-layer ActionBars pattern is exemplary. The exceptions noted above are localized and low-risk.
 
-### 8. Combat Lockdown Handling (Strength)
+### 11. Frame Pooling (Strength)
 
-The codebase is consistently defensive about combat lockdown. Protected frame operations are guarded. Secure templates are used correctly. The three-layer ActionBars pattern is exemplary. `issecretvalue()` checks are properly used in Kick.lua and Keystone.lua.
+Consistently used in Loot.lua, Frames.lua, Teleports.lua, Currency.lua, TalentManager.lua, and WidgetsPanel.
 
-### 9. Frame Pooling (Strength)
+### 12. Centralized TTS (Strength)
 
-Frame pooling is consistently used in Loot.lua, Frames.lua, Teleports.lua, Currency.lua, TalentManager.lua (build rows), and the widget WidgetsPanel. No frame leak concerns in the core modules.
+`Core.SpeakTTS` centralizes text-to-speech with graceful API fallbacks.
 
-### 10. Centralized TTS (Strength)
+### 13. Widget ApplyEvents Pattern (Strength)
 
-`Core.SpeakTTS` centralizes text-to-speech with graceful API fallbacks. Used consistently by QuestReminder, Misc (personal orders), and Combat (consumable reminders).
+Widgets consistently implement `ApplyEvents(enabled)`. Excellent pattern across all 27 widget files.
 
-### 11. Widget ApplyEvents Pattern (Strength)
+### 14. Widget Visibility Conditions (Strength -- NEW)
 
-Widgets consistently implement `ApplyEvents(enabled)` to register/unregister events when toggled. This prevents disabled widgets from processing events. Excellent pattern consistently applied across all 26 widget files.
+The new `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events is well-designed and reduces widget clutter effectively.
 
-### 12. Saved Variable Separation (Strength)
+### 15. Saved Variable Separation (Strength)
 
-Data that should survive settings resets is stored in separate saved variables: `LunaUITweaks_TalentReminders`, `LunaUITweaks_ReagentData`, `LunaUITweaks_QuestReminders`. This is a smart architectural decision.
+`LunaUITweaks_TalentReminders`, `LunaUITweaks_ReagentData`, `LunaUITweaks_QuestReminders` survive settings resets.
 
 ---
 
 ## Priority Recommendations
 
+### Critical (Fix Immediately)
+
+1. **FIXED: MplusTimer.lua forward reference (line 701)** -- Added `local OnChallengeEvent` forward declaration at file top and changed definition to assignment. M+ event processing now works correctly.
+
 ### High Priority
 
-1. **FIXED: `readyCheckActive`/`readyCheckResponses` scoping in widgets/Group.lua** -- Moved the local declarations to before the `OnEnter` script assignment so the closures properly capture them. Ready check tooltip overlay now displays correctly.
+2. **FIXED: EventBus duplicate registration** -- `EventBus.Register` now deduplicates by scanning for existing callback references before inserting.
+
+3. **FIXED: Group.lua `IsGuildMember()` (line 391)** -- Replaced with `IsInGuild()` + `C_GuildInfo.MemberExistsByName()` which is the documented API.
+
+4. **FIXED: TalentManager.lua `instanceType` undefined (line 1141)** -- Moved `GetInstanceInfo()` call before the `instanceType` reference.
+
+5. **FIXED: TalentReminder.lua data migration** -- `CleanupSavedVariables()` now wraps old-format builds in arrays instead of deleting them.
 
 ### Medium Priority
 
-2. **FIXED: Orphaned widgets/Currency.lua** -- Integrated into the addon: added to TOC, Core.lua defaults, and WidgetsPanel.lua. Currency IDs updated from TWW Season 1 (Harbinger Crests) to Season 3 (Ethereal Crests).
-
-3. **Reuse `placeholders` table in ChatSkin.lua `HighlightKeywords`** -- `FormatURLs` was fixed to use a module-level table, but `HighlightKeywords` (line 139) still creates a local per call. Use a separate module-level table with `wipe()`.
-
-4. **Add combat lockdown guard in MinimapCustom.lua `SetDrawerCollapsed`** -- Showing/hiding collected minimap buttons without checking `InCombatLockdown()` could taint secure buttons from other addons.
-
-5. **TalentManager scratch tables** -- `RefreshBuildList` allocates temporary tables per call. Reuse module-level tables with `wipe()`.
-
-6. **EJ cache timing in TalentManager** -- `EnsureEJCache()` changes global EJ tier selection. Defer cache build to a time when the EJ UI is unlikely to be open.
-
-7. **Extract shared border utility** -- Reduce ~100 lines of duplicated border code across 5 files.
-
-8. **Extract color picker helper in config system** -- Reduce ~300+ lines of duplicated `ColorPickerFrame` boilerplate across 20 config panels.
-
-9. **Cache collected minimap buttons in MinimapCustom.lua** -- `CollectMinimapButtons` iterates all minimap children on every call. Use the existing `alreadyCollected` dedup set more aggressively to skip re-processing.
-
-10. **Move FPS widget memory scan to background timer** -- `UpdateAddOnMemoryUsage()` is expensive. Triggering it on tooltip hover can cause frame hitches. Use a background timer instead.
-
-11. **Widget ticker efficiency** -- Add `eventDriven` flag to skip per-second `UpdateContent` calls for purely event-driven widgets.
-
-12. **Use `table.concat` in ObjectiveTracker string building** -- Reduce intermediate string allocations in hot render paths.
-
-13. **Throttle cast time text in CastBar.lua** -- Currently updates every frame; 0.05s throttle would reduce `string.format` calls by ~75%.
-
-14. **Widget panel frame recycling in WidgetsPanel.lua** -- `RefreshWidgetCheckboxes` orphans old frames on rebuild. Pool or reuse row frames.
-
-15. **Consolidate event frames in ObjectiveTracker.lua** -- Two frames (`f` and `hookFrame`) register overlapping events.
-
-16. **(NEW) ChatSkin.lua `SetItemRef` override fragility** -- `SetItemRef` is replaced globally instead of using `hooksecurefunc`. If another addon replaces `SetItemRef` after ChatSkin, the URL handler is lost. If another addon replaces it before, that addon's override is hidden behind LunaUI's wrapper. Use `hooksecurefunc("SetItemRef", ...)` for safe chaining.
-
-17. **(NEW) ChatSkin.lua `Disable()` does not undo `SetItemRef` override** -- The URL hyperlink handler remains active even when chat skin is disabled. `origSetItemRef` is captured in the `hooksInstalled` block and inaccessible from `Disable()`. Either store `origSetItemRef` at module scope for restoration, or switch to `hooksecurefunc` (which does not need restoration).
-
-18. **(NEW) MinimapCustom.lua `GetMinimapShape = nil` for round shape** -- Setting the global to nil means any addon calling `GetMinimapShape()` will error. Set to `function() return "ROUND" end` instead.
-
-19. **(NEW) Group.lua tooltip uses `CreateAtlasMarkup` per member per hover** -- Cached constants `TANK_ICON`, `HEALER_ICON`, `DPS_ICON` already exist at module scope but are not used in the `OnEnter` handler. Creates unnecessary string garbage on every tooltip display.
+6. **Teleports.lua FontString in button array (lines 549-554)** -- Track "no spells" FontString separately to avoid crash in `ClearMainPanel`.
+7. **Teleports.lua SetAttribute during combat** -- Guard `ReleaseButton` secure operations with `InCombatLockdown()`.
+8. **Keystone.lua position saved in wrong schema (line 137)** -- Use framework position keys.
+9. **FIXED: SessionStats.lua defaults verification** -- Core.lua DEFAULTS and TOC entry confirmed present.
+10. **MythicRating.lua nil `bestRunLevel`** -- Add nil guard before `string.format`.
+11. **Combat deferral frame leak** -- ActionBars.lua + CastBar.lua: use reusable module-level frame.
+12. **Combat.lua infinite retry in TrackConsumableUsage** -- Add retry counter.
+13. **MinimapCustom.lua SetDrawerCollapsed combat guard** -- Add `InCombatLockdown()` check.
+14. **ChatSkin.lua SetItemRef override** -- Use `hooksecurefunc` instead.
+15. **Downgraded: ChatSkin.lua HighlightKeywords table allocation** -- Per-invocation table is correct design to avoid stale state. Moved to low priority.
+16. **Vault.lua / WeeklyReset.lua ShowUIPanel combat guard** -- Add `InCombatLockdown()` check.
+17. **Spec.lua menu click combat guard** -- Check `InCombatLockdown()` in menu callbacks.
+18. **Friends.lua localized class name** -- Use `classFilename` (English token) instead of `className`.
+19. **Durability.lua unconditional event registration** -- Move into `ApplyEvents`.
+20. **EventBus snapshot allocation per dispatch** -- Consider scratch table reuse.
+21. **Config panel color swatch duplication (~960 lines)** -- Migrate 22 inline swatches to `Helpers.CreateColorSwatch`.
+22. **LootPanel.lua / VendorPanel.lua unguarded module access** -- Add nil checks.
+23. **AddonVersionsPanel.lua frame leak** -- Create dialog frames once, show/hide.
+24. **AddonVersionsPanel.lua loadstring length check** -- Add max input length guard.
+25. **MinimapPanel.lua missing opacityFunc** -- Add opacity callback to border swatch.
+26. **FramesPanel.lua duplicate functions** -- Use `Helpers.DeepCopy`, extract `NameExists`.
+27. **TalentManager.lua scratch tables** -- Reuse module-level tables with `wipe()`.
+28. **TalentManager.lua EJ cache timing** -- Save/restore current tier selection.
+29. **Keystone.lua bag scan every tick** -- Cache and rescan on `BAG_UPDATE`.
+30. **Spec.lua API calls every tick** -- Cache and update on spec change events.
+31. **Extract shared border utility** -- Reduce duplicated border code across 5+ files.
+32. **Extract color picker helper** -- Already exists as `Helpers.CreateColorSwatch`, just needs adoption.
+33. **MinimapCustom.lua cache collected buttons** -- Don't iterate all children every call.
+34. **FPS widget memory scan** -- Move to background timer.
+35. **ObjectiveTracker string concatenation** -- Use `table.concat` in hot paths.
+36. **CastBar.lua cast time throttle** -- 0.05s throttle on `string.format`.
 
 ### Low Priority / Polish
 
-20. **Defensive `db` nil check in Core.lua `ApplyDefaults`** -- Add `if not db then return end`.
+37. Core.lua DEFAULTS table placement (inside handler vs file scope)
+38. Loot.lua redundant `if i == 1` branches
+39. Combat.lua duplicate `ApplyReminderLock()` call
+40. MplusTimer death tooltip temp table
+41. Guild widget tooltip cap for large guilds
+42. Speed widget dual-update mechanism
+43. MinimapCustom.lua `GetMinimapShape` should return `"ROUND"`
+44. MinimapCustom.lua dead code in zone drag handler
+45. MinimapCustom.lua clock ticker never cancelled
+46. Frames.lua `SetBorder` function hoisting
+47. ObjectiveTracker `OnAchieveClick` type guard
+48. TalentManager.lua deprecated UIDropDownMenu API
+49. TalentManager.lua row button closure creation
+50. Reagents.lua `GetTrackedCharacters` caching
+51. DarkmoonFaire.lua tick rate for DMF info
+52. Bags.lua currency list caching
+53. Currency.lua table allocation per tick
+54. Hearthstone.lua early attribute set
+55. Widgets.lua OnUpdate on all frames (set only during drag)
+56. Widgets.lua duplicate anchor lookup
+57. TalentPanel.lua unreachable nil-checks (~40 lines)
+58. ChatSkinPanel.lua dead SetPoint
+59. ReagentsPanel.lua StaticPopupDialogs recreation
+60. ConfigMain.lua boilerplate reduction
+61. ~100 global frame names with generic "UIThings" prefix
 
-21. **Simplify `Loot.UpdateLayout`** -- Remove redundant `if i == 1` branch.
+---
 
-22. **Consolidate `GetItemInfo` calls in Combat.lua `TrackConsumableUsage`**.
+## Line Count Summary
 
-23. **MplusTimer ApplyLayout consolidation** -- Layout calls are spread across 5 call sites. Consolidating to a single post-update hook would simplify the code.
-
-24. **Cap guild member tooltip display** -- Large guilds (500+) could cause tooltip delay.
-
-25. **Speed widget dual-update mechanism** -- OnUpdate handler makes ticker `UpdateContent` redundant.
-
-26. **Bags widget goldData default** -- Verify Core.lua defaults include `goldData = {}` subtable.
-
-27. **Consider splitting large files** -- ActionBars.lua (1552 lines), ObjectiveTracker.lua (2131 lines), ChatSkin.lua (1330 lines), TalentManager.lua (1509 lines).
-
-28. **`OnAchieveClick` type guard** -- Add `type(self.achieID) == "number"` check.
-
-29. **TalentManager row button closure optimization** -- `SetRowAsBuild` creates closures on every row reuse. Pre-allocate handlers that read stored data from the row.
-
-30. **Reagents `GetTrackedCharacters` caching** -- Rebuilds list from saved variable on every call.
-
-31. **Font list cache invalidation note** -- Document in dropdown tooltip that new fonts require `/reload`.
-
-32. **Consistent module registration** -- Prefer `local M = {}; addonTable.M = M` pattern everywhere.
-
-33. **(NEW) MinimapCustom.lua dead code in zone drag handler** -- Line ~358 has `select(2, Minimap:GetTop(), Minimap:GetTop())` which is immediately overwritten by `mapTop = Minimap:GetTop()`.
-
-34. **(NEW) Frames.lua `SetBorder` local function** -- The `SetBorder(tex, r, g, b, a)` helper is defined inside the loop body of `UpdateFrames()`. It should be hoisted to module scope since it does not capture any loop variables.
-
-35. **(NEW) QuestAuto.lua `GOSSIP_CLOSED` not unregistered** -- When `autoGossip`, `autoAcceptQuests`, and `autoTurnIn` are all false, `ApplyEvents` unregisters `GOSSIP_SHOW` and `GOSSIP_CLOSED`. But the `GOSSIP_CLOSED` handler only clears `lastGossipOptionID`, which is harmless. No functional issue, but the event registration logic for `GOSSIP_CLOSED` could be simplified to always mirror `GOSSIP_SHOW`.
+| Category | Files | Lines |
+|----------|-------|-------|
+| Core Modules | 12 | 5,309 |
+| UI Modules | 10 | 12,340 |
+| Config System | 22 | 9,299 |
+| Widget Files | 28 | 4,715 |
+| **Total** | **72** | **31,663** |

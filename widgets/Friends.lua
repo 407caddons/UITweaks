@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local friendsFrame = Widgets.CreateWidgetFrame("Friends", "friends")
@@ -18,22 +19,15 @@ table.insert(Widgets.moduleInits, function()
             if info and info.connected then
                 hasWoWFriends = true
                 local classColor = C_ClassColor.GetClassColor(info.className)
-                local nameText = info.name
-                local rightText = ""
-                if info.level then
-                    rightText = "Lvl " .. info.level
-                end
+                local nameText = info.name:match("^([^-]+)") or info.name
+                local zone = (info.area and info.area ~= "") and info.area or ""
+                local rightText = zone .. "  " .. (info.level or "")
 
                 local r, g, b = 1, 1, 1
                 if classColor then
                     r, g, b = classColor.r, classColor.g, classColor.b
                 end
-                GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 1, 1, 1)
-
-                -- Zone/area info
-                if info.area and info.area ~= "" then
-                    GameTooltip:AddLine("  " .. info.area, 0.6, 0.6, 0.6)
-                end
+                GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 0.7, 0.7, 0.7)
             end
         end
 
@@ -63,9 +57,11 @@ table.insert(Widgets.moduleInits, function()
                     end
 
                     local rightText = ""
-                    if gameAccount.clientProgram == BNET_CLIENT_WOW and gameAccount.characterLevel then
-                        rightText = "Lvl " .. gameAccount.characterLevel
-                    elseif gameAccount.richPresence then
+                    if gameAccount.clientProgram == BNET_CLIENT_WOW then
+                        local zone = (gameAccount.areaName and gameAccount.areaName ~= "") and gameAccount.areaName or ""
+                        local level = gameAccount.characterLevel and tostring(gameAccount.characterLevel) or ""
+                        rightText = zone .. "  " .. level
+                    elseif gameAccount.richPresence and gameAccount.richPresence ~= "" then
                         rightText = gameAccount.richPresence
                     end
 
@@ -77,17 +73,7 @@ table.insert(Widgets.moduleInits, function()
                         end
                     end
 
-                    GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 1, 1, 1)
-
-                    -- Zone/activity info for WoW friends
-                    if gameAccount.clientProgram == BNET_CLIENT_WOW then
-                        local areaName = gameAccount.areaName
-                        if areaName and areaName ~= "" then
-                            GameTooltip:AddLine("  " .. areaName, 0.6, 0.6, 0.6)
-                        end
-                    elseif gameAccount.richPresence and gameAccount.richPresence ~= "" then
-                        GameTooltip:AddLine("  " .. gameAccount.richPresence, 0.6, 0.6, 0.6)
-                    end
+                    GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 0.7, 0.7, 0.7)
                 end
             end
         end
@@ -120,26 +106,23 @@ table.insert(Widgets.moduleInits, function()
         cachedText = string.format("Friends: %d", numOnline + bnetCount)
     end
 
-    local friendsEventFrame = CreateFrame("Frame")
-    friendsEventFrame:RegisterEvent("BN_FRIEND_INFO_CHANGED")
-    friendsEventFrame:RegisterEvent("FRIENDLIST_UPDATE")
-    friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
-    friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
-    friendsEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    friendsEventFrame:SetScript("OnEvent", function()
+    local function OnFriendsUpdate()
         RefreshFriendsCache()
-    end)
+    end
 
-    friendsFrame.eventFrame = friendsEventFrame
     friendsFrame.ApplyEvents = function(enabled)
         if enabled then
-            friendsEventFrame:RegisterEvent("BN_FRIEND_INFO_CHANGED")
-            friendsEventFrame:RegisterEvent("FRIENDLIST_UPDATE")
-            friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
-            friendsEventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
-            friendsEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("BN_FRIEND_INFO_CHANGED", OnFriendsUpdate)
+            EventBus.Register("FRIENDLIST_UPDATE", OnFriendsUpdate)
+            EventBus.Register("BN_FRIEND_ACCOUNT_ONLINE", OnFriendsUpdate)
+            EventBus.Register("BN_FRIEND_ACCOUNT_OFFLINE", OnFriendsUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnFriendsUpdate)
         else
-            friendsEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("BN_FRIEND_INFO_CHANGED", OnFriendsUpdate)
+            EventBus.Unregister("FRIENDLIST_UPDATE", OnFriendsUpdate)
+            EventBus.Unregister("BN_FRIEND_ACCOUNT_ONLINE", OnFriendsUpdate)
+            EventBus.Unregister("BN_FRIEND_ACCOUNT_OFFLINE", OnFriendsUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnFriendsUpdate)
         end
     end
 

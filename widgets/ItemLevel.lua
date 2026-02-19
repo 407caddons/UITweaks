@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local ilvlFrame = Widgets.CreateWidgetFrame("ItemLevel", "itemLevel")
@@ -22,22 +23,19 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local ilvlEventFrame = CreateFrame("Frame")
-    ilvlEventFrame:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
-    ilvlEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    ilvlEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    ilvlEventFrame:SetScript("OnEvent", function()
+    local function OnItemLevelUpdate()
         RefreshItemLevelCache()
-    end)
+    end
 
-    ilvlFrame.eventFrame = ilvlEventFrame
     ilvlFrame.ApplyEvents = function(enabled)
         if enabled then
-            ilvlEventFrame:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
-            ilvlEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-            ilvlEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("PLAYER_AVG_ITEM_LEVEL_UPDATE", OnItemLevelUpdate)
+            EventBus.Register("PLAYER_EQUIPMENT_CHANGED", OnItemLevelUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnItemLevelUpdate)
         else
-            ilvlEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("PLAYER_AVG_ITEM_LEVEL_UPDATE", OnItemLevelUpdate)
+            EventBus.Unregister("PLAYER_EQUIPMENT_CHANGED", OnItemLevelUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnItemLevelUpdate)
         end
     end
 

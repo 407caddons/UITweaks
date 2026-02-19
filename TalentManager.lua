@@ -374,7 +374,7 @@ local function SetRowAsHeader(row, text, indent, isCollapsed, onClick)
     row:SetScript("OnMouseDown", onClick)
 end
 
-local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, indent, isMatch)
+local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIndex, indent, isMatch)
     local settings = UIThingsDB.talentManager
     local font = settings.font or "Fonts\\FRIZQT__.TTF"
     local fontSize = settings.fontSize or 11
@@ -406,12 +406,12 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, indent,
     -- Show action buttons
     row.editBtn:Show()
     row.editBtn:SetScript("OnClick", function()
-        TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, reminder)
+        TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, reminder)
     end)
 
     row.copyBtn:Show()
     row.copyBtn:SetScript("OnClick", function()
-        TalentManager.CopyBuild(instanceID, diffID, zoneKey, reminder)
+        TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, reminder)
     end)
 
     row.updateBtn:Show()
@@ -420,6 +420,7 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, indent,
             instanceID = instanceID,
             diffID = diffID,
             zoneKey = zoneKey,
+            buildIndex = buildIndex,
             reminder = reminder,
         })
     end)
@@ -430,6 +431,7 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, indent,
             instanceID = instanceID,
             diffID = diffID,
             zoneKey = zoneKey,
+            buildIndex = buildIndex,
         })
     end)
 
@@ -502,56 +504,62 @@ function TalentManager.RefreshBuildList()
     if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
         for instanceID, diffs in pairs(LunaUITweaks_TalentReminders.reminders) do
             for diffID, zones in pairs(diffs) do
-                for zoneKey, reminder in pairs(zones) do
-                    -- Filter by class/spec
-                    if reminder.classID and reminder.classID ~= playerClassID then
-                        -- skip
-                    elseif reminder.specID and reminder.specID ~= playerSpecID then
-                        -- skip
+                for zoneKey, builds in pairs(zones) do
+                    if type(builds) ~= "table" then
+                        -- skip non-array entries
                     else
-                        -- Check if this build matches current talents
-                        local isMatch = false
-                        if reminder.talents and addonTable.TalentReminder and addonTable.TalentReminder.CompareTalents then
-                            local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
-                            isMatch = (#mismatches == 0)
-                        end
+                        for buildIndex, reminder in ipairs(builds) do
+                            -- Filter by class/spec
+                            if reminder.classID and reminder.classID ~= playerClassID then
+                                -- skip
+                            elseif reminder.specID and reminder.specID ~= playerSpecID then
+                                -- skip
+                            else
+                                -- Check if this build matches current talents
+                                local isMatch = false
+                                if reminder.talents and addonTable.TalentReminder and addonTable.TalentReminder.CompareTalents then
+                                    local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
+                                    isMatch = (#mismatches == 0)
+                                end
 
-                        if tonumber(instanceID) == 0 then
-                            -- Uncategorized build
-                            table.insert(uncategorizedBuilds, {
-                                reminder = reminder,
-                                instanceID = instanceID,
-                                diffID = diffID,
-                                zoneKey = zoneKey,
-                                isMatch = isMatch,
-                            })
-                        else
-                            local diffNum = tonumber(diffID)
-                            local isRaid = IsRaidDifficulty(diffNum)
-                            local target = isRaid and raidBuilds or dungeonBuilds
-                            local cachedName = FindInstanceInCache(instanceID)
-                                or (currentInstID and tonumber(instanceID) == currentInstID and currentInstName)
-                            local instName = reminder.instanceName or cachedName or
-                                ("Instance " .. tostring(instanceID))
-                            local diffName = reminder.difficulty or GetDifficultyInfo(diffNum) or "Unknown"
+                                if tonumber(instanceID) == 0 then
+                                    table.insert(uncategorizedBuilds, {
+                                        reminder = reminder,
+                                        instanceID = instanceID,
+                                        diffID = diffID,
+                                        zoneKey = zoneKey,
+                                        buildIndex = buildIndex,
+                                        isMatch = isMatch,
+                                    })
+                                else
+                                    local diffNum = tonumber(diffID)
+                                    local isRaid = IsRaidDifficulty(diffNum)
+                                    local target = isRaid and raidBuilds or dungeonBuilds
+                                    local cachedName = FindInstanceInCache(instanceID)
+                                        or (currentInstID and tonumber(instanceID) == currentInstID and currentInstName)
+                                    local instName = reminder.instanceName or cachedName or
+                                        ("Instance " .. tostring(instanceID))
+                                    local diffName = reminder.difficulty or GetDifficultyInfo(diffNum) or "Unknown"
 
-                            -- Backfill resolved names into saved data so they persist across sessions
-                            if not reminder.instanceName and cachedName then
-                                reminder.instanceName = cachedName
+                                    if not reminder.instanceName and cachedName then
+                                        reminder.instanceName = cachedName
+                                    end
+                                    if not reminder.difficulty and diffName ~= "Unknown" then
+                                        reminder.difficulty = diffName
+                                    end
+
+                                    target[instName] = target[instName] or {}
+                                    target[instName][diffName] = target[instName][diffName] or {}
+                                    table.insert(target[instName][diffName], {
+                                        reminder = reminder,
+                                        instanceID = instanceID,
+                                        diffID = diffID,
+                                        zoneKey = zoneKey,
+                                        buildIndex = buildIndex,
+                                        isMatch = isMatch,
+                                    })
+                                end
                             end
-                            if not reminder.difficulty and diffName ~= "Unknown" then
-                                reminder.difficulty = diffName
-                            end
-
-                            target[instName] = target[instName] or {}
-                            target[instName][diffName] = target[instName][diffName] or {}
-                            table.insert(target[instName][diffName], {
-                                reminder = reminder,
-                                instanceID = instanceID,
-                                diffID = diffID,
-                                zoneKey = zoneKey,
-                                isMatch = isMatch,
-                            })
                         end
                     end
                 end
@@ -631,8 +639,8 @@ function TalentManager.RefreshBuildList()
                         end)
                         for _, build in ipairs(builds) do
                             local bRow = AddRow()
-                            SetRowAsBuild(bRow, build.reminder, build.instanceID, build.diffID, build.zoneKey, indent + 3,
-                                build.isMatch)
+                            SetRowAsBuild(bRow, build.reminder, build.instanceID, build.diffID, build.zoneKey,
+                                build.buildIndex, indent + 3, build.isMatch)
                             yOffset = yOffset + bRow:GetHeight() + 4
                         end
                     end
@@ -648,7 +656,8 @@ function TalentManager.RefreshBuildList()
         end)
         for _, build in ipairs(uncategorizedBuilds) do
             local bRow = AddRow()
-            SetRowAsBuild(bRow, build.reminder, build.instanceID, build.diffID, build.zoneKey, 0, build.isMatch)
+            SetRowAsBuild(bRow, build.reminder, build.instanceID, build.diffID, build.zoneKey, build.buildIndex, 0,
+                build.isMatch)
             yOffset = yOffset + bRow:GetHeight() + 4
         end
     end
@@ -924,11 +933,16 @@ local function InitializeInstanceDropdown(f, contentType, selectedInstanceRef, s
                             end
                         end
                         if belongsToType then
-                            -- Get name from any reminder
+                            -- Get name from any reminder (array format)
                             local instName
                             for _, zones in pairs(diffs) do
-                                for _, rem in pairs(zones) do
-                                    instName = rem.instanceName; break
+                                for _, builds in pairs(zones) do
+                                    if type(builds) == "table" then
+                                        for _, rem in ipairs(builds) do
+                                            instName = rem.instanceName; break
+                                        end
+                                    end
+                                    if instName then break end
                                 end
                                 if instName then break end
                             end
@@ -1122,6 +1136,9 @@ function TalentManager.ShowAddDialog(importString)
     end
     f.nameBox:SetText(defaultName)
 
+    -- Auto-detect type from current location
+    local _, instanceType, difficultyID, _, _, _, _, currentInstID = GetInstanceInfo()
+
     -- Zone checkbox: default to checked for raids (zone-specific per boss area),
     -- unchecked for dungeons (instance-wide)
     local defaultZoneSpecific = (instanceType == "raid")
@@ -1137,9 +1154,6 @@ function TalentManager.ShowAddDialog(importString)
     -- Setup type dropdown with cascade
     local OnTypeChanged = SetupTypeDropdown(f, selectedTypeRef, selectedInstanceRef, selectedInstanceNameRef,
         selectedDiffRef, cache)
-
-    -- Auto-detect type from current location
-    local _, instanceType, difficultyID, _, _, _, _, currentInstID = GetInstanceInfo()
     if instanceType == "party" then
         UIDropDownMenu_SetText(f.typeDropdown, "Dungeon")
         OnTypeChanged("dungeon")
@@ -1215,7 +1229,7 @@ end
 -- Show Edit Dialog
 -- ============================================================
 
-function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, reminder)
+function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, reminder)
     local f = GetOrCreateAddEditFrame()
     f.title:SetText("Edit Talent Build")
     local cache = EnsureEJCache()
@@ -1289,61 +1303,28 @@ function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, reminder)
     f.saveBtn:SetScript("OnClick", function()
         SaveBuild(f, selectedTypeRef, selectedInstanceRef, selectedInstanceNameRef, selectedDiffRef,
             function(newName, saveInstID, saveDiffID, instName, diffName, newZoneKey)
-                -- Determine the final zone key for the edited build.
-                -- If the instance/difficulty didn't change, keep the original zone key
-                -- unless the zone checkbox state explicitly changed it.
+                -- Determine the final zone key
                 local finalZoneKey = newZoneKey
-                local sameLocation = (tonumber(saveInstID) == tonumber(instanceID) and
-                    tonumber(saveDiffID) == tonumber(diffID))
                 local zoneCheckChecked = f.zoneCheck:GetChecked()
 
-                if sameLocation then
-                    -- Determine if the original key is zone-specific
-                    local origIsZoneSpecific = (type(zoneKey) == "string" and zoneKey ~= "") or
-                        (type(zoneKey) == "number" and zoneKey ~= 0 and zoneKey < 900000)
-                    local origIsCopy = (type(zoneKey) == "number" and zoneKey >= 900000)
-
-                    if not zoneCheckChecked and origIsZoneSpecific then
-                        -- User unchecked zone-specific → move to instance-wide (0)
-                        finalZoneKey = 0
-                    elseif not zoneCheckChecked and origIsCopy then
-                        -- This is a copy and zone checkbox is unchecked:
-                        -- keep the copy's zone key to avoid overwriting zone key 0
-                        finalZoneKey = zoneKey
-                    elseif zoneCheckChecked then
-                        -- Zone-specific: use the new subzone text from SaveBuild
-                        finalZoneKey = newZoneKey
-                    else
-                        -- Instance-wide original staying instance-wide
-                        finalZoneKey = zoneKey
-                    end
+                if not zoneCheckChecked then
+                    finalZoneKey = 0
                 end
 
-                -- Check for collision: only if the destination differs from the original location
-                local movingToNewSlot = not sameLocation or finalZoneKey ~= zoneKey
-                if movingToNewSlot then
-                    local existing = LunaUITweaks_TalentReminders.reminders[saveInstID]
-                        and LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID]
-                        and LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][finalZoneKey]
-                    if existing then
-                        Log("TalentManager",
-                            "Cannot save: another build already exists at that instance/difficulty/zone", LogLevel.WARN)
-                        return false
-                    end
-                end
-
-                -- Delete old entry
+                -- Delete old entry by index
                 if addonTable.TalentReminder and addonTable.TalentReminder.DeleteReminder then
-                    addonTable.TalentReminder.DeleteReminder(instanceID, diffID, zoneKey)
+                    addonTable.TalentReminder.DeleteReminder(instanceID, diffID, zoneKey, buildIndex)
                 end
 
-                -- Write new entry, preserving the talent snapshot
+                -- Append new entry to the target array
                 LunaUITweaks_TalentReminders.reminders[saveInstID] = LunaUITweaks_TalentReminders.reminders[saveInstID] or
                     {}
                 LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID] = LunaUITweaks_TalentReminders.reminders
                     [saveInstID][saveDiffID] or {}
+                LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][finalZoneKey] =
+                    LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][finalZoneKey] or {}
 
-                LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][finalZoneKey] = {
+                table.insert(LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][finalZoneKey], {
                     name = newName,
                     instanceName = instName,
                     difficulty = diffName,
@@ -1355,7 +1336,7 @@ function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, reminder)
                     className = reminder.className,
                     specID = reminder.specID,
                     specName = reminder.specName,
-                }
+                })
 
                 Log("TalentManager", "Updated build: " .. newName, LogLevel.INFO)
                 f:Hide()
@@ -1374,18 +1355,8 @@ end
 -- Copy Build
 -- ============================================================
 
-function TalentManager.CopyBuild(instanceID, diffID, zoneKey, reminder)
+function TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, reminder)
     if not reminder then return end
-
-    -- Find a unique zone key for the copy
-    -- Use a high numeric key (900000+) to avoid collisions with real zone keys
-    local newZoneKey = 900000
-    local reminders = LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders
-    if reminders and reminders[instanceID] and reminders[instanceID][diffID] then
-        while reminders[instanceID][diffID][newZoneKey] do
-            newZoneKey = newZoneKey + 1
-        end
-    end
 
     local newReminder = {
         name = (reminder.name or "Unnamed") .. " (Copy)",
@@ -1401,11 +1372,13 @@ function TalentManager.CopyBuild(instanceID, diffID, zoneKey, reminder)
         specName = reminder.specName,
     }
 
-    -- Write directly to saved data
+    -- Append to same zone key array
     LunaUITweaks_TalentReminders.reminders[instanceID] = LunaUITweaks_TalentReminders.reminders[instanceID] or {}
     LunaUITweaks_TalentReminders.reminders[instanceID][diffID] = LunaUITweaks_TalentReminders.reminders[instanceID]
         [diffID] or {}
-    LunaUITweaks_TalentReminders.reminders[instanceID][diffID][newZoneKey] = newReminder
+    LunaUITweaks_TalentReminders.reminders[instanceID][diffID][zoneKey] =
+        LunaUITweaks_TalentReminders.reminders[instanceID][diffID][zoneKey] or {}
+    table.insert(LunaUITweaks_TalentReminders.reminders[instanceID][diffID][zoneKey], newReminder)
 
     Log("TalentManager", "Copied build: " .. newReminder.name, LogLevel.INFO)
     TalentManager.RefreshBuildList()
@@ -1446,7 +1419,7 @@ StaticPopupDialogs["LUNA_TALENTMGR_DELETE_CONFIRM"] = {
     button2 = "Cancel",
     OnAccept = function(self, data)
         if addonTable.TalentReminder and addonTable.TalentReminder.DeleteReminder then
-            addonTable.TalentReminder.DeleteReminder(data.instanceID, data.diffID, data.zoneKey)
+            addonTable.TalentReminder.DeleteReminder(data.instanceID, data.diffID, data.zoneKey, data.buildIndex)
         end
         if addonTable.TalentManager then
             addonTable.TalentManager.RefreshBuildList()
@@ -1474,11 +1447,12 @@ StaticPopupDialogs["LUNA_TALENTMGR_UPDATE_CONFIRM"] = {
             Log("TalentManager", "Failed to snapshot current talents", LogLevel.WARN)
             return
         end
-        -- Update the talent data in-place
+        -- Update the talent data in-place (array-based: access by buildIndex)
         local reminders = LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders
         if reminders and reminders[data.instanceID] and reminders[data.instanceID][data.diffID]
-            and reminders[data.instanceID][data.diffID][data.zoneKey] then
-            reminders[data.instanceID][data.diffID][data.zoneKey].talents = snapshot
+            and reminders[data.instanceID][data.diffID][data.zoneKey]
+            and reminders[data.instanceID][data.diffID][data.zoneKey][data.buildIndex] then
+            reminders[data.instanceID][data.diffID][data.zoneKey][data.buildIndex].talents = snapshot
             Log("TalentManager", "Updated build: " .. (data.reminder.name or "Unknown"), LogLevel.INFO)
         end
         if addonTable.TalentManager then
@@ -1513,33 +1487,35 @@ end
 -- Event Handling & Initialization
 -- ============================================================
 
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("ADDON_LOADED")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
-eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:SetScript("OnEvent", function(self, event, arg1)
-    if event == "ADDON_LOADED" then
-        if arg1 == addonName then
-            -- Our addon loaded, try to hook if talent frame already exists
-            if PlayerSpellsFrame then
-                HookTalentFrame()
-            end
-        elseif arg1 == "Blizzard_PlayerSpells" then
-            -- Blizzard talent UI just loaded
-            addonTable.Core.SafeAfter(0.1, function()
-                HookTalentFrame()
-            end)
-        end
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Try hooking on world entry in case talent frame loaded before us
+local function OnTalentManagerAddonLoaded(event, arg1)
+    if arg1 == addonName then
+        -- Our addon loaded, try to hook if talent frame already exists
         if PlayerSpellsFrame then
             HookTalentFrame()
         end
-    elseif event == "TRAIT_CONFIG_UPDATED" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
-        -- Refresh check marks when talents change
-        if mainPanel and mainPanel:IsShown() then
-            TalentManager.RefreshBuildList()
-        end
+    elseif arg1 == "Blizzard_PlayerSpells" then
+        -- Blizzard talent UI just loaded
+        addonTable.Core.SafeAfter(0.1, function()
+            HookTalentFrame()
+        end)
     end
-end)
+end
+
+local function OnTalentManagerEnteringWorld()
+    -- Try hooking on world entry in case talent frame loaded before us
+    if PlayerSpellsFrame then
+        HookTalentFrame()
+    end
+end
+
+local function OnTalentConfigUpdated()
+    -- Refresh check marks when talents change
+    if mainPanel and mainPanel:IsShown() then
+        TalentManager.RefreshBuildList()
+    end
+end
+
+addonTable.EventBus.Register("ADDON_LOADED", OnTalentManagerAddonLoaded)
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnTalentManagerEnteringWorld)
+addonTable.EventBus.Register("TRAIT_CONFIG_UPDATED", OnTalentConfigUpdated)
+addonTable.EventBus.Register("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", OnTalentConfigUpdated)

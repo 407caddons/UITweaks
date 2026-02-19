@@ -1556,22 +1556,28 @@ UnregisterPartyWatcher = function()
     addonTable.Core.Log("Kick", "Party watcher: stopped watching", 0)
 end
 
+-- Main event frame — kept for RegisterUnitEvent (player spell tracking)
+-- UNIT_SPELLCAST_SUCCEEDED and UNIT_SPELLCAST_SENT require RegisterUnitEvent,
+-- which EventBus doesn't support, so this frame stays.
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Always needed for initialization
 frame:SetScript("OnEvent", OnEvent)
 
+-- EventBus callbacks use (event, ...) signature — bridge to OnEvent
+local function OnEventBus(event, ...) OnEvent(nil, event, ...) end
+
 function Kick.ApplyEvents()
+    local EventBus = addonTable.EventBus
     if UIThingsDB.kick and UIThingsDB.kick.enabled then
-        frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-        frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        frame:RegisterEvent("SPELLS_CHANGED")
-        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus)
+        EventBus.Register("GROUP_ROSTER_UPDATE", OnEventBus)
+        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", OnEventBus)
+        EventBus.Register("SPELLS_CHANGED", OnEventBus)
+        EventBus.Register("PLAYER_REGEN_ENABLED", OnEventBus)
+        -- Unit events for player must stay on their own frame
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
         -- Party watcher for non-addon users
         if UIThingsDB.kick.trackNonAddonUsers then
-            -- Re-register to pick up current party units
             UnregisterPartyWatcher()
             RegisterPartyWatcher()
             AutoRegisterPartyByClass()
@@ -1579,10 +1585,11 @@ function Kick.ApplyEvents()
             UnregisterPartyWatcher()
         end
     else
-        frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
-        frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        frame:UnregisterEvent("SPELLS_CHANGED")
-        frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        EventBus.Unregister("PLAYER_ENTERING_WORLD", OnEventBus)
+        EventBus.Unregister("GROUP_ROSTER_UPDATE", OnEventBus)
+        EventBus.Unregister("PLAYER_SPECIALIZATION_CHANGED", OnEventBus)
+        EventBus.Unregister("SPELLS_CHANGED", OnEventBus)
+        EventBus.Unregister("PLAYER_REGEN_ENABLED", OnEventBus)
         frame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
         UnregisterPartyWatcher()
@@ -1595,3 +1602,6 @@ function Kick.ApplyEvents()
         end
     end
 end
+
+-- Register PLAYER_ENTERING_WORLD immediately for initialization
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus)

@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Teleport Data
 local TELEPORT_DATA = {
@@ -116,11 +117,7 @@ local function InvalidateTeleportCache()
     cachedScanUngrouped = nil
 end
 
--- Invalidate cache when spells change (talent swap, level up, etc.)
-local teleportCacheFrame = CreateFrame("Frame")
-teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
-teleportCacheFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
-teleportCacheFrame:SetScript("OnEvent", InvalidateTeleportCache)
+-- Invalidate cache when spells change (talent swap, level up, etc.) — registered in ApplyEvents
 
 -- Scan Spellbook (results cached until spells change)
 local function ScanSpellbookForTeleports()
@@ -186,13 +183,13 @@ table.insert(Widgets.moduleInits, function()
     local teleportFrame = Widgets.CreateWidgetFrame("Teleports", "teleports")
     teleportFrame:RegisterForClicks("AnyUp")
 
-    teleportFrame.eventFrame = teleportCacheFrame
     teleportFrame.ApplyEvents = function(enabled)
         if enabled then
-            teleportCacheFrame:RegisterEvent("SPELLS_CHANGED")
-            teleportCacheFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+            EventBus.Register("SPELLS_CHANGED", InvalidateTeleportCache)
+            EventBus.Register("PLAYER_TALENT_UPDATE", InvalidateTeleportCache)
         else
-            teleportCacheFrame:UnregisterAllEvents()
+            EventBus.Unregister("SPELLS_CHANGED", InvalidateTeleportCache)
+            EventBus.Unregister("PLAYER_TALENT_UPDATE", InvalidateTeleportCache)
         end
     end
 

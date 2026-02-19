@@ -1,0 +1,143 @@
+local addonName, addonTable = ...
+local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
+
+table.insert(Widgets.moduleInits, function()
+    local sessionFrame = Widgets.CreateWidgetFrame("SessionStats", "sessionStats")
+    sessionFrame:RegisterForClicks("AnyUp")
+
+    -- Session data persisted across reloads in UIThingsDB.
+    -- Detection: on a real login GetTime() resets to ~0, so if db.sessionStart > GetTime()
+    -- the saved value is from a previous client session — treat it as a fresh login.
+    local db           = UIThingsDB.widgets.sessionStats
+
+    -- If db.sessionStart > GetTime(), the client was restarted (GetTime() resets to ~0).
+    local isNewLogin   = not db.sessionStart or db.sessionStart > GetTime()
+
+    local sessionStart = isNewLogin and GetTime() or db.sessionStart
+    local goldAtLogin  = isNewLogin and GetMoney() or (db.goldAtLogin or GetMoney())
+    local deathCount   = isNewLogin and 0 or (db.deathCount or 0)
+    local itemsLooted  = isNewLogin and 0 or (db.itemsLooted or 0)
+
+    -- Cached display text updated on events
+    local cachedText   = "Session: 0:00"
+
+    local function SaveSessionData()
+        db.sessionStart = sessionStart
+        db.goldAtLogin  = goldAtLogin
+        db.deathCount   = deathCount
+        db.itemsLooted  = itemsLooted
+    end
+
+    -- Persist baseline immediately so a /reload right after login retains correct values
+    SaveSessionData()
+
+    local function FormatDuration(seconds)
+        local h = math.floor(seconds / 3600)
+        local m = math.floor((seconds % 3600) / 60)
+        if h > 0 then
+            return string.format("%d:%02d:%02d", h, m, math.floor(seconds % 60))
+        else
+            return string.format("%d:%02d", m, math.floor(seconds % 60))
+        end
+    end
+
+    local function FormatGoldDelta(delta)
+        local sign = delta >= 0 and "+" or "-"
+        local abs = math.abs(delta)
+        local g = math.floor(abs / 10000)
+        local s = math.floor((abs % 10000) / 100)
+        local c = abs % 100
+        if g > 0 then
+            return string.format("%s%d|cFFFFD700g|r %d|cFFC0C0C0s|r %d|cFFB87333c|r", sign, g, s, c)
+        elseif s > 0 then
+            return string.format("%s%d|cFFC0C0C0s|r %d|cFFB87333c|r", sign, s, c)
+        else
+            return string.format("%s%d|cFFB87333c|r", sign, c)
+        end
+    end
+
+    local function UpdateCachedText()
+        local elapsed = GetTime() - sessionStart
+        cachedText = "Session: " .. FormatDuration(elapsed)
+    end
+
+    local function OnPlayerDead()
+        if not db.enabled then return end
+        deathCount = deathCount + 1
+        SaveSessionData()
+    end
+
+    local function OnChatMsgLoot(event, msg)
+        if not db.enabled then return end
+        if msg and not issecretvalue(msg) then
+            itemsLooted = itemsLooted + 1
+            SaveSessionData()
+        end
+    end
+
+    -- PLAYER_ENTERING_WORLD fires on both login and reload — just refresh display.
+    -- Login detection is handled at init time via GetTime() comparison above.
+    local function OnSessionEnteringWorld()
+        if not db.enabled then return end
+        UpdateCachedText()
+    end
+
+    sessionFrame.ApplyEvents = function(enabled)
+        if enabled then
+            EventBus.Register("PLAYER_DEAD", OnPlayerDead)
+            EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld)
+            UpdateCachedText()
+        else
+            EventBus.Unregister("PLAYER_DEAD", OnPlayerDead)
+            EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLoot)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld)
+        end
+    end
+
+    -- Right-click resets session counters
+    sessionFrame:SetScript("OnClick", function(self, button)
+        if button == "RightButton" then
+            sessionStart = GetTime()
+            goldAtLogin  = GetMoney()
+            deathCount   = 0
+            itemsLooted  = 0
+            SaveSessionData()
+            UpdateCachedText()
+            self.text:SetText(cachedText)
+            GameTooltip:Hide()
+        end
+    end)
+
+    sessionFrame:SetScript("OnEnter", function(self)
+        if not UIThingsDB.widgets.locked then return end
+
+        Widgets.SmartAnchorTooltip(self)
+        GameTooltip:SetText("Session Stats", 1, 0.82, 0)
+
+        local elapsed = GetTime() - sessionStart
+        GameTooltip:AddDoubleLine("Session Time:", FormatDuration(elapsed), 1, 1, 1, 1, 1, 1)
+
+        local goldDelta = GetMoney() - goldAtLogin
+        GameTooltip:AddDoubleLine("Gold " .. (goldDelta >= 0 and "Earned:" or "Spent:"),
+            FormatGoldDelta(goldDelta), 1, 1, 1, 1, 1, 1)
+
+        GameTooltip:AddDoubleLine("Items Looted:", tostring(itemsLooted), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Deaths:", tostring(deathCount),
+            1, 1, 1,
+            deathCount > 0 and 1 or 0.5, deathCount > 0 and 0.3 or 0.5, deathCount > 0 and 0.3 or 0.5)
+
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Right-click to reset", 0.5, 0.5, 0.5)
+        GameTooltip:Show()
+    end)
+
+    sessionFrame:SetScript("OnLeave", GameTooltip_Hide)
+
+    -- UpdateContent is called by the widget ticker every second — update the clock
+    sessionFrame.UpdateContent = function(self)
+        UpdateCachedText()
+        self.text:SetText(cachedText)
+    end
+end)

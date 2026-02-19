@@ -5,6 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "reagents")
     -- Panel Title
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)

@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Raid Sorting Logic (Local helpers)
 local function GetRaidRole(unit, role, class)
@@ -387,7 +388,8 @@ table.insert(Widgets.moduleInits, function()
                         local relationship = ""
                         if UnitIsFriend("player", data.unit) then
                             if C_FriendList.IsFriend(UnitGUID(data.unit)) then relationship = "(F)" end
-                            if IsGuildMember(UnitGUID(data.unit)) then relationship = relationship .. "(G)" end
+                            local shortName = strsplit("-", data.name)
+                            if IsInGuild() and C_GuildInfo.MemberExistsByName(shortName) then relationship = relationship .. "(G)" end
                         end
 
                         -- Role Icon (use cached constants)
@@ -491,53 +493,53 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local groupEventFrame = CreateFrame("Frame")
-    groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
-    groupEventFrame:RegisterEvent("READY_CHECK")
-    groupEventFrame:RegisterEvent("READY_CHECK_CONFIRM")
-    groupEventFrame:RegisterEvent("READY_CHECK_FINISHED")
-    groupEventFrame:SetScript("OnEvent", function(self, event, ...)
-        if event == "READY_CHECK" then
-            readyCheckActive = true
-            wipe(readyCheckResponses)
-            -- Initialize all members as waiting
-            local members = GetNumGroupMembers()
-            if members > 0 then
-                for i = 1, members do
-                    local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
-                    readyCheckResponses[UnitName(unit) or unit] = "waiting"
-                end
-            end
-        elseif event == "READY_CHECK_CONFIRM" then
-            local unit, isReady = ...
-            local name = UnitName(unit)
-            if name then
-                readyCheckResponses[name] = isReady and "ready" or "notready"
-            end
-        elseif event == "READY_CHECK_FINISHED" then
-            -- Keep showing results for 5 seconds after finish
-            C_Timer.After(5, function()
-                readyCheckActive = false
-                wipe(readyCheckResponses)
-            end)
-        else
-            RefreshGroupCache()
-        end
-    end)
+    local function OnGroupRosterUpdate()
+        RefreshGroupCache()
+    end
 
-    groupFrame.eventFrame = groupEventFrame
+    local function OnReadyCheck()
+        readyCheckActive = true
+        wipe(readyCheckResponses)
+        -- Initialize all members as waiting
+        local members = GetNumGroupMembers()
+        if members > 0 then
+            for i = 1, members do
+                local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
+                readyCheckResponses[UnitName(unit) or unit] = "waiting"
+            end
+        end
+    end
+
+    local function OnReadyCheckConfirm(event, unit, isReady)
+        local name = UnitName(unit)
+        if name then
+            readyCheckResponses[name] = isReady and "ready" or "notready"
+        end
+    end
+
+    local function OnReadyCheckFinished()
+        -- Keep showing results for 5 seconds after finish
+        C_Timer.After(5, function()
+            readyCheckActive = false
+            wipe(readyCheckResponses)
+        end)
+    end
+
     groupFrame.ApplyEvents = function(enabled)
         if enabled then
-            groupEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-            groupEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            groupEventFrame:RegisterEvent("ROLE_CHANGED_INFORM")
-            groupEventFrame:RegisterEvent("READY_CHECK")
-            groupEventFrame:RegisterEvent("READY_CHECK_CONFIRM")
-            groupEventFrame:RegisterEvent("READY_CHECK_FINISHED")
+            EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)
+            EventBus.Register("ROLE_CHANGED_INFORM", OnGroupRosterUpdate)
+            EventBus.Register("READY_CHECK", OnReadyCheck)
+            EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckConfirm)
+            EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished)
         else
-            groupEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)
+            EventBus.Unregister("ROLE_CHANGED_INFORM", OnGroupRosterUpdate)
+            EventBus.Unregister("READY_CHECK", OnReadyCheck)
+            EventBus.Unregister("READY_CHECK_CONFIRM", OnReadyCheckConfirm)
+            EventBus.Unregister("READY_CHECK_FINISHED", OnReadyCheckFinished)
         end
     end
 

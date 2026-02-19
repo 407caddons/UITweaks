@@ -82,59 +82,118 @@ Loot.lua and Frames.lua use object pools — frames are hidden and recycled via 
 | CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
 | ChatSkin.lua | `ChatSkin` | Chat frame skinning, keyword highlighting, timestamps |
 | Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
+| EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
 | AddonComm.lua | `AddonComm` | Centralized addon communication message bus |
 | Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
 | AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
 
-## TalentReminder Module Details
+## EventBus (Centralized Event Dispatcher)
 
-The TalentReminder module uses **zone-based detection** (not boss selection) to alert players when their talents don't match saved builds.
+`EventBus.lua` provides a single-frame centralized event dispatcher that replaces the per-module pattern of creating individual frames and registering events. It loads after Core.lua and before all feature modules.
 
-### Zone-Based Detection
-- Reminders are keyed by zone name (from `GetSubZoneText()` or `GetMinimapZoneText()`)
-- Example keys: `"The Primal Bulwark"`, `"The Vault Approach"`, or `"general"` for instance-wide
-- Data structure: `LunaUITweaks_TalentReminders.reminders[instanceID][difficultyID][zoneKey]`
-- Zone changes are detected via `ZONE_CHANGED`, `ZONE_CHANGED_INDOORS`, `ZONE_CHANGED_NEW_AREA` events
+### Architecture
+- Uses a single `CreateFrame("Frame", "LunaUITweaks_EventBus")` frame to handle all WoW events
+- Maintains a `listeners[eventName] = { callback, ... }` registry
+- Automatically registers/unregisters WoW events on the frame as listeners are added/removed
+- Dispatch uses a snapshot copy of the listener array so callbacks can safely unregister themselves mid-dispatch
 
-### Alert Triggers
-1. **Zone Change** - When player moves to a new subzone with a saved build
-2. **Encounter Start** - When a boss encounter begins (`ENCOUNTER_START` event)
-3. **Talent Change** - When player changes talents or spec
-4. **M+ Entry** - Special check when entering Mythic+ dungeons
-5. **Difficulty Toggle** - When difficulty filter is enabled/disabled in config
+### API
 
-### Priority System
-When checking talents, the system uses a priority list:
-1. **Zone-specific reminders** (priority 1) - exact zone match
-2. **General reminders** (priority 2) - instance-wide fallback
+```lua
+-- Subscribe to a WoW event
+-- callback receives: callback(event, ...)
+addonTable.EventBus.Register(event, callback)
 
-Only one alert is shown at a time (highest priority with mismatches wins).
+-- Unsubscribe a specific callback (reference equality)
+addonTable.EventBus.Unregister(event, callback)
 
-### Alert Behavior
-- **No snoozing** - Alerts always show when talents mismatch (snooze functionality removed)
-- **Difficulty filtering** - Alerts respect `alertOnDifficulties` settings in `UIThingsDB.talentReminders`
-- **Dismissible** - Single "Dismiss" button hides the alert
-- **Auto-hide** - Alert hides when difficulty filter is disabled
-- **Auto-check** - Talents re-checked when difficulty filter is re-enabled
+-- Subscribe to a unit event with automatic unit filtering
+-- Returns the wrapper function (needed to Unregister later)
+local wrapper = addonTable.EventBus.RegisterUnit(event, unit, callback)
+```
 
-### Talent Comparison
-The `CompareTalents()` function returns mismatches categorized as:
-- **`missing`** - Talents in saved build but not selected
-- **`wrong`** - Different talent selected in same node, or insufficient rank
-- **`extra`** - Talents selected but not in saved build
+### Usage Pattern
+Modules should use EventBus instead of creating their own event frames:
 
-### UI Components
-- **Alert Frame** - Global frame named `"LunaTalentReminderAlert"`, movable, customizable appearance
-- **Config Tab** - Full settings in Config.lua's talent panel (7th tab)
-- **Saved Builds List** - Shows reminders filtered by current class/spec, highlights current zone
-- **Difficulty Filters** - Checkboxes for each dungeon/raid difficulty
+```lua
+local EventBus = addonTable.EventBus
 
-### Important Variables
-- `currentInstanceID`, `currentDifficultyID` - Track current instance context
-- `lastZone` - Tracks previous zone to detect zone changes
-- `alertFrame` - The popup alert frame (created once, reused)
+local function OnPlayerLogin(event, ...)
+    -- initialize module
+end
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+```
+
+### Current Consumers
+Most modules use EventBus for event handling, including Loot, QuestAuto, Kick, AddonComm, Combat, Vendor, Misc, ChatSkin, ActionBars, TalentReminder, Reagents, AddonVersions, widgets, and others.
+
+## AddonComm (Inter-Addon Communication)
+
+`AddonComm.lua` provides a centralized message bus for addon-to-addon communication over WoW's `C_ChatInfo.SendAddonMessage` system. It handles message routing, rate limiting, deduplication, and legacy prefix compatibility.
+
+### Message Format
+Messages use the unified prefix `"LunaUI"` with a structured format: `MODULE:ACTION:PAYLOAD`
+
+- **MODULE** — uppercase namespace (e.g., `"VER"`, `"KICK"`)
+- **ACTION** — uppercase action name (e.g., `"HELLO"`, `"CD"`, `"REQ"`, `"SPELLS"`)
+- **PAYLOAD** — optional data string
+
+### Legacy Compatibility
+Two legacy prefixes are still supported for backwards compatibility with older addon versions:
+- `"LunaVer"` — mapped to `VER:HELLO` or `VER:REQ`
+- `"LunaKick"` — mapped to `KICK:CD`
+
+`Comm.Send()` accepts optional `legacyPrefix` and `legacyMessage` parameters to dual-send in both new and legacy formats.
+
+### Built-in Protections
+- **Rate limiting** — `MIN_SEND_INTERVAL` (1.0s) per `module:action` key prevents message flooding
+- **Deduplication** — `DEDUP_WINDOW` (1.0s) ignores duplicate messages from the same sender
+- **Hide from world** — `UIThingsDB.addonComm.hideFromWorld` suppresses all sends
+- **Periodic cleanup** — Expired dedup/rate-limit entries are purged every 20 messages
+
+### API
+
+```lua
+-- Register a handler for incoming messages
+-- callback receives: callback(senderShort, payload, senderFull)
+addonTable.Comm.Register(module, action, callback)
+
+-- Send a message to the group (returns false if suppressed)
+addonTable.Comm.Send(module, action, payload, legacyPrefix, legacyMessage)
+
+-- Check if communication is allowed (in group + not hidden)
+addonTable.Comm.IsAllowed()
+
+-- Get current channel ("RAID", "PARTY", or nil)
+addonTable.Comm.GetChannel()
+
+-- Schedule a throttled broadcast (cancels pending for same key)
+addonTable.Comm.ScheduleThrottled(key, delay, func)
+
+-- Cancel a pending throttled broadcast
+addonTable.Comm.CancelThrottle(key)
+```
+
+### Current Message Types
+
+| Module | Action | Direction | Purpose |
+|--------|--------|-----------|---------|
+| `VER` | `HELLO` | Send/Receive | Broadcast addon version to group |
+| `VER` | `REQ` | Send/Receive | Request version info from group members |
+| `KICK` | `CD` | Send/Receive | Broadcast interrupt cooldown status |
+| `KICK` | `SPELLS` | Send/Receive | Share available interrupt spell list |
+| `KICK` | `REQ` | Send/Receive | Request interrupt data from group |
+
+### Integration with EventBus
+AddonComm listens for `CHAT_MSG_ADDON` via EventBus (not its own frame), keeping event registration centralized:
+
+```lua
+addonTable.EventBus.Register("CHAT_MSG_ADDON", function(event, ...)
+    OnAddonMessage(...)
+end)
+```
 
 ## Combat-Safe Frame Positioning (ActionBars Pattern)
 

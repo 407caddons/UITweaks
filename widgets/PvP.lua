@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Currency IDs
 local HONOR_CURRENCY_ID = 1792
@@ -27,26 +28,23 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local pvpEventFrame = CreateFrame("Frame")
-    pvpEventFrame:RegisterEvent("HONOR_LEVEL_UPDATE")
-    pvpEventFrame:RegisterEvent("HONOR_XP_UPDATE")
-    pvpEventFrame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-    pvpEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    pvpEventFrame:RegisterEvent("PVP_RATED_STATS_UPDATE")
-    pvpEventFrame:SetScript("OnEvent", function()
+    local function OnPvPUpdate()
         RefreshPvPCache()
-    end)
+    end
 
-    pvpFrame.eventFrame = pvpEventFrame
     pvpFrame.ApplyEvents = function(enabled)
         if enabled then
-            pvpEventFrame:RegisterEvent("HONOR_LEVEL_UPDATE")
-            pvpEventFrame:RegisterEvent("HONOR_XP_UPDATE")
-            pvpEventFrame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-            pvpEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            pvpEventFrame:RegisterEvent("PVP_RATED_STATS_UPDATE")
+            EventBus.Register("HONOR_LEVEL_UPDATE", OnPvPUpdate)
+            EventBus.Register("HONOR_XP_UPDATE", OnPvPUpdate)
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnPvPUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnPvPUpdate)
+            EventBus.Register("PVP_RATED_STATS_UPDATE", OnPvPUpdate)
         else
-            pvpEventFrame:UnregisterAllEvents()
+            EventBus.Unregister("HONOR_LEVEL_UPDATE", OnPvPUpdate)
+            EventBus.Unregister("HONOR_XP_UPDATE", OnPvPUpdate)
+            EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnPvPUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPvPUpdate)
+            EventBus.Unregister("PVP_RATED_STATS_UPDATE", OnPvPUpdate)
         end
     end
 

@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local dmfFrame = Widgets.CreateWidgetFrame("DarkmoonFaire", "darkmoonFaire")
@@ -78,22 +79,19 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("QUEST_TURNED_IN")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:SetScript("OnEvent", function()
+    local function OnDMFEvent()
         if not UIThingsDB.widgets.darkmoonFaire.enabled then return end
         RefreshDMFCache()
-    end)
+    end
 
-    dmfFrame.eventFrame = eventFrame
     dmfFrame.ApplyEvents = function(enabled)
         if enabled then
-            eventFrame:RegisterEvent("QUEST_TURNED_IN")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("QUEST_TURNED_IN", OnDMFEvent)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnDMFEvent)
             RefreshDMFCache()
         else
-            eventFrame:UnregisterAllEvents()
+            EventBus.Unregister("QUEST_TURNED_IN", OnDMFEvent)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnDMFEvent)
         end
     end
 

@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Combat panel
 function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "combat")
     local fonts = Helpers.fonts
 
     -- Create ScrollFrame

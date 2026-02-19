@@ -1,11 +1,9 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local combatFrame = Widgets.CreateWidgetFrame("Combat", "combat")
-    combatFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    combatFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     -- Cached text (updated on events, not every second)
     local cachedText = "|cff00ff00Out of Combat|r"
@@ -18,19 +16,20 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    combatFrame:SetScript("OnEvent", function(self, event)
+    local function OnCombatUpdate()
         RefreshCombatCache()
-        self.text:SetText(cachedText)
-    end)
+        combatFrame.text:SetText(cachedText)
+    end
 
-    combatFrame.eventFrame = combatFrame
     combatFrame.ApplyEvents = function(enabled)
         if enabled then
-            combatFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-            combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-            combatFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("PLAYER_REGEN_DISABLED", OnCombatUpdate)
+            EventBus.Register("PLAYER_REGEN_ENABLED", OnCombatUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnCombatUpdate)
         else
-            combatFrame:UnregisterAllEvents()
+            EventBus.Unregister("PLAYER_REGEN_DISABLED", OnCombatUpdate)
+            EventBus.Unregister("PLAYER_REGEN_ENABLED", OnCombatUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnCombatUpdate)
         end
     end
 

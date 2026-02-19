@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 -- Hearthstone toy IDs (fallback if player has no item 6948)
 local HEARTHSTONE_TOYS = {
@@ -91,8 +92,6 @@ local function GetCooldownRemaining()
     return 0
 end
 
-local eventFrame = CreateFrame("Frame")
-
 table.insert(Widgets.moduleInits, function()
     local hearthFrame = Widgets.CreateWidgetFrame("Hearthstone", "hearthstone")
 
@@ -158,29 +157,32 @@ table.insert(Widgets.moduleInits, function()
     end)
     secureBtn:SetScript("OnLeave", GameTooltip_Hide)
 
-    hearthFrame.eventFrame = eventFrame
-    hearthFrame.ApplyEvents = function(enabled)
-        if enabled then
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            eventFrame:RegisterEvent("HEARTHSTONE_BOUND")
-            eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-        else
-            eventFrame:UnregisterAllEvents()
-        end
-    end
-
-    eventFrame:SetScript("OnEvent", function(self, event)
+    local function OnHearthEnteringWorld()
         if not UIThingsDB.widgets.hearthstone.enabled then return end
-        if event == "PLAYER_ENTERING_WORLD" then
-            -- Rebuild owned hearthstone list
-            ownedHearthstones = nil
-            BuildOwnedList()
-            if not InCombatLockdown() then
-                secureBtn:SetAttribute("item", "item:" .. GetRandomHearthstoneID())
-            end
+        ownedHearthstones = nil
+        BuildOwnedList()
+        if not InCombatLockdown() then
+            secureBtn:SetAttribute("item", "item:" .. GetRandomHearthstoneID())
         end
         hearthFrame:UpdateContent(hearthFrame)
-    end)
+    end
+
+    local function OnHearthUpdate()
+        if not UIThingsDB.widgets.hearthstone.enabled then return end
+        hearthFrame:UpdateContent(hearthFrame)
+    end
+
+    hearthFrame.ApplyEvents = function(enabled)
+        if enabled then
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnHearthEnteringWorld)
+            EventBus.Register("HEARTHSTONE_BOUND", OnHearthUpdate)
+            EventBus.Register("SPELL_UPDATE_COOLDOWN", OnHearthUpdate)
+        else
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnHearthEnteringWorld)
+            EventBus.Unregister("HEARTHSTONE_BOUND", OnHearthUpdate)
+            EventBus.Unregister("SPELL_UPDATE_COOLDOWN", OnHearthUpdate)
+        end
+    end
 
     hearthFrame.UpdateContent = function(self)
         local remaining = GetCooldownRemaining()

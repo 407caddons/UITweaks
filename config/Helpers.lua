@@ -161,6 +161,90 @@ function Helpers.UpdateModuleVisuals(panel, tab, enabled)
     end
 end
 
+--- Helper: Create a "Reset to Defaults" button anchored to the top-right of a panel.
+-- Clicking it shows a confirmation popup, then wipes and re-applies the module's
+-- defaults from addonTable.Core.DEFAULTS, and reloads the UI.
+-- @param panel frame The panel frame (button is anchored to its TOPRIGHT)
+-- @param dbKey string The key in UIThingsDB (and DEFAULTS) to reset, e.g. "combat"
+-- @param label string Optional button label (defaults to "Reset Defaults")
+-- @return button The created button
+function Helpers.CreateResetButton(panel, dbKey, label)
+    local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    btn:SetSize(120, 22)
+    btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -6)
+    btn:SetText(label or "Reset Defaults")
+
+    btn:SetScript("OnClick", function()
+        StaticPopup_Show("LUNA_RESET_MODULE_CONFIRM", dbKey, nil, dbKey)
+    end)
+
+    return btn
+end
+
+-- Static popup for per-module reset confirmation (registered once)
+if not StaticPopupDialogs["LUNA_RESET_MODULE_CONFIRM"] then
+    StaticPopupDialogs["LUNA_RESET_MODULE_CONFIRM"] = {
+        text = "Reset '%s' settings to defaults?\n\nThis will reload the UI.",
+        button1 = "Reset & Reload",
+        button2 = "Cancel",
+        OnAccept = function(self, data)
+            local key = data
+            local defaults = addonTable and addonTable.Core and addonTable.Core.DEFAULTS
+            if defaults and defaults[key] and UIThingsDB and UIThingsDB[key] then
+                wipe(UIThingsDB[key])
+                -- Deep copy defaults for this key back into UIThingsDB
+                local function DeepCopyInto(target, source)
+                    for k, v in pairs(source) do
+                        if type(v) == "table" then
+                            target[k] = {}
+                            DeepCopyInto(target[k], v)
+                        else
+                            target[k] = v
+                        end
+                    end
+                end
+                DeepCopyInto(UIThingsDB[key], defaults[key])
+            end
+            ReloadUI()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+end
+
+--- Helper: Create a "Reset All" button (for AddonVersions panel).
+-- Resets the entire UIThingsDB to defaults and reloads.
+-- @param panel frame The parent frame
+-- @return button The created button
+function Helpers.CreateResetAllButton(panel)
+    local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    btn:SetSize(100, 22)
+    btn:SetText("Reset All")
+
+    btn:SetScript("OnClick", function()
+        StaticPopup_Show("LUNA_RESET_ALL_CONFIRM")
+    end)
+
+    return btn
+end
+
+-- Static popup for full reset (registered once)
+if not StaticPopupDialogs["LUNA_RESET_ALL_CONFIRM"] then
+    StaticPopupDialogs["LUNA_RESET_ALL_CONFIRM"] = {
+        text = "Reset ALL LunaUITweaks settings to defaults?\n\nThis will reload the UI.",
+        button1 = "Reset All & Reload",
+        button2 = "Cancel",
+        OnAccept = function(self, data)
+            UIThingsDB = nil
+            ReloadUI()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+end
+
 --- Helper: Create Section Header
 -- @param parent frame Parent frame
 -- @param text string Header text

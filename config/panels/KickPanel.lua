@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Kick panel
 function addonTable.ConfigSetup.Kick(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "kick")
     -- Create ScrollFrame
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsKickScroll", panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 0, 0)

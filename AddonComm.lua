@@ -214,12 +214,8 @@ end
 
 -- == EVENT FRAME ==
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("CHAT_MSG_ADDON")
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "CHAT_MSG_ADDON" then
-        OnAddonMessage(...)
-    end
+addonTable.EventBus.Register("CHAT_MSG_ADDON", function(event, ...)
+    OnAddonMessage(...)
 end)
 
 -- Register all prefixes

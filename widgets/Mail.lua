@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local mailFrame = Widgets.CreateWidgetFrame("Mail", "mail")
@@ -14,24 +15,21 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("UPDATE_PENDING_MAIL")
-    eventFrame:RegisterEvent("MAIL_INBOX_UPDATE")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:SetScript("OnEvent", function()
+    local function OnMailUpdate()
         if not UIThingsDB.widgets.mail.enabled then return end
         RefreshMailCache()
-    end)
+    end
 
-    mailFrame.eventFrame = eventFrame
     mailFrame.ApplyEvents = function(enabled)
         if enabled then
-            eventFrame:RegisterEvent("UPDATE_PENDING_MAIL")
-            eventFrame:RegisterEvent("MAIL_INBOX_UPDATE")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+            EventBus.Register("UPDATE_PENDING_MAIL", OnMailUpdate)
+            EventBus.Register("MAIL_INBOX_UPDATE", OnMailUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnMailUpdate)
             RefreshMailCache()
         else
-            eventFrame:UnregisterAllEvents()
+            EventBus.Unregister("UPDATE_PENDING_MAIL", OnMailUpdate)
+            EventBus.Unregister("MAIL_INBOX_UPDATE", OnMailUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnMailUpdate)
         end
     end
 

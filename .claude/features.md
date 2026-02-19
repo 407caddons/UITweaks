@@ -1,6 +1,7 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-17
+**Date:** 2026-02-19
+**Previous Review:** 2026-02-18
 **Current Version:** v1.11.0
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
@@ -9,16 +10,32 @@ Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), 
 
 ## Previously Suggested - Now Implemented
 
-The following features from the previous review have been implemented:
+The following features from previous reviews have been implemented:
 
-- **M+ Dungeon Timer** -- Fully implemented as `MplusTimer.lua`. Includes +1/+2/+3 timer bars, forces tracking, boss objectives, death counter, affix display, Peril affix timer adjustments, auto-slot keystone, and demo mode.
+- **M+ Dungeon Timer** -- Fully implemented as `MplusTimer.lua`. Includes +1/+2/+3 timer bars, forces tracking, boss objectives, death counter with per-player breakdown tooltip, affix display, Peril affix timer adjustments, auto-slot keystone, and demo mode.
 - **Quest Automation** -- Fully implemented as `QuestAuto.lua`. Includes auto-accept, auto-turn-in, auto-gossip single option, shift-to-pause, trivial quest filtering, and gossip loop prevention.
-- **Quest Reminders** -- New module `QuestReminder.lua` (not previously suggested). Automatically tracks daily/weekly quests on accept, shows a login popup for incomplete repeatable quests, includes TTS notifications, chat messages, per-character warband override, and a full config panel with quest management.
-- **Talent Build Manager** -- New module `TalentManager.lua` (not previously suggested). Side panel anchored to the talent screen with Encounter Journal-based category/instance/difficulty tree view, import/export talent strings, build match detection (green tick), copy/update/delete/load per build. Shares data with TalentReminder via `LunaUITweaks_TalentReminders`.
+- **Quest Reminders** -- Fully implemented as `QuestReminder.lua`. Automatically tracks daily/weekly quests on accept, shows a login popup for incomplete repeatable quests, includes TTS notifications, chat messages, per-character warband override, and a full config panel with quest management.
+- **Talent Build Manager** -- Fully implemented as `TalentManager.lua`. Side panel anchored to the talent screen with Encounter Journal-based category/instance/difficulty tree view, import/export talent strings, build match detection (green tick), copy/update/delete/load per build. Array-based storage for multiple builds per zone key.
 - **Notifications Panel** -- Separated personal orders and mail notification settings into a dedicated `NotificationsPanel.lua` config tab with per-notification TTS, voice selection, alert color, and duration controls.
-- **Currency Widget** -- New widget `widgets/Currency.lua` with a detailed currency panel popup, weekly cap tracking, and icon-rich display. (Note: not yet listed in the TOC widget loading section.)
-- **Loot Spec Quick-Switcher (Suggestion #23)** -- Partially implemented via the existing Spec widget, which already offers left-click for spec switching and right-click for loot spec switching via context menus. The mismatch warning portion is not yet implemented.
-- **Addon Memory/CPU Monitor Widget (Suggestion #28)** -- Implemented within the FPS widget tooltip, which now shows per-addon memory breakdown (top 30 addons sorted by memory), total memory, jitter calculation, bandwidth stats, and a configurable `showAddonMemory` toggle. Separate garbage collection button not yet added.
+- **Currency Widget** -- Fully implemented as `widgets/Currency.lua` with a detailed currency panel popup, weekly cap tracking, icon-rich display, and frame pooling. Currency list updated to TWW Season 3 values.
+- **Loot Spec Quick-Switcher** -- Partially implemented via the existing Spec widget, which already offers left-click for spec switching and right-click for loot spec switching via context menus. The mismatch warning portion is not yet implemented.
+- **Addon Memory/CPU Monitor Widget** -- Implemented within the FPS widget tooltip, which shows per-addon memory breakdown (top addons sorted by memory), total memory, jitter calculation, bandwidth stats, and a configurable `showAddonMemory` toggle.
+- **Minimap Button Drawer** -- Implemented in `MinimapCustom.lua` with configurable button collection from minimap children, adjustable button size, padding, column count, border/background colors, lockable/draggable container frame, and toggle visibility.
+- **Quick Item Destroy** -- Implemented in `Misc.lua` as `quickDestroy` option. Bypasses the "DELETE" typing requirement on rare/epic items with a single-click DELETE button overlay on the confirmation dialog.
+- **Session Stats Widget** -- NEW (2026-02-19). Implemented as `widgets/SessionStats.lua`. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload` with true login vs reload detection. Right-click resets counters.
+- **Widget Visibility Conditions** -- NEW (2026-02-19). Implemented in `Widgets.lua` with `EvaluateCondition()` supporting 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Each widget has a condition dropdown in the config panel. BattleRes and PullCounter default to `instance`.
+
+---
+
+## Changes Since Last Review (2026-02-19)
+
+The following changes were observed since the 2026-02-18 review:
+
+1. **SessionStats widget (NEW)** -- A new widget file `widgets/SessionStats.lua` (untracked in git). Tracks session-level statistics: time played this session, gold earned/spent delta, items looted count, and deaths count. Uses EventBus for `PLAYER_DEAD` and `CHAT_MSG_LOOT`. Persists across `/reload` by comparing `GetTime()` epochs. Right-click resets counters. `issecretvalue()` check on gold amount.
+
+2. **Widget Visibility Conditions (NEW)** -- `Widgets.lua` now includes a condition evaluation system. `EvaluateCondition(condition)` checks 7 states: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Conditions are re-evaluated on 8 EventBus events (combat transitions, group roster changes, zone changes). The WidgetsPanel now includes a per-widget condition dropdown. Default conditions set to `instance` for BattleRes and PullCounter; `always` for all others.
+
+**No previously suggested features were newly implemented** in this update beyond the two items above. The changes are primarily internal quality additions.
 
 ---
 
@@ -78,66 +95,65 @@ Extend the Vendor module with custom sell lists -- allow users to mark specific 
 - **Files:** Vendor.lua, config/panels/VendorPanel.lua, Core.lua (defaults)
 
 ### 8. M+ Timer History and Statistics
-Extend MplusTimer to save run history (completion times, death counts, key levels, affixes) to a SavedVariable and display statistics: average completion time per dungeon, personal bests, upgrade/downgrade trends, and a filterable run log.
+Extend MplusTimer to save run history (completion times, death counts, key levels, affixes, per-player death breakdowns) to a SavedVariable and display statistics: average completion time per dungeon, personal bests, upgrade/downgrade trends, and a filterable run log.
 - **Ease:** Medium
 - **Impact:** Medium-High for M+ players
-- **Rationale:** MplusTimer already tracks all the data during a run (elapsed time, deaths, boss times, forces, Peril timer adjustments). Saving it on completion is trivial. The complexity is in the statistics UI -- a scrollable run log with filtering, sorting, and potentially a small chart or comparison view. Saved variable size management (pruning old runs) adds minor complexity.
+- **Rationale:** MplusTimer already tracks all the data during a run. Saving it on completion is trivial. The complexity is in the statistics UI -- a scrollable run log with filtering, sorting, and potentially a small chart or comparison view. Saved variable size management (pruning old runs) adds minor complexity.
 - **Files:** MplusTimer.lua, new SavedVariable or extend UIThingsDB, config panel additions
 
 ### 9. Chat Tabs/Channels Manager
-Extend ChatSkin with custom chat tab presets (e.g., "M+ Group" tab that auto-joins instance chat + party), auto-join/leave channels on zone change, and per-tab color/font settings. Add a quick-switch dropdown for tab layouts.
+Extend ChatSkin with custom chat tab presets (e.g., "M+ Group" tab that auto-joins instance chat + party), auto-join/leave channels on zone change, and per-tab color/font settings.
 - **Ease:** Medium
 - **Impact:** Medium
-- **Rationale:** Chat frame manipulation via `ChatFrame_AddChannel`/`ChatFrame_RemoveChannel` and `FCF_OpenNewWindow` is documented. The complexity is in tracking state across zone changes reliably and providing a clean config UI for defining channel presets.
+- **Rationale:** Chat frame manipulation via `ChatFrame_AddChannel`/`ChatFrame_RemoveChannel` and `FCF_OpenNewWindow` is documented. The complexity is in tracking state across zone changes reliably.
 - **Files:** ChatSkin.lua, config/panels/ChatSkinPanel.lua
 
 ### 10. Encounter Notes
-Allow users to save per-boss or per-dungeon text notes that automatically display as a small, dismissible overlay when entering the relevant zone. Integrate with TalentReminder's zone detection to reuse the instance/difficulty/zone mapping. Support class/role-specific note variants.
+Allow users to save per-boss or per-dungeon text notes that automatically display as a small, dismissible overlay when entering the relevant zone. Integrate with TalentReminder's zone detection to reuse the instance/difficulty/zone mapping.
 - **Ease:** Medium
 - **Impact:** Medium
-- **Rationale:** The zone detection infrastructure exists in TalentReminder. A new saved variable for notes with the same `instanceID/difficultyID/zoneKey` structure would allow seamless integration. The display UI is a simple text frame. The editing UI needs a multi-line EditBox with save/load. The TalentManager's Encounter Journal cache could be reused for instance/difficulty lookups.
+- **Rationale:** The zone detection infrastructure exists in TalentReminder. A new saved variable for notes with the same structure would allow seamless integration.
 - **Files:** New EncounterNotes.lua or extend TalentReminder.lua
 
 ### 11. Quest Auto Enhancements
-Extend QuestAuto with: a blacklist/whitelist for specific quest IDs or NPC names, auto-select best quest reward based on item level or sell price, party quest sharing on accept, and an optional confirmation dialog for important quests (e.g., weekly/bi-weekly quests).
+Extend QuestAuto with: a blacklist/whitelist for specific quest IDs or NPC names, auto-select best quest reward based on item level or sell price, party quest sharing on accept, and an optional confirmation dialog for important quests.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** QuestAuto already handles all the quest interaction events. Adding a blacklist is a simple table lookup before each auto-action. Best reward selection requires `GetQuestItemInfo` and `GetItemInfo` comparisons. Quest sharing uses `QuestLogPushQuest()`. The main design challenge is making the config UI intuitive for managing blacklists.
+- **Rationale:** QuestAuto already handles all quest interaction events. Adding a blacklist is a simple table lookup. Best reward selection requires `GetQuestItemInfo` and `GetItemInfo` comparisons.
 - **Files:** QuestAuto.lua, config/panels/QuestAutoPanel.lua, Core.lua (defaults)
 
 ### 12. Party Composition Analyzer
 Show a summary widget or popup when joining a group: available interrupts (leveraging the Kick module's INTERRUPT_SPELLS database), battle rez coverage, bloodlust/heroism availability, and missing raid buffs. Highlight gaps in group composition.
 - **Ease:** Medium
 - **Impact:** Medium-High for M+ and raid leaders
-- **Rationale:** The Kick module already has a comprehensive database of interrupt spells per class. The Group widget already shows role breakdown with tank/healer/DPS counts. Extending this with battle rez, lust, and buff coverage is a data expansion. The display could be a tooltip enhancement on the Group widget. The challenge is accurately detecting which abilities each group member has (spec-dependent abilities require inspect or addon comm data).
+- **Rationale:** The Kick module already has a comprehensive database of interrupt spells per class. The Group widget already shows role breakdown. Extending this with battle rez, lust, and buff coverage is a data expansion.
 - **Files:** New module or extend Group widget/Kick.lua, possibly AddonComm.lua for spec sharing
 
 ### 13. M+ Timer Split Comparison
 Extend MplusTimer to save "personal best splits" per dungeon per key level range and show real-time green/red delta comparisons during runs. Display boss kill deltas, forces completion delta, and overall pace indicator.
 - **Ease:** Medium-Hard
 - **Impact:** Medium-High for competitive M+ players
-- **Rationale:** MplusTimer already tracks boss completion times and forces progress. Saving these as "best splits" is a SavedVariable addition. The real-time comparison needs additional UI elements (delta text per boss/forces bar) and logic to interpolate pace between checkpoints. The UI design for showing deltas without cluttering the timer is the main challenge.
+- **Rationale:** MplusTimer already tracks boss completion times and forces progress. The real-time comparison needs additional UI elements and logic to interpolate pace between checkpoints.
 - **Files:** MplusTimer.lua, new SavedVariable for split data
 
 ### 14. Interrupt Assignment Helper
-Extend the Kick module with a visual interrupt rotation assignment tool for M+ groups. Auto-assign interrupt order based on cooldown lengths (shorter CDs more frequent in rotation), show the rotation visually, and broadcast assignments via addon comm.
+Extend the Kick module with a visual interrupt rotation assignment tool for M+ groups. Auto-assign interrupt order based on cooldown lengths, show the rotation visually, and broadcast assignments via addon comm.
 - **Ease:** Medium-Hard
 - **Impact:** High for organized M+ groups
-- **Rationale:** The Kick module already has the full INTERRUPT_SPELLS database with cooldown durations and tracks who has interrupts available. The algorithm for optimal rotation assignment is moderately complex (sort by CD length, distribute evenly). The broadcast needs AddonComm integration for sharing the assignment. The UI needs a visual rotation display.
+- **Rationale:** The Kick module already has the full INTERRUPT_SPELLS database with cooldown durations and tracks who has interrupts available.
 - **Files:** Kick.lua, AddonComm.lua, config/panels/KickPanel.lua
 
 ### 15. Currency Widget Improvements
-The Currency widget currently has a hardcoded `DEFAULT_CURRENCIES` list for TWW Season 1. Extend it to: automatically detect the current season's relevant currencies, allow users to customize which currencies to track, add cross-character currency comparison (similar to Bags widget's gold tracking), and fix the missing TOC entry.
+The Currency widget now has TWW Season 3 currencies but the `DEFAULT_CURRENCIES` list remains hardcoded per season. Extend to: automatically detect the current season's relevant currencies using `C_CurrencyInfo.GetCurrencyListSize/Info` or `isShowInBackpack`, allow users to customize which currencies to track, and add cross-character currency comparison.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** The currency tracking infrastructure is already built with a detailed popup panel. The main work is replacing the hardcoded list with a user-configurable one (using `C_CurrencyInfo.GetCurrencyListSize/Info` to enumerate available currencies) and adding a character-keyed SavedVariable for cross-character totals. The TOC fix is a one-line addition.
-- **Files:** widgets/Currency.lua, LunaUITweaks.toc, Core.lua (defaults), config/panels/WidgetsPanel.lua
+- **Rationale:** The currency tracking infrastructure is already built. The Bags widget already iterates `isShowInBackpack` currencies in its tooltip, proving the pattern works.
+- **Files:** widgets/Currency.lua, Core.lua (defaults), config/panels/WidgetsPanel.lua
 
 ### 16. Raid Sorting Improvements
-The Group widget already has raid sorting (odds/evens, split half, healers to last). Extend with: save custom sorting presets, class-based grouping (all mages in group 3, etc.), and sync sorting preferences across the raid via AddonComm.
+The Group widget already has raid sorting (odds/evens, split half, healers to last). Extend with: save custom sorting presets, class-based grouping, and sync sorting preferences across the raid via AddonComm.
 - **Ease:** Medium
 - **Impact:** Medium for raid leaders
-- **Rationale:** The sorting infrastructure in `widgets/Group.lua` is well-built with `ApplyRaidAssignments()` handling the actual group swaps via a ticker. Adding presets is a SavedVariable addition. Class-based grouping extends the existing role categorization. AddonComm broadcast for sharing preferences uses the established pattern.
 - **Files:** widgets/Group.lua, AddonComm.lua, Core.lua (defaults)
 
 ---
@@ -145,268 +161,240 @@ The Group widget already has raid sorting (odds/evens, split half, healers to la
 ## Quality-of-Life Improvements
 
 ### 17. Global Font/Scale Settings
-Add a "Global" settings page that lets users set a default font family and base scale applied across all modules. Individual modules could still override with their own font/scale setting.
+Add a "Global" settings page that lets users set a default font family and base scale applied across all modules. Individual modules could still override.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** Most modules already read font settings from `UIThingsDB.moduleName.font` or similar. Adding a global default that modules fall back to when their own font is unset is a small change to each module's initialization.
 - **Files:** Core.lua, config/ConfigMain.lua, all modules that use fonts
 
 ### 18. Settings Reset Per-Module
-Add a "Reset to Defaults" button on each config panel that resets only that module's settings in `UIThingsDB` back to the values from the `DEFAULTS` table.
+Add a "Reset to Defaults" button on each config panel that resets only that module's settings.
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** The `DEFAULTS` table in Core.lua already defines defaults per module key. A reset function just needs to copy the relevant subtable from `DEFAULTS` over the current `UIThingsDB[moduleKey]`, then call `UpdateSettings()`.
 - **Files:** config/ConfigMain.lua, Core.lua
 
 ### 19. Minimap Button Right-Click Menu
-Add a right-click context menu to the minimap button with quick toggles: objective tracker on/off, widgets lock/unlock, combat timer toggle, M+ timer toggle, and quick access to individual config panels.
+Add a right-click context menu to the minimap button with quick toggles and quick access to individual config panels.
 - **Ease:** Easy
 - **Impact:** Medium
-- **Rationale:** WoW's `MenuUtil.CreateContextMenu` pattern is already used extensively (Spec widget, Group widget). The minimap button already has click handling; adding right-click detection and a menu is minimal work.
 - **Files:** MinimapButton.lua
 
 ### 20. Keybind Support for More Actions
-Expand keybind support beyond the existing quest item button and tracker toggle. Add bindable actions for: toggle all widgets, toggle combat timer, open config window, lock/unlock all movable frames, toggle M+ timer demo mode, and cycle through specs.
+Expand keybind support: toggle all widgets, toggle combat timer, open config window, lock/unlock all movable frames.
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** WoW keybinds are declared in `Bindings.xml` with corresponding global functions. Each binding is one XML entry and one Lua function.
 - **Files:** Bindings.xml (new or extended), relevant modules
 
 ### 21. Search in Config Window
-Add a search box at the top of the config window that filters visible tabs and/or highlights matching settings within panels. As the addon grows beyond 20 tabs, finding specific settings becomes harder.
+Add a search box at the top of the config window that filters visible tabs. With 20+ tabs, finding specific settings becomes harder.
 - **Ease:** Medium-Hard
 - **Impact:** Medium
-- **Rationale:** Tab filtering is straightforward (match tab name against query, hide non-matching tabs). Highlighting settings within panels is much harder. A simpler tab-level-only approach would still be valuable.
 - **Files:** config/ConfigMain.lua, all panel files (for metadata)
 
 ### 22. Snap to Grid for Movable Frames
-When dragging widgets, custom frames, the cast bar, or the M+ timer, add optional grid snapping (e.g., snap to nearest 5/10/25px). Could be toggled with a modifier key (Shift to snap) or a global setting.
+When dragging widgets, custom frames, the cast bar, or the M+ timer, add optional grid snapping. Could be toggled with a modifier key (Shift to snap).
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** The `OnDragStop` handler in each movable frame already captures position via `GetCenter()`. Adding snap is a one-line rounding operation: `x = math.floor(x / gridSize + 0.5) * gridSize`. Applying this consistently across all draggable frames is straightforward since `Widgets.CreateWidgetFrame` centralizes the drag logic.
+- **Rationale:** `Widgets.CreateWidgetFrame` centralizes the drag logic. A one-line rounding operation in `OnDragStop`.
 - **Files:** widgets/Widgets.lua, CastBar.lua, Frames.lua, MplusTimer.lua, Kick.lua
 
 ### 23. Talent Reminder Import/Export for Sharing
-Allow exporting/importing talent reminder configurations as encoded strings. Raid leaders could share talent setups for specific encounters with their team. The TalentManager already implements import/export for talent strings -- this would extend that to share the zone-based reminder mappings.
+Allow exporting/importing talent reminder configurations as encoded strings. Raid leaders could share talent setups for specific encounters with their team.
 - **Ease:** Medium
 - **Impact:** Medium for organized groups
-- **Rationale:** The talent reminder data structure (`instanceID/difficultyID/zoneKey -> snapshot`) is well-defined. The TalentManager's existing import/export dialog code could be reused. The challenge is handling conflicts (existing reminder for same zone) and validating that imported talent nodes exist for the player's class/spec.
 - **Files:** TalentReminder.lua, TalentManager.lua, config/panels/TalentPanel.lua
 
 ### 24. Cooldown Tracker Widget
-Add a widget (or set of widgets) that shows remaining cooldowns on important player abilities: major defensives, DPS cooldowns, movement abilities, and utility spells. Display as a small icon bar with timers, similar to the interrupt tracker but for personal cooldowns.
+Add a widget that shows remaining cooldowns on important player abilities: major defensives, DPS cooldowns, movement abilities. Display as a small icon bar with timers.
 - **Ease:** Easy-Medium
 - **Impact:** Medium-High -- Useful across all content types
-- **Rationale:** The Kick module already tracks spell cooldowns via `GetSpellCooldown`. The Combat module already tracks consumable buffs with clickable icons. Reusing these patterns for a configurable list of player spells is straightforward.
+- **Rationale:** The Kick module already tracks spell cooldowns via `C_Spell.GetSpellCooldown`. The Combat module tracks consumable buffs with clickable icons.
 - **Files:** New widget in widgets/ or standalone module, config panel
 
 ### 25. Auto-Screenshot on Achievement/Kill
-Automatically take a screenshot when earning an achievement, timing a M+ key, killing a raid boss for the first time, or obtaining a rare mount/pet. Configurable triggers with optional delay.
+Automatically take a screenshot when earning an achievement, timing a M+ key, killing a raid boss for the first time, or obtaining a rare mount/pet.
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** The `Screenshot()` API is one function call. Trigger events are `ACHIEVEMENT_EARNED`, `CHALLENGE_MODE_COMPLETED`, `ENCOUNTER_END`, `NEW_MOUNT_ADDED`, `NEW_PET_ADDED`. A small event handler with configurable toggle per trigger type.
 - **Files:** Extend Misc.lua or new small module
 
 ### 26. Reagent Shopping List
-Extend Reagents.lua to let users define target quantities for specific reagents. Show a "shopping list" of items needed to reach the target, factoring in stock across all tracked characters. Integrate with the AH filter to highlight needed items.
+Extend Reagents.lua to let users define target quantities for specific reagents. Show a "shopping list" of items needed to reach the target, factoring in stock across all tracked characters.
 - **Ease:** Medium
 - **Impact:** Medium for crafters
-- **Rationale:** The reagent scanning infrastructure exists with full bag/bank/warband scanning and cross-character tracking. Adding target quantities is a saved variable addition. AH integration requires working with `AuctionHouseFrame` which has limited addon support.
 - **Files:** Reagents.lua, config/panels/ReagentsPanel.lua
 
 ### 27. Dungeon/Raid Lockout Widget
 Add a widget showing current instance lockouts: raid lockouts with boss completion progress, M+ weekly best, and saved instance count. Click to open the Raid Info panel.
 - **Ease:** Easy-Medium
 - **Impact:** Medium for raiders
-- **Rationale:** `GetNumSavedInstances()`, `GetSavedInstanceInfo()`, and `RequestRaidInfo()` provide lockout data. The tooltip format is similar to existing widgets (Vault, Keystone). The Vault widget already shows M+ and raid progress -- this would complement it with explicit lockout tracking.
 - **Files:** New widget in widgets/Lockouts.lua
 
 ### 28. Chat Message Filter/Mute
-Extend ChatSkin with message filtering: hide messages containing specific keywords or from specific players, auto-collapse spam (repeated messages), and optionally route filtered messages to a separate "Filtered" tab.
+Extend ChatSkin with message filtering: hide messages containing specific keywords or from specific players, auto-collapse spam, and optionally route filtered messages to a separate tab.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** ChatSkin already hooks chat messages for URL detection and keyword highlighting via `ChatFrame_AddMessageEventFilter`. Adding a filter layer that checks against a blocklist before displaying is a small addition to the existing hooks.
 - **Files:** ChatSkin.lua, config/panels/ChatSkinPanel.lua, Core.lua (defaults)
 
 ### 29. World Quest Timer Overlay
-Add countdown timers to world quests in the ObjectiveTracker showing time remaining before they expire. Color-code quests that expire soon (red for <1h, orange for <4h). Optionally add sound alerts for expiring quests that are being tracked.
+Add countdown timers to world quests in the ObjectiveTracker showing time remaining before they expire. Sound alerts for expiring quests that are being tracked.
 - **Ease:** Easy
 - **Impact:** Medium
-- **Rationale:** `C_TaskQuest.GetQuestTimeLeftSeconds()` returns the remaining time. The ObjectiveTracker already displays world quests with timer coloring. This would extend the coloring to the main quest text and add optional audio alerts.
-- **Files:** ObjectiveTracker.lua
+- **Files:** ObjectiveTracker.lua, config/panels/TrackerPanel.lua
 
 ---
 
-## New Feature Ideas (Added This Review)
+## New Feature Ideas (Added 2026-02-19)
 
 ### 30. Talent Manager Enhancements
-The TalentManager is new and functional but could be extended with: drag-and-drop reordering of builds, keyboard shortcuts to load builds (1-9), auto-detect current content type and suggest matching builds, and a "quick switch" bar that shows outside the talent frame.
+The TalentManager has array-based build storage making drag-and-drop reordering trivially implementable. Extend with: drag-and-drop reordering, keyboard shortcuts to load builds (1-9), auto-detect current content type and suggest matching builds, and a "quick switch" bar outside the talent frame.
 - **Ease:** Medium
 - **Impact:** Medium-High
-- **Rationale:** The TalentManager already has a comprehensive tree view with categories, instances, and difficulties. The EJ cache is built. Adding drag-and-drop requires `OnDragStart`/`OnDragStop` handlers on build rows. The quick switch bar would be a small floating frame with build buttons, similar to a toolbar.
+- **Rationale:** The `buildIndex` tracking infrastructure is fully in place. Drag-and-drop requires `OnDragStart`/`OnDragStop` handlers on build rows.
 - **Files:** TalentManager.lua, config/panels/TalentManagerPanel.lua
 
 ### 31. Quest Reminder Enhancements
-The QuestReminder module could be extended with: quest category grouping (dailies vs weeklies in separate sections), completion streak tracking (how many days/weeks in a row you've completed a quest), priority marking for important quests, and integration with the ObjectiveTracker to highlight reminder quests.
+Extend with: quest category grouping (dailies vs weeklies in separate sections), completion streak tracking, priority marking for important quests, and integration with the ObjectiveTracker.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** The QuestReminder already tracks frequency (daily/weekly) and zone. Adding grouping is a UI sort change. Streak tracking requires a history table in the SavedVariable. Priority marking is a per-quest flag. ObjectiveTracker integration would use the quest ID list to add visual indicators.
 - **Files:** QuestReminder.lua, config/panels/QuestReminderPanel.lua, ObjectiveTracker.lua
 
 ### 32. M+ Route/Pull Planner Integration
-Add a simple in-game route display for M+ dungeons: show pull markers or waypoints on the minimap, integrate with the MplusTimer's forces tracking to estimate if the planned pulls will meet the requirement. Support importing routes from popular planning tools.
+Add a simple in-game route display for M+ dungeons: show pull markers on the minimap, integrate with MplusTimer's forces tracking. Support importing routes from popular planning tools.
 - **Ease:** Hard
 - **Impact:** High for M+ players
-- **Rationale:** The MplusTimer already tracks forces and has per-dungeon data. Minimap pin placement uses `C_Map.SetUserWaypoint()` or addon-drawn minimap icons. The Hard part is the route data format and import parsing. This would be a significant differentiator from other timer addons.
 - **Files:** New MplusRoute.lua module or extend MplusTimer.lua
 
 ### 33. Consumable Reminder Improvements
-The Combat module's consumable reminder system already tracks flask, food, weapon buff, pet, and class buffs with clickable icons. Extend with: auto-detect content difficulty to only remind in relevant content (e.g., M+ and raid only), show remaining duration on existing buffs, add Augmentation rune tracking, and provide a "restock" shopping list after a raid session.
+The Combat module's consumable reminder system already tracks flask, food, weapon buff, pet, and class buffs. Extend with: auto-detect content difficulty to only remind in relevant content, show remaining duration on existing buffs, add Augmentation rune tracking.
 - **Ease:** Easy-Medium
 - **Impact:** Medium
-- **Rationale:** The consumable reminder system is already well-built with quality star icons, `SecureActionButtonTemplate` buttons, and bag scanning. Adding difficulty filtering requires checking `select(3, GetInstanceInfo())`. Duration display needs `C_UnitAuras` checking. Rune tracking is another item category to scan for.
 - **Files:** Combat.lua, config/panels/CombatPanel.lua
 
 ### 34. Hearthstone Widget Improvements
-The Hearthstone widget supports 30+ toy hearthstones with random selection. Extend with: a hearthstone preference list (favorites weighted higher in random selection), show all available hearthstones in a click-menu (like the Teleport widget's panel), and track hearthstone usage statistics for fun.
+Add a hearthstone preference list (favorites weighted in random selection), show all available hearthstones in a click-menu (like the Teleport widget's panel), and track usage statistics.
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** The Hearthstone widget already builds an owned list and supports `SecureActionButtonTemplate` for combat-safe usage. Adding a preference list is a SavedVariable addition. A panel popup can reuse the Teleport widget's panel pattern (button pool, dismiss frame, secure buttons).
 - **Files:** widgets/Hearthstone.lua, Core.lua (defaults)
 
 ### 35. Group Widget Ready Check Improvements
-The Group widget already shows ready check status with color-coded progress. Extend with: ready check history (who was slow/declined), sound alerts for declined ready checks, auto-ready-check before pull timer, and a visual countdown ring during the check.
+Extend with: ready check history, sound alerts for declined ready checks, auto-ready-check before pull timer.
 - **Ease:** Easy-Medium
 - **Impact:** Medium for group leaders
-- **Rationale:** The `READY_CHECK`, `READY_CHECK_CONFIRM`, and `READY_CHECK_FINISHED` events are already handled. Adding history is a session table. Sound alerts use `PlaySound()`. Auto-ready-check requires detecting DBM/BigWigs pull timers or the built-in `C_PartyInfo.DoCountdown()`.
 - **Files:** widgets/Group.lua
 
 ### 36. Minimap Enhancements
-The MinimapCustom module already handles shape (round/square), border, zone text, and clock. Extend with: minimap scaling, node tracking toggles (herbs, ores, etc.) as buttons around the minimap border, a coordinates overlay directly on the minimap, and a ping tracker showing who pinged.
+Extend with: minimap scaling, node tracking toggles around the minimap border, coordinates overlay on the minimap, and a ping tracker showing who pinged.
 - **Ease:** Medium
 - **Impact:** Medium
-- **Rationale:** Minimap scaling uses `Minimap:SetScale()`. Node tracking toggles use `C_Minimap.SetTracking()`. The ping tracker hooks `MINIMAP_PING` events with `Minimap:GetPingPosition()`. The coordinates overlay reuses the Coordinates widget logic.
 - **Files:** MinimapCustom.lua, config/panels/MinimapPanel.lua
 
 ### 37. Death Recap Enhancement
-Replace or supplement Blizzard's death recap with a more detailed breakdown: show the last N damage/healing events before death, highlight the killing blow, and show a timeline. Use sub-events from `CombatLogGetCurrentEventInfo()`.
+Replace or supplement Blizzard's death recap with a more detailed breakdown: last N damage/healing events, killing blow highlight, timeline display. Must use `CombatLogGetCurrentEventInfo()` via sub-events (not `COMBAT_LOG_EVENT_UNFILTERED`).
 - **Ease:** Medium-Hard
 - **Impact:** Medium -- Very useful for learning encounters
-- **Rationale:** Tracking damage events requires maintaining a rolling buffer of recent combat log entries filtered to the player. The display is a scrollable frame showing spell icons, damage amounts, and timestamps. Must use `CombatLogGetCurrentEventInfo()` and specific sub-events, not `COMBAT_LOG_EVENT_UNFILTERED` directly (restricted to Blizzard UI only).
 - **Files:** New DeathRecap.lua module + config panel
 
 ### 38. Teleport Widget Favorites
-The Teleport widget already has an excellent panel with categories, current season dungeons, and secure spell buttons. Add a "favorites" row at the top of the panel for frequently used teleports, and remember the last-used teleport for a one-click quick-cast without opening the full panel.
+Add a "favorites" row at the top of the Teleport panel and remember the last-used teleport for one-click quick-cast.
 - **Ease:** Easy
 - **Impact:** Low-Medium
-- **Rationale:** The panel infrastructure with button pools and secure buttons is already built. Favorites would be a small SavedVariable list. The "last used" quick-cast changes the widget's click behavior to cast the saved spell directly (left-click = last used, right-click = open panel).
 - **Files:** widgets/Teleports.lua, Core.lua (defaults)
+
+### 39. Loot Spec Mismatch Warning
+Add a persistent warning indicator when loot spec differs from current spec via the Spec widget.
+- **Ease:** Easy
+- **Impact:** Medium -- Prevents loot going to wrong spec
+- **Files:** widgets/Spec.lua, Core.lua (defaults)
+
+### 40. M+ Affix Strategy Notes
+Extend MplusTimer with configurable per-affix strategy notes that display during the run.
+- **Ease:** Easy
+- **Impact:** Low-Medium
+- **Files:** MplusTimer.lua, config/panels/MplusTimerPanel.lua, Core.lua (defaults)
+
+### 41. SCT Spell Icons and Filtering
+Enhance SCT with: spell icons, damage school coloring, minimum threshold filter, per-spell blacklist.
+- **Ease:** Medium
+- **Impact:** Medium
+- **Files:** Misc.lua, config/panels/MiscPanel.lua, Core.lua (defaults)
+
+### 42. Objective Tracker Auto-Collapse in Combat
+Add a middle-ground option: auto-collapse all sections to just headers during combat, then auto-expand when combat ends.
+- **Ease:** Easy
+- **Impact:** Low-Medium
+- **Files:** ObjectiveTracker.lua, config/panels/TrackerPanel.lua, Core.lua (defaults)
+
+### 43. Warband Bank Integration for Reagents
+Better surface warband vs personal quantities in tooltips, add "total across warband" summary.
+- **Ease:** Easy
+- **Impact:** Medium for multi-character crafters
+- **Files:** Reagents.lua, config/panels/ReagentsPanel.lua
+
+### 44. Chat Skin Fade Timer
+Add optional auto-fade: chat fades to configurable alpha after N seconds of inactivity, becomes visible on new messages or mouse hover.
+- **Ease:** Easy-Medium
+- **Impact:** Medium
+- **Files:** ChatSkin.lua, config/panels/ChatSkinPanel.lua, Core.lua (defaults)
+
+### 45. M+ Death Log Enhancements
+Extend per-player death log with: death timestamps, death locations, cause of death tracking (from combat log sub-events), death timeline overlay on timer bar.
+- **Ease:** Medium
+- **Impact:** Medium for M+ groups
+- **Files:** MplusTimer.lua, AddonComm.lua, config/panels/MplusTimerPanel.lua
+
+### 46. Talent Build Comparison View
+Side-by-side comparison view for two builds showing which talents differ and which are shared. Allow merging (taking specific nodes from one build into another).
+- **Ease:** Medium
+- **Impact:** Medium for raiders and M+ players
+- **Files:** TalentManager.lua, TalentReminder.lua
+
+### 47. Multi-Build Quick Apply Toolbar
+Floating toolbar in instances showing all matching builds for the current zone/difficulty with one-click apply buttons.
+- **Ease:** Easy-Medium
+- **Impact:** Medium-High for raiders who swap talents between pulls
+- **Files:** TalentReminder.lua or new TalentToolbar.lua, Core.lua (defaults)
 
 ---
 
 ## Architecture Improvements
 
-### 39. Module Enable/Disable Without Reload
-Add proper teardown methods to modules that currently require `/reload` to fully enable/disable (mainly those hooking Blizzard frames: ActionBars, CastBar, ChatSkin, ObjectiveTracker). Each module would implement a `Teardown()` function that unhooks, hides, and restores Blizzard defaults.
-- **Ease:** Medium-Hard (varies significantly by module)
+### 48. Module Enable/Disable Without Reload
+Add proper teardown methods to modules that currently require `/reload` to fully enable/disable. Each module would implement a `Teardown()` function.
+- **Ease:** Medium-Hard (varies by module)
 - **Impact:** Medium
-- **Rationale:** Some modules like ActionBars deeply modify Blizzard frames with `hooksecurefunc` which cannot be un-hooked. A full teardown for such modules would require wrapping hooks in conditional checks (`if not enabled then return end`). CastBar and ChatSkin are more feasible since they primarily show/hide addon-created frames.
 
-### 40. Internal Event Bus
-Create a centralized internal event bus so modules can communicate without direct table references. Modules publish events and other modules subscribe with callbacks, replacing the current pattern of direct `addonTable.ModuleName` function calls across the codebase.
-- **Ease:** Medium
-- **Impact:** Low-Medium (architecture improvement, reduces coupling)
-- **Rationale:** The bus itself is simple (a table of event -> callback lists). The migration effort is moderate -- every cross-module call needs to be replaced with a publish/subscribe pattern. The benefit is cleaner module boundaries and easier testing. The AddonComm module already demonstrates a handler registry pattern that could be generalized.
+### 49. Internal Event Bus -- FULLY IMPLEMENTED
+The centralized EventBus is now fully implemented across the addon with all modules migrated. The pcall memory regression has been resolved. **Note (2026-02-19):** A new HIGH priority issue was discovered -- duplicate registration vulnerability where modules that call `EventBus.Register` in `ApplyEvents` without first calling `Unregister` accumulate duplicate listeners. Only Reagents.lua correctly prevents this.
+- **Status:** Fully implemented but needs duplicate registration fix.
 
-#### Proposed Events
-
-Based on the current cross-module communication patterns in the codebase, the event bus would expose approximately 40 events across 7 categories:
-
-**Lifecycle Events**
-| Event | Publisher | Replaces |
-|---|---|---|
-| `LUNA_ADDON_LOADED` | Core.lua | Direct `Initialize()` calls in Core.lua |
-| `LUNA_MODULE_READY` | Each module after init | Implicit load-order dependencies |
-| `LUNA_SETTINGS_RESET` | Config panels | Would support per-module reset (Feature 18) |
-
-**Config Events**
-| Event | Publisher | Replaces |
-|---|---|---|
-| `LUNA_CONFIG_OPENED` | ConfigMain.lua | Implicit (panels check on render) |
-| `LUNA_CONFIG_CLOSED` | ConfigMain.lua | Direct calls to `Frames.UpdateFrames()`, `Loot.LockAnchor()`, `Misc.LockSCTAnchors()`, `Widgets.UpdateVisuals()`, `MplusTimer.CloseDemo()` |
-| `LUNA_SETTING_CHANGED` | Config panels | Direct `UpdateSettings()` calls from 20+ config panels |
-
-**Frame & Layout Events**
-| Event | Publisher | Replaces |
-|---|---|---|
-| `LUNA_FRAMES_UPDATED` | Frames.lua | `Widgets.InvalidateAnchorCache()` |
-| `LUNA_FRAME_CREATED/DELETED` | Frames.lua | `Config.RefreshFrameControls()` |
-| `LUNA_WIDGETS_LOCKED/UNLOCKED` | Widgets.lua | Implicit state check |
-
-**Module-Specific Events**
-| Event | Publisher | Replaces |
-|---|---|---|
-| `LUNA_REMINDER_LIST_CHANGED` | TalentReminder.lua | `Config.RefreshTalentReminderList()` |
-| `LUNA_REAGENTS_SCANNED` | Reagents.lua | `Config.RefreshReagentsList()` |
-| `LUNA_MPLUS_STARTED/COMPLETED` | MplusTimer.lua | Currently internal only, would enable future modules |
-| `LUNA_QUEST_REMINDER_CHANGED` | QuestReminder.lua | `Config.RefreshQuestReminderList()` |
-
-#### Implementation Sketch
-
-```lua
--- Core.lua: Event Bus Implementation
-local EventBus = {}
-local listeners = {}
-
-function EventBus:Subscribe(event, callback, owner)
-    listeners[event] = listeners[event] or {}
-    table.insert(listeners[event], { fn = callback, owner = owner })
-end
-
-function EventBus:Unsubscribe(event, owner)
-    if not listeners[event] then return end
-    for i = #listeners[event], 1, -1 do
-        if listeners[event][i].owner == owner then
-            table.remove(listeners[event], i)
-        end
-    end
-end
-
-function EventBus:Publish(event, payload)
-    if not listeners[event] then return end
-    for _, listener in ipairs(listeners[event]) do
-        local ok, err = pcall(listener.fn, payload)
-        if not ok then
-            addonTable.Core.Log("EventBus", "Error in " .. event .. ": " .. err, 3)
-        end
-    end
-end
-
-addonTable.EventBus = EventBus
-```
-
-### 41. Shared Border/Backdrop Utility
-Extract the duplicated border drawing code from ActionBars, CastBar, ChatSkin, Frames, MplusTimer, Kick, TalentManager, and QuestReminder into a shared utility function. A single `CreateStyledBorder(frame, settings)` call would replace the repeated backdrop/border setup code found across 8+ modules.
+### 50. Shared Border/Backdrop Utility
+Extract duplicated border drawing code from 8+ modules into `Helpers.ApplyFrameBackdrop`.
 - **Ease:** Easy-Medium
-- **Impact:** Medium (code quality + faster development of new modules)
-- **Rationale:** At least 8 modules independently create borders with nearly identical code (BackdropTemplate, edge size, inset calculations). The QuestReminder and TalentManager config panels both duplicate the border/background color picker pattern. Centralizing this reduces bugs and ensures visual consistency.
-- **Files:** New utility in Core.lua or a dedicated Shared.lua
+- **Impact:** Medium (code quality)
 
-### 42. Lazy Module Loading
-Defer initialization of modules that are disabled in settings. Currently all modules load and initialize on `ADDON_LOADED` regardless of whether they are enabled. Modules like MplusTimer, Reagents, TalentManager, and QuestReminder could skip initialization entirely when disabled.
+### 51. Lazy Module Loading
+Defer initialization of disabled modules. Currently all modules load and initialize on `ADDON_LOADED` regardless of state.
 - **Ease:** Medium
-- **Impact:** Low-Medium (performance, mainly noticeable on low-end systems)
-- **Rationale:** Requires restructuring each module to check its enabled state before initialization and adding a mechanism to initialize on-demand when the user enables the module in config. The new modules (TalentManager, QuestReminder) are good candidates since they have clean Initialize/UpdateSettings patterns.
+- **Impact:** Low-Medium (performance)
 
-### 43. Localization Support
-Add a localization framework for translating all UI strings. Create a `Locales/` folder with per-language string tables. Fall back to English for missing translations.
+### 52. Localization Support
+Add a localization framework for translating all UI strings. The TOC already includes localized Category strings in 10 languages.
 - **Ease:** Medium
 - **Impact:** Medium for non-English users
-- **Rationale:** The framework itself is simple (lookup table with fallback). The migration effort is high -- every user-visible string in 25+ files needs to be wrapped in a `L["key"]` call. The TOC already includes localized Category strings, suggesting international users exist.
 
-### 44. Config Panel Code Deduplication
-The config panels for QuestReminder, TalentManager, and Notifications all follow the same pattern: enable checkbox, section headers, border/background color pickers, TTS settings (enable, message, voice dropdown, test button). Extract these repeated patterns into `Helpers.lua` as composable building blocks (e.g., `Helpers.CreateTTSSection()`, `Helpers.CreateAppearanceSection()`).
+### 53. Config Panel Code Deduplication
+Extract repeated TTS, appearance, and color swatch patterns into `Helpers.lua` composable building blocks. **Note (2026-02-19):** The code review found ~960 lines of duplicated color swatch code across 6 panels when `Helpers.CreateColorSwatch` already exists and is used correctly by 8 other panels.
 - **Ease:** Easy-Medium
-- **Impact:** Medium (code quality, faster development of new config panels)
-- **Rationale:** The Helpers.lua module already provides `CreateSectionHeader`, `CreateFontDropdown`, `CreateColorSwatch`, and `UpdateModuleVisuals`. Adding TTS and appearance section builders would eliminate 100+ lines of duplicated code across 3+ panels, and every future module panel would benefit.
-- **Files:** config/Helpers.lua, config/panels/NotificationsPanel.lua, config/panels/QuestReminderPanel.lua, config/panels/TalentManagerPanel.lua
+- **Impact:** Medium (code quality)
+- **Files:** config/Helpers.lua, multiple panel files
+
+### 54. Talent Data Migration Safety
+The `CleanupSavedVariables()` function deletes old-format entries instead of migrating them. **Fix:** Wrap old single-object entries in arrays (`{ value }`) instead of deleting them.
+- **Ease:** Easy
+- **Impact:** Low-Medium (data safety for existing users)
+- **Files:** TalentReminder.lua
+
+### 55. EventBus Duplicate Registration Fix
+Add deduplication to `EventBus.Register` or adopt the Reagents.lua `eventsEnabled` guard pattern across all modules. Currently, every module except Reagents.lua can accumulate duplicate listeners on repeated `ApplyEvents` calls.
+- **Ease:** Easy (fix in EventBus.lua) or Medium (fix in each module)
+- **Impact:** High (correctness -- event handlers fire multiple times)
+- **Files:** EventBus.lua or all modules with ApplyEvents functions

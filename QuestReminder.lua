@@ -15,18 +15,17 @@ function QuestReminder.Initialize()
 
     QuestReminder.CreatePopupFrame()
 
-    QuestReminder.eventFrame = CreateFrame("Frame")
-    QuestReminder.eventFrame:SetScript("OnEvent", QuestReminder.OnEvent)
     QuestReminder.ApplyEvents()
 end
 
 function QuestReminder.ApplyEvents()
-    if not QuestReminder.eventFrame then return end
+    local EventBus = addonTable.EventBus
     if UIThingsDB.questReminder and UIThingsDB.questReminder.enabled then
-        QuestReminder.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        QuestReminder.eventFrame:RegisterEvent("QUEST_ACCEPTED")
+        EventBus.Register("PLAYER_ENTERING_WORLD", QuestReminder.OnEnteringWorldEvent)
+        EventBus.Register("QUEST_ACCEPTED", QuestReminder.OnQuestAcceptedEvent)
     else
-        QuestReminder.eventFrame:UnregisterAllEvents()
+        EventBus.Unregister("PLAYER_ENTERING_WORLD", QuestReminder.OnEnteringWorldEvent)
+        EventBus.Unregister("QUEST_ACCEPTED", QuestReminder.OnQuestAcceptedEvent)
         if popupFrame and popupFrame:IsShown() then
             popupFrame:Hide()
         end
@@ -37,16 +36,14 @@ end
 -- Event Handler
 -- ============================================================
 
-function QuestReminder.OnEvent(self, event, ...)
-    if event == "PLAYER_ENTERING_WORLD" then
-        local isLogin, isReload = ...
-        if isLogin then
-            addonTable.Core.SafeAfter(5, QuestReminder.CheckQuestsOnLogin)
-        end
-    elseif event == "QUEST_ACCEPTED" then
-        local questID = ...
-        QuestReminder.OnQuestAccepted(questID)
+function QuestReminder.OnEnteringWorldEvent(event, isLogin, isReload)
+    if isLogin then
+        addonTable.Core.SafeAfter(5, QuestReminder.CheckQuestsOnLogin)
     end
+end
+
+function QuestReminder.OnQuestAcceptedEvent(event, questID)
+    QuestReminder.OnQuestAccepted(questID)
 end
 
 -- ============================================================

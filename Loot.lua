@@ -440,140 +440,116 @@ local function UpdateRosterCache()
 end
 
 -- Event Handler
-local frame = CreateFrame("Frame")
-local lastMoney = 0                 -- Tracks previous gold amount for locale-independent gold change detection
-frame:RegisterEvent("PLAYER_LOGIN") -- Always needed for initialization
+local EventBus = addonTable.EventBus
+local lastMoney = 0 -- Tracks previous gold amount for locale-independent gold change detection
 
-function Loot.ApplyEvents()
-    if UIThingsDB.loot.enabled then
-        frame:RegisterEvent("CHAT_MSG_LOOT")
-        frame:RegisterEvent("LOOT_READY")
-        frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- Named callbacks for EventBus
+local function OnGroupRosterUpdate()
+    UpdateRosterCache()
+end
 
-        -- Currency notifications
-        if UIThingsDB.loot.showCurrency then
-            frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-        else
-            frame:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+local function OnCurrencyDisplayUpdate(event, currencyID, quantity, quantityChange)
+    if not UIThingsDB.loot.enabled then return end
+    if UIThingsDB.loot.showCurrency then
+        if currencyID and quantityChange and quantityChange > 0 then
+            SpawnCurrencyToast(currencyID, quantityChange)
         end
-
-        -- Gold notifications
-        if UIThingsDB.loot.showGold then
-            lastMoney = GetMoney()
-            frame:RegisterEvent("PLAYER_MONEY")
-        else
-            frame:UnregisterEvent("PLAYER_MONEY")
-        end
-    else
-        frame:UnregisterEvent("CHAT_MSG_LOOT")
-        frame:UnregisterEvent("LOOT_READY")
-        frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
-        frame:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
-        frame:UnregisterEvent("PLAYER_MONEY")
     end
 end
 
-frame:SetScript("OnEvent", function(self, event, msg, ...)
-    if event == "PLAYER_LOGIN" then
-        lastMoney = GetMoney()
-        addonTable.Loot.UpdateSettings()
-        UpdateRosterCache()
-        return
-    end
-
-    if event == "GROUP_ROSTER_UPDATE" then
-        UpdateRosterCache()
-        return
-    end
-
+local function OnPlayerMoney()
     if not UIThingsDB.loot.enabled then return end
-
-    if event == "CURRENCY_DISPLAY_UPDATE" then
-        if UIThingsDB.loot.showCurrency then
-            local currencyID, quantity, quantityChange = msg, ...
-            if currencyID and quantityChange and quantityChange > 0 then
-                SpawnCurrencyToast(currencyID, quantityChange)
-            end
+    if UIThingsDB.loot.showGold then
+        local currentMoney = GetMoney()
+        local gained = currentMoney - lastMoney
+        lastMoney = currentMoney
+        if gained > 0 and gained >= (UIThingsDB.loot.minGoldAmount or 10000) then
+            SpawnGoldToast(gained)
         end
-        return
     end
+end
 
-    if event == "PLAYER_MONEY" then
-        if UIThingsDB.loot.showGold then
-            local currentMoney = GetMoney()
-            local gained = currentMoney - lastMoney
-            lastMoney = currentMoney
-
-            if gained > 0 and gained >= (UIThingsDB.loot.minGoldAmount or 10000) then
-                SpawnGoldToast(gained)
-            end
-        end
-        return
-    end
-
-    if event == "LOOT_READY" then
-        if UIThingsDB.loot.fasterLoot and GetCVar("autoLootDefault") == "1" then
-            local numItems = GetNumLootItems()
-            if numItems == 0 then return end
-
-            local delay = UIThingsDB.loot.fasterLootDelay or 0.3
-
-            for i = numItems, 1, -1 do
-                if delay == 0 then
+local function OnLootReady()
+    if not UIThingsDB.loot.enabled then return end
+    if UIThingsDB.loot.fasterLoot and GetCVar("autoLootDefault") == "1" then
+        local numItems = GetNumLootItems()
+        if numItems == 0 then return end
+        local delay = UIThingsDB.loot.fasterLootDelay or 0.3
+        for i = numItems, 1, -1 do
+            if delay == 0 then
+                LootSlot(i)
+            else
+                local timerDelay = (numItems - i) * delay
+                C_Timer.After(timerDelay, function()
                     LootSlot(i)
-                else
-                    local timerDelay = (numItems - i) * delay
-                    C_Timer.After(timerDelay, function()
-                        LootSlot(i)
-                    end)
-                end
+                end)
             end
         end
-        return
     end
+end
 
-    if event == "CHAT_MSG_LOOT" then
-        local itemLink = string.match(msg, "|Hitem:.-|h")
-        if itemLink then
-            -- Get Quality
-            local _, _, quality = GetItemInfo(itemLink)
-            if not quality then return end
-
-            if quality >= UIThingsDB.loot.minQuality then
-                -- Identify Looter
-                local looterName = nil
-                local looterClass = nil
-
-                -- Check for "You receive..."
-                if string.find(msg, "^You receive") then
-                    looterName = UnitName("player")
+local function OnChatMsgLoot(event, msg)
+    if not UIThingsDB.loot.enabled then return end
+    local itemLink = string.match(msg, "|Hitem:.-|h")
+    if itemLink then
+        local _, _, quality = GetItemInfo(itemLink)
+        if not quality then return end
+        if quality >= UIThingsDB.loot.minQuality then
+            local looterName, looterClass = nil, nil
+            if string.find(msg, "^You receive") then
+                looterName = UnitName("player")
+                looterClass = rosterCache[looterName]
+            else
+                local otherName = string.match(msg, "^([^%s]+) receive")
+                if otherName then
+                    looterName = otherName
+                    local shortName = string.match(looterName, "^([^%-]+)")
+                    if shortName then looterName = shortName end
                     looterClass = rosterCache[looterName]
-                else
-                    -- Check for "X receives..."
-                    local otherName = string.match(msg, "^([^%s]+) receive")
-                    if otherName then
-                        looterName = otherName
-                        -- Strip server name if present (e.g., "Player-ServerName" -> "Player")
-                        local shortName = string.match(looterName, "^([^%-]+)")
-                        if shortName then looterName = shortName end
-
-                        -- Optimized Lookup
-                        looterClass = rosterCache[looterName]
-                    end
                 end
-
-                -- Filtering
-                if not UIThingsDB.loot.showAll then
-                    if looterName ~= UnitName("player") then return end
-                end
-
-                -- Parse count
-                local count = 1
-                local matchCount = string.match(msg, "x(%d+)")
-                if matchCount then count = tonumber(matchCount) end
-
-                SpawnToast(itemLink, nil, count, looterName, looterClass)
             end
+            if not UIThingsDB.loot.showAll then
+                if looterName ~= UnitName("player") then return end
+            end
+            local count = 1
+            local matchCount = string.match(msg, "x(%d+)")
+            if matchCount then count = tonumber(matchCount) end
+            SpawnToast(itemLink, nil, count, looterName, looterClass)
         end
     end
-end)
+end
+
+local function OnPlayerLogin()
+    lastMoney = GetMoney()
+    addonTable.Loot.UpdateSettings()
+    UpdateRosterCache()
+end
+
+function Loot.ApplyEvents()
+    if UIThingsDB.loot.enabled then
+        EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot)
+        EventBus.Register("LOOT_READY", OnLootReady)
+        EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+
+        if UIThingsDB.loot.showCurrency then
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
+        else
+            EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
+        end
+
+        if UIThingsDB.loot.showGold then
+            lastMoney = GetMoney()
+            EventBus.Register("PLAYER_MONEY", OnPlayerMoney)
+        else
+            EventBus.Unregister("PLAYER_MONEY", OnPlayerMoney)
+        end
+    else
+        EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLoot)
+        EventBus.Unregister("LOOT_READY", OnLootReady)
+        EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+        EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
+        EventBus.Unregister("PLAYER_MONEY", OnPlayerMoney)
+    end
+end
+
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)

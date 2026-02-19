@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.11.0
+## Version: 1.12.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
@@ -22,6 +22,7 @@
 
 # Core initialization
 Core.lua
+EventBus.lua
 
 # Modular Configuration System
 # Load order: Helpers -> All Panels -> Main Window
@@ -96,6 +97,7 @@ widgets\Mail.lua
 widgets\PullCounter.lua
 widgets\Hearthstone.lua
 widgets\Currency.lua
+widgets\SessionStats.lua
 
 # Config entry point (now just a stub)
 Config.lua

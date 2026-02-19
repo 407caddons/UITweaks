@@ -5,6 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "questAuto")
     -- Panel Title
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
@@ -116,6 +117,6 @@ function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
     shiftHelp:SetWidth(500)
     shiftHelp:SetJustifyH("LEFT")
     shiftHelp:SetText(
-    "Hold Shift when interacting with an NPC to temporarily skip all quest automation for that interaction.")
+        "Hold Shift when interacting with an NPC to temporarily skip all quest automation for that interaction.")
     shiftHelp:SetTextColor(0.7, 0.7, 0.7)
 end

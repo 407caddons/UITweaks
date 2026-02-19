@@ -1099,16 +1099,15 @@ local function SetupChatSkin()
         end)
 
         -- Event-based reskin
-        local eventFrame = CreateFrame("Frame")
-        eventFrame:RegisterEvent("UPDATE_CHAT_WINDOWS")
-        eventFrame:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
-        eventFrame:SetScript("OnEvent", function()
+        local function OnChatWindowsUpdate()
             if not UIThingsDB.chatSkin.enabled then return end
             C_Timer.After(0.1, function()
                 SkinAllChatFrames()
                 for tab in pairs(skinnedTabs) do UpdateTabColors(tab) end
             end)
-        end)
+        end
+        addonTable.EventBus.Register("UPDATE_CHAT_WINDOWS", OnChatWindowsUpdate)
+        addonTable.EventBus.Register("UPDATE_FLOATING_CHAT_WINDOWS", OnChatWindowsUpdate)
 
         hooksInstalled = true
     end -- hooksInstalled guard
@@ -1156,9 +1155,7 @@ function ChatSkin.UpdateTabDraggability()
 end
 
 function ChatSkin.Initialize()
-    local f = CreateFrame("Frame")
-    f:RegisterEvent("PLAYER_ENTERING_WORLD")
-    f:SetScript("OnEvent", function()
+    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", function()
         if not UIThingsDB.chatSkin.enabled then return end
         C_Timer.After(0.5, function()
             if not isSetup then SetupChatSkin() end

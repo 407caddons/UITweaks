@@ -328,12 +328,18 @@ local function SetupMinimap()
         minimapFrame.zoneFrame = zoneFrame
 
         -- Update zone text on zone changes
-        minimapFrame:RegisterEvent("ZONE_CHANGED")
-        minimapFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-        minimapFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-
-        -- Register for crafting order updates to refresh icon visibility
-        minimapFrame:RegisterEvent("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS")
+        local function OnMinimapZoneChanged()
+            if zoneText then
+                zoneText:SetText(GetMinimapZoneText())
+            end
+        end
+        local function OnCraftingOrdersUpdate()
+            PositionMinimapIcons()
+        end
+        addonTable.EventBus.Register("ZONE_CHANGED", OnMinimapZoneChanged)
+        addonTable.EventBus.Register("ZONE_CHANGED_INDOORS", OnMinimapZoneChanged)
+        addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnMinimapZoneChanged)
+        addonTable.EventBus.Register("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", OnCraftingOrdersUpdate)
 
         -- == Clock Text (movable, anchored to minimap) ==
         local clockOffset = settings.minimapClockOffset or { x = 0, y = -4 }
@@ -412,17 +418,6 @@ local function SetupMinimap()
         local clockTicker = C_Timer.NewTicker(1, UpdateClock)
 
         -- Zone event handler
-        minimapFrame:SetScript("OnEvent", function(self, event, ...)
-            if event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
-                if zoneText then
-                    zoneText:SetText(GetMinimapZoneText())
-                end
-            elseif event == "CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS" then
-                -- Refresh icons when orders update
-                PositionMinimapIcons()
-            end
-        end)
-
         -- Make it movable via a drag overlay
         minimapFrame:SetMovable(true)
 
@@ -1044,22 +1039,20 @@ end
 
 -- == Events ==
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" then
-        local addon = ...
-        if addon == "Blizzard_HybridMinimap" then
-            -- Apply mask to HybridMinimap when it loads
-            if UIThingsDB.misc and UIThingsDB.misc.minimapEnabled then
-                ApplyMinimapShape(UIThingsDB.misc.minimapShape)
-            end
-        end
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        if UIThingsDB.misc then
-            SetupMinimap()
-            SetupDrawer()
+local function OnAddonLoaded(event, addon)
+    if addon == "Blizzard_HybridMinimap" then
+        if UIThingsDB.misc and UIThingsDB.misc.minimapEnabled then
+            ApplyMinimapShape(UIThingsDB.misc.minimapShape)
         end
     end
-end)
+end
+
+local function OnPlayerEnteringWorld()
+    if UIThingsDB.misc then
+        SetupMinimap()
+        SetupDrawer()
+    end
+end
+
+addonTable.EventBus.Register("ADDON_LOADED", OnAddonLoaded)
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)

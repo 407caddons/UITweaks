@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Minimap panel
 function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
+    Helpers.CreateResetButton(panel, "minimap")
     -- Visual compatibility with sidebar navigation
     Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.misc.minimapEnabled)
 

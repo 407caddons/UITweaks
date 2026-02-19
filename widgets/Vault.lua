@@ -1,5 +1,6 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
+local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local vaultFrame = Widgets.CreateWidgetFrame("Vault", "vault")
@@ -31,34 +32,32 @@ table.insert(Widgets.moduleInits, function()
         cachedText = string.format("Vault: %d/9", totalUnlocked)
     end
 
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("WEEKLY_REWARDS_UPDATE")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-    eventFrame:RegisterEvent("ENCOUNTER_END")
-    eventFrame:SetScript("OnEvent", function(self, event)
+    local function OnVaultUpdate()
         if not UIThingsDB.widgets.vault.enabled then return end
-        if event == "PLAYER_ENTERING_WORLD" then
-            C_Timer.After(2, function()
-                if UIThingsDB.widgets.vault.enabled then
-                    RefreshVaultCache()
-                end
-            end)
-        else
-            RefreshVaultCache()
-        end
-    end)
+        RefreshVaultCache()
+    end
 
-    vaultFrame.eventFrame = eventFrame
+    local function OnVaultEnteringWorld()
+        if not UIThingsDB.widgets.vault.enabled then return end
+        C_Timer.After(2, function()
+            if UIThingsDB.widgets.vault.enabled then
+                RefreshVaultCache()
+            end
+        end)
+    end
+
     vaultFrame.ApplyEvents = function(enabled)
         if enabled then
-            eventFrame:RegisterEvent("WEEKLY_REWARDS_UPDATE")
-            eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-            eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-            eventFrame:RegisterEvent("ENCOUNTER_END")
+            EventBus.Register("WEEKLY_REWARDS_UPDATE", OnVaultUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnVaultEnteringWorld)
+            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnVaultUpdate)
+            EventBus.Register("ENCOUNTER_END", OnVaultUpdate)
             RefreshVaultCache()
         else
-            eventFrame:UnregisterAllEvents()
+            EventBus.Unregister("WEEKLY_REWARDS_UPDATE", OnVaultUpdate)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", OnVaultEnteringWorld)
+            EventBus.Unregister("CHALLENGE_MODE_COMPLETED", OnVaultUpdate)
+            EventBus.Unregister("ENCOUNTER_END", OnVaultUpdate)
         end
     end
 

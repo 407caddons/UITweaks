@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Talent panel
 function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "talentReminders")
     local fonts = Helpers.fonts
 
     local talentTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
@@ -428,90 +429,58 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         local rowIndex = 0
         local yOffset = -5
 
-        -- Helper function to compare talent builds for equality
-        local function TalentBuildsEqual(talents1, talents2)
-            if not talents1 or not talents2 then return false end
-
-            local count1, count2 = 0, 0
-            for _ in pairs(talents1) do count1 = count1 + 1 end
-            for _ in pairs(talents2) do count2 = count2 + 1 end
-            if count1 ~= count2 then return false end
-
-            for nodeID, data1 in pairs(talents1) do
-                local data2 = talents2[nodeID]
-                if not data2 then return false end
-                if data1.entryID ~= data2.entryID then return false end
-                if data1.rank ~= data2.rank then return false end
-            end
-
-            return true
-        end
-
-        -- First pass: collect and group reminders by identical builds
+        -- Collect all builds individually
         local sortedReminders = {}
 
         if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
             for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
                 for diffID, diffReminders in pairs(reminders) do
-                    for zoneKey, reminder in pairs(diffReminders) do
-                        -- Filter: only show reminders for current class/spec OR unknown
-                        local showReminder = true
-                        if reminder.classID and reminder.classID ~= playerClassID then
-                            showReminder = false
-                        elseif reminder.specID and reminder.specID ~= playerSpecID then
-                            showReminder = false
-                        end
-
-                        if showReminder then
-                            -- Check if this reminder matches current instance/difficulty/zone
-                            local isCurrentZone = false
-                            if currentInstanceID and currentInstanceID ~= 0 and
-                                currentDifficultyID then
-                                local instMatch = tonumber(instanceID) == tonumber(currentInstanceID)
-                                local diffMatch = tonumber(diffID) == tonumber(currentDifficultyID)
-                                local zoneMatch = false
-                                if type(zoneKey) == "string" and zoneKey ~= "" then
-                                    zoneMatch = (zoneKey == currentSubZone)
-                                elseif currentZone then
-                                    zoneMatch = ((tonumber(zoneKey) or 0) == currentZone)
+                    for zoneKey, builds in pairs(diffReminders) do
+                        if type(builds) ~= "table" then
+                            -- skip non-array entries
+                        else
+                            for buildIndex, reminder in ipairs(builds) do
+                                -- Filter: only show reminders for current class/spec OR unknown
+                                local showReminder = true
+                                if reminder.classID and reminder.classID ~= playerClassID then
+                                    showReminder = false
+                                elseif reminder.specID and reminder.specID ~= playerSpecID then
+                                    showReminder = false
                                 end
-                                isCurrentZone = instMatch and diffMatch and zoneMatch
-                            end
 
-                            -- Try to find existing entry with same instance, zone, and talents
-                            local foundMatch = false
-                            for _, existing in ipairs(sortedReminders) do
-                                if tonumber(existing.instanceID) == tonumber(instanceID) and
-                                    existing.zoneKey == zoneKey and
-                                    TalentBuildsEqual(existing.reminder.talents, reminder.talents) then
-                                    -- Same build - add this difficulty to the list
-                                    table.insert(existing.difficulties, {
-                                        diffID = diffID,
-                                        difficultyName = reminder.difficulty or GetDifficultyInfo(tonumber(diffID)) or
-                                            "Unknown",
-                                        isCurrentZone = isCurrentZone
+                                if showReminder then
+                                    -- Check if this reminder matches current instance/difficulty/zone
+                                    local isCurrentZone = false
+                                    if currentInstanceID and currentInstanceID ~= 0 and
+                                        currentDifficultyID then
+                                        local instMatch = tonumber(instanceID) == tonumber(currentInstanceID)
+                                        local diffMatch = tonumber(diffID) == tonumber(currentDifficultyID)
+                                        local zoneMatch = false
+                                        if type(zoneKey) == "string" and zoneKey ~= "" then
+                                            zoneMatch = (zoneKey == currentSubZone)
+                                        elseif currentZone then
+                                            zoneMatch = ((tonumber(zoneKey) or 0) == currentZone)
+                                        end
+                                        isCurrentZone = instMatch and diffMatch and zoneMatch
+                                    end
+
+                                    -- Each build gets its own row (no grouping)
+                                    table.insert(sortedReminders, {
+                                        instanceID = instanceID,
+                                        zoneKey = zoneKey,
+                                        buildIndex = buildIndex,
+                                        reminder = reminder,
+                                        isCurrentZone = isCurrentZone,
+                                        difficulties = { {
+                                            diffID = diffID,
+                                            buildIndex = buildIndex,
+                                            difficultyName = reminder.difficulty or
+                                                GetDifficultyInfo(tonumber(diffID)) or
+                                                "Unknown",
+                                            isCurrentZone = isCurrentZone
+                                        } }
                                     })
-                                    -- Update overall isCurrentZone if any difficulty matches
-                                    existing.isCurrentZone = existing.isCurrentZone or isCurrentZone
-                                    foundMatch = true
-                                    break
                                 end
-                            end
-
-                            if not foundMatch then
-                                -- New unique build
-                                table.insert(sortedReminders, {
-                                    instanceID = instanceID,
-                                    zoneKey = zoneKey,
-                                    reminder = reminder,
-                                    isCurrentZone = isCurrentZone,
-                                    difficulties = { {
-                                        diffID = diffID,
-                                        difficultyName = reminder.difficulty or GetDifficultyInfo(tonumber(diffID)) or
-                                            "Unknown",
-                                        isCurrentZone = isCurrentZone
-                                    } }
-                                })
                             end
                         end
                     end
@@ -765,11 +734,11 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             row.enableBtn:SetScript("OnClick", function(self)
                 local newState = not isDisabled
                 for _, diff in ipairs(self.difficulties) do
-                    local r = LunaUITweaks_TalentReminders.reminders[self.instanceID]
+                    local builds = LunaUITweaks_TalentReminders.reminders[self.instanceID]
                         and LunaUITweaks_TalentReminders.reminders[self.instanceID][diff.diffID]
                         and LunaUITweaks_TalentReminders.reminders[self.instanceID][diff.diffID][self.zoneKey]
-                    if r then
-                        r.disabled = newState or nil
+                    if builds and builds[diff.buildIndex] then
+                        builds[diff.buildIndex].disabled = newState or nil
                     end
                 end
                 if newState then
@@ -973,14 +942,32 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             local zoneReminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID][currentDifficultyID]
 
             local priorityList = {}
+            local currentSubZoneTest = GetSubZoneText() or ""
 
-            if currentZone and currentZone ~= 0 and zoneReminders[currentZone] then
-                table.insert(priorityList,
-                    { zoneKey = currentZone, reminder = zoneReminders[currentZone], priority = 1 })
-            end
-
-            if zoneReminders[0] then
-                table.insert(priorityList, { zoneKey = 0, reminder = zoneReminders[0], priority = 2 })
+            for zoneKey, builds in pairs(zoneReminders) do
+                if type(builds) == "table" then
+                    for buildIndex, reminder in ipairs(builds) do
+                        local priority
+                        if type(zoneKey) == "string" and zoneKey ~= "" then
+                            if currentSubZoneTest ~= "" and zoneKey == currentSubZoneTest then
+                                priority = 1
+                            end
+                        else
+                            local numKey = tonumber(zoneKey) or 0
+                            if numKey == 0 then
+                                priority = 2
+                            end
+                        end
+                        if priority then
+                            table.insert(priorityList, {
+                                zoneKey = zoneKey,
+                                reminder = reminder,
+                                buildIndex = buildIndex,
+                                priority = priority,
+                            })
+                        end
+                    end
+                end
             end
 
             table.sort(priorityList, function(a, b) return a.priority < b.priority end)
@@ -1063,20 +1050,21 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         button2 = "No",
         OnAccept = function(self, data)
             if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
-                local deleteCount = 0
                 for instanceID, reminders in pairs(LunaUITweaks_TalentReminders.reminders) do
                     for diffID, diffReminders in pairs(reminders) do
-                        for bossID, reminder in pairs(diffReminders) do
-                            local shouldDelete = false
-                            if not reminder.classID and not reminder.specID then
-                                shouldDelete = false
-                            elseif reminder.classID == data.classID and reminder.specID == data.specID then
-                                shouldDelete = true
-                            end
-
-                            if shouldDelete then
-                                diffReminders[bossID] = nil
-                                deleteCount = deleteCount + 1
+                        for zoneKey, builds in pairs(diffReminders) do
+                            if type(builds) == "table" then
+                                -- Iterate in reverse to safely remove by index
+                                for i = #builds, 1, -1 do
+                                    local reminder = builds[i]
+                                    if reminder.classID == data.classID and reminder.specID == data.specID then
+                                        table.remove(builds, i)
+                                    end
+                                end
+                                -- Clean up empty arrays
+                                if #builds == 0 then
+                                    diffReminders[zoneKey] = nil
+                                end
                             end
                         end
                     end
@@ -1120,11 +1108,19 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         button2 = "Cancel",
         OnAccept = function(self, data)
             if addonTable.TalentReminder then
+                -- Delete in reverse order of buildIndex to avoid shifting issues
+                -- when multiple difficulties share the same buildIndex
+                local sorted = {}
                 for _, diff in ipairs(data.difficulties) do
+                    table.insert(sorted, diff)
+                end
+                table.sort(sorted, function(a, b) return a.buildIndex > b.buildIndex end)
+                for _, diff in ipairs(sorted) do
                     addonTable.TalentReminder.DeleteReminder(
                         data.instanceID,
                         diff.diffID,
-                        data.zoneKey
+                        data.zoneKey,
+                        diff.buildIndex
                     )
                 end
                 if addonTable.Config.RefreshTalentReminderList then
@@ -1137,12 +1133,8 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         hideOnEscape = true,
     }
 
-    -- Set up event listener to update button states
-    local instanceCheckFrame = CreateFrame("Frame", nil, panel)
-    instanceCheckFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    instanceCheckFrame:SetScript("OnEvent", function(self, event)
-        UpdateButtonStates()
-    end)
+    -- Update button states when entering world
+    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", UpdateButtonStates)
 
     -- Initial button state update
     UpdateButtonStates()

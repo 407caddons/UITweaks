@@ -8,6 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Tracker panel
 function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "tracker")
     local fonts = Helpers.fonts
 
     local function UpdateTracker()

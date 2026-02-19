@@ -5,6 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.TalentManager(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "talentManager")
     local fonts = Helpers.fonts
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
