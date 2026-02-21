@@ -400,6 +400,10 @@ end
 function TalentReminder.CompareTalents(savedTalents)
     local mismatches = {}
 
+    if not savedTalents then
+        return mismatches  -- Import-string builds can't be compared node-by-node
+    end
+
     if not C_ClassTalents or not C_Traits then
         return mismatches
     end
@@ -555,6 +559,10 @@ end
 -- Validate that saved talents still exist in current talent tree
 -- Returns: isValid (boolean), invalidTalents (table)
 function TalentReminder.ValidateTalentBuild(savedTalents)
+    if not savedTalents then
+        return true, {}  -- Import-string builds have no snapshot to validate
+    end
+
     if not C_ClassTalents or not C_Traits then
         return false, {}
     end
@@ -1050,87 +1058,107 @@ function TalentReminder.ApplyTalents(reminder)
     local changes = 0
     local errors = 0
 
-    -- Step 1: Remove all talents that shouldn't be there
+    -- Step 1: Remove all talents that shouldn't be there, sorted bottom-to-top (by posY
+    -- descending) so child talents are refunded before their prerequisites
+    local refundNodes = {}
     for nodeID, current in pairs(currentTalents) do
+        local needsRefund = false
         if not savedTalents[nodeID] and current.rank > 0 then
-            -- This talent should not be selected - remove it
-            local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
-            if nodeInfo then
-                for i = 1, current.rank do
-                    local success = C_Traits.RefundRank(configID, nodeID)
-                    if success then
-                        changes = changes + 1
-                    else
-                        errors = errors + 1
-                        addonTable.Core.Log("TalentReminder", string.format("Failed to refund node %d", nodeID), 2)
-                    end
-                end
-            end
+            needsRefund = true
         elseif savedTalents[nodeID] and current.entryID ~= savedTalents[nodeID].entryID then
-            -- Wrong choice selected - need to refund before changing
+            needsRefund = true
+        end
+        if needsRefund then
             local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
             if nodeInfo then
-                for i = 1, current.rank do
-                    local success = C_Traits.RefundRank(configID, nodeID)
-                    if success then
-                        changes = changes + 1
-                    else
-                        errors = errors + 1
-                        addonTable.Core.Log("TalentReminder",
-                            string.format("Failed to refund node %d for re-selection", nodeID), 2)
-                    end
-                end
+                refundNodes[#refundNodes + 1] = {
+                    nodeID = nodeID,
+                    current = current,
+                    posY = nodeInfo.posY or 0,
+                    isWrongChoice = savedTalents[nodeID] ~= nil,
+                }
+            end
+        end
+    end
+    table.sort(refundNodes, function(a, b) return a.posY > b.posY end)
+
+    for _, entry in ipairs(refundNodes) do
+        for i = 1, entry.current.rank do
+            local success = C_Traits.RefundRank(configID, entry.nodeID)
+            if success then
+                changes = changes + 1
+            else
+                errors = errors + 1
+                local msg = entry.isWrongChoice
+                    and string.format("Failed to refund node %d for re-selection", entry.nodeID)
+                    or string.format("Failed to refund node %d", entry.nodeID)
+                addonTable.Core.Log("TalentReminder", msg, 2)
             end
         end
     end
 
-    -- Step 2: Apply all saved talents
+    -- Step 2: Apply all saved talents, sorted top-to-bottom (by posY) so prerequisites
+    -- are purchased before dependent talents further down the tree
+    local sortedNodes = {}
     for nodeID, savedData in pairs(savedTalents) do
-        local current = currentTalents[nodeID]
         local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
-
         if not nodeInfo then
             addonTable.Core.Log("TalentReminder", string.format("Node %d no longer exists", nodeID), 2)
             errors = errors + 1
         else
-            -- Check if this is a choice node (has multiple entries)
-            if nodeInfo.type == 2 then -- TYPE_CHOICE
-                -- Use SetSelection for choice nodes
-                if not current or current.entryID ~= savedData.entryID or current.rank == 0 then
-                    local success = C_Traits.SetSelection(configID, nodeID, savedData.entryID)
-                    if success then
-                        changes = changes + 1
-                    else
-                        errors = errors + 1
-                        addonTable.Core.Log("TalentReminder",
-                            string.format("Failed to set selection for node %d", nodeID), 2)
-                    end
-                end
+            sortedNodes[#sortedNodes + 1] = {
+                nodeID = nodeID,
+                savedData = savedData,
+                posY = nodeInfo.posY or 0,
+                nodeInfo = nodeInfo,
+            }
+        end
+    end
+    table.sort(sortedNodes, function(a, b) return a.posY < b.posY end)
 
-                -- After setting selection, purchase ranks if needed
-                local currentRank = current and current.rank or 0
-                for i = currentRank + 1, savedData.rank do
-                    local success = C_Traits.PurchaseRank(configID, nodeID)
-                    if success then
-                        changes = changes + 1
-                    else
-                        errors = errors + 1
-                        addonTable.Core.Log("TalentReminder",
-                            string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
-                    end
+    for _, entry in ipairs(sortedNodes) do
+        local nodeID = entry.nodeID
+        local savedData = entry.savedData
+        local nodeInfo = entry.nodeInfo
+        local current = currentTalents[nodeID]
+
+        -- Check if this is a choice node (has multiple entries)
+        if nodeInfo.type == 2 then -- TYPE_CHOICE
+            -- Use SetSelection for choice nodes
+            if not current or current.entryID ~= savedData.entryID or current.rank == 0 then
+                local success = C_Traits.SetSelection(configID, nodeID, savedData.entryID)
+                if success then
+                    changes = changes + 1
+                else
+                    errors = errors + 1
+                    addonTable.Core.Log("TalentReminder",
+                        string.format("Failed to set selection for node %d", nodeID), 2)
                 end
-            else
-                -- Regular node - just purchase ranks
-                local currentRank = current and current.rank or 0
-                for i = currentRank + 1, savedData.rank do
-                    local success = C_Traits.PurchaseRank(configID, nodeID)
-                    if success then
-                        changes = changes + 1
-                    else
-                        errors = errors + 1
-                        addonTable.Core.Log("TalentReminder",
-                            string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
-                    end
+            end
+
+            -- After setting selection, purchase ranks if needed
+            local currentRank = current and current.rank or 0
+            for i = currentRank + 1, savedData.rank do
+                local success = C_Traits.PurchaseRank(configID, nodeID)
+                if success then
+                    changes = changes + 1
+                else
+                    errors = errors + 1
+                    addonTable.Core.Log("TalentReminder",
+                        string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
+                end
+            end
+        else
+            -- Regular node - just purchase ranks
+            local currentRank = current and current.rank or 0
+            for i = currentRank + 1, savedData.rank do
+                local success = C_Traits.PurchaseRank(configID, nodeID)
+                if success then
+                    changes = changes + 1
+                else
+                    errors = errors + 1
+                    addonTable.Core.Log("TalentReminder",
+                        string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
                 end
             end
         end

@@ -1,8 +1,8 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-19 (Sixth Pass -- Full Codebase Audit)
-**Previous Review:** 2026-02-18 (Fifth Pass -- EventBus Optimization & MplusTimer Migration)
-**Scope:** All 62 source files: 22 root .lua modules, 22 config files, 28 widget files, TOC
+**Review Date:** 2026-02-21 (Eighth Pass -- Modified Files Audit)
+**Previous Review:** 2026-02-20 (Seventh Pass -- Modified Files Audit)
+**Scope:** Modified files (`ActionBars.lua`, `Combat.lua`, `Core.lua`, `Loot.lua`, `TalentManager.lua`, `TalentReminder.lua`, `config/panels/WidgetsPanel.lua`) + targeted re-review of key modules
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
 
 ---
@@ -22,30 +22,40 @@
 
 ## Executive Summary
 
-LunaUITweaks is a well-structured addon with consistent patterns, good combat lockdown awareness, and effective use of frame pooling. The codebase demonstrates strong understanding of the WoW API and its restrictions. Key strengths include the three-layer combat-safe positioning in ActionBars, proper event-driven architecture, shared utility patterns (logging, SafeAfter, SpeakTTS), excellent widget framework design with anchor caching, smart tooltip positioning, and the new widget visibility conditions system.
+LunaUITweaks is a well-structured addon with consistent patterns, good combat lockdown awareness, and effective use of frame pooling. The codebase demonstrates strong understanding of the WoW API and its restrictions. Key strengths include the three-layer combat-safe positioning in ActionBars, proper event-driven architecture, shared utility patterns (logging, SafeAfter, SpeakTTS), excellent widget framework design with anchor caching, smart tooltip positioning, the widget visibility conditions system, and the new hook-based consumable tracking architecture.
 
-### What Changed Since Last Review (2026-02-18 to 2026-02-19)
+### What Changed Since Last Review (2026-02-20 to 2026-02-21)
 
-Two new additions were identified since the previous review:
+Seven files modified (per git status). Key findings:
 
-1. **SessionStats widget** (`widgets/SessionStats.lua`) -- NEW untracked file. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload` via `UIThingsDB.widgets.sessionStats` with `GetTime()` epoch comparison to detect true login vs reload. Right-click resets counters. Uses EventBus for `PLAYER_DEAD` and `CHAT_MSG_LOOT`.
+1. **Combat.lua** -- **FIXED (HIGH):** The `C_Item.GetItemInfoInstant(spellName)` issue from the previous review is resolved. The `UNIT_SPELLCAST_SUCCEEDED` handler (lines 1144-1148) now returns early with a comment explaining that consumable usage is tracked via `UseAction`/`UseContainerItem`/`UseItemByName` hooks instead. The hook-based consumable tracking architecture is a correct approach. Stale comment on line 1113 ("Create 4 text lines" but loop creates 5) and duplicate `ApplyReminderLock()` calls still present.
 
-2. **Widget Visibility Conditions** -- `Widgets.lua` now contains `EvaluateCondition()` supporting 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Each widget has a condition dropdown in WidgetsPanel. Conditions re-evaluate on 8 EventBus events (combat transitions, group changes, zone changes). BattleRes and PullCounter default to `instance`; all others default to `always`.
+2. **TalentManager.lua** -- **PARTIALLY FIXED (MEDIUM):** EJ cache now saves/restores the current tier selection (lines 54-55, 92-95), addressing the concern about mutating global EJ state. **NEW MEDIUM:** `SetRowAsBuild` (lines 410-443) creates 6 closures (editBtn, copyBtn, updateBtn, deleteBtn, loadBtn, OnEnter) every time `RefreshBuildList` is called -- significant closure churn for users with many builds. **NEW LOW:** `DecodeImportString` does not type-check `importStream` internals.
+
+3. **TalentReminder.lua** -- No functional regressions. **NEW LOW:** `ReleaseAlertFrame()` (line 1513) clears `currentReminder` but does not clear `currentMismatches` (line 1268). The `mismatches` table reference persists after release, preventing garbage collection of the mismatch data.
+
+4. **Core.lua** -- Added defaults for `talentManager`, `questAuto`, `questReminder`, `mplusTimer` modules. No new issues.
+
+5. **ActionBars.lua** -- No functional changes from previous review. Combat deferral frame leak still present.
+
+6. **Loot.lua** -- No functional changes from previous review. Locale-dependent `"^You receive"` pattern still present.
+
+7. **config/panels/WidgetsPanel.lua** -- No changes from previous review. Loop-scoped `CONDITIONS` table and `GetConditionLabel` closure allocations still present.
 
 ### Issue Counts
 
 **Critical Issues:** ~~1~~ All fixed (MplusTimer forward reference)
-**High Priority:** ~~3~~ All fixed (EventBus dedup, Group.lua IsGuildMember, TalentManager instanceType, TalentReminder migration)
-**Medium Priority:** 29 (2 resolved: SessionStats defaults verified, ChatSkin HighlightKeywords downgraded)
-**Low Priority / Polish:** 26+
+**High Priority:** ~~5~~ All fixed (Combat.lua C_Item.GetItemInfoInstant, EventBus dedup, Group.lua IsGuildMember, TalentManager instanceType, TalentReminder data migration)
+**Medium Priority:** 31 (1 new: TalentManager SetRowAsBuild closure churn)
+**Low Priority / Polish:** 28+
 
 ---
 
-## Changes Since Last Review
+## Changes Since Last Review (2026-02-21)
 
-### Previous Findings Status
+### Status of Previously Identified Issues
 
-#### All Previously Fixed Items (Confirmed Still Fixed)
+#### Confirmed Still Fixed
 
 - **FIXED:** MplusTimer.lua nil guard for `info.quantityString`
 - **FIXED:** Misc.lua nil guard for `inviterGUID`
@@ -62,20 +72,34 @@ Two new additions were identified since the previous review:
 - **FIXED:** Core.lua defaults include `goldData = {}` subtable for bags widget
 - **FIXED:** EventBus.lua pcall removed from dispatch loop
 - **FIXED:** MplusTimer.lua raw event frames fully migrated to EventBus
+- **FIXED:** `CleanupSavedVariables()` in TalentReminder.lua now migrates old-format builds by wrapping them in arrays instead of deleting them.
 
 #### Previously Identified Issues Still Open
 
-- **FIXED:** `CleanupSavedVariables()` in TalentReminder.lua now migrates old-format builds by wrapping them in arrays instead of deleting them.
-- All medium and low priority items from the fifth pass remain unless explicitly noted as resolved below.
+- All medium and low priority items from the seventh pass remain unless explicitly noted as resolved below.
 
-### New Findings Summary
+#### NOT FIXED -- Still Open from Previous Reviews
 
-| Severity | Count | Key Issues |
-|----------|-------|-----------|
-| Critical | ~~1~~ 0 | ~~MplusTimer forward reference to undefined local~~ (FIXED) |
-| High | ~~4~~ 0 | ~~EventBus dedup~~ (FIXED), ~~TalentManager instanceType~~ (FIXED), ~~Group.lua IsGuildMember~~ (FIXED), ~~TalentReminder migration~~ (FIXED) |
-| Medium | ~~31~~ 29 | Combat deferral frame leaks, missing combat guards, config panel issues, widget bugs |
-| Low | 26+ | Performance optimizations, dead code, code quality |
+- **Teleports.lua lines 549-553:** FontString inserted into `mainButtons` array -- crash risk in `ClearMainPanel()`.
+- **Teleports.lua lines 322-336:** `SetAttribute` on secure buttons during potential combat lockdown.
+- **Keystone.lua line 137:** Position saved as `{x, y}` instead of framework schema `{point, relPoint, x, y}`.
+- **ActionBars.lua lines 1158 / 1277:** Combat deferral frame leak on repeated combat-blocked calls.
+- **CastBar.lua:** Same combat deferral frame leak pattern.
+- **Combat.lua line 580:** Infinite retry risk in `TrackConsumableUsage`. No retry counter.
+- **Combat.lua lines 1048 / 1070 / 1135:** Triplicate `ApplyReminderLock()` calls (init + two in UpdateReminderFrame flow).
+- **Combat.lua line 1113:** Stale comment says "Create 4 text lines" but loop on line 1114 creates 5.
+- **Loot.lua lines 196-210:** Redundant `if i == 1`/`else` branches in `UpdateLayout`.
+- **Loot.lua line 500:** Locale-dependent `"^You receive"` string pattern.
+
+#### NEW Findings (2026-02-21)
+
+| Severity | Issue | File | Line |
+|----------|-------|------|------|
+| FIXED (was HIGH) | `C_Item.GetItemInfoInstant(spellName)` -- UNIT_SPELLCAST_SUCCEEDED now returns early; consumable tracking uses hooks | Combat.lua | 1144-1148 |
+| FIXED (was MEDIUM) | EJ cache now saves/restores current tier via `EJ_GetCurrentTier`/`EJ_SelectTier` | TalentManager.lua | 54-55, 92-95 |
+| Medium | `SetRowAsBuild` creates 6 closures per build row on every `RefreshBuildList` call | TalentManager.lua | 410-443 |
+| Low | `ReleaseAlertFrame()` clears `currentReminder` but not `currentMismatches` -- table reference persists | TalentReminder.lua | 1508-1529 |
+| Low | `DecodeImportString` does not type-check `importStream` internals before use | TalentManager.lua | ~1480 |
 
 ---
 
@@ -138,13 +162,17 @@ Two new additions were identified since the previous review:
 
 ---
 
-### Combat.lua (~1227 lines)
+### Combat.lua (~1217 lines)
 
-**Status:** Two medium issues. Two low.
+**Status:** Previous HIGH issue FIXED. Two medium. Three low.
 
-- **Medium (NEW):** `TrackConsumableUsage` (line 580) has infinite retry risk. If `GetItemInfo` never returns data for a given `itemID`, the function calls itself via `C_Timer.After(0.5, ...)` indefinitely. Should add a retry counter.
+- **FIXED (was HIGH):** `C_Item.GetItemInfoInstant(spellName)` (previously line 1151). The `UNIT_SPELLCAST_SUCCEEDED` handler (lines 1144-1148) now returns early with a comment explaining that consumable usage is tracked via `UseAction`/`UseContainerItem`/`UseItemByName` hooks. This is the correct architectural approach -- spell IDs from cast events cannot be reliably mapped back to item IDs, so hook-based tracking at the point of item use is proper.
+- **Medium:** `TrackConsumableUsage` (line 580) has infinite retry risk. If `GetItemInfo` never returns data for a given `itemID`, the function recurses via `C_Timer.After(0.5, ...)` indefinitely. Should add a retry counter (max 5 attempts).
 - **Medium:** `GetItemInfo(itemID)` called twice in `TrackConsumableUsage` (lines 577 and 584). Should consolidate.
-- **Low:** `ApplyReminderLock()` is called twice -- once on line 1048 and again on line 1070.
+- **Low:** `ApplyReminderLock()` is called three times -- line 1048, line 1070, and line 1135. At least one is redundant.
+- **Low:** Line 1113 comment says "Create 4 text lines" but the loop on line 1114 creates 5 (`for i = 1, 5`).
+- Bag scan caching (invalidated on `BAG_UPDATE_DELAYED`), quality star overlays, and MH/OH weapon slot targeting are well-implemented.
+- Hook-based consumable tracking (`HookConsumableUsage`) is a solid architectural choice.
 - Hybrid event approach (own frame for OnUpdate + timer events, EventBus elsewhere) is intentional and correct.
 - `UpdateReminderFrame` correctly exits early if `InCombatLockdown()`. All SecureActionButtonTemplate operations properly guarded.
 
@@ -229,42 +257,47 @@ Two new additions were identified since the previous review:
 
 ---
 
-### TalentManager.lua (~1521 lines)
+### TalentManager.lua (~1782 lines)
 
-**Status:** HIGH priority issue fixed. Three medium remain.
+**Status:** Previous HIGH and MEDIUM issues fixed. Two medium remain. Two low.
 
 - **FIXED: Undefined `instanceType` variable (lines 1141 and 1156).** Moved the `GetInstanceInfo()` call above the `instanceType == "raid"` check so the zone-specific checkbox now correctly defaults to checked in raids.
 
+- **FIXED: EJ cache tier mutation (lines 54-55, 92-95).** `EnsureEJCache()` now saves the current tier via `EJ_GetCurrentTier()` before iterating and restores it via `EJ_SelectTier(savedTier)` after. No longer disrupts the user's Encounter Journal view.
+
 - **Medium:** `RefreshBuildList` creates multiple temporary tables per call (`raidBuilds`, `dungeonBuilds`, `uncategorizedBuilds`, sorted arrays). Significant garbage for users with 50+ builds. Use module-level scratch tables with `wipe()`.
-- **Medium:** `EnsureEJCache()` calls `EJ_SelectTier(tierIdx)` which mutates global EJ state, potentially disrupting the user's Encounter Journal view.
+- **Medium (NEW):** `SetRowAsBuild` (lines 410-443) creates 6 closures per build row on every `RefreshBuildList` call. For `editBtn`, `copyBtn`, `updateBtn`, `deleteBtn`, `loadBtn`, and `OnEnter`, each gets a new anonymous function capturing `instanceID`, `diffID`, `zoneKey`, `buildIndex`, and `reminder`. With 20+ builds, this generates 120+ closures per refresh. Consider storing the data on the row frame via attributes and using a shared click handler.
 - **Medium:** EJ cache saved to SavedVariables (`settings.ejCache`). Grows with each expansion, bloating `UIThingsDB`.
 - **Low:** Uses deprecated `UIDropDownMenuTemplate` API. Works currently but may break in future patches.
-- **Low:** `SetRowAsBuild` sets `OnClick` scripts every time, creating closures.
+- **Low (NEW):** `DecodeImportString` does not type-check `importStream` internals. Malformed import strings could produce unexpected behavior rather than a clean error.
 
 ---
 
-### TalentReminder.lua (~1531 lines)
+### TalentReminder.lua (~1552 lines)
 
-**Status:** HIGH priority issue fixed. One medium remains.
+**Status:** Previous HIGH issue fixed. One medium remains. One new low.
 
 - **FIXED:** `CleanupSavedVariables()` now migrates old-format builds by wrapping them in arrays (`zones[zoneKey] = { value }`) instead of deleting them.
 
 - **Medium:** `table.remove` index shifting in `DeleteReminder` is fragile for future maintainers. Currently handled correctly (reverse-sorted deletions in TalentPanel.lua), but poorly documented.
+- **Low (NEW):** `ReleaseAlertFrame()` (lines 1508-1529) clears `alertFrame.currentReminder = nil` but does not clear `alertFrame.currentMismatches`. The `currentMismatches` table (set on line 1268 in `UpdateAlertFrame`) contains mismatch data that persists after the alert is released, preventing the table and its contents from being garbage collected. Add `alertFrame.currentMismatches = nil` to the release function.
 - `ApplyTalents` correctly checks `InCombatLockdown()`.
-- `ReleaseAlertFrame()` properly clears content references while preserving the frame. Good memory management.
+- Priority-based talent matching (zone-specific=1, instance-wide=2) is solid.
+- Subzone-based detection via `GetSubZoneText()` for raid boss areas.
 
 ---
 
-### ActionBars.lua (~1516 lines)
+### ActionBars.lua (~1527 lines)
 
-**Status:** One medium (new). Two low.
+**Status:** One medium. Two low.
 
-- **Medium (NEW):** Combat deferral frame leak (lines 1147-1154 and 1266-1273). Both `ApplySkin()` and `RemoveSkin()` create a new `CreateFrame("Frame")` when called during combat. Frames persist indefinitely (WoW has no `DestroyFrame`). If called repeatedly during combat, frames accumulate.
+- **Medium:** Combat deferral frame leak (lines 1147-1154 and 1266-1273). Both `ApplySkin()` and `RemoveSkin()` create a new `CreateFrame("Frame")` when called during combat. Frames persist indefinitely (WoW has no `DestroyFrame`). If called repeatedly during combat, frames accumulate.
   **Fix:** Use a single module-level deferral frame with a flag.
 
 - Three-layer combat-safe positioning remains exemplary.
 - All `RegisterStateDriver`/`UnregisterStateDriver` calls properly guarded.
-- **Low:** File is 1516 lines. Consider splitting skin vs. drawer logic.
+- Micro-menu drawer uses `SetAlpha(0)`/`EnableMouse(false)` instead of `Show`/`Hide` to avoid triggering Blizzard's `MicroMenuContainer:Layout()` crash. `PatchMicroMenuLayout()` crash guard is well-designed.
+- **Low:** File is 1527 lines. Consider splitting skin vs. drawer logic.
 - **Low:** `SkinButton` calls `button.icon:GetMaskTextures()` every time. Only on skin apply, not hot path.
 
 ---
@@ -424,10 +457,12 @@ Two new additions were identified since the previous review:
 
 ### config/panels/WidgetsPanel.lua (~413 lines)
 
-**Status:** One medium observation.
+**Status:** Two medium observations. Two medium from 2026-02-20.
 
 - **Medium:** Widget anchor dropdown won't show new frames added while config is open.
 - **Medium:** 1 inline color swatch when `Helpers.CreateColorSwatch` is available.
+- **Medium (2026-02-20):** `CONDITIONS` table (7 entries, each a table) is defined inside the `for i, widget in ipairs(widgets)` loop body (line 246). Creates 182 table objects every time the Widgets config panel is opened. Should be hoisted to file scope as a module-level constant.
+- **Medium (2026-02-20):** `GetConditionLabel` local function (line 274) is defined inside the same loop. Creates 26 closure allocations per panel open. Should also be hoisted to file scope.
 
 ---
 
@@ -619,61 +654,73 @@ Two new additions were identified since the previous review:
 
 **FIXED:** `CleanupSavedVariables()` now wraps old-format builds in arrays (`zones[zoneKey] = { value }`) instead of deleting them.
 
-### 3. Combat Deferral Frame Accumulation (Medium Priority -- NEW)
+### 3. Combat.lua Consumable Tracking Architecture (HIGH Priority -- FIXED)
+
+**FIXED:** The broken `C_Item.GetItemInfoInstant(spellName)` path has been replaced by a return-early in `UNIT_SPELLCAST_SUCCEEDED` (lines 1144-1148). Consumable usage is now tracked correctly via hooks on `UseAction`, `C_Container.UseContainerItem`, and `UseItemByName`, which capture the actual item ID at the point of use. This is architecturally superior to the spell-cast-event approach.
+
+### 4. Combat Deferral Frame Accumulation (Medium Priority)
 
 ActionBars.lua and CastBar.lua create disposable `CreateFrame("Frame")` instances when called during combat lockdown. WoW frames are never garbage collected. **Fix:** Use a reusable module-level frame.
 
-### 4. Config Panel Color Swatch Duplication (Medium Priority -- NEW)
+### 5. Config Panel Color Swatch Duplication (Medium Priority)
 
 ~960 lines of duplicated color swatch code across 6 panels (TrackerPanel, ActionBarsPanel, MinimapPanel, NotificationsPanel, FramesPanel, WidgetsPanel) when `Helpers.CreateColorSwatch` already exists. 8 panels already use the helper correctly.
 
-### 5. Config Panel Unguarded Module Access (Medium Priority -- NEW)
+### 6. Config Panel Unguarded Module Access (Medium Priority)
 
 LootPanel.lua (8 occurrences) and VendorPanel.lua (6 occurrences) access module methods without nil-checking the module first. Will crash if the module fails to load.
 
-### 6. Locale-Dependent String Matching (Medium Priority)
+### 7. Locale-Dependent String Matching (Medium Priority)
 
 - Loot.lua `"^You receive"` pattern fails on non-English clients
 - Friends.lua `C_ClassColor.GetClassColor` given localized class name
 
-### 7. Missing Combat Lockdown Guards (Medium Priority)
+### 8. Missing Combat Lockdown Guards (Medium Priority)
 
 - MinimapCustom.lua `SetDrawerCollapsed`
 - Teleports.lua `ReleaseButton` on secure buttons
 - Vault.lua / WeeklyReset.lua `ShowUIPanel`/`HideUIPanel`
 - Spec.lua delayed menu click
 
-### 8. Duplicated Border Drawing Code (Medium Priority)
+### 9. Duplicated Border Drawing Code (Medium Priority)
 
 At least 5 files implement nearly identical border texture creation.
 
-### 9. Widget Ticker Efficiency (Medium Priority)
+### 10. Widget Ticker Efficiency (Medium Priority)
 
 The widget framework's shared ticker calls `UpdateContent` on all enabled widgets every second. Many are purely event-driven.
 
-### 10. Combat Lockdown Handling (Strength)
+### 11. TalentManager Closure Churn (Medium Priority -- NEW)
+
+`SetRowAsBuild` creates 6 closures per build row on every `RefreshBuildList` call. For users with 20+ builds, this generates 120+ closure allocations per refresh. Consider storing build data as frame attributes and using shared click handlers that read from `self:GetParent()` data.
+
+### 12. Combat Lockdown Handling (Strength)
 
 The codebase is consistently defensive about combat lockdown. The three-layer ActionBars pattern is exemplary. The exceptions noted above are localized and low-risk.
 
-### 11. Frame Pooling (Strength)
+### 13. Frame Pooling (Strength)
 
 Consistently used in Loot.lua, Frames.lua, Teleports.lua, Currency.lua, TalentManager.lua, and WidgetsPanel.
 
-### 12. Centralized TTS (Strength)
+### 14. Centralized TTS (Strength)
 
 `Core.SpeakTTS` centralizes text-to-speech with graceful API fallbacks.
 
-### 13. Widget ApplyEvents Pattern (Strength)
+### 15. Widget ApplyEvents Pattern (Strength)
 
 Widgets consistently implement `ApplyEvents(enabled)`. Excellent pattern across all 27 widget files.
 
-### 14. Widget Visibility Conditions (Strength -- NEW)
+### 16. Widget Visibility Conditions (Strength)
 
-The new `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events is well-designed and reduces widget clutter effectively.
+The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events is well-designed and reduces widget clutter effectively.
 
-### 15. Saved Variable Separation (Strength)
+### 17. Saved Variable Separation (Strength)
 
 `LunaUITweaks_TalentReminders`, `LunaUITweaks_ReagentData`, `LunaUITweaks_QuestReminders` survive settings resets.
+
+### 18. Consumable Tracking Architecture (Strength -- NEW)
+
+The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseContainerItem`, `UseItemByName`) is architecturally correct. It captures the actual item ID at the point of use rather than trying to reverse-map spell IDs from cast events, which is unreliable.
 
 ---
 
@@ -683,77 +730,86 @@ The new `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger ev
 
 1. **FIXED: MplusTimer.lua forward reference (line 701)** -- Added `local OnChallengeEvent` forward declaration at file top and changed definition to assignment. M+ event processing now works correctly.
 
-### High Priority
+### High Priority (All Fixed)
 
-2. **FIXED: EventBus duplicate registration** -- `EventBus.Register` now deduplicates by scanning for existing callback references before inserting.
+2. **FIXED (2026-02-21): Combat.lua `C_Item.GetItemInfoInstant(spellName)` (was line 1151)** -- `UNIT_SPELLCAST_SUCCEEDED` handler now returns early (lines 1144-1148). Consumable tracking correctly uses `UseAction`/`UseContainerItem`/`UseItemByName` hooks.
 
-3. **FIXED: Group.lua `IsGuildMember()` (line 391)** -- Replaced with `IsInGuild()` + `C_GuildInfo.MemberExistsByName()` which is the documented API.
+3. **FIXED: EventBus duplicate registration** -- `EventBus.Register` now deduplicates by scanning for existing callback references before inserting.
 
-4. **FIXED: TalentManager.lua `instanceType` undefined (line 1141)** -- Moved `GetInstanceInfo()` call before the `instanceType` reference.
+4. **FIXED: Group.lua `IsGuildMember()` (line 391)** -- Replaced with `IsInGuild()` + `C_GuildInfo.MemberExistsByName()`.
 
-5. **FIXED: TalentReminder.lua data migration** -- `CleanupSavedVariables()` now wraps old-format builds in arrays instead of deleting them.
+5. **FIXED: TalentManager.lua `instanceType` undefined (line 1141)** -- Moved `GetInstanceInfo()` call before the `instanceType` reference.
+
+6. **FIXED: TalentReminder.lua data migration** -- `CleanupSavedVariables()` now wraps old-format builds in arrays instead of deleting them.
 
 ### Medium Priority
 
-6. **Teleports.lua FontString in button array (lines 549-554)** -- Track "no spells" FontString separately to avoid crash in `ClearMainPanel`.
-7. **Teleports.lua SetAttribute during combat** -- Guard `ReleaseButton` secure operations with `InCombatLockdown()`.
-8. **Keystone.lua position saved in wrong schema (line 137)** -- Use framework position keys.
-9. **FIXED: SessionStats.lua defaults verification** -- Core.lua DEFAULTS and TOC entry confirmed present.
-10. **MythicRating.lua nil `bestRunLevel`** -- Add nil guard before `string.format`.
-11. **Combat deferral frame leak** -- ActionBars.lua + CastBar.lua: use reusable module-level frame.
-12. **Combat.lua infinite retry in TrackConsumableUsage** -- Add retry counter.
-13. **MinimapCustom.lua SetDrawerCollapsed combat guard** -- Add `InCombatLockdown()` check.
-14. **ChatSkin.lua SetItemRef override** -- Use `hooksecurefunc` instead.
-15. **Downgraded: ChatSkin.lua HighlightKeywords table allocation** -- Per-invocation table is correct design to avoid stale state. Moved to low priority.
-16. **Vault.lua / WeeklyReset.lua ShowUIPanel combat guard** -- Add `InCombatLockdown()` check.
-17. **Spec.lua menu click combat guard** -- Check `InCombatLockdown()` in menu callbacks.
-18. **Friends.lua localized class name** -- Use `classFilename` (English token) instead of `className`.
-19. **Durability.lua unconditional event registration** -- Move into `ApplyEvents`.
-20. **EventBus snapshot allocation per dispatch** -- Consider scratch table reuse.
-21. **Config panel color swatch duplication (~960 lines)** -- Migrate 22 inline swatches to `Helpers.CreateColorSwatch`.
-22. **LootPanel.lua / VendorPanel.lua unguarded module access** -- Add nil checks.
-23. **AddonVersionsPanel.lua frame leak** -- Create dialog frames once, show/hide.
-24. **AddonVersionsPanel.lua loadstring length check** -- Add max input length guard.
-25. **MinimapPanel.lua missing opacityFunc** -- Add opacity callback to border swatch.
-26. **FramesPanel.lua duplicate functions** -- Use `Helpers.DeepCopy`, extract `NameExists`.
-27. **TalentManager.lua scratch tables** -- Reuse module-level tables with `wipe()`.
-28. **TalentManager.lua EJ cache timing** -- Save/restore current tier selection.
-29. **Keystone.lua bag scan every tick** -- Cache and rescan on `BAG_UPDATE`.
-30. **Spec.lua API calls every tick** -- Cache and update on spec change events.
-31. **Extract shared border utility** -- Reduce duplicated border code across 5+ files.
-32. **Extract color picker helper** -- Already exists as `Helpers.CreateColorSwatch`, just needs adoption.
-33. **MinimapCustom.lua cache collected buttons** -- Don't iterate all children every call.
-34. **FPS widget memory scan** -- Move to background timer.
-35. **ObjectiveTracker string concatenation** -- Use `table.concat` in hot paths.
-36. **CastBar.lua cast time throttle** -- 0.05s throttle on `string.format`.
+7. **Teleports.lua FontString in button array (lines 549-554)** -- Track "no spells" FontString separately to avoid crash in `ClearMainPanel`.
+8. **Teleports.lua SetAttribute during combat** -- Guard `ReleaseButton` secure operations with `InCombatLockdown()`.
+9. **Keystone.lua position saved in wrong schema (line 137)** -- Use framework position keys.
+10. **FIXED: SessionStats.lua defaults verification** -- Core.lua DEFAULTS and TOC entry confirmed present.
+11. **MythicRating.lua nil `bestRunLevel`** -- Add nil guard before `string.format`.
+12. **Combat deferral frame leak** -- ActionBars.lua + CastBar.lua: use reusable module-level frame.
+13. **Combat.lua infinite retry in TrackConsumableUsage** -- Add retry counter (max 5 attempts).
+14. **MinimapCustom.lua SetDrawerCollapsed combat guard** -- Add `InCombatLockdown()` check.
+15. **ChatSkin.lua SetItemRef override** -- Use `hooksecurefunc` instead.
+16. **Downgraded: ChatSkin.lua HighlightKeywords table allocation** -- Per-invocation table is correct design to avoid stale state. Moved to low priority.
+17. **Vault.lua / WeeklyReset.lua ShowUIPanel combat guard** -- Add `InCombatLockdown()` check.
+18. **Spec.lua menu click combat guard** -- Check `InCombatLockdown()` in menu callbacks.
+19. **Friends.lua localized class name** -- Use `classFilename` (English token) instead of `className`.
+20. **Durability.lua unconditional event registration** -- Move into `ApplyEvents`.
+21. **EventBus snapshot allocation per dispatch** -- Consider scratch table reuse.
+22. **WidgetsPanel.lua `CONDITIONS` table inside loop (line 246) (NEW 2026-02-20)** -- Hoist to file-scope constant; eliminates 182 table allocs per panel open.
+23. **WidgetsPanel.lua `GetConditionLabel` closure inside loop (line 274) (NEW 2026-02-20)** -- Hoist to file scope; eliminates 26 closure allocs per panel open.
+24. **Config panel color swatch duplication (~960 lines)** -- Migrate 22 inline swatches to `Helpers.CreateColorSwatch`.
+25. **LootPanel.lua / VendorPanel.lua unguarded module access** -- Add nil checks.
+26. **AddonVersionsPanel.lua frame leak** -- Create dialog frames once, show/hide.
+27. **AddonVersionsPanel.lua loadstring length check** -- Add max input length guard.
+28. **MinimapPanel.lua missing opacityFunc** -- Add opacity callback to border swatch.
+29. **FramesPanel.lua duplicate functions** -- Use `Helpers.DeepCopy`, extract `NameExists`.
+30. **TalentManager.lua scratch tables** -- Reuse module-level tables with `wipe()`.
+31. **FIXED (2026-02-21): TalentManager.lua EJ cache tier mutation** -- Now saves/restores current tier selection.
+32. **Keystone.lua bag scan every tick** -- Cache and rescan on `BAG_UPDATE`.
+33. **Spec.lua API calls every tick** -- Cache and update on spec change events.
+34. **Extract shared border utility** -- Reduce duplicated border code across 5+ files.
+35. **Extract color picker helper** -- Already exists as `Helpers.CreateColorSwatch`, just needs adoption.
+36. **MinimapCustom.lua cache collected buttons** -- Don't iterate all children every call.
+37. **FPS widget memory scan** -- Move to background timer.
+38. **ObjectiveTracker string concatenation** -- Use `table.concat` in hot paths.
+39. **CastBar.lua cast time throttle** -- 0.05s throttle on `string.format`.
+40. **TalentManager.lua SetRowAsBuild closure churn (NEW 2026-02-21)** -- Store data as frame attributes; use shared click handlers. Eliminates 120+ closures per refresh.
+41. **TalentManager.lua EJ cache bloat** -- Cache grows with each expansion in SavedVariables.
 
 ### Low Priority / Polish
 
-37. Core.lua DEFAULTS table placement (inside handler vs file scope)
-38. Loot.lua redundant `if i == 1` branches
-39. Combat.lua duplicate `ApplyReminderLock()` call
-40. MplusTimer death tooltip temp table
-41. Guild widget tooltip cap for large guilds
-42. Speed widget dual-update mechanism
-43. MinimapCustom.lua `GetMinimapShape` should return `"ROUND"`
-44. MinimapCustom.lua dead code in zone drag handler
-45. MinimapCustom.lua clock ticker never cancelled
-46. Frames.lua `SetBorder` function hoisting
-47. ObjectiveTracker `OnAchieveClick` type guard
-48. TalentManager.lua deprecated UIDropDownMenu API
-49. TalentManager.lua row button closure creation
-50. Reagents.lua `GetTrackedCharacters` caching
-51. DarkmoonFaire.lua tick rate for DMF info
-52. Bags.lua currency list caching
-53. Currency.lua table allocation per tick
-54. Hearthstone.lua early attribute set
-55. Widgets.lua OnUpdate on all frames (set only during drag)
-56. Widgets.lua duplicate anchor lookup
-57. TalentPanel.lua unreachable nil-checks (~40 lines)
-58. ChatSkinPanel.lua dead SetPoint
-59. ReagentsPanel.lua StaticPopupDialogs recreation
-60. ConfigMain.lua boilerplate reduction
-61. ~100 global frame names with generic "UIThings" prefix
+42. Core.lua DEFAULTS table placement (inside handler vs file scope)
+43. Loot.lua redundant `if i == 1` branches
+44. Combat.lua triplicate `ApplyReminderLock()` calls (lines 1048, 1070, 1135)
+45. Combat.lua stale comment "Create 4 text lines" (line 1113, loop creates 5)
+46. MplusTimer death tooltip temp table
+47. Guild widget tooltip cap for large guilds
+48. Speed widget dual-update mechanism
+49. MinimapCustom.lua `GetMinimapShape` should return `"ROUND"`
+50. MinimapCustom.lua dead code in zone drag handler
+51. MinimapCustom.lua clock ticker never cancelled
+52. Frames.lua `SetBorder` function hoisting
+53. ObjectiveTracker `OnAchieveClick` type guard
+54. TalentManager.lua deprecated UIDropDownMenu API
+55. TalentManager.lua `DecodeImportString` type safety (NEW 2026-02-21)
+56. TalentReminder.lua `ReleaseAlertFrame` does not clear `currentMismatches` (NEW 2026-02-21)
+57. Reagents.lua `GetTrackedCharacters` caching
+58. DarkmoonFaire.lua tick rate for DMF info
+59. Bags.lua currency list caching
+60. Currency.lua table allocation per tick
+61. Hearthstone.lua early attribute set
+62. Widgets.lua OnUpdate on all frames (set only during drag)
+63. Widgets.lua duplicate anchor lookup
+64. TalentPanel.lua unreachable nil-checks (~40 lines)
+65. ChatSkinPanel.lua dead SetPoint
+66. ReagentsPanel.lua StaticPopupDialogs recreation
+67. ConfigMain.lua boilerplate reduction
+68. ~100 global frame names with generic "UIThings" prefix
+69. CastBar.lua color table allocation per cast start
 
 ---
 
@@ -762,7 +818,7 @@ The new `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger ev
 | Category | Files | Lines |
 |----------|-------|-------|
 | Core Modules | 12 | 5,309 |
-| UI Modules | 10 | 12,340 |
+| UI Modules | 10 | 12,600 |
 | Config System | 22 | 9,299 |
 | Widget Files | 28 | 4,715 |
-| **Total** | **72** | **31,663** |
+| **Total** | **72** | **31,923** |

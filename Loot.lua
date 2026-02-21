@@ -490,6 +490,7 @@ end
 
 local function OnChatMsgLoot(event, msg)
     if not UIThingsDB.loot.enabled then return end
+    if issecretvalue(msg) then return end
     local itemLink = string.match(msg, "|Hitem:.-|h")
     if itemLink then
         local _, _, quality = GetItemInfo(itemLink)

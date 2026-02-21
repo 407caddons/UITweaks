@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(560, 500)
+    scrollChild:SetSize(630, 500)
     scrollFrame:SetScrollChild(scrollChild)
     panel = scrollChild
 
@@ -209,6 +209,8 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "hearthstone",   label = "Hearthstone" },
         { key = "currency",      label = "Currency Tracker" },
         { key = "sessionStats",  label = "Session Stats" },
+        { key = "lockouts",      label = "Instance Lockouts" },
+        { key = "xpRep",         label = "XP / Reputation" },
     }
 
     local yOffset = -250
@@ -234,14 +236,14 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         -- Anchor Dropdown
         local anchorDropdown = CreateFrame("Frame", "UIThingsWidget" .. widget.key .. "AnchorDropdown", panel,
             "UIDropDownMenuTemplate")
-        anchorDropdown:SetPoint("LEFT", cb, "RIGHT", 200, -2)
-        UIDropDownMenu_SetWidth(anchorDropdown, 120)
+        anchorDropdown:SetPoint("LEFT", cb, "RIGHT", 130, -2)
+        UIDropDownMenu_SetWidth(anchorDropdown, 90)
 
         -- Condition Dropdown
         local conditionDropdown = CreateFrame("Frame", "UIThingsWidget" .. widget.key .. "ConditionDropdown", panel,
             "UIDropDownMenuTemplate")
-        conditionDropdown:SetPoint("LEFT", anchorDropdown, "RIGHT", 100, 0)
-        UIDropDownMenu_SetWidth(conditionDropdown, 110)
+        conditionDropdown:SetPoint("LEFT", anchorDropdown, "RIGHT", 10, 0)
+        UIDropDownMenu_SetWidth(conditionDropdown, 85)
 
         local CONDITIONS = {
             { value = "always",   text = "Always" },
@@ -329,7 +331,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
 
         -- Left Button
         local leftBtn = CreateFrame("Button", "UIThingsWidget" .. widget.key .. "LeftBtn", panel, "UIPanelButtonTemplate")
-        leftBtn:SetPoint("LEFT", conditionDropdown, "RIGHT", 120, 2)
+        leftBtn:SetPoint("LEFT", conditionDropdown, "RIGHT", 20, 2)
         leftBtn:SetSize(22, 22)
         leftBtn:SetText("<")
         leftBtn:SetScript("OnClick", function() SwapOrder(-1) end)

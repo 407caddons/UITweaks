@@ -57,6 +57,7 @@ local collectedButtons = {} -- { button, origParent, origPoints, origWidth, orig
 local collectedSet = {}     -- [button] = true, for fast lookup
 local drawerHooked = false
 local inEditMode = false
+local inFullscreenPanel = false
 
 -- Forward declarations for functions/tables defined later but referenced from hooks
 local RestoreBarPositions
@@ -90,20 +91,60 @@ local function PatchMicroMenuLayout()
     local container = MicroMenuContainer
     if not container then return end
 
-    -- MicroMenuContainer:UpdateHelpTicketButtonAnchor() calls GetEdgeButton() which
-    -- returns nil when our drawer has reparented the buttons away from the container.
-    -- The nil comparison crash happens inside UpdateHelpTicketButtonAnchor at line 161.
-    -- We hook it to bail out early when we own the buttons, since the anchor update
-    -- is irrelevant while buttons are reparented to our drawer.
-    -- hooksecurefunc runs after the original, but we override the method directly so
-    -- the original never runs when we have custody of the buttons.
-    if container.UpdateHelpTicketButtonAnchor then
-        local origAnchor = container.UpdateHelpTicketButtonAnchor
-        container.UpdateHelpTicketButtonAnchor = function(self, ...)
-            -- Only run Blizzard's anchor logic when we don't have the buttons
-            if #collectedButtons == 0 then
-                origAnchor(self, ...)
+    -- MicroMenuContainer:Layout() calls GetEdgeButton() which iterates child buttons
+    -- and compares their centers.  When our drawer has reparented the micro buttons,
+    -- GetCenter() returns nil and Blizzard crashes at line 161 comparing two nils.
+    --
+    -- Rather than trying to suppress individual callers (UpdateHelpTicketButtonAnchor,
+    -- UpdateQueueStatusAnchors, etc.), we patch GetEdgeButton itself to bail out when
+    -- buttons have nil positions.  This covers ALL code paths through Layout().
+    local function PatchGetEdgeButton(origFunc)
+        return function(self, ...)
+            -- When our drawer owns the buttons, they aren't children of the container
+            -- and GetCenter() returns nil — skip the original to avoid the nil compare crash
+            if #collectedButtons > 0 then
+                return nil
             end
+            return origFunc(self, ...)
+        end
+    end
+
+    -- Patch instance method
+    if container.GetEdgeButton then
+        container.GetEdgeButton = PatchGetEdgeButton(container.GetEdgeButton)
+    end
+
+    -- Also patch metatable if the method lives there (Blizzard mixins)
+    local mt = getmetatable(container)
+    local mtIndex = mt and mt.__index
+    if type(mtIndex) == "table" and mtIndex.GetEdgeButton
+       and mtIndex.GetEdgeButton ~= container.GetEdgeButton then
+        mtIndex.GetEdgeButton = PatchGetEdgeButton(mtIndex.GetEdgeButton)
+    end
+
+    -- Also patch UpdateHelpTicketButtonAnchor, UpdateQueueStatusAnchors,
+    -- and UpdateFramerateFrameAnchor since they all use the return value
+    -- of GetEdgeButton and would fail on nil even with the patch above
+    -- if called through a code path that bypasses our GetEdgeButton patch.
+    local anchorMethods = {
+        "UpdateHelpTicketButtonAnchor",
+        "UpdateQueueStatusAnchors",
+        "UpdateFramerateFrameAnchor",
+    }
+    for _, methodName in ipairs(anchorMethods) do
+        local function SafeMethod(origMethod)
+            return function(self, ...)
+                if #collectedButtons > 0 then return end
+                return origMethod(self, ...)
+            end
+        end
+
+        if container[methodName] then
+            container[methodName] = SafeMethod(container[methodName])
+        end
+        if type(mtIndex) == "table" and mtIndex[methodName]
+           and mtIndex[methodName] ~= container[methodName] then
+            mtIndex[methodName] = SafeMethod(mtIndex[methodName])
         end
     end
 
@@ -270,6 +311,66 @@ local function CalculateFrameSize(count)
     return frameW, frameH, numCols
 end
 
+-- Keep the QueueStatusButton (queue eye) on the minimap while our drawer owns
+-- the micro buttons.  Blizzard repositions it via QueueStatusButton:UpdatePosition
+-- which anchors to MicroMenu/MicroMenuContainer.  We hook OnShow to re-anchor
+-- after Blizzard finishes, using a C_Timer.After(0) to run after the entire
+-- OnShow → Layout → UpdatePosition chain completes.
+local queueStatusAnchored = false
+local suppressQueueAnchor = false
+
+local function AnchorQueueStatusToMinimap()
+    if not QueueStatusButton then return end
+    if #collectedButtons == 0 then return end
+
+    suppressQueueAnchor = true
+    QueueStatusButton:ClearAllPoints()
+    QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
+    QueueStatusButton:SetParent(Minimap)
+    QueueStatusButton:SetFrameStrata("HIGH")
+    QueueStatusButton:SetFrameLevel(100)
+    suppressQueueAnchor = false
+    queueStatusAnchored = true
+end
+
+local function ReleaseQueueStatusAnchor()
+    if not queueStatusAnchored or not QueueStatusButton then return end
+    queueStatusAnchored = false
+end
+
+local queueStatusHooked = false
+local function HookQueueStatusButton()
+    if queueStatusHooked or not QueueStatusButton then return end
+
+    -- Hook OnShow: Blizzard's OnShow calls Layout → UpdateQueueStatusAnchors →
+    -- UpdatePosition which sets the point. We schedule a frame-delayed re-anchor
+    -- so we run after the entire Blizzard chain finishes.
+    QueueStatusButton:HookScript("OnShow", function()
+        if #collectedButtons > 0 then
+            C_Timer.After(0, function()
+                if #collectedButtons > 0 then
+                    AnchorQueueStatusToMinimap()
+                end
+            end)
+        end
+    end)
+
+    -- Also hook SetPoint on the button itself: if Blizzard moves it while we own
+    -- buttons, schedule a re-anchor on the next frame.
+    hooksecurefunc(QueueStatusButton, "SetPoint", function()
+        if suppressQueueAnchor then return end
+        if #collectedButtons > 0 then
+            C_Timer.After(0, function()
+                if #collectedButtons > 0 then
+                    AnchorQueueStatusToMinimap()
+                end
+            end)
+        end
+    end)
+
+    queueStatusHooked = true
+end
+
 local function LayoutButtons()
     if not drawerFrame then return end
     local settings = UIThingsDB.actionBars
@@ -324,6 +425,8 @@ local function LayoutButtons()
     if not drawerCollapsed then
         ApplyDrawerLockVisuals()
     end
+
+    AnchorQueueStatusToMinimap()
 end
 
 -- == Collapse / Expand ==
@@ -460,6 +563,7 @@ local function ReclaimButtons()
     if not drawerCollapsed then
         ApplyDrawerLockVisuals()
     end
+    AnchorQueueStatusToMinimap()
 end
 
 local function ReleaseButtons()
@@ -480,6 +584,7 @@ local function ReleaseButtons()
     end
     wipe(collectedButtons)
     wipe(collectedSet)
+    ReleaseQueueStatusAnchor()
 end
 
 -- == Setup / Destroy ==
@@ -491,6 +596,7 @@ function ActionBars.SetupDrawer()
 
     -- Patch MicroMenuContainer before touching any buttons
     PatchMicroMenuLayout()
+    HookQueueStatusButton()
 
     if not drawerFrame then
         drawerFrame = CreateFrame("Frame", "LunaMicroMenuDrawer", UIParent, "BackdropTemplate")
@@ -547,7 +653,7 @@ function ActionBars.SetupDrawer()
     if not drawerHooked then
         if type(UpdateMicroButtons) == "function" then
             hooksecurefunc("UpdateMicroButtons", function()
-                if drawerFrame and not inEditMode and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
+                if drawerFrame and not inEditMode and not inFullscreenPanel and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
                     -- Guard: SetParent on micro buttons is tainted in combat; defer to post-combat
                     if InCombatLockdown() then return end
                     C_Timer.After(0, function() SuppressMicroLayout(ReclaimButtons) end)
@@ -557,10 +663,45 @@ function ActionBars.SetupDrawer()
 
         -- After combat ends, reclaim any buttons Blizzard repositioned during combat
         addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
-            if drawerFrame and not inEditMode and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
+            if drawerFrame and not inEditMode and not inFullscreenPanel and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
                 C_Timer.After(0, function() SuppressMicroLayout(ReclaimButtons) end)
             end
         end)
+
+        -- Release buttons when a fullscreen panel (Trading Post, Collections, etc.) opens.
+        -- Blizzard reparents MicroMenuContainer into these panels, which triggers Layout()
+        -- and crashes when our drawer owns the buttons.
+        if MicroMenuContainer then
+            hooksecurefunc(MicroMenuContainer, "SetParent", function(self, newParent)
+                if not drawerFrame or inEditMode then return end
+                if not UIThingsDB.actionBars or not UIThingsDB.actionBars.enabled then return end
+                if #collectedButtons == 0 then return end
+
+                local isFullscreen = newParent and newParent ~= UIParent and newParent ~= MainStatusTrackingBarContainer
+                if isFullscreen and not inFullscreenPanel then
+                    -- Fullscreen panel opened — release buttons so Blizzard can reparent them
+                    inFullscreenPanel = true
+                    if not InCombatLockdown() then
+                        ReleaseButtons()
+                    end
+                    if drawerFrame then drawerFrame:Hide() end
+                    if drawerToggleBtn then drawerToggleBtn:Hide() end
+                elseif not isFullscreen and inFullscreenPanel then
+                    -- Fullscreen panel closed — reclaim buttons back into our drawer
+                    inFullscreenPanel = false
+                    if not InCombatLockdown() then
+                        C_Timer.After(0.1, function()
+                            if not inEditMode and not inFullscreenPanel then
+                                if drawerFrame then drawerFrame:Show() end
+                                if drawerToggleBtn then drawerToggleBtn:Show() end
+                                SuppressMicroLayout(CollectMicroButtons)
+                            end
+                        end)
+                    end
+                end
+            end)
+        end
+
         -- Release buttons when edit mode opens, reclaim when it closes
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "Show", function()

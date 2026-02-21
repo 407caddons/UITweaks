@@ -23,7 +23,10 @@
       "WebFetch(domain:addonstudio.org)",
       "WebFetch(domain:git.wowinterface.com)",
       "WebFetch(domain:www.wowhead.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:news.blizzard.com)",
+      "Bash(ls:*)",
+      "Bash(cd:*)"
     ]
   }
 }

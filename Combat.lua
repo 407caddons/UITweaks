@@ -275,7 +275,7 @@ local function ScanConsumableBuffs()
         if not auraData then break end
 
         local name = auraData.name
-        if name then
+        if name and not issecretvalue(name) then
             local lowerName = string.lower(name)
             if not hasFlaskCache and (string.find(lowerName, PATTERN_FLASK) or string.find(lowerName, PATTERN_PHIAL)) then
                 hasFlaskCache = true
@@ -1142,18 +1142,9 @@ local function InitReminders()
             InvalidateBagScanCache()
         end
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
-            if spellID then
-                local spellName = C_Spell.GetSpellName(spellID)
-                if spellName then
-                    -- Ignore generic spells that trigger from food/drink
-                    if spellName == "Refreshment" or spellName == "Food" or spellName == "Drink" then return end
-
-                    local itemID = select(1, C_Item.GetItemInfoInstant(spellName))
-                    if itemID then
-                        TrackConsumableUsage(itemID)
-                    end
-                end
-            end
+            -- Consumable usage is tracked via UseAction/UseContainerItem/UseItemByName hooks.
+            -- UNIT_SPELLCAST_SUCCEEDED fires with the on-use spell ID, not the item ID,
+            -- and there is no API to reliably map spell ID -> item ID for arbitrary consumables.
             return
         end
 
@@ -1179,7 +1170,6 @@ local function ApplyReminderEvents()
         reminderEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
         reminderEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         reminderEventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-        reminderEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         reminderEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
         reminderEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     else

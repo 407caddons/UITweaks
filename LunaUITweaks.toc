@@ -98,6 +98,8 @@ widgets\PullCounter.lua
 widgets\Hearthstone.lua
 widgets\Currency.lua
 widgets\SessionStats.lua
+widgets\Lockouts.lua
+widgets\XPRep.lua
 
 # Config entry point (now just a stub)
 Config.lua

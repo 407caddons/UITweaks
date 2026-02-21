@@ -1,8 +1,8 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-19
-**Previous Review:** 2026-02-18
-**Current Version:** v1.11.0
+**Date:** 2026-02-21
+**Previous Review:** 2026-02-20
+**Current Version:** v1.12.0
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
 
@@ -15,7 +15,7 @@ The following features from previous reviews have been implemented:
 - **M+ Dungeon Timer** -- Fully implemented as `MplusTimer.lua`. Includes +1/+2/+3 timer bars, forces tracking, boss objectives, death counter with per-player breakdown tooltip, affix display, Peril affix timer adjustments, auto-slot keystone, and demo mode.
 - **Quest Automation** -- Fully implemented as `QuestAuto.lua`. Includes auto-accept, auto-turn-in, auto-gossip single option, shift-to-pause, trivial quest filtering, and gossip loop prevention.
 - **Quest Reminders** -- Fully implemented as `QuestReminder.lua`. Automatically tracks daily/weekly quests on accept, shows a login popup for incomplete repeatable quests, includes TTS notifications, chat messages, per-character warband override, and a full config panel with quest management.
-- **Talent Build Manager** -- Fully implemented as `TalentManager.lua`. Side panel anchored to the talent screen with Encounter Journal-based category/instance/difficulty tree view, import/export talent strings, build match detection (green tick), copy/update/delete/load per build. Array-based storage for multiple builds per zone key.
+- **Talent Build Manager** -- Fully implemented as `TalentManager.lua`. Side panel anchored to the talent screen with Encounter Journal-based category/instance/difficulty tree view, import/export talent strings, build match detection (green tick), copy/update/delete/load per build. Array-based storage for multiple builds per zone key. **Updated 2026-02-21:** Import string decoding now uses `DecodeImportString()` with Blizzard's `ExportUtil.MakeImportDataStream` and `ReadLoadoutHeader`/`ReadLoadoutContent` to directly decode and apply talent builds from import strings without creating temporary loadouts. posY-sorted talent application ensures prerequisite ordering. `CleanupTempLoadouts()` removes leftover entries from the old import approach.
 - **Notifications Panel** -- Separated personal orders and mail notification settings into a dedicated `NotificationsPanel.lua` config tab with per-notification TTS, voice selection, alert color, and duration controls.
 - **Currency Widget** -- Fully implemented as `widgets/Currency.lua` with a detailed currency panel popup, weekly cap tracking, icon-rich display, and frame pooling. Currency list updated to TWW Season 3 values.
 - **Loot Spec Quick-Switcher** -- Partially implemented via the existing Spec widget, which already offers left-click for spec switching and right-click for loot spec switching via context menus. The mismatch warning portion is not yet implemented.
@@ -27,15 +27,37 @@ The following features from previous reviews have been implemented:
 
 ---
 
-## Changes Since Last Review (2026-02-19)
+## Changes Since Last Review (2026-02-21)
 
-The following changes were observed since the 2026-02-18 review:
+The following changes were observed since the 2026-02-20 review (git status: `ActionBars.lua`, `Combat.lua`, `Core.lua`, `Loot.lua`, `TalentManager.lua`, `TalentReminder.lua`, `config/panels/WidgetsPanel.lua` modified -- 519 insertions, 179 deletions):
 
-1. **SessionStats widget (NEW)** -- A new widget file `widgets/SessionStats.lua` (untracked in git). Tracks session-level statistics: time played this session, gold earned/spent delta, items looted count, and deaths count. Uses EventBus for `PLAYER_DEAD` and `CHAT_MSG_LOOT`. Persists across `/reload` by comparing `GetTime()` epochs. Right-click resets counters. `issecretvalue()` check on gold amount.
+1. **TalentManager.lua** (+288 lines) -- Major import string overhaul:
+   - New `DecodeImportString()` function decodes talent import strings using Blizzard's `ExportUtil.MakeImportDataStream`, `ReadLoadoutHeader`, `ReadLoadoutContent`, and `ConvertToImportLoadoutEntryInfo` APIs. Validates spec, version, and tree hash.
+   - `LoadBuild()` now handles import-string builds by decoding and applying talents directly via `C_Traits.PurchaseRank`/`SetSelection` in posY-sorted order (top-to-bottom), without creating temporary loadout configs.
+   - `_pendingImportString` flow: Import dialog stores the string, Add dialog's save handler detects it and saves the build with `importString` field instead of a talent snapshot.
+   - `CleanupTempLoadouts()` runs once on `PLAYER_ENTERING_WORLD` to delete leftover `LunaLoad`/`LunaTemp`/`LunaValidate` configs from the old import approach.
+   - `CopyBuild()` and `ShowEditDialog()` now preserve `importString` field.
+   - Update build operation clears `importString` when converting to a snapshot build.
+   - Import/export edit box improvements: explicit height, `SetMaxLetters(0)`, `OnCursorChanged` scroll sync, `OnMouseDown` focus.
+   - Header rows now clear `OnEnter`/`OnLeave` scripts to prevent stale tooltip behavior.
 
-2. **Widget Visibility Conditions (NEW)** -- `Widgets.lua` now includes a condition evaluation system. `EvaluateCondition(condition)` checks 7 states: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Conditions are re-evaluated on 8 EventBus events (combat transitions, group roster changes, zone changes). The WidgetsPanel now includes a per-widget condition dropdown. Default conditions set to `instance` for BattleRes and PullCounter; `always` for all others.
+2. **TalentReminder.lua** (+154/-87 lines) -- Talent application ordering fix:
+   - `ApplyTalents()` refactored to sort nodes by `posY`: refunds bottom-to-top (children before prerequisites), purchases top-to-bottom (prerequisites before dependents). Fixes failures where prerequisite ordering caused `PurchaseRank` to fail.
+   - `CompareTalents()` and `ValidateTalentBuild()` now handle import-string builds gracefully (return empty mismatches / valid when `savedTalents` is nil).
 
-**No previously suggested features were newly implemented** in this update beyond the two items above. The changes are primarily internal quality additions.
+3. **ActionBars.lua** -- `PatchMicroMenuLayout()` now patches both the instance table AND the metatable's `__index` table to ensure `SafeUpdateHelpTicketButtonAnchor` override is found regardless of how Blizzard resolves the method call. Fixes edge case where Blizzard mixins route through metatable.
+
+4. **Combat.lua** -- Two fixes:
+   - Added `issecretvalue(name)` guard on aura names in `ScanConsumableBuffs()` to prevent errors when aura data is combat-locked.
+   - **FIXED (from code review):** Removed broken `UNIT_SPELLCAST_SUCCEEDED` consumable tracking path that passed spell names to `C_Item.GetItemInfoInstant()`. The event is no longer registered. Comment documents that consumable usage should be tracked via action hooks instead.
+
+5. **Loot.lua** -- Added `issecretvalue(msg)` guard on `CHAT_MSG_LOOT` handler to prevent errors when message content is a secret value during combat.
+
+6. **Core.lua** -- Trailing comma fix in `DEFAULTS.widgets.sessionStats` entry (syntactic only).
+
+7. **config/panels/WidgetsPanel.lua** -- Layout refinements: scrollChild width increased from 560 to 630, dropdown widths and spacing adjusted for better fit.
+
+**Previously suggested features advanced:** The Talent Build Manager (feature #30 - Talent Manager Enhancements) saw significant progress with import string decoding and direct loading. The `issecretvalue()` guards address Architecture Improvement #56 (Standardize issecretvalue Guards).
 
 ---
 

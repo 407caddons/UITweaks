@@ -372,6 +372,8 @@ local function SetRowAsHeader(row, text, indent, isCollapsed, onClick)
 
     row:EnableMouse(true)
     row:SetScript("OnMouseDown", onClick)
+    row:SetScript("OnEnter", nil)
+    row:SetScript("OnLeave", nil)
 end
 
 local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIndex, indent, isMatch)
@@ -535,7 +537,7 @@ function TalentManager.RefreshBuildList()
                                     local diffNum = tonumber(diffID)
                                     local isRaid = IsRaidDifficulty(diffNum)
                                     local target = isRaid and raidBuilds or dungeonBuilds
-                                    local cachedName = FindInstanceInCache(instanceID)
+                                    local cachedName = FindInstanceInCache(instanceID, isRaid and "raid" or "dungeon")
                                         or (currentInstID and tonumber(instanceID) == currentInstID and currentInstName)
                                     local instName = reminder.instanceName or cachedName or
                                         ("Instance " .. tostring(instanceID))
@@ -674,12 +676,17 @@ function TalentManager.RefreshBuildList()
         row.text:SetTextColor(0.7, 0.7, 0.7)
         row.text:SetPoint("LEFT", 5, 0)
         row.editBtn:Hide()
+        row.copyBtn:Hide()
+        row.updateBtn:Hide()
         row.deleteBtn:Hide()
         row.loadBtn:Hide()
+        row.tickIcon:Hide()
         row.bg:SetColorTexture(0, 0, 0, 0)
         row:SetHeight(80)
         row:EnableMouse(false)
         row:SetScript("OnMouseDown", nil)
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
         yOffset = yOffset + 80
     end
 
@@ -727,7 +734,13 @@ local function GetOrCreateImportExportFrame()
     editBox:SetAutoFocus(false)
     editBox:SetFontObject("ChatFontNormal")
     editBox:SetWidth(350)
+    editBox:SetHeight(scrollFrame:GetHeight() or 120)
+    editBox:SetMaxLetters(0)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    editBox:SetScript("OnCursorChanged", function(self, x, y, w, h)
+        scrollFrame:SetVerticalScroll(-y)
+    end)
+    editBox:SetScript("OnMouseDown", function(self) self:SetFocus() end)
     scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
 
@@ -793,17 +806,10 @@ function TalentManager.ShowImportDialog()
 
         f:Hide()
 
-        -- Preview the build in the talent UI
-        if C_ClassTalents and C_ClassTalents.ViewLoadout then
-            local success = C_ClassTalents.ViewLoadout({}, importString)
-            if success then
-                Log("TalentManager", "Previewing imported build in talent UI", LogLevel.INFO)
-            else
-                Log("TalentManager", "Failed to preview imported build - invalid string?", LogLevel.WARN)
-            end
-        end
+        -- Store the import string — the Add dialog's save handler checks for this
+        TalentManager._pendingImportString = importString
 
-        -- Prompt to save
+        -- Prompt to save with the Add dialog
         TalentManager.ShowAddDialog(importString)
     end)
     f:Show()
@@ -1118,6 +1124,11 @@ end
 -- ============================================================
 
 function TalentManager.ShowAddDialog(importString)
+    -- Clear any stale pending import if this isn't an import flow
+    if not importString then
+        TalentManager._pendingImportString = nil
+    end
+
     local f = GetOrCreateAddEditFrame()
     f.title:SetText("Add Talent Build")
     local cache = EnsureEJCache()
@@ -1202,6 +1213,46 @@ function TalentManager.ShowAddDialog(importString)
     f.saveBtn:SetScript("OnClick", function()
         SaveBuild(f, selectedTypeRef, selectedInstanceRef, selectedInstanceNameRef, selectedDiffRef,
             function(buildName, saveInstID, saveDiffID, instName, diffName, zoneKey)
+                -- Check if this is an import (has a pending import string)
+                local pendingImport = TalentManager._pendingImportString
+                if pendingImport then
+                    TalentManager._pendingImportString = nil
+
+                    local _, className, classID = UnitClass("player")
+                    local specIndex = GetSpecialization()
+                    local specID, specName = nil, nil
+                    if specIndex then
+                        specID, specName = GetSpecializationInfo(specIndex)
+                    end
+
+                    LunaUITweaks_TalentReminders.reminders[saveInstID] = LunaUITweaks_TalentReminders.reminders[saveInstID] or {}
+                    LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID] = LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID] or {}
+                    LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][zoneKey] = LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][zoneKey] or {}
+
+                    table.insert(LunaUITweaks_TalentReminders.reminders[saveInstID][saveDiffID][zoneKey], {
+                        name = buildName,
+                        instanceName = instName,
+                        difficulty = diffName,
+                        difficultyID = saveDiffID,
+                        createdDate = date("%Y-%m-%d"),
+                        note = "",
+                        importString = pendingImport,
+                        classID = classID,
+                        className = className,
+                        specID = specID,
+                        specName = specName,
+                    })
+
+                    Log("TalentManager", "Saved imported build: " .. buildName, LogLevel.INFO)
+                    f:Hide()
+                    TalentManager.RefreshBuildList()
+                    if addonTable.Config and addonTable.Config.RefreshTalentReminderList then
+                        addonTable.Config.RefreshTalentReminderList()
+                    end
+                    return true
+                end
+
+                -- Normal save: snapshot current talents
                 local success, err, count
                 if addonTable.TalentReminder and addonTable.TalentReminder.SaveReminder then
                     success, err, count = addonTable.TalentReminder.SaveReminder(
@@ -1220,6 +1271,12 @@ function TalentManager.ShowAddDialog(importString)
                 end
                 return success
             end)
+    end)
+
+    -- Clear pending import if dialog is cancelled
+    f.cancelBtn:SetScript("OnClick", function()
+        TalentManager._pendingImportString = nil
+        f:Hide()
     end)
 
     f:Show()
@@ -1332,6 +1389,7 @@ function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, r
                     createdDate = reminder.createdDate or date("%Y-%m-%d"),
                     note = reminder.note or "",
                     talents = reminder.talents,
+                    importString = reminder.importString,
                     classID = reminder.classID,
                     className = reminder.className,
                     specID = reminder.specID,
@@ -1365,7 +1423,8 @@ function TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, remind
         difficultyID = reminder.difficultyID,
         createdDate = date("%Y-%m-%d"),
         note = reminder.note or "",
-        talents = Helpers.DeepCopy(reminder.talents),
+        talents = reminder.talents and Helpers.DeepCopy(reminder.talents),
+        importString = reminder.importString,
         classID = reminder.classID,
         className = reminder.className,
         specID = reminder.specID,
@@ -1388,11 +1447,187 @@ function TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, remind
 end
 
 -- ============================================================
+-- Import String Decoding Helpers
+-- ============================================================
+
+-- Get TalentsFrame from the Blizzard talent UI (must be loaded)
+local function GetTalentsFrame()
+    if not PlayerSpellsFrame then return nil end
+    return PlayerSpellsFrame.TalentsTab or PlayerSpellsFrame.TalentsFrame
+end
+
+-- Decode an import string into sorted loadoutEntryInfo using Blizzard's APIs
+-- Returns: loadoutEntryInfo table or nil, errorMessage
+local function DecodeImportString(importString)
+    local talentsFrame = GetTalentsFrame()
+    if not talentsFrame then
+        return nil, "Talent UI not loaded - open your talent window first"
+    end
+
+    local specID = PlayerUtil.GetCurrentSpecID()
+    local treeID = C_ClassTalents.GetTraitTreeForSpec(specID)
+    if not treeID then
+        return nil, "Could not get talent tree for current spec"
+    end
+
+    local configID = C_ClassTalents.GetActiveConfigID()
+    if not configID then
+        return nil, "No active talent config"
+    end
+
+    -- Decode base64 into a data stream
+    local importStream = ExportUtil.MakeImportDataStream(importString)
+    if not importStream or not importStream.currentRemainingValue then
+        return nil, "Invalid import string format"
+    end
+
+    -- Validate header (spec, version, tree hash)
+    local version = C_Traits.GetLoadoutSerializationVersion and C_Traits.GetLoadoutSerializationVersion() or 1
+    local headerValid, serializationVersion, headerSpecID, treeHash = talentsFrame:ReadLoadoutHeader(importStream)
+    if not headerValid then
+        return nil, "Bad import string - invalid header"
+    end
+    if serializationVersion ~= version then
+        return nil, "Import string version mismatch - string may be outdated"
+    end
+    if headerSpecID ~= specID then
+        return nil, "Import string is for a different spec"
+    end
+    if not talentsFrame:IsHashEmpty(treeHash) then
+        if not talentsFrame:HashEquals(treeHash, C_Traits.GetTreeHash(treeID)) then
+            return nil, "Talent tree has changed since this build was exported"
+        end
+    end
+
+    -- Parse loadout content
+    local ok, loadoutContent = pcall(talentsFrame.ReadLoadoutContent, talentsFrame, importStream, treeID)
+    if not ok then
+        return nil, "Failed to parse import string content"
+    end
+
+    -- Convert to structured entry info
+    local loadoutEntryInfo = talentsFrame:ConvertToImportLoadoutEntryInfo(configID, treeID, loadoutContent)
+    if not loadoutEntryInfo or #loadoutEntryInfo == 0 then
+        return nil, "Import string produced no talent entries"
+    end
+
+    -- Build node position order (Y then X) for sorted application
+    local nodeOrder = {}
+    for _, nodeID in pairs(C_Traits.GetTreeNodes(treeID)) do
+        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+        if nodeInfo.isVisible then
+            nodeOrder[nodeID] = { posY = nodeInfo.posY, posX = nodeInfo.posX }
+        end
+    end
+
+    -- Validate all nodes exist in the tree and assign order
+    local orderIndex = {}
+    do
+        local sorted = {}
+        for nodeID, pos in pairs(nodeOrder) do
+            sorted[#sorted + 1] = { nodeID = nodeID, posY = pos.posY, posX = pos.posX }
+        end
+        table.sort(sorted, function(a, b)
+            if a.posY ~= b.posY then return a.posY < b.posY end
+            return a.posX < b.posX
+        end)
+        for i, entry in ipairs(sorted) do
+            orderIndex[entry.nodeID] = i
+        end
+    end
+
+    for _, entry in pairs(loadoutEntryInfo) do
+        if not orderIndex[entry.nodeID] then
+            return nil, "Import string contains unknown talent nodes"
+        end
+    end
+
+    -- Sort entries by position (top-to-bottom, left-to-right)
+    table.sort(loadoutEntryInfo, function(a, b)
+        return orderIndex[a.nodeID] < orderIndex[b.nodeID]
+    end)
+
+    return loadoutEntryInfo, nil
+end
+
+-- ============================================================
 -- Load Build
 -- ============================================================
 
 function TalentManager.LoadBuild(reminder)
-    if not reminder or not reminder.talents then
+    if not reminder then
+        Log("TalentManager", "No build data", LogLevel.WARN)
+        return
+    end
+
+    -- Imported builds have an importString instead of a talents snapshot
+    if reminder.importString then
+        if InCombatLockdown() then
+            Log("TalentManager", "Cannot change talents while in combat", LogLevel.WARN)
+            return
+        end
+
+        local configID = C_ClassTalents.GetActiveConfigID()
+        if not configID then
+            Log("TalentManager", "No active talent config", LogLevel.WARN)
+            return
+        end
+
+        -- Decode the import string into sorted entry info
+        local loadoutEntryInfo, errMsg = DecodeImportString(reminder.importString)
+        if not loadoutEntryInfo then
+            Log("TalentManager", "Failed to load build: " .. (errMsg or "unknown error"), LogLevel.WARN)
+            return
+        end
+
+        -- Deactivate starter build if active
+        if C_ClassTalents.GetStarterBuildActive() then
+            C_ClassTalents.SetStarterBuildActive(false)
+        end
+
+        -- Reset the talent tree
+        local specID = PlayerUtil.GetCurrentSpecID()
+        local treeID = C_ClassTalents.GetTraitTreeForSpec(specID)
+        if not treeID then
+            Log("TalentManager", "Could not get talent tree", LogLevel.WARN)
+            return
+        end
+        C_Traits.ResetTree(configID, treeID)
+
+        -- Apply each talent in sorted order
+        local errorCount = 0
+        for _, entry in ipairs(loadoutEntryInfo) do
+            local nodeInfo = C_Traits.GetNodeInfo(configID, entry.nodeID)
+            local result = true
+
+            if nodeInfo.type == Enum.TraitNodeType.Single or nodeInfo.type == Enum.TraitNodeType.Tiered then
+                for rank = 1, entry.ranksPurchased do
+                    result = C_Traits.PurchaseRank(configID, entry.nodeID)
+                    if not result then break end
+                end
+            else
+                -- Selection or SubTreeSelection
+                result = C_Traits.SetSelection(configID, entry.nodeID, entry.selectionEntryID)
+            end
+
+            if not result then
+                errorCount = errorCount + 1
+            end
+        end
+
+        -- Commit the changes
+        C_Traits.CommitConfig(configID)
+
+        if errorCount > 0 then
+            Log("TalentManager", string.format("Applied build with %d node errors: %s", errorCount, reminder.name or "Unknown"), LogLevel.WARN)
+        else
+            Log("TalentManager", "Applied imported build: " .. (reminder.name or "Unknown"), LogLevel.INFO)
+        end
+        return
+    end
+
+    -- Normal builds with a talents snapshot
+    if not reminder.talents then
         Log("TalentManager", "No talent data in this build", LogLevel.WARN)
         return
     end
@@ -1452,7 +1687,9 @@ StaticPopupDialogs["LUNA_TALENTMGR_UPDATE_CONFIRM"] = {
         if reminders and reminders[data.instanceID] and reminders[data.instanceID][data.diffID]
             and reminders[data.instanceID][data.diffID][data.zoneKey]
             and reminders[data.instanceID][data.diffID][data.zoneKey][data.buildIndex] then
-            reminders[data.instanceID][data.diffID][data.zoneKey][data.buildIndex].talents = snapshot
+            local build = reminders[data.instanceID][data.diffID][data.zoneKey][data.buildIndex]
+            build.talents = snapshot
+            build.importString = nil  -- Convert from import-string build to snapshot build
             Log("TalentManager", "Updated build: " .. (data.reminder.name or "Unknown"), LogLevel.INFO)
         end
         if addonTable.TalentManager then
@@ -1487,6 +1724,23 @@ end
 -- Event Handling & Initialization
 -- ============================================================
 
+-- One-time cleanup of leftover temp loadout entries from old import approach
+local function CleanupTempLoadouts()
+    local specIndex = GetSpecialization()
+    local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+    if not specID then return end
+
+    local configIDs = C_ClassTalents.GetConfigIDsBySpecID(specID)
+    if not configIDs then return end
+
+    for _, cid in ipairs(configIDs) do
+        local info = C_Traits.GetConfigInfo(cid)
+        if info and (info.name == "LunaLoad" or info.name == "LunaTemp" or info.name == "LunaValidate") then
+            pcall(C_ClassTalents.DeleteConfig, cid)
+        end
+    end
+end
+
 local function OnTalentManagerAddonLoaded(event, arg1)
     if arg1 == addonName then
         -- Our addon loaded, try to hook if talent frame already exists
@@ -1501,10 +1755,16 @@ local function OnTalentManagerAddonLoaded(event, arg1)
     end
 end
 
+local tempLoadoutsCleaned = false
 local function OnTalentManagerEnteringWorld()
     -- Try hooking on world entry in case talent frame loaded before us
     if PlayerSpellsFrame then
         HookTalentFrame()
+    end
+    -- One-time cleanup of leftover temp loadouts from old import approach
+    if not tempLoadoutsCleaned then
+        tempLoadoutsCleaned = true
+        addonTable.Core.SafeAfter(2, CleanupTempLoadouts)
     end
 end
 

@@ -379,7 +379,9 @@ local function OnEvent(self, event, ...)
                 pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460, condition = "instance" },
                 hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480, condition = "always" },
                 currency = { enabled = false, point = "CENTER", x = 0, y = -500, condition = "always" },
-                sessionStats = { enabled = false, point = "CENTER", x = 0, y = -520, condition = "always" }
+                sessionStats = { enabled = false, point = "CENTER", x = 0, y = -520, condition = "always" },
+                lockouts = { enabled = false, point = "CENTER", x = 0, y = -540, condition = "always" },
+                xpRep = { enabled = false, point = "CENTER", x = 0, y = -560, condition = "always" },
             },
             kick = {
                 enabled = false,

@@ -1,11 +1,26 @@
 # Widget Ideas & Improvements - LunaUITweaks
 
-**Date:** 2026-02-19
-**Current Widgets (27):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats (NEW)
+**Date:** 2026-02-21
+**Previous Review:** 2026-02-20
+**Current Widgets (27):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats
 
 **New Standalone Modules (not widgets):** MplusTimer -- full M+ timer overlay. QuestAuto -- auto accept/turn-in quests. QuestReminder -- zone-based quest pickup reminders. TalentManager -- dedicated talent build management panel.
 
 Ease ratings: **Easy** (few hours), **Medium** (1-2 days), **Hard** (3+ days)
+
+---
+
+## Changes Since Last Review (2026-02-21)
+
+Git status shows modifications to 7 files (519 insertions, 179 deletions). Widget-relevant changes:
+
+- **config/panels/WidgetsPanel.lua** -- Layout refinements: scrollChild width increased from 560 to 630, anchor dropdown width adjusted to 90, condition dropdown width adjusted to 85, spacing tightened. No new widget entries added.
+- **TalentManager.lua** -- Major import string decoding additions (+288 lines). `DecodeImportString()` function, direct talent loading via `C_Traits.PurchaseRank`/`SetSelection`, `CleanupTempLoadouts()`. Strengthens the case for a Talent Loadout widget (#3) that surfaces the active loadout at a glance.
+- **Combat.lua** -- `issecretvalue()` guard on aura names in `ScanConsumableBuffs()`. Relevant to Buff/Flask Reminder widget (#8) which would need the same pattern.
+- **Loot.lua** -- `issecretvalue()` guard on `CHAT_MSG_LOOT`. Relevant to Personal Loot Tracker widget (#12) which would use the same event.
+- No new widget files were added. Widget count remains at 27.
+
+**None of the 20 numbered suggestions from the previous review have been implemented yet.**
 
 ---
 
@@ -23,6 +38,15 @@ The following ideas from previous reviews have been implemented or superseded:
 - **M+ Affix Widget** - SUPERSEDED by MplusTimer during runs. Standalone always-visible version carried forward.
 - **Session Stats Widget** - DONE (NEW 2026-02-19). Implemented as `widgets/SessionStats.lua`. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload`. Right-click resets counters.
 - **Widget Visibility Conditions** - DONE (NEW 2026-02-19). `EvaluateCondition()` supports 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Per-widget condition dropdown in config panel. BattleRes and PullCounter default to `instance`.
+
+---
+
+## Won't Do
+
+### DPS Meter Widget — Won't Do
+**Attempted (2026-02-20):** Implemented three iterations using `COMBAT_LOG_EVENT` (blocked — event removed from addon API in 12.0), `UNIT_COMBAT` (abandoned for accuracy), and finally `C_DamageMeter.GetCombatSessionFromType(Current, Dps)`.
+
+**Reason removed:** `C_DamageMeter.amountPerSecond` is a session average (total damage ÷ elapsed seconds since combat started), not a rolling-window DPS. The value increments slowly as a running average rather than reflecting burst DPS, and does not agree with other meters. WoW 12.0 removed all `COMBAT_LOG_EVENT_UNFILTERED` / `COMBAT_LOG_EVENT` access for third-party addons entirely. `C_DamageMeter` is the only addon-accessible damage API, and it only exposes session averages. Accurate per-second DPS tracking is not achievable in the addon API as of 12.0.
 
 ---
 
