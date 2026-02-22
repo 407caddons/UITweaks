@@ -190,201 +190,6 @@ function Misc.ApplyUIScale()
     ApplyUIScale()
 end
 
--- == SCROLLING COMBAT TEXT ==
-
-local sctDamageAnchor = CreateFrame("Frame", "LunaSCTDamageAnchor", UIParent, "BackdropTemplate")
-sctDamageAnchor:SetSize(150, 20)
-sctDamageAnchor:SetMovable(true)
-sctDamageAnchor:SetClampedToScreen(true)
-sctDamageAnchor:EnableMouse(false)
-sctDamageAnchor:RegisterForDrag("LeftButton")
-sctDamageAnchor:SetScript("OnDragStart", sctDamageAnchor.StartMoving)
-sctDamageAnchor:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    local point, _, relPoint, x, y = self:GetPoint()
-    UIThingsDB.misc.sct.damageAnchor = { point = point, relPoint = relPoint, x = x, y = y }
-end)
-sctDamageAnchor:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true,
-    tileSize = 16,
-    edgeSize = 16,
-    insets = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-sctDamageAnchor:SetBackdropColor(1, 0.2, 0.2, 0.6)
-sctDamageAnchor.text = sctDamageAnchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-sctDamageAnchor.text:SetPoint("CENTER")
-sctDamageAnchor.text:SetText("SCT Damage")
-sctDamageAnchor:Hide()
-
-local sctHealingAnchor = CreateFrame("Frame", "LunaSCTHealingAnchor", UIParent, "BackdropTemplate")
-sctHealingAnchor:SetSize(150, 20)
-sctHealingAnchor:SetMovable(true)
-sctHealingAnchor:SetClampedToScreen(true)
-sctHealingAnchor:EnableMouse(false)
-sctHealingAnchor:RegisterForDrag("LeftButton")
-sctHealingAnchor:SetScript("OnDragStart", sctHealingAnchor.StartMoving)
-sctHealingAnchor:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    local point, _, relPoint, x, y = self:GetPoint()
-    UIThingsDB.misc.sct.healingAnchor = { point = point, relPoint = relPoint, x = x, y = y }
-end)
-sctHealingAnchor:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true,
-    tileSize = 16,
-    edgeSize = 16,
-    insets = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-sctHealingAnchor:SetBackdropColor(0.2, 1, 0.2, 0.6)
-sctHealingAnchor.text = sctHealingAnchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-sctHealingAnchor.text:SetPoint("CENTER")
-sctHealingAnchor.text:SetText("SCT Healing")
-sctHealingAnchor:Hide()
-
--- SCT Frame Pool
-local sctPool = {}
-local sctActive = {}
-local SCT_MAX_ACTIVE = 30
-
-local function RecycleSCTFrame(f)
-    f:Hide()
-    f:ClearAllPoints()
-    for i, active in ipairs(sctActive) do
-        if active == f then
-            table.remove(sctActive, i)
-            break
-        end
-    end
-    table.insert(sctPool, f)
-end
-
-local function AcquireSCTFrame()
-    -- Cap active frames
-    if #sctActive >= SCT_MAX_ACTIVE then
-        RecycleSCTFrame(sctActive[1])
-    end
-
-    local f = table.remove(sctPool)
-    if not f then
-        f = CreateFrame("Frame", nil, UIParent)
-        f:SetFrameStrata("HIGH")
-        f.text = f:CreateFontString(nil, "OVERLAY")
-        f.text:SetPoint("CENTER")
-        f:SetScript("OnUpdate", function(self, elapsed)
-            self.elapsed = self.elapsed + elapsed
-            local progress = self.elapsed / self.duration
-            if progress >= 1 then
-                RecycleSCTFrame(self)
-                return
-            end
-            -- Move upward
-            local yOffset = self.scrollDistance * progress
-            self:ClearAllPoints()
-            self:SetPoint("BOTTOM", self.anchor, "TOP", 0, yOffset)
-            -- Fade out in last 30%
-            if progress > 0.7 then
-                self:SetAlpha(1 - ((progress - 0.7) / 0.3))
-            else
-                self:SetAlpha(1)
-            end
-        end)
-    end
-    return f
-end
-
--- category: "damage" or "healing"
-local function SpawnSCTText(amount, isCrit, category, targetName)
-    local settings = UIThingsDB.misc.sct
-    if not settings or not settings.enabled then return end
-    if category == "damage" and not settings.showDamage then return end
-    if category == "healing" and not settings.showHealing then return end
-
-    local color, anchor
-    if category == "damage" then
-        color = settings.damageColor
-        anchor = sctDamageAnchor
-    else
-        color = settings.healingColor
-        anchor = sctHealingAnchor
-    end
-
-    local f = AcquireSCTFrame()
-    local fontSize = settings.fontSize
-    if isCrit then
-        fontSize = math.floor(fontSize * settings.critScale)
-    end
-
-    f.text:SetFont(settings.font or "Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
-    f.text:SetTextColor(color.r, color.g, color.b)
-
-    -- Build display text
-    local displayText = tostring(amount)
-    if isCrit then
-        displayText = displayText .. "*"
-    end
-    local showName = (category == "damage" and settings.showTargetDamage) or
-        (category == "healing" and settings.showTargetHealing)
-    if showName and targetName and targetName ~= "" then
-        displayText = displayText .. " (" .. targetName .. ")"
-    end
-    f.text:SetText(displayText)
-
-    f:SetSize(f.text:GetStringWidth() + 10, f.text:GetStringHeight() + 4)
-    f:ClearAllPoints()
-    f:SetPoint("BOTTOM", anchor, "TOP", 0, 0)
-
-    f.elapsed = 0
-    f.duration = settings.duration
-    f.scrollDistance = settings.scrollDistance
-    f.anchor = anchor
-
-    f:SetAlpha(1)
-    f:Show()
-    table.insert(sctActive, f)
-end
-
-local function InitSCTAnchors()
-    local settings = UIThingsDB.misc.sct
-    if not settings then return end
-
-    local da = settings.damageAnchor
-    sctDamageAnchor:ClearAllPoints()
-    sctDamageAnchor:SetPoint(da.point, UIParent, da.relPoint or da.point, da.x, da.y)
-
-    local ha = settings.healingAnchor
-    sctHealingAnchor:ClearAllPoints()
-    sctHealingAnchor:SetPoint(ha.point, UIParent, ha.relPoint or ha.point, ha.x, ha.y)
-end
-
-function Misc.UpdateSCTSettings()
-    InitSCTAnchors()
-
-    local settings = UIThingsDB.misc.sct
-    if not settings then return end
-
-    if settings.locked then
-        sctDamageAnchor:EnableMouse(false)
-        sctDamageAnchor:Hide()
-        sctHealingAnchor:EnableMouse(false)
-        sctHealingAnchor:Hide()
-    else
-        sctDamageAnchor:EnableMouse(true)
-        sctDamageAnchor:Show()
-        sctHealingAnchor:EnableMouse(true)
-        sctHealingAnchor:Show()
-    end
-end
-
-function Misc.LockSCTAnchors()
-    if UIThingsDB.misc.sct then
-        UIThingsDB.misc.sct.locked = true
-        Misc.UpdateSCTSettings()
-    end
-end
-
 -- == EVENTS ==
 
 -- Slash command for /rl
@@ -494,6 +299,7 @@ end
 
 local EventBus = addonTable.EventBus
 local ApplyMiscEvents -- forward declaration
+local HookTooltipClassColors -- forward declaration
 
 -- Named event callbacks
 local function OnPlayerEnteringWorld()
@@ -502,9 +308,11 @@ local function OnPlayerEnteringWorld()
     if UIThingsDB.misc.enabled then
         ApplyUIScale()
         Misc.UpdateAutoInviteKeywords()
-        InitSCTAnchors()
         if UIThingsDB.misc.quickDestroy then
             Misc.ToggleQuickDestroy(true)
+        end
+        if UIThingsDB.misc.classColorTooltips then
+            HookTooltipClassColors()
         end
         addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
     end
@@ -596,25 +404,26 @@ local function OnChatMsgWhisper(event, msg, sender)
     end
 end
 
-local function OnUnitCombat(event, unitTarget, combatEvent, flagText, amount, schoolMask)
-    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
-    local sctSettings = UIThingsDB.misc.sct
-    if not sctSettings or not sctSettings.captureToFrames then return end
-    if not amount or issecretvalue(amount) then return end
-    if amount == 0 then return end
-    local isCrit = (not issecretvalue(flagText) and flagText == "CRITICAL")
-
-    if unitTarget == "player" then
-        if combatEvent == "HEAL" then
-            local targetName = sctSettings.showTargetHealing and UnitName("target") or nil
-            SpawnSCTText(amount, isCrit, "healing", targetName)
+-- Class-colored unit tooltip names
+local tooltipHooked = false
+HookTooltipClassColors = function()
+    if tooltipHooked then return end
+    tooltipHooked = true
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+        if tooltip ~= GameTooltip then return end
+        if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+        if not UIThingsDB.misc.classColorTooltips then return end
+        local _, unit = tooltip:GetUnit()
+        if not unit or not UnitIsPlayer(unit) then return end
+        local _, classFile = UnitClass(unit)
+        if not classFile then return end
+        local color = C_ClassColor.GetClassColor(classFile)
+        if not color then return end
+        local name = GameTooltipTextLeft1
+        if name then
+            name:SetTextColor(color.r, color.g, color.b)
         end
-    elseif string.find(unitTarget, "nameplate") then
-        if combatEvent == "WOUND" then
-            local targetName = sctSettings.showTargetDamage and UnitName(unitTarget) or nil
-            SpawnSCTText(amount, isCrit, "damage", targetName)
-        end
-    end
+    end)
 end
 
 ApplyMiscEvents = function()
@@ -625,7 +434,6 @@ ApplyMiscEvents = function()
         EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
-        EventBus.Unregister("UNIT_COMBAT", OnUnitCombat)
         return
     end
 
@@ -662,13 +470,8 @@ ApplyMiscEvents = function()
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
     end
 
-    if UIThingsDB.misc.sct then
-        SetCVar("enableFloatingCombatText", UIThingsDB.misc.sct.enabled and 1 or 0)
-        if UIThingsDB.misc.sct.captureToFrames then
-            EventBus.Register("UNIT_COMBAT", OnUnitCombat)
-        else
-            EventBus.Unregister("UNIT_COMBAT", OnUnitCombat)
-        end
+    if UIThingsDB.misc.classColorTooltips then
+        HookTooltipClassColors()
     end
 end
 

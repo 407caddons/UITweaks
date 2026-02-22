@@ -70,7 +70,12 @@ local OFFSET_BARS = {
 
 function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
     Helpers.CreateResetButton(panel, "actionBars")
-    Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.actionBars.enabled)
+
+    local function UpdateNavVisuals()
+        Helpers.UpdateModuleVisuals(panel, navButton,
+            UIThingsDB.actionBars.enabled or UIThingsDB.actionBars.skinEnabled)
+    end
+    UpdateNavVisuals()
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
@@ -109,7 +114,7 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
         enableBtn:Disable()
         enableBtn:SetChecked(false)
         UIThingsDB.actionBars.enabled = false
-        Helpers.UpdateModuleVisuals(panel, navButton, false)
+        UpdateNavVisuals()
         local warnText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         warnText:SetPoint("TOPLEFT", 20, yPos - 22)
         warnText:SetTextColor(1, 0.4, 0.4)
@@ -118,7 +123,7 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
     else
         enableBtn:SetScript("OnClick", function(self)
             UIThingsDB.actionBars.enabled = self:GetChecked()
-            Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.actionBars.enabled)
+            UpdateNavVisuals()
         end)
     end
     yPos = yPos - 30
@@ -319,6 +324,7 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
     else
         skinEnable:SetScript("OnClick", function(self)
             UIThingsDB.actionBars.skinEnabled = self:GetChecked()
+            UpdateNavVisuals()
         end)
     end
     yPos = yPos - 30

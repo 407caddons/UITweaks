@@ -10,7 +10,7 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     Helpers.CreateResetButton(panel, "minimap")
     -- Visual compatibility with sidebar navigation
-    Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.misc.minimapEnabled)
+    Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.minimap.minimapEnabled)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
@@ -20,10 +20,10 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local minimapBtn = CreateFrame("CheckButton", "UIThingsMinimapEnabled", panel, "ChatConfigCheckButtonTemplate")
     minimapBtn:SetPoint("TOPLEFT", 20, -50)
     _G[minimapBtn:GetName() .. "Text"]:SetText("Enable Minimap Customization (requires reload)")
-    minimapBtn:SetChecked(UIThingsDB.misc.minimapEnabled)
+    minimapBtn:SetChecked(UIThingsDB.minimap.minimapEnabled)
     minimapBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapEnabled = self:GetChecked()
-        Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.misc.minimapEnabled)
+        UIThingsDB.minimap.minimapEnabled = self:GetChecked()
+        Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.minimap.minimapEnabled)
     end)
 
     -- Create ScrollFrame
@@ -32,7 +32,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 620)
+    child:SetSize(600, 870)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -47,28 +47,28 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local shapeDropdown = CreateFrame("Frame", "UIThingsMinimapShape", child, "UIDropDownMenuTemplate")
     shapeDropdown:SetPoint("LEFT", shapeLabel, "RIGHT", -5, -3)
     UIDropDownMenu_SetWidth(shapeDropdown, 100)
-    UIDropDownMenu_SetText(shapeDropdown, UIThingsDB.misc.minimapShape == "SQUARE" and "Square" or "Round")
+    UIDropDownMenu_SetText(shapeDropdown, UIThingsDB.minimap.minimapShape == "SQUARE" and "Square" or "Round")
 
     UIDropDownMenu_Initialize(shapeDropdown, function(self, level)
         local info = UIDropDownMenu_CreateInfo()
 
         info.text = "Round"
-        info.checked = UIThingsDB.misc.minimapShape == "ROUND"
+        info.checked = UIThingsDB.minimap.minimapShape == "ROUND"
         info.func = function()
-            UIThingsDB.misc.minimapShape = "ROUND"
+            UIThingsDB.minimap.minimapShape = "ROUND"
             UIDropDownMenu_SetText(shapeDropdown, "Round")
-            if UIThingsDB.misc.minimapEnabled and addonTable.MinimapCustom and addonTable.MinimapCustom.ApplyMinimapShape then
+            if UIThingsDB.minimap.minimapEnabled and addonTable.MinimapCustom and addonTable.MinimapCustom.ApplyMinimapShape then
                 addonTable.MinimapCustom.ApplyMinimapShape("ROUND")
             end
         end
         UIDropDownMenu_AddButton(info)
 
         info.text = "Square"
-        info.checked = UIThingsDB.misc.minimapShape == "SQUARE"
+        info.checked = UIThingsDB.minimap.minimapShape == "SQUARE"
         info.func = function()
-            UIThingsDB.misc.minimapShape = "SQUARE"
+            UIThingsDB.minimap.minimapShape = "SQUARE"
             UIDropDownMenu_SetText(shapeDropdown, "Square")
-            if UIThingsDB.misc.minimapEnabled and addonTable.MinimapCustom and addonTable.MinimapCustom.ApplyMinimapShape then
+            if UIThingsDB.minimap.minimapEnabled and addonTable.MinimapCustom and addonTable.MinimapCustom.ApplyMinimapShape then
                 addonTable.MinimapCustom.ApplyMinimapShape("SQUARE")
             end
         end
@@ -97,7 +97,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     borderSwatch.tex = borderSwatch:CreateTexture(nil, "OVERLAY")
     borderSwatch.tex:SetAllPoints()
-    local bCol = UIThingsDB.misc.minimapBorderColor or { r = 0, g = 0, b = 0, a = 1 }
+    local bCol = UIThingsDB.minimap.minimapBorderColor or { r = 0, g = 0, b = 0, a = 1 }
     borderSwatch.tex:SetColorTexture(bCol.r, bCol.g, bCol.b, bCol.a or 1)
 
     Mixin(borderSwatch, BackdropTemplateMixin)
@@ -105,7 +105,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     borderSwatch:SetBackdropBorderColor(1, 1, 1)
 
     borderSwatch:SetScript("OnClick", function()
-        local c = UIThingsDB.misc.minimapBorderColor or { r = 0, g = 0, b = 0, a = 1 }
+        local c = UIThingsDB.minimap.minimapBorderColor or { r = 0, g = 0, b = 0, a = 1 }
         if ColorPickerFrame.SetupColorPickerAndShow then
             ColorPickerFrame:SetupColorPickerAndShow({
                 r = c.r,
@@ -118,14 +118,14 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
                     local a = ColorPickerFrame:GetColorAlpha()
                     c.r, c.g, c.b, c.a = r, g, b, a
                     borderSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.minimapBorderColor = c
+                    UIThingsDB.minimap.minimapBorderColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapBorder then
                         addonTable.MinimapCustom.UpdateMinimapBorder()
                     end
                 end,
                 cancelFunc = function()
                     borderSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-                    UIThingsDB.misc.minimapBorderColor = c
+                    UIThingsDB.minimap.minimapBorderColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapBorder then
                         addonTable.MinimapCustom.UpdateMinimapBorder()
                     end
@@ -141,13 +141,13 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     borderSlider:SetMinMaxValues(0, 10)
     borderSlider:SetValueStep(1)
     borderSlider:SetObeyStepOnDrag(true)
-    borderSlider:SetValue(UIThingsDB.misc.minimapBorderSize or 3)
+    borderSlider:SetValue(UIThingsDB.minimap.minimapBorderSize or 3)
     _G[borderSlider:GetName() .. "Low"]:SetText("0")
     _G[borderSlider:GetName() .. "High"]:SetText("10")
-    _G[borderSlider:GetName() .. "Text"]:SetText("Border Thickness: " .. (UIThingsDB.misc.minimapBorderSize or 3))
+    _G[borderSlider:GetName() .. "Text"]:SetText("Border Thickness: " .. (UIThingsDB.minimap.minimapBorderSize or 3))
     borderSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
-        UIThingsDB.misc.minimapBorderSize = value
+        UIThingsDB.minimap.minimapBorderSize = value
         _G[self:GetName() .. "Text"]:SetText("Border Thickness: " .. value)
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapBorder then
             addonTable.MinimapCustom.UpdateMinimapBorder()
@@ -161,9 +161,9 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local showMailBtn = CreateFrame("CheckButton", "UIThingsShowMail", child, "ChatConfigCheckButtonTemplate")
     showMailBtn:SetPoint("TOPLEFT", 20, -110)
     _G[showMailBtn:GetName() .. "Text"]:SetText("Show Mail Icon")
-    showMailBtn:SetChecked(UIThingsDB.misc.minimapShowMail)
+    showMailBtn:SetChecked(UIThingsDB.minimap.minimapShowMail)
     showMailBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowMail = self:GetChecked()
+        UIThingsDB.minimap.minimapShowMail = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapIcons then
             addonTable.MinimapCustom.UpdateMinimapIcons()
         end
@@ -172,9 +172,9 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local showTrackingBtn = CreateFrame("CheckButton", "UIThingsShowTracking", child, "ChatConfigCheckButtonTemplate")
     showTrackingBtn:SetPoint("TOPLEFT", 300, -110)
     _G[showTrackingBtn:GetName() .. "Text"]:SetText("Show Tracking Icon")
-    showTrackingBtn:SetChecked(UIThingsDB.misc.minimapShowTracking)
+    showTrackingBtn:SetChecked(UIThingsDB.minimap.minimapShowTracking)
     showTrackingBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowTracking = self:GetChecked()
+        UIThingsDB.minimap.minimapShowTracking = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapIcons then
             addonTable.MinimapCustom.UpdateMinimapIcons()
         end
@@ -185,9 +185,9 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         "ChatConfigCheckButtonTemplate")
     showDrawerBtn:SetPoint("TOPLEFT", 20, -135)
     _G[showDrawerBtn:GetName() .. "Text"]:SetText("Show App Drawer")
-    showDrawerBtn:SetChecked(UIThingsDB.misc.minimapShowAddonCompartment)
+    showDrawerBtn:SetChecked(UIThingsDB.minimap.minimapShowAddonCompartment)
     showDrawerBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowAddonCompartment = self:GetChecked()
+        UIThingsDB.minimap.minimapShowAddonCompartment = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapIcons then
             addonTable.MinimapCustom.UpdateMinimapIcons()
         end
@@ -197,9 +197,9 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         "ChatConfigCheckButtonTemplate")
     showWorkOrderBtn:SetPoint("TOPLEFT", 300, -135)
     _G[showWorkOrderBtn:GetName() .. "Text"]:SetText("Show Work Order Icon")
-    showWorkOrderBtn:SetChecked(UIThingsDB.misc.minimapShowCraftingOrder)
+    showWorkOrderBtn:SetChecked(UIThingsDB.minimap.minimapShowCraftingOrder)
     showWorkOrderBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowCraftingOrder = self:GetChecked()
+        UIThingsDB.minimap.minimapShowCraftingOrder = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateMinimapIcons then
             addonTable.MinimapCustom.UpdateMinimapIcons()
         end
@@ -212,17 +212,17 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local showZoneBtn = CreateFrame("CheckButton", "UIThingsShowZone", child, "ChatConfigCheckButtonTemplate")
     showZoneBtn:SetPoint("TOPLEFT", 20, -200)
     _G[showZoneBtn:GetName() .. "Text"]:SetText("Show Zone Name")
-    showZoneBtn:SetChecked(UIThingsDB.misc.minimapShowZone)
+    showZoneBtn:SetChecked(UIThingsDB.minimap.minimapShowZone)
     showZoneBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowZone = self:GetChecked()
+        UIThingsDB.minimap.minimapShowZone = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
             addonTable.MinimapCustom.UpdateZoneText()
         end
     end)
 
-    Helpers.CreateFontDropdown(child, "UIThingsZoneFont", "Zone Font:", UIThingsDB.misc.minimapZoneFont,
+    Helpers.CreateFontDropdown(child, "UIThingsZoneFont", "Zone Font:", UIThingsDB.minimap.minimapZoneFont,
         function(fontPath)
-            UIThingsDB.misc.minimapZoneFont = fontPath
+            UIThingsDB.minimap.minimapZoneFont = fontPath
             if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
                 addonTable.MinimapCustom.UpdateZoneText()
             end
@@ -234,13 +234,13 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     zoneSizeSlider:SetMinMaxValues(8, 24)
     zoneSizeSlider:SetValueStep(1)
     zoneSizeSlider:SetObeyStepOnDrag(true)
-    zoneSizeSlider:SetValue(UIThingsDB.misc.minimapZoneFontSize or 12)
+    zoneSizeSlider:SetValue(UIThingsDB.minimap.minimapZoneFontSize or 12)
     _G[zoneSizeSlider:GetName() .. "Low"]:SetText("8")
     _G[zoneSizeSlider:GetName() .. "High"]:SetText("24")
-    _G[zoneSizeSlider:GetName() .. "Text"]:SetText("Zone Font Size: " .. (UIThingsDB.misc.minimapZoneFontSize or 12))
+    _G[zoneSizeSlider:GetName() .. "Text"]:SetText("Zone Font Size: " .. (UIThingsDB.minimap.minimapZoneFontSize or 12))
     zoneSizeSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
-        UIThingsDB.misc.minimapZoneFontSize = value
+        UIThingsDB.minimap.minimapZoneFontSize = value
         _G[self:GetName() .. "Text"]:SetText("Zone Font Size: " .. value)
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
             addonTable.MinimapCustom.UpdateZoneText()
@@ -255,12 +255,12 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local zoneColorSwatch = CreateFrame("Button", nil, child)
     zoneColorSwatch:SetPoint("LEFT", zoneColorLabel, "RIGHT", 8, 0)
     zoneColorSwatch:SetSize(20, 20)
-    local zcCur = UIThingsDB.misc.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
+    local zcCur = UIThingsDB.minimap.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
     zoneColorSwatch.tex = zoneColorSwatch:CreateTexture(nil, "BACKGROUND")
     zoneColorSwatch.tex:SetAllPoints()
     zoneColorSwatch.tex:SetColorTexture(zcCur.r, zcCur.g, zcCur.b)
     zoneColorSwatch:SetScript("OnClick", function()
-        local c = UIThingsDB.misc.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
+        local c = UIThingsDB.minimap.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
         ColorPickerFrame:SetupColorPickerAndShow({
             r = c.r,
             g = c.g,
@@ -269,14 +269,14 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 c.r, c.g, c.b = r, g, b
                 zoneColorSwatch.tex:SetColorTexture(r, g, b)
-                UIThingsDB.misc.minimapZoneFontColor = c
+                UIThingsDB.minimap.minimapZoneFontColor = c
                 if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
                     addonTable.MinimapCustom.UpdateZoneText()
                 end
             end,
             cancelFunc = function()
                 zoneColorSwatch.tex:SetColorTexture(c.r, c.g, c.b)
-                UIThingsDB.misc.minimapZoneFontColor = c
+                UIThingsDB.minimap.minimapZoneFontColor = c
                 if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
                     addonTable.MinimapCustom.UpdateZoneText()
                 end
@@ -294,7 +294,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         end
     end)
 
-    local zoneOff = UIThingsDB.misc.minimapZoneOffset or { x = 0, y = 4 }
+    local zoneOff = UIThingsDB.minimap.minimapZoneOffset or { x = 0, y = 4 }
 
     local zonePosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     zonePosLabel:SetPoint("TOPLEFT", 40, -383)
@@ -307,7 +307,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     zoneXBox:SetText(tostring(math.floor(zoneOff.x + 0.5)))
     zoneXBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText()) or 0
-        local curY = UIThingsDB.misc.minimapZoneOffset and UIThingsDB.misc.minimapZoneOffset.y or 4
+        local curY = UIThingsDB.minimap.minimapZoneOffset and UIThingsDB.minimap.minimapZoneOffset.y or 4
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZonePosition then
             addonTable.MinimapCustom.UpdateZonePosition(val, curY)
         end
@@ -325,7 +325,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     zoneYBox:SetText(tostring(math.floor(zoneOff.y + 0.5)))
     zoneYBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText()) or 0
-        local curX = UIThingsDB.misc.minimapZoneOffset and UIThingsDB.misc.minimapZoneOffset.x or 0
+        local curX = UIThingsDB.minimap.minimapZoneOffset and UIThingsDB.minimap.minimapZoneOffset.x or 0
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZonePosition then
             addonTable.MinimapCustom.UpdateZonePosition(curX, val)
         end
@@ -338,17 +338,17 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local showClockBtn = CreateFrame("CheckButton", "UIThingsShowClock", child, "ChatConfigCheckButtonTemplate")
     showClockBtn:SetPoint("TOPLEFT", rightCol, -200)
     _G[showClockBtn:GetName() .. "Text"]:SetText("Show Clock")
-    showClockBtn:SetChecked(UIThingsDB.misc.minimapShowClock)
+    showClockBtn:SetChecked(UIThingsDB.minimap.minimapShowClock)
     showClockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapShowClock = self:GetChecked()
+        UIThingsDB.minimap.minimapShowClock = self:GetChecked()
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
             addonTable.MinimapCustom.UpdateClockText()
         end
     end)
 
-    Helpers.CreateFontDropdown(child, "UIThingsClockFont", "Clock Font:", UIThingsDB.misc.minimapClockFont,
+    Helpers.CreateFontDropdown(child, "UIThingsClockFont", "Clock Font:", UIThingsDB.minimap.minimapClockFont,
         function(fontPath)
-            UIThingsDB.misc.minimapClockFont = fontPath
+            UIThingsDB.minimap.minimapClockFont = fontPath
             if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
                 addonTable.MinimapCustom.UpdateClockText()
             end
@@ -360,13 +360,13 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     clockSizeSlider:SetMinMaxValues(8, 24)
     clockSizeSlider:SetValueStep(1)
     clockSizeSlider:SetObeyStepOnDrag(true)
-    clockSizeSlider:SetValue(UIThingsDB.misc.minimapClockFontSize or 11)
+    clockSizeSlider:SetValue(UIThingsDB.minimap.minimapClockFontSize or 11)
     _G[clockSizeSlider:GetName() .. "Low"]:SetText("8")
     _G[clockSizeSlider:GetName() .. "High"]:SetText("24")
-    _G[clockSizeSlider:GetName() .. "Text"]:SetText("Clock Font Size: " .. (UIThingsDB.misc.minimapClockFontSize or 11))
+    _G[clockSizeSlider:GetName() .. "Text"]:SetText("Clock Font Size: " .. (UIThingsDB.minimap.minimapClockFontSize or 11))
     clockSizeSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
-        UIThingsDB.misc.minimapClockFontSize = value
+        UIThingsDB.minimap.minimapClockFontSize = value
         _G[self:GetName() .. "Text"]:SetText("Clock Font Size: " .. value)
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
             addonTable.MinimapCustom.UpdateClockText()
@@ -381,12 +381,12 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local clockColorSwatch = CreateFrame("Button", nil, child)
     clockColorSwatch:SetPoint("LEFT", clockColorLabel, "RIGHT", 8, 0)
     clockColorSwatch:SetSize(20, 20)
-    local ccCur = UIThingsDB.misc.minimapClockFontColor or { r = 1, g = 1, b = 1 }
+    local ccCur = UIThingsDB.minimap.minimapClockFontColor or { r = 1, g = 1, b = 1 }
     clockColorSwatch.tex = clockColorSwatch:CreateTexture(nil, "BACKGROUND")
     clockColorSwatch.tex:SetAllPoints()
     clockColorSwatch.tex:SetColorTexture(ccCur.r, ccCur.g, ccCur.b)
     clockColorSwatch:SetScript("OnClick", function()
-        local c = UIThingsDB.misc.minimapClockFontColor or { r = 1, g = 1, b = 1 }
+        local c = UIThingsDB.minimap.minimapClockFontColor or { r = 1, g = 1, b = 1 }
         ColorPickerFrame:SetupColorPickerAndShow({
             r = c.r,
             g = c.g,
@@ -395,14 +395,14 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
                 local r, g, b = ColorPickerFrame:GetColorRGB()
                 c.r, c.g, c.b = r, g, b
                 clockColorSwatch.tex:SetColorTexture(r, g, b)
-                UIThingsDB.misc.minimapClockFontColor = c
+                UIThingsDB.minimap.minimapClockFontColor = c
                 if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
                     addonTable.MinimapCustom.UpdateClockText()
                 end
             end,
             cancelFunc = function()
                 clockColorSwatch.tex:SetColorTexture(c.r, c.g, c.b)
-                UIThingsDB.misc.minimapClockFontColor = c
+                UIThingsDB.minimap.minimapClockFontColor = c
                 if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
                     addonTable.MinimapCustom.UpdateClockText()
                 end
@@ -418,22 +418,22 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local clockFormatDropdown = CreateFrame("Frame", "UIThingsClockFormat", child, "UIDropDownMenuTemplate")
     clockFormatDropdown:SetPoint("LEFT", clockFormatLabel, "RIGHT", -5, -3)
     UIDropDownMenu_SetWidth(clockFormatDropdown, 50)
-    UIDropDownMenu_SetText(clockFormatDropdown, UIThingsDB.misc.minimapClockFormat or "24H")
+    UIDropDownMenu_SetText(clockFormatDropdown, UIThingsDB.minimap.minimapClockFormat or "24H")
 
     UIDropDownMenu_Initialize(clockFormatDropdown, function(self, level)
         local info = UIDropDownMenu_CreateInfo()
         info.text = "24H"
-        info.checked = (UIThingsDB.misc.minimapClockFormat or "24H") == "24H"
+        info.checked = (UIThingsDB.minimap.minimapClockFormat or "24H") == "24H"
         info.func = function()
-            UIThingsDB.misc.minimapClockFormat = "24H"
+            UIThingsDB.minimap.minimapClockFormat = "24H"
             UIDropDownMenu_SetText(clockFormatDropdown, "24H")
         end
         UIDropDownMenu_AddButton(info)
 
         info.text = "12H"
-        info.checked = UIThingsDB.misc.minimapClockFormat == "12H"
+        info.checked = UIThingsDB.minimap.minimapClockFormat == "12H"
         info.func = function()
-            UIThingsDB.misc.minimapClockFormat = "12H"
+            UIThingsDB.minimap.minimapClockFormat = "12H"
             UIDropDownMenu_SetText(clockFormatDropdown, "12H")
         end
         UIDropDownMenu_AddButton(info)
@@ -443,23 +443,23 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     local clockSourceDropdown = CreateFrame("Frame", "UIThingsClockSource", child, "UIDropDownMenuTemplate")
     clockSourceDropdown:SetPoint("LEFT", clockFormatDropdown, "RIGHT", -30, 0)
     UIDropDownMenu_SetWidth(clockSourceDropdown, 80)
-    local srcText = (UIThingsDB.misc.minimapClockTimeSource or "local") == "local" and "Local" or "Server"
+    local srcText = (UIThingsDB.minimap.minimapClockTimeSource or "local") == "local" and "Local" or "Server"
     UIDropDownMenu_SetText(clockSourceDropdown, srcText)
 
     UIDropDownMenu_Initialize(clockSourceDropdown, function(self, level)
         local info = UIDropDownMenu_CreateInfo()
         info.text = "Local"
-        info.checked = (UIThingsDB.misc.minimapClockTimeSource or "local") == "local"
+        info.checked = (UIThingsDB.minimap.minimapClockTimeSource or "local") == "local"
         info.func = function()
-            UIThingsDB.misc.minimapClockTimeSource = "local"
+            UIThingsDB.minimap.minimapClockTimeSource = "local"
             UIDropDownMenu_SetText(clockSourceDropdown, "Local")
         end
         UIDropDownMenu_AddButton(info)
 
         info.text = "Server"
-        info.checked = UIThingsDB.misc.minimapClockTimeSource == "server"
+        info.checked = UIThingsDB.minimap.minimapClockTimeSource == "server"
         info.func = function()
-            UIThingsDB.misc.minimapClockTimeSource = "server"
+            UIThingsDB.minimap.minimapClockTimeSource = "server"
             UIDropDownMenu_SetText(clockSourceDropdown, "Server")
         end
         UIDropDownMenu_AddButton(info)
@@ -475,7 +475,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         end
     end)
 
-    local clockOff = UIThingsDB.misc.minimapClockOffset or { x = 0, y = -4 }
+    local clockOff = UIThingsDB.minimap.minimapClockOffset or { x = 0, y = -4 }
 
     local clockPosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     clockPosLabel:SetPoint("TOPLEFT", rightCol + 20, -418)
@@ -488,7 +488,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     clockXBox:SetText(tostring(math.floor(clockOff.x + 0.5)))
     clockXBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText()) or 0
-        local curY = UIThingsDB.misc.minimapClockOffset and UIThingsDB.misc.minimapClockOffset.y or -4
+        local curY = UIThingsDB.minimap.minimapClockOffset and UIThingsDB.minimap.minimapClockOffset.y or -4
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockPosition then
             addonTable.MinimapCustom.UpdateClockPosition(val, curY)
         end
@@ -506,32 +506,158 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     clockYBox:SetText(tostring(math.floor(clockOff.y + 0.5)))
     clockYBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText()) or 0
-        local curX = UIThingsDB.misc.minimapClockOffset and UIThingsDB.misc.minimapClockOffset.x or 0
+        local curX = UIThingsDB.minimap.minimapClockOffset and UIThingsDB.minimap.minimapClockOffset.x or 0
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockPosition then
             addonTable.MinimapCustom.UpdateClockPosition(curX, val)
         end
         self:ClearFocus()
     end)
 
+    -- == Coordinates ==
+    Helpers.CreateSectionHeader(child, "Coordinates", -450)
+
+    local showCoordsBtn = CreateFrame("CheckButton", "UIThingsShowCoords", child, "ChatConfigCheckButtonTemplate")
+    showCoordsBtn:SetPoint("TOPLEFT", 20, -480)
+    _G[showCoordsBtn:GetName() .. "Text"]:SetText("Show Coordinates")
+    showCoordsBtn:SetChecked(UIThingsDB.minimap.minimapShowCoords)
+    showCoordsBtn:SetScript("OnClick", function(self)
+        UIThingsDB.minimap.minimapShowCoords = self:GetChecked()
+        if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
+            addonTable.MinimapCustom.UpdateCoordsText()
+        end
+    end)
+
+    Helpers.CreateFontDropdown(child, "UIThingsCoordsFont", "Font:", UIThingsDB.minimap.minimapCoordsFont,
+        function(fontPath)
+            UIThingsDB.minimap.minimapCoordsFont = fontPath
+            if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
+                addonTable.MinimapCustom.UpdateCoordsText()
+            end
+        end, 40, -510)
+
+    local coordsSizeSlider = CreateFrame("Slider", "UIThingsCoordsFontSize", child, "OptionsSliderTemplate")
+    coordsSizeSlider:SetPoint("TOPLEFT", 40, -580)
+    coordsSizeSlider:SetWidth(200)
+    coordsSizeSlider:SetMinMaxValues(8, 24)
+    coordsSizeSlider:SetValueStep(1)
+    coordsSizeSlider:SetObeyStepOnDrag(true)
+    coordsSizeSlider:SetValue(UIThingsDB.minimap.minimapCoordsFontSize or 11)
+    _G[coordsSizeSlider:GetName() .. "Low"]:SetText("8")
+    _G[coordsSizeSlider:GetName() .. "High"]:SetText("24")
+    _G[coordsSizeSlider:GetName() .. "Text"]:SetText("Font Size: " .. (UIThingsDB.minimap.minimapCoordsFontSize or 11))
+    coordsSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        UIThingsDB.minimap.minimapCoordsFontSize = value
+        _G[self:GetName() .. "Text"]:SetText("Font Size: " .. value)
+        if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
+            addonTable.MinimapCustom.UpdateCoordsText()
+        end
+    end)
+
+    -- Coords Font Color
+    local coordsColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    coordsColorLabel:SetPoint("TOPLEFT", 40, -608)
+    coordsColorLabel:SetText("Font Color:")
+
+    local coordsColorSwatch = CreateFrame("Button", nil, child)
+    coordsColorSwatch:SetPoint("LEFT", coordsColorLabel, "RIGHT", 8, 0)
+    coordsColorSwatch:SetSize(20, 20)
+    local coordsCur = UIThingsDB.minimap.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
+    coordsColorSwatch.tex = coordsColorSwatch:CreateTexture(nil, "BACKGROUND")
+    coordsColorSwatch.tex:SetAllPoints()
+    coordsColorSwatch.tex:SetColorTexture(coordsCur.r, coordsCur.g, coordsCur.b)
+    coordsColorSwatch:SetScript("OnClick", function()
+        local c = UIThingsDB.minimap.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = c.r,
+            g = c.g,
+            b = c.b,
+            swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                c = { r = r, g = g, b = b }
+                coordsColorSwatch.tex:SetColorTexture(r, g, b)
+                UIThingsDB.minimap.minimapCoordsFontColor = c
+                if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
+                    addonTable.MinimapCustom.UpdateCoordsText()
+                end
+            end,
+            cancelFunc = function()
+                coordsColorSwatch.tex:SetColorTexture(c.r, c.g, c.b)
+                UIThingsDB.minimap.minimapCoordsFontColor = c
+                if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
+                    addonTable.MinimapCustom.UpdateCoordsText()
+                end
+            end,
+        })
+    end)
+
+    local lockCoordsBtn = CreateFrame("CheckButton", "UIThingsLockCoords", child, "ChatConfigCheckButtonTemplate")
+    lockCoordsBtn:SetPoint("TOPLEFT", 20, -635)
+    _G[lockCoordsBtn:GetName() .. "Text"]:SetText("Lock Coords Position")
+    lockCoordsBtn:SetChecked(true)
+    lockCoordsBtn:SetScript("OnClick", function(self)
+        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetCoordsLocked then
+            addonTable.MinimapCustom.SetCoordsLocked(self:GetChecked())
+        end
+    end)
+
+    local coordsOff = UIThingsDB.minimap.minimapCoordsOffset or { x = 0, y = -20 }
+
+    local coordsPosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    coordsPosLabel:SetPoint("TOPLEFT", 40, -663)
+    coordsPosLabel:SetText("X:")
+
+    local coordsXBox = CreateFrame("EditBox", "UIThingsMinimapCoordsX", child, "InputBoxTemplate")
+    coordsXBox:SetPoint("LEFT", coordsPosLabel, "RIGHT", 5, 0)
+    coordsXBox:SetSize(45, 20)
+    coordsXBox:SetAutoFocus(false)
+    coordsXBox:SetText(tostring(math.floor(coordsOff.x + 0.5)))
+    coordsXBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText()) or 0
+        local curY = UIThingsDB.minimap.minimapCoordsOffset and UIThingsDB.minimap.minimapCoordsOffset.y or -20
+        if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsPosition then
+            addonTable.MinimapCustom.UpdateCoordsPosition(val, curY)
+        end
+        self:ClearFocus()
+    end)
+
+    local coordsYLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    coordsYLabel:SetPoint("LEFT", coordsXBox, "RIGHT", 10, 0)
+    coordsYLabel:SetText("Y:")
+
+    local coordsYBox = CreateFrame("EditBox", "UIThingsMinimapCoordsY", child, "InputBoxTemplate")
+    coordsYBox:SetPoint("LEFT", coordsYLabel, "RIGHT", 5, 0)
+    coordsYBox:SetSize(45, 20)
+    coordsYBox:SetAutoFocus(false)
+    coordsYBox:SetText(tostring(math.floor(coordsOff.y + 0.5)))
+    coordsYBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText()) or 0
+        local curX = UIThingsDB.minimap.minimapCoordsOffset and UIThingsDB.minimap.minimapCoordsOffset.x or 0
+        if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsPosition then
+            addonTable.MinimapCustom.UpdateCoordsPosition(curX, val)
+        end
+        self:ClearFocus()
+    end)
+
     -- == Minimap Drawer ==
-    Helpers.CreateSectionHeader(child, "Minimap Drawer", -450)
+    Helpers.CreateSectionHeader(child, "Minimap Drawer", -700)
 
     local drawerEnableBtn = CreateFrame("CheckButton", "UIThingsMinimapDrawerEnabled", child,
         "ChatConfigCheckButtonTemplate")
-    drawerEnableBtn:SetPoint("TOPLEFT", 20, -480)
+    drawerEnableBtn:SetPoint("TOPLEFT", 20, -730)
     drawerEnableBtn:SetHitRectInsets(0, -200, 0, 0)
     _G[drawerEnableBtn:GetName() .. "Text"]:SetText("Enable Minimap Drawer (requires reload)")
-    drawerEnableBtn:SetChecked(UIThingsDB.misc.minimapDrawerEnabled)
+    drawerEnableBtn:SetChecked(UIThingsDB.minimap.minimapDrawerEnabled)
     drawerEnableBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.minimapDrawerEnabled = self:GetChecked()
+        UIThingsDB.minimap.minimapDrawerEnabled = self:GetChecked()
     end)
 
     local drawerLockBtn = CreateFrame("CheckButton", "UIThingsMinimapDrawerLocked", child,
         "ChatConfigCheckButtonTemplate")
-    drawerLockBtn:SetPoint("TOPLEFT", 20, -505)
+    drawerLockBtn:SetPoint("TOPLEFT", 20, -755)
     drawerLockBtn:SetHitRectInsets(0, -130, 0, 0)
     _G[drawerLockBtn:GetName() .. "Text"]:SetText("Lock Drawer Position")
-    drawerLockBtn:SetChecked(UIThingsDB.misc.minimapDrawerLocked)
+    drawerLockBtn:SetChecked(UIThingsDB.minimap.minimapDrawerLocked)
     drawerLockBtn:SetScript("OnClick", function(self)
         if addonTable.MinimapCustom and addonTable.MinimapCustom.SetDrawerLocked then
             addonTable.MinimapCustom.SetDrawerLocked(self:GetChecked())
@@ -540,7 +666,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     -- Background Color
     local drawerBgLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    drawerBgLabel:SetPoint("TOPLEFT", 300, -480)
+    drawerBgLabel:SetPoint("TOPLEFT", 300, -730)
     drawerBgLabel:SetText("Background:")
 
     local drawerBgSwatch = CreateFrame("Button", nil, child)
@@ -549,7 +675,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     drawerBgSwatch.tex = drawerBgSwatch:CreateTexture(nil, "OVERLAY")
     drawerBgSwatch.tex:SetAllPoints()
-    local bgCol = UIThingsDB.misc.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
+    local bgCol = UIThingsDB.minimap.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
     drawerBgSwatch.tex:SetColorTexture(bgCol.r, bgCol.g, bgCol.b, bgCol.a or 0.7)
 
     Mixin(drawerBgSwatch, BackdropTemplateMixin)
@@ -557,7 +683,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     drawerBgSwatch:SetBackdropBorderColor(1, 1, 1)
 
     drawerBgSwatch:SetScript("OnClick", function()
-        local c = UIThingsDB.misc.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
+        local c = UIThingsDB.minimap.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
         if ColorPickerFrame.SetupColorPickerAndShow then
             ColorPickerFrame:SetupColorPickerAndShow({
                 r = c.r,
@@ -570,14 +696,14 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
                     local a = ColorPickerFrame:GetColorAlpha()
                     c.r, c.g, c.b, c.a = r, g, b, a
                     drawerBgSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.minimapDrawerBgColor = c
+                    UIThingsDB.minimap.minimapDrawerBgColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateDrawerBorder then
                         addonTable.MinimapCustom.UpdateDrawerBorder()
                     end
                 end,
                 cancelFunc = function()
                     drawerBgSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-                    UIThingsDB.misc.minimapDrawerBgColor = c
+                    UIThingsDB.minimap.minimapDrawerBgColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateDrawerBorder then
                         addonTable.MinimapCustom.UpdateDrawerBorder()
                     end
@@ -588,7 +714,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     -- Border Color
     local drawerBorderLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    drawerBorderLabel:SetPoint("TOPLEFT", 300, -505)
+    drawerBorderLabel:SetPoint("TOPLEFT", 300, -755)
     drawerBorderLabel:SetText("Border Color:")
 
     local drawerBorderSwatch = CreateFrame("Button", nil, child)
@@ -597,7 +723,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     drawerBorderSwatch.tex = drawerBorderSwatch:CreateTexture(nil, "OVERLAY")
     drawerBorderSwatch.tex:SetAllPoints()
-    local dbCol = UIThingsDB.misc.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
+    local dbCol = UIThingsDB.minimap.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
     drawerBorderSwatch.tex:SetColorTexture(dbCol.r, dbCol.g, dbCol.b, dbCol.a or 1)
 
     Mixin(drawerBorderSwatch, BackdropTemplateMixin)
@@ -605,7 +731,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     drawerBorderSwatch:SetBackdropBorderColor(1, 1, 1)
 
     drawerBorderSwatch:SetScript("OnClick", function()
-        local c = UIThingsDB.misc.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
+        local c = UIThingsDB.minimap.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
         if ColorPickerFrame.SetupColorPickerAndShow then
             ColorPickerFrame:SetupColorPickerAndShow({
                 r = c.r,
@@ -618,14 +744,14 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
                     local a = ColorPickerFrame:GetColorAlpha()
                     c.r, c.g, c.b, c.a = r, g, b, a
                     drawerBorderSwatch.tex:SetColorTexture(r, g, b, a)
-                    UIThingsDB.misc.minimapDrawerBorderColor = c
+                    UIThingsDB.minimap.minimapDrawerBorderColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateDrawerBorder then
                         addonTable.MinimapCustom.UpdateDrawerBorder()
                     end
                 end,
                 cancelFunc = function()
                     drawerBorderSwatch.tex:SetColorTexture(c.r, c.g, c.b, c.a)
-                    UIThingsDB.misc.minimapDrawerBorderColor = c
+                    UIThingsDB.minimap.minimapDrawerBorderColor = c
                     if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateDrawerBorder then
                         addonTable.MinimapCustom.UpdateDrawerBorder()
                     end
@@ -636,19 +762,19 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     -- Border Thickness Slider
     local drawerBorderSlider = CreateFrame("Slider", "UIThingsDrawerBorderSize", child, "OptionsSliderTemplate")
-    drawerBorderSlider:SetPoint("TOPLEFT", 300, -530)
+    drawerBorderSlider:SetPoint("TOPLEFT", 300, -780)
     drawerBorderSlider:SetWidth(200)
     drawerBorderSlider:SetMinMaxValues(0, 5)
     drawerBorderSlider:SetValueStep(1)
     drawerBorderSlider:SetObeyStepOnDrag(true)
-    drawerBorderSlider:SetValue(UIThingsDB.misc.minimapDrawerBorderSize or 2)
+    drawerBorderSlider:SetValue(UIThingsDB.minimap.minimapDrawerBorderSize or 2)
     _G[drawerBorderSlider:GetName() .. "Low"]:SetText("0")
     _G[drawerBorderSlider:GetName() .. "High"]:SetText("5")
     _G[drawerBorderSlider:GetName() .. "Text"]:SetText("Border Thickness: " ..
-        (UIThingsDB.misc.minimapDrawerBorderSize or 2))
+        (UIThingsDB.minimap.minimapDrawerBorderSize or 2))
     drawerBorderSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
-        UIThingsDB.misc.minimapDrawerBorderSize = value
+        UIThingsDB.minimap.minimapDrawerBorderSize = value
         _G[self:GetName() .. "Text"]:SetText("Border Thickness: " .. value)
         if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateDrawerBorder then
             addonTable.MinimapCustom.UpdateDrawerBorder()

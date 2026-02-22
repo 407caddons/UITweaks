@@ -27,7 +27,9 @@ function addonTable.Config.Initialize()
         configWindow:SetScript("OnDragStop", configWindow.StopMovingOrSizing)
 
         configWindow:SetScript("OnHide", function()
-            -- Auto-lock frames on close
+            -- Auto-lock all movable/unlockable elements on config close
+
+            -- Frames (each frame has its own locked flag)
             if UIThingsDB.frames and UIThingsDB.frames.list then
                 for _, f in ipairs(UIThingsDB.frames.list) do
                     f.locked = true
@@ -37,21 +39,107 @@ function addonTable.Config.Initialize()
                 end
             end
 
-            -- Auto-lock Loot Anchor
+            -- Loot Anchor
             if addonTable.Loot and addonTable.Loot.LockAnchor then
                 addonTable.Loot.LockAnchor()
             end
 
-            -- Auto-lock SCT Anchors
-            if addonTable.Misc and addonTable.Misc.LockSCTAnchors then
-                addonTable.Misc.LockSCTAnchors()
+            -- SCT Anchors
+            if addonTable.SCT and addonTable.SCT.LockSCTAnchors then
+                addonTable.SCT.LockSCTAnchors()
             end
 
-            -- Auto-lock Widgets
+            -- Widgets
             if UIThingsDB.widgets then
                 UIThingsDB.widgets.locked = true
                 if addonTable.Widgets and addonTable.Widgets.UpdateVisuals then
                     addonTable.Widgets.UpdateVisuals()
+                end
+            end
+
+            -- Tracker
+            if UIThingsDB.tracker then
+                UIThingsDB.tracker.locked = true
+                if addonTable.ObjectiveTracker and addonTable.ObjectiveTracker.UpdateSettings then
+                    addonTable.ObjectiveTracker.UpdateSettings()
+                end
+            end
+
+            -- Combat Timer
+            if UIThingsDB.combat then
+                UIThingsDB.combat.locked = true
+                if UIThingsDB.combat.reminders then
+                    UIThingsDB.combat.reminders.locked = true
+                end
+                if addonTable.Combat and addonTable.Combat.UpdateSettings then
+                    addonTable.Combat.UpdateSettings()
+                end
+            end
+
+            -- Cast Bar
+            if UIThingsDB.castBar then
+                UIThingsDB.castBar.locked = true
+                if addonTable.CastBar and addonTable.CastBar.UpdateSettings then
+                    addonTable.CastBar.UpdateSettings()
+                end
+            end
+
+            -- Kick CDs
+            if UIThingsDB.kick then
+                UIThingsDB.kick.locked = true
+                if addonTable.Kick and addonTable.Kick.UpdateSettings then
+                    addonTable.Kick.UpdateSettings()
+                end
+            end
+
+            -- Chat Skin
+            if UIThingsDB.chatSkin then
+                UIThingsDB.chatSkin.locked = true
+                if addonTable.ChatSkin and addonTable.ChatSkin.UpdateSettings then
+                    addonTable.ChatSkin.UpdateSettings()
+                end
+            end
+
+            -- Action Bars
+            if UIThingsDB.actionBars then
+                UIThingsDB.actionBars.locked = true
+                if addonTable.ActionBars and addonTable.ActionBars.SetDrawerLocked then
+                    addonTable.ActionBars.SetDrawerLocked(true)
+                end
+            end
+
+            -- M+ Timer
+            if UIThingsDB.mplusTimer then
+                UIThingsDB.mplusTimer.locked = true
+                if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
+                    addonTable.MplusTimer.UpdateSettings()
+                end
+            end
+
+            -- Coordinates / Waypoints
+            if UIThingsDB.coordinates then
+                UIThingsDB.coordinates.locked = true
+                if addonTable.Coordinates and addonTable.Coordinates.UpdateSettings then
+                    addonTable.Coordinates.UpdateSettings()
+                end
+            end
+
+            -- Minimap (position, zone, clock, drawer)
+            if addonTable.MinimapCustom then
+                if addonTable.MinimapCustom.SetMinimapLocked then
+                    addonTable.MinimapCustom.SetMinimapLocked(true)
+                end
+                if addonTable.MinimapCustom.SetZoneLocked then
+                    addonTable.MinimapCustom.SetZoneLocked(true)
+                end
+                if addonTable.MinimapCustom.SetClockLocked then
+                    addonTable.MinimapCustom.SetClockLocked(true)
+                end
+                if addonTable.MinimapCustom.SetCoordsLocked then
+                    addonTable.MinimapCustom.SetCoordsLocked(true)
+                end
+                if addonTable.MinimapCustom.SetDrawerLocked then
+                    addonTable.MinimapCustom.SetDrawerLocked(true)
                 end
             end
 
@@ -90,24 +178,26 @@ function addonTable.Config.Initialize()
         local modules = {
             { id = 1,  name = "Tracker",          key = "tracker",       icon = "Interface\\Icons\\Inv_Misc_Book_09" },
             { id = 2,  name = "Quest Reminders",  key = "questReminder", icon = "Interface\\Icons\\Inv_Misc_Book_08" },
-            { id = 3,  name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 3,  name = "Quest Auto",       key = "questAuto",     icon = "Interface\\Icons\\Inv_Misc_Book_08" },
             { id = 4,  name = "Combat",           key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
-            { id = 5,  name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
-            { id = 6,  name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 7,  name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 8,  name = "Minimap",          key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
-            { id = 9,  name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 10, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 11, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 12, name = "Chat",             key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
-            { id = 13, name = "Kick CDs",         key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
-            { id = 14, name = "Action Bars",      key = "actionBars",    icon = "Interface\\Icons\\Inv_Misc_Desecrated_PlateChest" },
-            { id = 15, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
-            { id = 16, name = "Cast Bar",         key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = 5,  name = "SCT",              key = "sct",           icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
+            { id = 6,  name = "Cast Bar",         key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = 7,  name = "Kick CDs",         key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 8,  name = "M+ Timer",         key = "mplusTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
+            { id = 9,  name = "Action Bars",      key = "actionBars",    icon = "Interface\\Icons\\Inv_Misc_Desecrated_PlateChest" },
+            { id = 10, name = "Minimap",          key = "minimap",        icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 11, name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
+            { id = 12, name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 13, name = "Chat",             key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
+            { id = 14, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 15, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 16, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
             { id = 17, name = "Reagents",         key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
-            { id = 18, name = "Quest Auto",       key = "questAuto",     icon = "Interface\\Icons\\Inv_Misc_Book_08" },
-            { id = 19, name = "M+ Timer",         key = "mplusTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
-            { id = 20, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 18, name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 19, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 20, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 21, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 22, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -143,6 +233,10 @@ function addonTable.Config.Initialize()
         local miscPanel = CreateFrame("Frame", nil, contentContainer)
         miscPanel:SetAllPoints()
         miscPanel:Hide()
+
+        local sctPanel = CreateFrame("Frame", nil, contentContainer)
+        sctPanel:SetAllPoints()
+        sctPanel:Hide()
 
         local minimapPanel = CreateFrame("Frame", nil, contentContainer)
         minimapPanel:SetAllPoints()
@@ -200,6 +294,10 @@ function addonTable.Config.Initialize()
         talentManagerPanel:SetAllPoints()
         talentManagerPanel:Hide()
 
+        local coordinatesPanel = CreateFrame("Frame", nil, contentContainer)
+        coordinatesPanel:SetAllPoints()
+        coordinatesPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -207,6 +305,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.frames = framesPanel
         addonTable.ConfigPanels.loot = lootPanel
         addonTable.ConfigPanels.misc = miscPanel
+        addonTable.ConfigPanels.sct = sctPanel
         addonTable.ConfigPanels.minimap = minimapPanel
         addonTable.ConfigPanels.talent = talentPanel
         addonTable.ConfigPanels.widgets = widgetsPanel
@@ -221,29 +320,32 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.questReminder = questReminderPanel
         addonTable.ConfigPanels.mplusTimer = mplusTimerPanel
         addonTable.ConfigPanels.talentManager = talentManagerPanel
+        addonTable.ConfigPanels.coordinates = coordinatesPanel
 
         -- Map IDs to Panels
         local idToPanel = {
             [1] = trackerPanel,
             [2] = questReminderPanel,
-            [3] = vendorPanel,
+            [3] = questAutoPanel,
             [4] = combatPanel,
-            [5] = framesPanel,
-            [6] = lootPanel,
-            [7] = miscPanel,
-            [8] = minimapPanel,
-            [9] = talentManagerPanel,
-            [10] = talentPanel,
-            [11] = widgetsPanel,
-            [12] = chatSkinPanel,
-            [13] = kickPanel,
-            [14] = actionBarsPanel,
-            [15] = notificationsPanel,
-            [16] = castBarPanel,
+            [5] = sctPanel,
+            [6] = castBarPanel,
+            [7] = kickPanel,
+            [8] = mplusTimerPanel,
+            [9] = actionBarsPanel,
+            [10] = minimapPanel,
+            [11] = coordinatesPanel,
+            [12] = framesPanel,
+            [13] = chatSkinPanel,
+            [14] = vendorPanel,
+            [15] = lootPanel,
+            [16] = notificationsPanel,
             [17] = reagentsPanel,
-            [18] = questAutoPanel,
-            [19] = mplusTimerPanel,
-            [20] = addonVersionsPanel,
+            [18] = talentManagerPanel,
+            [19] = talentPanel,
+            [20] = miscPanel,
+            [21] = widgetsPanel,
+            [22] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -281,7 +383,7 @@ function addonTable.Config.Initialize()
             if id == 2 and addonTable.Config.RefreshQuestReminderList then
                 addonTable.Config.RefreshQuestReminderList()
             end
-            if id == 10 and addonTable.Config.RefreshTalentReminderList then
+            if id == 19 and addonTable.Config.RefreshTalentReminderList then
                 addonTable.Config.RefreshTalentReminderList()
             end
             if id == 17 and addonTable.Config.RefreshReagentsList then
@@ -339,59 +441,65 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.QuestReminder then
                 addonTable.ConfigSetup.QuestReminder(questReminderPanel, navButtons[2], configWindow)
             end
-            if addonTable.ConfigSetup.Vendor then
-                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[3], configWindow)
+            if addonTable.ConfigSetup.QuestAuto then
+                addonTable.ConfigSetup.QuestAuto(questAutoPanel, navButtons[3], configWindow)
             end
             if addonTable.ConfigSetup.Combat then
                 addonTable.ConfigSetup.Combat(combatPanel, navButtons[4], configWindow)
             end
-            if addonTable.ConfigSetup.Frames then
-                addonTable.ConfigSetup.Frames(framesPanel, navButtons[5], configWindow)
-            end
-            if addonTable.ConfigSetup.Loot then
-                addonTable.ConfigSetup.Loot(lootPanel, navButtons[6], configWindow)
-            end
-            if addonTable.ConfigSetup.Misc then
-                addonTable.ConfigSetup.Misc(miscPanel, navButtons[7], configWindow)
-            end
-            if addonTable.ConfigSetup.Minimap then
-                addonTable.ConfigSetup.Minimap(minimapPanel, navButtons[8], configWindow)
-            end
-            if addonTable.ConfigSetup.TalentManager then
-                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[9], configWindow)
-            end
-            if addonTable.ConfigSetup.Talent then
-                addonTable.ConfigSetup.Talent(talentPanel, navButtons[10], configWindow)
-            end
-            if addonTable.ConfigSetup.Widgets then
-                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[11], configWindow)
-            end
-            if addonTable.ConfigSetup.ChatSkin then
-                addonTable.ConfigSetup.ChatSkin(chatSkinPanel, navButtons[12], configWindow)
-            end
-            if addonTable.ConfigSetup.Kick then
-                addonTable.ConfigSetup.Kick(kickPanel, navButtons[13], configWindow)
-            end
-            if addonTable.ConfigSetup.ActionBars then
-                addonTable.ConfigSetup.ActionBars(actionBarsPanel, navButtons[14], configWindow)
-            end
-            if addonTable.ConfigSetup.Notifications then
-                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[15], configWindow)
+            if addonTable.ConfigSetup.SCT then
+                addonTable.ConfigSetup.SCT(sctPanel, navButtons[5], configWindow)
             end
             if addonTable.ConfigSetup.CastBar then
-                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[16], configWindow)
+                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[6], configWindow)
+            end
+            if addonTable.ConfigSetup.Kick then
+                addonTable.ConfigSetup.Kick(kickPanel, navButtons[7], configWindow)
+            end
+            if addonTable.ConfigSetup.MplusTimer then
+                addonTable.ConfigSetup.MplusTimer(mplusTimerPanel, navButtons[8], configWindow)
+            end
+            if addonTable.ConfigSetup.ActionBars then
+                addonTable.ConfigSetup.ActionBars(actionBarsPanel, navButtons[9], configWindow)
+            end
+            if addonTable.ConfigSetup.Minimap then
+                addonTable.ConfigSetup.Minimap(minimapPanel, navButtons[10], configWindow)
+            end
+            if addonTable.ConfigSetup.Coordinates then
+                addonTable.ConfigSetup.Coordinates(coordinatesPanel, navButtons[11], configWindow)
+            end
+            if addonTable.ConfigSetup.Frames then
+                addonTable.ConfigSetup.Frames(framesPanel, navButtons[12], configWindow)
+            end
+            if addonTable.ConfigSetup.ChatSkin then
+                addonTable.ConfigSetup.ChatSkin(chatSkinPanel, navButtons[13], configWindow)
+            end
+            if addonTable.ConfigSetup.Vendor then
+                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[14], configWindow)
+            end
+            if addonTable.ConfigSetup.Loot then
+                addonTable.ConfigSetup.Loot(lootPanel, navButtons[15], configWindow)
+            end
+            if addonTable.ConfigSetup.Notifications then
+                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[16], configWindow)
             end
             if addonTable.ConfigSetup.Reagents then
                 addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[17], configWindow)
             end
-            if addonTable.ConfigSetup.QuestAuto then
-                addonTable.ConfigSetup.QuestAuto(questAutoPanel, navButtons[18], configWindow)
+            if addonTable.ConfigSetup.TalentManager then
+                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[18], configWindow)
             end
-            if addonTable.ConfigSetup.MplusTimer then
-                addonTable.ConfigSetup.MplusTimer(mplusTimerPanel, navButtons[19], configWindow)
+            if addonTable.ConfigSetup.Talent then
+                addonTable.ConfigSetup.Talent(talentPanel, navButtons[19], configWindow)
+            end
+            if addonTable.ConfigSetup.Misc then
+                addonTable.ConfigSetup.Misc(miscPanel, navButtons[20], configWindow)
+            end
+            if addonTable.ConfigSetup.Widgets then
+                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[21], configWindow)
             end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[20], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[22], configWindow)
             end
         end
         ----------------------------------------------------

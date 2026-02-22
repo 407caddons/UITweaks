@@ -1,8 +1,8 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-21 (Eighth Pass -- Modified Files Audit)
-**Previous Review:** 2026-02-20 (Seventh Pass -- Modified Files Audit)
-**Scope:** Modified files (`ActionBars.lua`, `Combat.lua`, `Core.lua`, `Loot.lua`, `TalentManager.lua`, `TalentReminder.lua`, `config/panels/WidgetsPanel.lua`) + targeted re-review of key modules
+**Review Date:** 2026-02-21 (Ninth Pass -- New Files + Modified Files Audit)
+**Previous Review:** 2026-02-21 (Eighth Pass -- Modified Files Audit)
+**Scope:** New files (`widgets/Lockouts.lua`, `widgets/XPRep.lua`), modified files (`MinimapCustom.lua`, `TalentManager.lua`, `config/panels/ActionBarsPanel.lua`, `LunaUITweaks.toc`) + full review of config system, ObjectiveTracker, Kick, CastBar, Vendor, AddonComm, AddonVersions, Reagents, QuestAuto, QuestReminder, MplusTimer, and Frames
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
 
 ---
@@ -24,40 +24,41 @@
 
 LunaUITweaks is a well-structured addon with consistent patterns, good combat lockdown awareness, and effective use of frame pooling. The codebase demonstrates strong understanding of the WoW API and its restrictions. Key strengths include the three-layer combat-safe positioning in ActionBars, proper event-driven architecture, shared utility patterns (logging, SafeAfter, SpeakTTS), excellent widget framework design with anchor caching, smart tooltip positioning, the widget visibility conditions system, and the new hook-based consumable tracking architecture.
 
-### What Changed Since Last Review (2026-02-20 to 2026-02-21)
+### What Changed Since Last Review (Eighth to Ninth Pass)
 
-Seven files modified (per git status). Key findings:
+Five files modified, two new files added (per git diff). Key findings:
 
-1. **Combat.lua** -- **FIXED (HIGH):** The `C_Item.GetItemInfoInstant(spellName)` issue from the previous review is resolved. The `UNIT_SPELLCAST_SUCCEEDED` handler (lines 1144-1148) now returns early with a comment explaining that consumable usage is tracked via `UseAction`/`UseContainerItem`/`UseItemByName` hooks instead. The hook-based consumable tracking architecture is a correct approach. Stale comment on line 1113 ("Create 4 text lines" but loop creates 5) and duplicate `ApplyReminderLock()` calls still present.
+1. **MinimapCustom.lua** -- **NEW (3 MEDIUM):** QueueStatusButton persistent anchoring added (lines 16-79). Three hooks (OnShow, SetPoint, UpdatePosition) each schedule `C_Timer.After(0, ...)` for deferred repositioning. Issues: (a) `SetParent(Minimap)` on line 29 without `InCombatLockdown()` guard -- QueueStatusButton may be protected during combat. (b) Triple redundant `C_Timer.After(0)` scheduling -- when Blizzard repositions the eye, both SetPoint and UpdatePosition hooks fire, scheduling two deferred calls for the same frame. (c) Potential hook conflict with ActionBars.lua if both modules hook QueueStatusButton positioning methods.
 
-2. **TalentManager.lua** -- **PARTIALLY FIXED (MEDIUM):** EJ cache now saves/restores the current tier selection (lines 54-55, 92-95), addressing the concern about mutating global EJ state. **NEW MEDIUM:** `SetRowAsBuild` (lines 410-443) creates 6 closures (editBtn, copyBtn, updateBtn, deleteBtn, loadBtn, OnEnter) every time `RefreshBuildList` is called -- significant closure churn for users with many builds. **NEW LOW:** `DecodeImportString` does not type-check `importStream` internals.
+2. **TalentManager.lua** -- Minor whitespace/formatting changes only. No new functional issues.
 
-3. **TalentReminder.lua** -- No functional regressions. **NEW LOW:** `ReleaseAlertFrame()` (line 1513) clears `currentReminder` but does not clear `currentMismatches` (line 1268). The `mismatches` table reference persists after release, preventing garbage collection of the mismatch data.
+3. **config/panels/ActionBarsPanel.lua** -- **FIXED (MEDIUM):** Nav visuals now use `UpdateNavVisuals()` helper that checks `enabled or skinEnabled`, so the tab correctly shows gold when either feature is active rather than only when the main `enabled` flag is set.
 
-4. **Core.lua** -- Added defaults for `talentManager`, `questAuto`, `questReminder`, `mplusTimer` modules. No new issues.
+4. **widgets/Lockouts.lua** -- **FIXED (MEDIUM):** OnClick handler rewritten from removed `ToggleRaidFrame()` to `ToggleFriendsFrame(3)` + `RaidInfoFrame:Show()`. Correct API for current WoW client. Widget otherwise clean.
 
-5. **ActionBars.lua** -- No functional changes from previous review. Combat deferral frame leak still present.
+5. **widgets/XPRep.lua** -- **NEW WIDGET.** XP/Reputation display widget (245 lines). Proper `ApplyEvents(enabled)` pattern with 5 events. Handles max-level (reputation) vs leveling (XP). Renown + paragon support with reward indicator. **NEW LOW:** OnClick calls `ToggleCharacter("ReputationFrame")` without `InCombatLockdown()` guard (line 232-239). `ToggleCharacter` opens a protected frame that may cause taint in combat.
 
-6. **Loot.lua** -- No functional changes from previous review. Locale-dependent `"^You receive"` pattern still present.
+6. **LunaUITweaks.toc** -- Version bump 1.12.0 -> 1.13.0. No issues.
 
-7. **config/panels/WidgetsPanel.lua** -- No changes from previous review. Loop-scoped `CONDITIONS` table and `GetConditionLabel` closure allocations still present.
+7. **Previous findings all confirmed still present** -- All medium and low priority items from the eighth pass remain unless explicitly noted as resolved.
 
 ### Issue Counts
 
-**Critical Issues:** ~~1~~ All fixed (MplusTimer forward reference)
-**High Priority:** ~~5~~ All fixed (Combat.lua C_Item.GetItemInfoInstant, EventBus dedup, Group.lua IsGuildMember, TalentManager instanceType, TalentReminder data migration)
-**Medium Priority:** 31 (1 new: TalentManager SetRowAsBuild closure churn)
-**Low Priority / Polish:** 28+
+**Critical Issues:** 3 (2 new Loot.lua, 1 new TalentManager.lua); ~~1~~ fixed (MplusTimer forward reference)
+**High Priority:** 1 new (TalentReminder ApplyTalents stale ranks); ~~5~~ All previous fixed (Combat.lua C_Item.GetItemInfoInstant, EventBus dedup, Group.lua IsGuildMember, TalentManager instanceType, TalentReminder data migration)
+**Medium Priority:** 34 (3 MinimapCustom QueueStatusButton hooks, 1 TalentReminder prerequisite chains; 1 fixed: Lockouts OnClick, 1 fixed: ActionBarsPanel nav visuals)
+**Low Priority / Polish:** 29+ (1 new: XPRep ToggleCharacter combat guard)
 
 ---
 
-## Changes Since Last Review (2026-02-21)
+## Changes Since Last Review (Ninth Pass -- 2026-02-21)
 
 ### Status of Previously Identified Issues
 
 #### Confirmed Still Fixed
 
 - **FIXED:** MplusTimer.lua nil guard for `info.quantityString`
+- **FIXED:** MplusTimer.lua forward reference `local OnChallengeEvent` at line 6
 - **FIXED:** Misc.lua nil guard for `inviterGUID`
 - **FIXED:** Group.lua `readyCheckActive`/`readyCheckResponses` scoping
 - **FIXED:** Group.lua tooltip uses cached atlas constants
@@ -73,10 +74,14 @@ Seven files modified (per git status). Key findings:
 - **FIXED:** EventBus.lua pcall removed from dispatch loop
 - **FIXED:** MplusTimer.lua raw event frames fully migrated to EventBus
 - **FIXED:** `CleanupSavedVariables()` in TalentReminder.lua now migrates old-format builds by wrapping them in arrays instead of deleting them.
+- **FIXED:** Combat.lua `C_Item.GetItemInfoInstant(spellName)` -- now uses hook-based consumable tracking
+- **FIXED:** TalentManager.lua EJ cache tier mutation -- saves/restores current tier
+- **FIXED (ninth pass):** Lockouts.lua OnClick -- rewritten from removed `ToggleRaidFrame()` to `ToggleFriendsFrame(3)` + `RaidInfoFrame:Show()`
+- **FIXED (ninth pass):** ActionBarsPanel.lua nav visuals -- `UpdateNavVisuals()` checks `enabled or skinEnabled`
 
 #### Previously Identified Issues Still Open
 
-- All medium and low priority items from the seventh pass remain unless explicitly noted as resolved below.
+- All medium and low priority items from the eighth pass remain unless explicitly noted as resolved below.
 
 #### NOT FIXED -- Still Open from Previous Reviews
 
@@ -91,12 +96,21 @@ Seven files modified (per git status). Key findings:
 - **Loot.lua lines 196-210:** Redundant `if i == 1`/`else` branches in `UpdateLayout`.
 - **Loot.lua line 500:** Locale-dependent `"^You receive"` string pattern.
 
-#### NEW Findings (2026-02-21)
+#### NEW Findings (Ninth Pass -- 2026-02-21)
 
 | Severity | Issue | File | Line |
 |----------|-------|------|------|
-| FIXED (was HIGH) | `C_Item.GetItemInfoInstant(spellName)` -- UNIT_SPELLCAST_SUCCEEDED now returns early; consumable tracking uses hooks | Combat.lua | 1144-1148 |
-| FIXED (was MEDIUM) | EJ cache now saves/restores current tier via `EJ_GetCurrentTier`/`EJ_SelectTier` | TalentManager.lua | 54-55, 92-95 |
+| FIXED (was MEDIUM) | Lockouts OnClick -- rewritten from removed `ToggleRaidFrame()` to correct API | widgets/Lockouts.lua | OnClick |
+| FIXED (was MEDIUM) | ActionBarsPanel nav visuals now check `enabled or skinEnabled` | config/panels/ActionBarsPanel.lua | UpdateNavVisuals |
+| Medium | `SetParent(Minimap)` on QueueStatusButton without `InCombatLockdown()` guard | MinimapCustom.lua | 29 |
+| Medium | Triple redundant `C_Timer.After(0)` scheduling from OnShow/SetPoint/UpdatePosition hooks | MinimapCustom.lua | 41-75 |
+| Medium | Potential hook conflict with ActionBars.lua -- both modules may hook QueueStatusButton | MinimapCustom.lua / ActionBars.lua | cross-module |
+| Low | `ToggleCharacter("ReputationFrame")` without `InCombatLockdown()` guard in OnClick | widgets/XPRep.lua | 232-239 |
+
+#### Previous Eighth Pass Findings (Still Present)
+
+| Severity | Issue | File | Line |
+|----------|-------|------|------|
 | Medium | `SetRowAsBuild` creates 6 closures per build row on every `RefreshBuildList` call | TalentManager.lua | 410-443 |
 | Low | `ReleaseAlertFrame()` clears `currentReminder` but not `currentMismatches` -- table reference persists | TalentReminder.lua | 1508-1529 |
 | Low | `DecodeImportString` does not type-check `importStream` internals before use | TalentManager.lua | ~1480 |
@@ -152,12 +166,17 @@ Seven files modified (per git status). Key findings:
 
 ### Loot.lua (~556 lines)
 
-**Status:** One medium issue. One low. Previous duplicate registration fixed.
+**Status:** Two critical issues. One medium. One low. Previous duplicate registration fixed.
 
 - **FIXED:** Duplicate EventBus registration pattern resolved by EventBus deduplication.
+
+- **CRITICAL (NEW): OnUpdate script not cleared on recycled toast frames (lines 137-148, 167-180).** The `OnUpdate` timer script is set once during initial frame creation in `AcquireToast()` (line 137), inside the `if not toast then` block. When `RecycleToast()` (line 167) hides the frame and returns it to `itemPool`, **the OnUpdate script is never cleared**. On next reacquisition, `toast.timeParams` is set to `nil` (line 153) before being reassigned, but the old OnUpdate continues firing during this window. More critically, if the pooled frame is never reacquired, its OnUpdate fires every render frame on a hidden frame, accessing `self.timeParams.elapsed` on nil -- causing repeated Lua errors. **Fix:** Add `toast:SetScript("OnUpdate", nil)` to `RecycleToast()`.
+
+- **CRITICAL (NEW): Truncated item link regex pattern (line 494).** The pattern `|Hitem:.-|h` only captures up to the first `|h` delimiter, missing the item name and closing `|h|r`. A WoW item link has the form `|cFFFFFFFF|Hitem:12345:...|h[Item Name]|h|r`. The current pattern captures `|Hitem:12345:...|h` but omits `[Item Name]|h`. This produces malformed links that cannot be used for `GetItemInfo()` lookups or display. **Fix:** Use `|Hitem:.-|h.-|h` or `|c.-|Hitem:.-|h.-|h|r` to capture the complete link.
+
 - **Medium:** `string.find(msg, "^You receive")` is locale-dependent (line 499). On non-English clients, self-loot detection fails.
 - **Low:** `UpdateLayout` has identical code in `if i == 1` and `else` branches. Redundant.
-- Frame pool (`itemPool`) correctly recycles frames. Good pattern.
+- Frame pool (`itemPool`) correctly recycles frames (when OnUpdate is fixed). Good pattern.
 - Roster cache for class color lookups is a nice optimization.
 
 ---
@@ -265,6 +284,8 @@ Seven files modified (per git status). Key findings:
 
 - **FIXED: EJ cache tier mutation (lines 54-55, 92-95).** `EnsureEJCache()` now saves the current tier via `EJ_GetCurrentTier()` before iterating and restores it via `EJ_SelectTier(savedTier)` after. No longer disrupts the user's Encounter Journal view.
 
+- **CRITICAL (NEW): Stale `buildIndex` in button closures (lines 410-438).** `SetRowAsBuild` captures `buildIndex` by value in click handlers for edit, copy, update, and delete buttons. When `RefreshBuildList()` re-sorts builds (line 639), the captured indices become stale. If user deletes build A at index 1, build B moves from index 2 to index 1, but B's delete button still holds `buildIndex = 2`. Clicking it deletes the wrong build or crashes on out-of-bounds access. **Fix:** Store build data on the row frame (e.g., `row.buildData = { instanceID, diffID, zoneKey, buildIndex, reminder }`) and re-set it each time `SetRowAsBuild` is called, or look up the build by a stable identifier (e.g., name + hash) instead of array index.
+
 - **Medium:** `RefreshBuildList` creates multiple temporary tables per call (`raidBuilds`, `dungeonBuilds`, `uncategorizedBuilds`, sorted arrays). Significant garbage for users with 50+ builds. Use module-level scratch tables with `wipe()`.
 - **Medium (NEW):** `SetRowAsBuild` (lines 410-443) creates 6 closures per build row on every `RefreshBuildList` call. For `editBtn`, `copyBtn`, `updateBtn`, `deleteBtn`, `loadBtn`, and `OnEnter`, each gets a new anonymous function capturing `instanceID`, `diffID`, `zoneKey`, `buildIndex`, and `reminder`. With 20+ builds, this generates 120+ closures per refresh. Consider storing the data on the row frame via attributes and using a shared click handler.
 - **Medium:** EJ cache saved to SavedVariables (`settings.ejCache`). Grows with each expansion, bloating `UIThingsDB`.
@@ -278,6 +299,10 @@ Seven files modified (per git status). Key findings:
 **Status:** Previous HIGH issue fixed. One medium remains. One new low.
 
 - **FIXED:** `CleanupSavedVariables()` now migrates old-format builds by wrapping them in arrays (`zones[zoneKey] = { value }`) instead of deleting them.
+
+- **HIGH (NEW): `ApplyTalents` uses pre-refund rank values (lines 1044-1165).** The `currentTalents` map is built at lines 1044-1054, capturing `nodeInfo.currentRank` for all talent nodes. Then the refund step (lines 1085-1098) calls `C_Traits.RefundRank()` to reset nodes to rank 0. But the apply step (lines 1119-1165) reads `current.rank` from the stale `currentTalents` map. For a node that had rank 3 before refund: the actual rank is now 0, but `currentRank` reads 3 from the stale map. The apply loop `for i = currentRank + 1, savedData.rank` becomes `for i = 4, savedData.rank`, **skipping ranks 1-3 entirely**. Talents end up under-purchased or not applied. **Fix:** Re-capture `currentTalents` after the refund step completes, before the apply step begins.
+
+- **Medium (NEW): No prerequisite chain validation in `ApplyTalents` (lines 1100-1165).** Talents are sorted by `posY` (top-to-bottom) to approximate prerequisite ordering, but if a prerequisite fails to apply, all dependent talents are still attempted and silently fail. The code logs individual errors but doesn't break the chain or inform the user which prerequisite failed. For complex talent trees with lateral dependencies, `posY` sorting is insufficient.
 
 - **Medium:** `table.remove` index shifting in `DeleteReminder` is fragile for future maintainers. Currently handled correctly (reverse-sorted deletions in TalentPanel.lua), but poorly documented.
 - **Low (NEW):** `ReleaseAlertFrame()` (lines 1508-1529) clears `alertFrame.currentReminder = nil` but does not clear `alertFrame.currentMismatches`. The `currentMismatches` table (set on line 1268 in `UpdateAlertFrame`) contains mismatch data that persists after the alert is released, preventing the table and its contents from being garbage collected. Add `alertFrame.currentMismatches = nil` to the release function.
@@ -335,10 +360,13 @@ Seven files modified (per git status). Key findings:
 
 ---
 
-### MinimapCustom.lua (~1058 lines)
+### MinimapCustom.lua (~1127 lines, +69 lines from QueueStatusButton hooks)
 
-**Status:** Two medium issues. Two low. Unchanged from previous review.
+**Status:** Five medium issues (3 new). Two low. Updated ninth pass.
 
+- **Medium (NEW):** `AnchorQueueEyeToMinimap()` (line 29) calls `QueueStatusButton:SetParent(Minimap)` without `InCombatLockdown()` guard. `QueueStatusButton` may be protected during combat, and `SetParent` on a protected frame during lockdown causes taint. This is called from all three hooks (OnShow, SetPoint, UpdatePosition) via `C_Timer.After(0)`, which can fire during combat.
+- **Medium (NEW):** Triple redundant `C_Timer.After(0)` scheduling (lines 41-75). When Blizzard repositions the eye, the `SetPoint` hook fires, scheduling a deferred reposition. If `UpdatePosition` also exists and fires, it schedules a second deferred call. And if `OnShow` also fires, a third. All three schedule `AnchorQueueEyeToMinimap()` for the same next-frame. A single coalescing flag (e.g., `queueEyePending`) would eliminate redundant calls.
+- **Medium (NEW):** Potential hook conflict with ActionBars.lua. If ActionBars.lua also hooks `QueueStatusButton` positioning methods (e.g., for micro-menu drawer layout), the two modules could fight over the button's position. Currently ActionBars.lua does not hook QueueStatusButton directly, but the pattern is fragile if either module changes.
 - **Medium:** `SetDrawerCollapsed` shows/hides collected minimap buttons without `InCombatLockdown()` check. Could taint secure buttons from other addons.
 - **Medium:** `CollectMinimapButtons` iterates all Minimap children on every call. Not cached.
 - **Low:** `GetMinimapShape = nil` for round shape; should be `function() return "ROUND" end`.
@@ -638,6 +666,30 @@ Seven files modified (per git status). Key findings:
 
 ---
 
+### widgets/Lockouts.lua (~163 lines) -- UPDATED
+
+**Status:** Clean. Previous issue fixed.
+
+- **FIXED (ninth pass):** OnClick handler rewritten from removed `ToggleRaidFrame()` API to `ToggleFriendsFrame(3)` + `RaidInfoFrame:Show()`. Correct API for current WoW client (12.0).
+- Proper `ApplyEvents(enabled)` pattern with `UPDATE_INSTANCE_INFO` and `PLAYER_ENTERING_WORLD` events.
+- `RequestRaidInfo()` called on world entry with 2-second delayed refresh. Good timing pattern.
+- Tooltip displays instance name, difficulty, boss progress, and time remaining.
+
+---
+
+### widgets/XPRep.lua (~245 lines) -- NEW
+
+**Status:** One low issue. Otherwise clean.
+
+- **Low (NEW):** OnClick (lines 232-239) calls `ToggleCharacter("ReputationFrame")` at max level. `ToggleCharacter` opens a Blizzard-owned protected frame. If clicked during combat, this will cause taint. Add `if InCombatLockdown() then return end` guard.
+- Proper `ApplyEvents(enabled)` pattern with 5 events (`PLAYER_XP_UPDATE`, `PLAYER_LEVEL_UP`, `UPDATE_FACTION`, `PLAYER_ENTERING_WORLD`, `MAJOR_FACTION_RENOWN_LEVEL_CHANGED`).
+- Handles max-level (reputation display) vs leveling (XP display) correctly.
+- Renown + paragon support with reward indicator (`!` suffix when paragon reward is pending).
+- `AbbreviateNumber()` utility for large XP/rep values.
+- Core.lua defaults and TOC entry verified present.
+
+---
+
 ### Clean Widget Files (No Issues)
 
 **Combat.lua** (39 lines), **Mail.lua** (52 lines), **ItemLevel.lua** (96 lines), **Zone.lua** (95 lines), **PullCounter.lua** (155 lines), **Volume.lua** (72 lines), **PvP.lua** (121 lines), **BattleRes.lua** (87 lines), **Coordinates.lua** (55 lines), **Time.lua** (66 lines), **WeeklyReset.lua** (noted above for combat guard) -- All clean and follow established patterns.
@@ -658,67 +710,81 @@ Seven files modified (per git status). Key findings:
 
 **FIXED:** The broken `C_Item.GetItemInfoInstant(spellName)` path has been replaced by a return-early in `UNIT_SPELLCAST_SUCCEEDED` (lines 1144-1148). Consumable usage is now tracked correctly via hooks on `UseAction`, `C_Container.UseContainerItem`, and `UseItemByName`, which capture the actual item ID at the point of use. This is architecturally superior to the spell-cast-event approach.
 
-### 4. Combat Deferral Frame Accumulation (Medium Priority)
+### 4. Loot.lua Toast Pool Corruption (Critical -- NEW)
+
+`RecycleToast()` does not clear the `OnUpdate` script set during frame creation. Pooled (hidden) frames continue firing `OnUpdate` every render frame, accessing `self.timeParams` which may be nil. Additionally, the item link pattern `|Hitem:.-|h` is truncated and misses the item name portion of links, producing malformed links that break `GetItemInfo()` lookups. Both issues affect core loot toast functionality.
+
+### 5. TalentManager Stale Build Index (Critical -- NEW)
+
+Button closures in `SetRowAsBuild` capture `buildIndex` by value. When builds are deleted or `RefreshBuildList` re-sorts the list, captured indices become stale. Delete/edit/update operations may target the wrong build or crash on out-of-bounds access.
+
+### 6. TalentReminder ApplyTalents Stale Ranks (High -- NEW)
+
+`ApplyTalents` captures all talent node ranks before the refund step, then uses those stale values in the apply step. After refund, actual ranks are 0 but the code reads pre-refund values, causing the apply loop to skip purchasing ranks for refunded nodes.
+
+### 7. Combat Deferral Frame Accumulation (Medium Priority)
 
 ActionBars.lua and CastBar.lua create disposable `CreateFrame("Frame")` instances when called during combat lockdown. WoW frames are never garbage collected. **Fix:** Use a reusable module-level frame.
 
-### 5. Config Panel Color Swatch Duplication (Medium Priority)
+### 8. Config Panel Color Swatch Duplication (Medium Priority)
 
 ~960 lines of duplicated color swatch code across 6 panels (TrackerPanel, ActionBarsPanel, MinimapPanel, NotificationsPanel, FramesPanel, WidgetsPanel) when `Helpers.CreateColorSwatch` already exists. 8 panels already use the helper correctly.
 
-### 6. Config Panel Unguarded Module Access (Medium Priority)
+### 9. Config Panel Unguarded Module Access (Medium Priority)
 
 LootPanel.lua (8 occurrences) and VendorPanel.lua (6 occurrences) access module methods without nil-checking the module first. Will crash if the module fails to load.
 
-### 7. Locale-Dependent String Matching (Medium Priority)
+### 10. Locale-Dependent String Matching (Medium Priority)
 
 - Loot.lua `"^You receive"` pattern fails on non-English clients
 - Friends.lua `C_ClassColor.GetClassColor` given localized class name
 
-### 8. Missing Combat Lockdown Guards (Medium Priority)
+### 11. Missing Combat Lockdown Guards (Medium Priority)
 
+- MinimapCustom.lua `AnchorQueueEyeToMinimap` -- `SetParent(Minimap)` on protected QueueStatusButton (NEW)
 - MinimapCustom.lua `SetDrawerCollapsed`
 - Teleports.lua `ReleaseButton` on secure buttons
 - Vault.lua / WeeklyReset.lua `ShowUIPanel`/`HideUIPanel`
 - Spec.lua delayed menu click
+- XPRep.lua `ToggleCharacter("ReputationFrame")` in OnClick (NEW)
 
-### 9. Duplicated Border Drawing Code (Medium Priority)
+### 12. Duplicated Border Drawing Code (Medium Priority)
 
 At least 5 files implement nearly identical border texture creation.
 
-### 10. Widget Ticker Efficiency (Medium Priority)
+### 13. Widget Ticker Efficiency (Medium Priority)
 
 The widget framework's shared ticker calls `UpdateContent` on all enabled widgets every second. Many are purely event-driven.
 
-### 11. TalentManager Closure Churn (Medium Priority -- NEW)
+### 14. TalentManager Closure Churn (Medium Priority -- NEW)
 
 `SetRowAsBuild` creates 6 closures per build row on every `RefreshBuildList` call. For users with 20+ builds, this generates 120+ closure allocations per refresh. Consider storing build data as frame attributes and using shared click handlers that read from `self:GetParent()` data.
 
-### 12. Combat Lockdown Handling (Strength)
+### 15. Combat Lockdown Handling (Strength)
 
 The codebase is consistently defensive about combat lockdown. The three-layer ActionBars pattern is exemplary. The exceptions noted above are localized and low-risk.
 
-### 13. Frame Pooling (Strength)
+### 16. Frame Pooling (Strength)
 
 Consistently used in Loot.lua, Frames.lua, Teleports.lua, Currency.lua, TalentManager.lua, and WidgetsPanel.
 
-### 14. Centralized TTS (Strength)
+### 17. Centralized TTS (Strength)
 
 `Core.SpeakTTS` centralizes text-to-speech with graceful API fallbacks.
 
-### 15. Widget ApplyEvents Pattern (Strength)
+### 18. Widget ApplyEvents Pattern (Strength)
 
 Widgets consistently implement `ApplyEvents(enabled)`. Excellent pattern across all 27 widget files.
 
-### 16. Widget Visibility Conditions (Strength)
+### 19. Widget Visibility Conditions (Strength)
 
 The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events is well-designed and reduces widget clutter effectively.
 
-### 17. Saved Variable Separation (Strength)
+### 20. Saved Variable Separation (Strength)
 
 `LunaUITweaks_TalentReminders`, `LunaUITweaks_ReagentData`, `LunaUITweaks_QuestReminders` survive settings resets.
 
-### 18. Consumable Tracking Architecture (Strength -- NEW)
+### 21. Consumable Tracking Architecture (Strength -- NEW)
 
 The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseContainerItem`, `UseItemByName`) is architecturally correct. It captures the actual item ID at the point of use rather than trying to reverse-map spell IDs from cast events, which is unreliable.
 
@@ -730,7 +796,15 @@ The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseC
 
 1. **FIXED: MplusTimer.lua forward reference (line 701)** -- Added `local OnChallengeEvent` forward declaration at file top and changed definition to assignment. M+ event processing now works correctly.
 
-### High Priority (All Fixed)
+1b. **NEW: Loot.lua OnUpdate not cleared on recycled toast frames (lines 137-148, 167-180).** `RecycleToast()` hides the frame and returns it to the pool but never clears the `OnUpdate` script. The script continues firing on hidden pooled frames, accessing `self.timeParams.elapsed` on nil. Add `toast:SetScript("OnUpdate", nil)` to `RecycleToast()`.
+
+1c. **NEW: Loot.lua truncated item link regex (line 494).** Pattern `|Hitem:.-|h` captures only up to the first `|h`, missing the item name and closing `|h|r`. Produces malformed links that fail `GetItemInfo()` lookups. Fix to `|Hitem:.-|h.-|h` or similar.
+
+1d. **NEW: TalentManager.lua stale `buildIndex` in button closures (lines 410-438).** Delete/edit/update buttons capture `buildIndex` by value. After sorting or deleting other builds, the index points to wrong build. Use stable identifier instead of array index.
+
+### High Priority
+
+2a. **NEW: TalentReminder.lua `ApplyTalents` uses pre-refund rank values (lines 1044-1165).** `currentTalents` map built before refund step captures stale ranks. After refund, apply loop skips ranks 1-N for refunded nodes. Re-capture `currentTalents` after refund step.
 
 2. **FIXED (2026-02-21): Combat.lua `C_Item.GetItemInfoInstant(spellName)` (was line 1151)** -- `UNIT_SPELLCAST_SUCCEEDED` handler now returns early (lines 1144-1148). Consumable tracking correctly uses `UseAction`/`UseContainerItem`/`UseItemByName` hooks.
 
@@ -752,6 +826,8 @@ The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseC
 12. **Combat deferral frame leak** -- ActionBars.lua + CastBar.lua: use reusable module-level frame.
 13. **Combat.lua infinite retry in TrackConsumableUsage** -- Add retry counter (max 5 attempts).
 14. **MinimapCustom.lua SetDrawerCollapsed combat guard** -- Add `InCombatLockdown()` check.
+14b. **MinimapCustom.lua QueueStatusButton SetParent combat guard (NEW)** -- `AnchorQueueEyeToMinimap` calls `SetParent(Minimap)` on protected frame without combat check.
+14c. **MinimapCustom.lua triple redundant C_Timer.After(0) scheduling (NEW)** -- Add coalescing flag to prevent 3 deferred calls for same reposition.
 15. **ChatSkin.lua SetItemRef override** -- Use `hooksecurefunc` instead.
 16. **Downgraded: ChatSkin.lua HighlightKeywords table allocation** -- Per-invocation table is correct design to avoid stale state. Moved to low priority.
 17. **Vault.lua / WeeklyReset.lua ShowUIPanel combat guard** -- Add `InCombatLockdown()` check.
@@ -779,6 +855,7 @@ The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseC
 39. **CastBar.lua cast time throttle** -- 0.05s throttle on `string.format`.
 40. **TalentManager.lua SetRowAsBuild closure churn (NEW 2026-02-21)** -- Store data as frame attributes; use shared click handlers. Eliminates 120+ closures per refresh.
 41. **TalentManager.lua EJ cache bloat** -- Cache grows with each expansion in SavedVariables.
+42. **TalentReminder.lua ApplyTalents prerequisite chain validation (NEW 2026-02-21)** -- Failed prerequisites don't block dependent talents. Add chain-aware error handling.
 
 ### Low Priority / Polish
 
@@ -810,6 +887,7 @@ The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseC
 67. ConfigMain.lua boilerplate reduction
 68. ~100 global frame names with generic "UIThings" prefix
 69. CastBar.lua color table allocation per cast start
+70. XPRep.lua `ToggleCharacter` without `InCombatLockdown()` guard in OnClick (NEW)
 
 ---
 
@@ -818,7 +896,7 @@ The hook-based consumable tracking in Combat.lua (`UseAction`, `C_Container.UseC
 | Category | Files | Lines |
 |----------|-------|-------|
 | Core Modules | 12 | 5,309 |
-| UI Modules | 10 | 12,600 |
-| Config System | 22 | 9,299 |
-| Widget Files | 28 | 4,715 |
-| **Total** | **72** | **31,923** |
+| UI Modules | 10 | 12,669 |
+| Config System | 22 | 9,311 |
+| Widget Files | 30 | 5,123 |
+| **Total** | **74** | **32,412** |

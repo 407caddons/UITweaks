@@ -7,17 +7,21 @@ table.insert(Widgets.moduleInits, function()
     sessionFrame:RegisterForClicks("AnyUp")
 
     -- Session data persisted across reloads in UIThingsDB.
-    -- Detection: on a real login GetTime() resets to ~0, so if db.sessionStart > GetTime()
-    -- the saved value is from a previous client session — treat it as a fresh login.
+    -- Reset if offline for more than 30 minutes or if switching characters.
     local db           = UIThingsDB.widgets.sessionStats
+    local TIMEOUT      = 1800 -- 30 minutes in seconds
+    local charKey      = UnitGUID("player") or (UnitName("player") or "unknown")
 
-    -- If db.sessionStart > GetTime(), the client was restarted (GetTime() resets to ~0).
-    local isNewLogin   = not db.sessionStart or db.sessionStart > GetTime()
+    local isStale = not db.sessionStart
+        or not db.lastSeen
+        or (time() - db.lastSeen > TIMEOUT)
+        or (db.charKey ~= charKey)
 
-    local sessionStart = isNewLogin and GetTime() or db.sessionStart
-    local goldAtLogin  = isNewLogin and GetMoney() or (db.goldAtLogin or GetMoney())
-    local deathCount   = isNewLogin and 0 or (db.deathCount or 0)
-    local itemsLooted  = isNewLogin and 0 or (db.itemsLooted or 0)
+    local sessionStart    = isStale and GetTime() or db.sessionStart
+    local goldAtLogin     = isStale and 0 or (db.goldAtLogin or 0)
+    local goldNeedsSnap   = isStale -- snapshot gold on first PLAYER_ENTERING_WORLD
+    local deathCount      = isStale and 0 or (db.deathCount or 0)
+    local itemsLooted     = isStale and 0 or (db.itemsLooted or 0)
 
     -- Cached display text updated on events
     local cachedText   = "Session: 0:00"
@@ -27,6 +31,8 @@ table.insert(Widgets.moduleInits, function()
         db.goldAtLogin  = goldAtLogin
         db.deathCount   = deathCount
         db.itemsLooted  = itemsLooted
+        db.lastSeen     = time()
+        db.charKey      = charKey
     end
 
     -- Persist baseline immediately so a /reload right after login retains correct values
@@ -76,10 +82,14 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    -- PLAYER_ENTERING_WORLD fires on both login and reload — just refresh display.
-    -- Login detection is handled at init time via GetTime() comparison above.
+    -- PLAYER_ENTERING_WORLD fires after character data is loaded — snapshot gold here.
     local function OnSessionEnteringWorld()
         if not db.enabled then return end
+        if goldNeedsSnap then
+            goldAtLogin = GetMoney()
+            goldNeedsSnap = false
+            SaveSessionData()
+        end
         UpdateCachedText()
     end
 
@@ -99,10 +109,11 @@ table.insert(Widgets.moduleInits, function()
     -- Right-click resets session counters
     sessionFrame:SetScript("OnClick", function(self, button)
         if button == "RightButton" then
-            sessionStart = GetTime()
-            goldAtLogin  = GetMoney()
-            deathCount   = 0
-            itemsLooted  = 0
+            sessionStart    = GetTime()
+            goldAtLogin     = GetMoney()
+            goldNeedsSnap   = false
+            deathCount      = 0
+            itemsLooted     = 0
             SaveSessionData()
             UpdateCachedText()
             self.text:SetText(cachedText)
@@ -139,5 +150,6 @@ table.insert(Widgets.moduleInits, function()
     sessionFrame.UpdateContent = function(self)
         UpdateCachedText()
         self.text:SetText(cachedText)
+        db.lastSeen = time()
     end
 end)

@@ -58,7 +58,7 @@ table.insert(Widgets.moduleInits, function()
 
     timeFrame.UpdateContent = function(self)
         local format = "%I:%M %p"
-        if UIThingsDB.misc and UIThingsDB.misc.minimapClockFormat == "24H" then
+        if UIThingsDB.minimap and UIThingsDB.minimap.minimapClockFormat == "24H" then
             format = "%H:%M"
         end
         self.text:SetText(date(format))

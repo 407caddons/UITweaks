@@ -12,9 +12,75 @@ local minimapLocked = true -- Runtime-only, always defaults to locked
 
 local zoneText = nil
 local clockText = nil
+local coordsText = nil
+
+-- == QueueStatusButton (Dungeon Finder Eye) Persistent Anchor ==
+-- Blizzard repositions the eye via UpdatePosition when queuing for content.
+-- We hook SetPoint and OnShow to always move it back to the minimap.
+local queueHooked = false
+local suppressQueueHook = false
+
+local function AnchorQueueEyeToMinimap()
+    if not QueueStatusButton then return end
+    if not minimapFrame then return end
+
+    suppressQueueHook = true
+    QueueStatusButton:ClearAllPoints()
+    QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
+    QueueStatusButton:SetParent(Minimap)
+    QueueStatusButton:SetFrameStrata("HIGH")
+    QueueStatusButton:SetFrameLevel(100)
+    suppressQueueHook = false
+end
+
+local function HookQueueEye()
+    if queueHooked or not QueueStatusButton then return end
+
+    -- Hook OnShow: fires when Blizzard shows the eye after queuing.
+    -- Use a frame-delayed callback so we run after the entire Blizzard
+    -- OnShow -> Layout -> UpdatePosition chain finishes.
+    QueueStatusButton:HookScript("OnShow", function()
+        if minimapFrame then
+            C_Timer.After(0, function()
+                if minimapFrame then
+                    AnchorQueueEyeToMinimap()
+                end
+            end)
+        end
+    end)
+
+    -- Hook SetPoint: catches any Blizzard code that repositions the eye
+    -- (e.g., UpdatePosition, UpdateQueueStatusAnchors).
+    hooksecurefunc(QueueStatusButton, "SetPoint", function()
+        if suppressQueueHook then return end
+        if minimapFrame then
+            C_Timer.After(0, function()
+                if minimapFrame then
+                    AnchorQueueEyeToMinimap()
+                end
+            end)
+        end
+    end)
+
+    -- Hook UpdatePosition if it exists (Blizzard's method on the button itself).
+    if QueueStatusButton.UpdatePosition then
+        hooksecurefunc(QueueStatusButton, "UpdatePosition", function()
+            if suppressQueueHook then return end
+            if minimapFrame then
+                C_Timer.After(0, function()
+                    if minimapFrame then
+                        AnchorQueueEyeToMinimap()
+                    end
+                end)
+            end
+        end)
+    end
+
+    queueHooked = true
+end
 
 local function ApplyMinimapShape(shape)
-    if not shape then shape = UIThingsDB.misc.minimapShape or "ROUND" end
+    if not shape then shape = UIThingsDB.minimap.minimapShape or "ROUND" end
 
     if shape == "SQUARE" then
         Minimap:SetMaskTexture("Interface\\BUTTONS\\WHITE8X8")
@@ -146,7 +212,7 @@ end
 
 local function PositionMinimapIcons()
     if not minimapFrame then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     local yOffset = -5
     local iconSpacing = 28
     local xPos = Minimap:GetWidth() / 2 + 8
@@ -232,7 +298,7 @@ local function PositionMinimapIcons()
 end
 
 local function SetupMinimap()
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     if not settings.minimapEnabled then return end
 
     -- Create a wrapper frame for positioning
@@ -312,7 +378,7 @@ local function SetupMinimap()
             -- Re-anchor to minimap so it stays correct on reload
             zoneFrame:ClearAllPoints()
             zoneFrame:SetPoint("BOTTOM", Minimap, "TOP", offX, offY)
-            UIThingsDB.misc.minimapZoneOffset = { x = offX, y = offY }
+            UIThingsDB.minimap.minimapZoneOffset = { x = offX, y = offY }
             -- Sync config edit boxes if open
             if _G["UIThingsMiscZoneX"] then _G["UIThingsMiscZoneX"]:SetText(tostring(math.floor(offX + 0.5))) end
             if _G["UIThingsMiscZoneY"] then _G["UIThingsMiscZoneY"]:SetText(tostring(math.floor(offY + 0.5))) end
@@ -378,7 +444,7 @@ local function SetupMinimap()
             -- Re-anchor to minimap so it stays correct on reload
             clockFrame:ClearAllPoints()
             clockFrame:SetPoint("TOP", Minimap, "BOTTOM", offX, offY)
-            UIThingsDB.misc.minimapClockOffset = { x = offX, y = offY }
+            UIThingsDB.minimap.minimapClockOffset = { x = offX, y = offY }
             -- Sync config edit boxes if open
             if _G["UIThingsMiscClockX"] then _G["UIThingsMiscClockX"]:SetText(tostring(math.floor(offX + 0.5))) end
             if _G["UIThingsMiscClockY"] then _G["UIThingsMiscClockY"]:SetText(tostring(math.floor(offY + 0.5))) end
@@ -393,16 +459,81 @@ local function SetupMinimap()
         -- Store reference
         minimapFrame.clockFrame = clockFrame
 
+        -- == Coordinates Text (movable, anchored to minimap) ==
+        local coordsOffset = settings.minimapCoordsOffset or { x = 0, y = -20 }
+        local coordsFrame = CreateFrame("Frame", "LunaMinimapCoordsFrame", minimapFrame)
+        coordsFrame:SetSize(100, 20)
+        coordsFrame:SetPoint("TOP", Minimap, "BOTTOM", coordsOffset.x, coordsOffset.y)
+        coordsFrame:SetMovable(true)
+        coordsFrame:SetClampedToScreen(true)
+
+        coordsText = coordsFrame:CreateFontString(nil, "OVERLAY")
+        coordsText:SetFont(settings.minimapCoordsFont or "Fonts\\FRIZQT__.TTF", settings.minimapCoordsFontSize or 11, "OUTLINE")
+        local crc = settings.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
+        coordsText:SetTextColor(crc.r, crc.g, crc.b)
+        coordsText:SetShadowOffset(1, -1)
+        coordsText:SetShadowColor(0, 0, 0, 1)
+        coordsText:SetPoint("CENTER", coordsFrame, "CENTER")
+
+        -- Drag overlay for coords
+        local coordsDragOverlay = CreateFrame("Frame", nil, coordsFrame)
+        coordsDragOverlay:SetAllPoints(coordsFrame)
+        coordsDragOverlay:SetFrameStrata("TOOLTIP")
+        coordsDragOverlay:EnableMouse(true)
+        coordsDragOverlay:RegisterForDrag("LeftButton")
+        coordsDragOverlay:SetScript("OnDragStart", function()
+            coordsFrame:StartMoving()
+        end)
+        coordsDragOverlay:SetScript("OnDragStop", function()
+            coordsFrame:StopMovingOrSizing()
+            local coordsCX, coordsCY = coordsFrame:GetCenter()
+            local mapCX = Minimap:GetCenter()
+            local mapBottom = Minimap:GetBottom()
+            local offX = coordsCX - mapCX
+            local offY = coordsCY - mapBottom
+            coordsFrame:ClearAllPoints()
+            coordsFrame:SetPoint("TOP", Minimap, "BOTTOM", offX, offY)
+            UIThingsDB.minimap.minimapCoordsOffset = { x = offX, y = offY }
+            if _G["UIThingsMinimapCoordsX"] then _G["UIThingsMinimapCoordsX"]:SetText(tostring(math.floor(offX + 0.5))) end
+            if _G["UIThingsMinimapCoordsY"] then _G["UIThingsMinimapCoordsY"]:SetText(tostring(math.floor(offY + 0.5))) end
+        end)
+        coordsDragOverlay:Hide() -- Start locked
+        coordsFrame.dragOverlay = coordsDragOverlay
+
+        if not settings.minimapShowCoords then
+            coordsFrame:Hide()
+        end
+
+        -- Store reference
+        minimapFrame.coordsFrame = coordsFrame
+
+        -- Coords update ticker
+        local function UpdateCoords()
+            if not coordsText then return end
+            local mapID = C_Map.GetBestMapForUnit("player")
+            if mapID then
+                local pos = C_Map.GetPlayerMapPosition(mapID, "player")
+                if pos then
+                    local x, y = pos:GetXY()
+                    coordsText:SetFormattedText("%.1f, %.1f", x * 100, y * 100)
+                    return
+                end
+            end
+            coordsText:SetText("\226\128\148, \226\128\148")
+        end
+        UpdateCoords()
+        local coordsTicker = C_Timer.NewTicker(1, UpdateCoords)
+
         -- Clock update timer
         local function UpdateClock()
             local hour, minute
-            local timeSource = UIThingsDB.misc.minimapClockTimeSource or "local"
+            local timeSource = UIThingsDB.minimap.minimapClockTimeSource or "local"
             if timeSource == "local" then
                 hour, minute = tonumber(date("%H")), tonumber(date("%M"))
             else
                 hour, minute = GetGameTime()
             end
-            local clockFormat = UIThingsDB.misc.minimapClockFormat or "24H"
+            local clockFormat = UIThingsDB.minimap.minimapClockFormat or "24H"
             if clockFormat == "24H" then
                 clockText:SetFormattedText("%02d:%02d", hour, minute)
             else
@@ -433,10 +564,10 @@ local function SetupMinimap()
         dragOverlay:SetScript("OnDragStop", function()
             minimapFrame:StopMovingOrSizing()
             local point, _, relPoint, x, y = minimapFrame:GetPoint()
-            UIThingsDB.misc.minimapPos.point = point
-            UIThingsDB.misc.minimapPos.relPoint = relPoint
-            UIThingsDB.misc.minimapPos.x = x
-            UIThingsDB.misc.minimapPos.y = y
+            UIThingsDB.minimap.minimapPos.point = point
+            UIThingsDB.minimap.minimapPos.relPoint = relPoint
+            UIThingsDB.minimap.minimapPos.x = x
+            UIThingsDB.minimap.minimapPos.y = y
         end)
 
         -- Store reference for lock toggling
@@ -451,6 +582,10 @@ local function SetupMinimap()
 
     -- Position any enabled minimap icons on the right side
     PositionMinimapIcons()
+
+    -- Hook the dungeon finder eye so it stays on the minimap when queuing
+    HookQueueEye()
+    AnchorQueueEyeToMinimap()
 end
 
 -- == Exported Functions ==
@@ -496,7 +631,7 @@ end
 
 function MinimapCustom.UpdateMinimapBorder()
     if not borderBackdrop or not minimapFrame then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     local bc = settings.minimapBorderColor or { r = 0, g = 0, b = 0, a = 1 }
     borderBackdrop:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
 
@@ -507,7 +642,7 @@ end
 
 function MinimapCustom.UpdateZoneText()
     if not zoneText then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     zoneText:SetFont(settings.minimapZoneFont or "Fonts\\FRIZQT__.TTF", settings.minimapZoneFontSize or 12, "OUTLINE")
     local zc = settings.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
     zoneText:SetTextColor(zc.r, zc.g, zc.b)
@@ -522,7 +657,7 @@ end
 
 function MinimapCustom.UpdateZonePosition(x, y)
     if minimapFrame and minimapFrame.zoneFrame then
-        UIThingsDB.misc.minimapZoneOffset = { x = x, y = y }
+        UIThingsDB.minimap.minimapZoneOffset = { x = x, y = y }
         minimapFrame.zoneFrame:ClearAllPoints()
         minimapFrame.zoneFrame:SetPoint("BOTTOM", Minimap, "TOP", x, y)
     end
@@ -530,7 +665,7 @@ end
 
 function MinimapCustom.UpdateClockText()
     if not clockText then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     clockText:SetFont(settings.minimapClockFont or "Fonts\\FRIZQT__.TTF", settings.minimapClockFontSize or 11, "OUTLINE")
     local cc = settings.minimapClockFontColor or { r = 1, g = 1, b = 1 }
     clockText:SetTextColor(cc.r, cc.g, cc.b)
@@ -545,9 +680,42 @@ end
 
 function MinimapCustom.UpdateClockPosition(x, y)
     if minimapFrame and minimapFrame.clockFrame then
-        UIThingsDB.misc.minimapClockOffset = { x = x, y = y }
+        UIThingsDB.minimap.minimapClockOffset = { x = x, y = y }
         minimapFrame.clockFrame:ClearAllPoints()
         minimapFrame.clockFrame:SetPoint("TOP", Minimap, "BOTTOM", x, y)
+    end
+end
+
+function MinimapCustom.SetCoordsLocked(locked)
+    if minimapFrame and minimapFrame.coordsFrame and minimapFrame.coordsFrame.dragOverlay then
+        if locked then
+            minimapFrame.coordsFrame.dragOverlay:Hide()
+        else
+            minimapFrame.coordsFrame.dragOverlay:Show()
+        end
+    end
+end
+
+function MinimapCustom.UpdateCoordsText()
+    if not coordsText then return end
+    local settings = UIThingsDB.minimap
+    coordsText:SetFont(settings.minimapCoordsFont or "Fonts\\FRIZQT__.TTF", settings.minimapCoordsFontSize or 11, "OUTLINE")
+    local crc = settings.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
+    coordsText:SetTextColor(crc.r, crc.g, crc.b)
+    if minimapFrame and minimapFrame.coordsFrame then
+        if settings.minimapShowCoords then
+            minimapFrame.coordsFrame:Show()
+        else
+            minimapFrame.coordsFrame:Hide()
+        end
+    end
+end
+
+function MinimapCustom.UpdateCoordsPosition(x, y)
+    if minimapFrame and minimapFrame.coordsFrame then
+        UIThingsDB.minimap.minimapCoordsOffset = { x = x, y = y }
+        minimapFrame.coordsFrame:ClearAllPoints()
+        minimapFrame.coordsFrame:SetPoint("TOP", Minimap, "BOTTOM", x, y)
     end
 end
 
@@ -575,6 +743,7 @@ local DRAWER_BLACKLIST = {
     ["LunaMinimapFrame"] = true,
     ["LunaMinimapZoneFrame"] = true,
     ["LunaMinimapClockFrame"] = true,
+    ["LunaMinimapCoordsFrame"] = true,
     ["LunaMinimapDrawer"] = true,
     -- TomTom arrows/direction indicators
     ["TomTomCrazyArrow"] = true,
@@ -702,7 +871,7 @@ end
 
 local function UpdateToggleBtnColor()
     if not drawerToggleBtn then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     local bg = settings.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
     local bc = settings.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
     local borderSize = settings.minimapDrawerBorderSize or 2
@@ -721,7 +890,7 @@ end
 
 local function ApplyDrawerLockVisuals()
     if not drawerFrame then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     local borderSize = settings.minimapDrawerBorderSize or 2
     local bc = settings.minimapDrawerBorderColor or { r = 0.3, g = 0.3, b = 0.3, a = 1 }
     local bg = settings.minimapDrawerBgColor or { r = 0, g = 0, b = 0, a = 0.7 }
@@ -805,7 +974,7 @@ local function SetDrawerCollapsed(collapsed)
             drawerFrame:SetBackdrop(nil)
         else
             -- Re-layout to restore proper size
-            local settings = UIThingsDB.misc
+            local settings = UIThingsDB.minimap
             local btnSize = settings.minimapDrawerButtonSize or 32
             local padding = settings.minimapDrawerPadding or 4
             local count = #collectedButtons
@@ -825,7 +994,7 @@ end
 
 local function LayoutDrawerButtons()
     if not drawerFrame then return end
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     local btnSize = settings.minimapDrawerButtonSize or 32
     local padding = settings.minimapDrawerPadding or 4
 
@@ -929,7 +1098,7 @@ local function ReleaseDrawerButtons()
 end
 
 local function SetupDrawer()
-    local settings = UIThingsDB.misc
+    local settings = UIThingsDB.minimap
     if not settings.minimapDrawerEnabled then return end
 
     if not drawerFrame then
@@ -956,7 +1125,7 @@ local function SetupDrawer()
         dragOverlay:SetScript("OnDragStop", function()
             drawerFrame:StopMovingOrSizing()
             local point, _, relPoint, x, y = drawerFrame:GetPoint()
-            UIThingsDB.misc.minimapDrawerPos = { point = point, relPoint = relPoint, x = x, y = y }
+            UIThingsDB.minimap.minimapDrawerPos = { point = point, relPoint = relPoint, x = x, y = y }
             -- Update toggle side after moving
             UpdateToggleButton()
         end)
@@ -993,7 +1162,7 @@ local function SetupDrawer()
 
     -- Delayed re-collect for addons that create buttons lazily
     C_Timer.After(3, function()
-        if drawerFrame and UIThingsDB.misc.minimapDrawerEnabled then
+        if drawerFrame and UIThingsDB.minimap.minimapDrawerEnabled then
             CollectMinimapButtons()
         end
     end)
@@ -1014,7 +1183,7 @@ function MinimapCustom.DestroyDrawer()
 end
 
 function MinimapCustom.SetDrawerLocked(locked)
-    UIThingsDB.misc.minimapDrawerLocked = locked
+    UIThingsDB.minimap.minimapDrawerLocked = locked
     if drawerFrame and drawerFrame.dragOverlay then
         if locked then
             drawerFrame.dragOverlay:Hide()
@@ -1032,7 +1201,7 @@ function MinimapCustom.UpdateDrawerBorder()
 end
 
 function MinimapCustom.RefreshDrawer()
-    if drawerFrame and UIThingsDB.misc.minimapDrawerEnabled then
+    if drawerFrame and UIThingsDB.minimap.minimapDrawerEnabled then
         CollectMinimapButtons()
     end
 end
@@ -1041,14 +1210,14 @@ end
 
 local function OnAddonLoaded(event, addon)
     if addon == "Blizzard_HybridMinimap" then
-        if UIThingsDB.misc and UIThingsDB.misc.minimapEnabled then
-            ApplyMinimapShape(UIThingsDB.misc.minimapShape)
+        if UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled then
+            ApplyMinimapShape(UIThingsDB.minimap.minimapShape)
         end
     end
 end
 
 local function OnPlayerEnteringWorld()
-    if UIThingsDB.misc then
+    if UIThingsDB.minimap then
         SetupMinimap()
         SetupDrawer()
     end

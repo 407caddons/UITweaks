@@ -262,23 +262,9 @@ local function OnEvent(self, event, ...)
                 autoInviteEnabled = false,
                 autoInviteKeywords = "inv,invite",
                 quickDestroy = false,
-                sct = {
-                    enabled = false,
-                    captureToFrames = false,
-                    showDamage = true,
-                    showHealing = true,
-                    showTargetDamage = false,
-                    showTargetHealing = false,
-                    fontSize = 24,
-                    duration = 1.5,
-                    critScale = 1.5,
-                    scrollDistance = 100,
-                    damageColor = { r = 1, g = 0.2, b = 0.2 },
-                    healingColor = { r = 0.2, g = 1, b = 0.2 },
-                    damageAnchor = { point = "CENTER", x = 150, y = 0 },
-                    healingAnchor = { point = "CENTER", x = -150, y = 0 },
-                    locked = true,
-                },
+                classColorTooltips = false,
+            },
+            minimap = {
                 minimapEnabled = false,
                 minimapShape = "ROUND",
                 minimapPos = { point = "TOPRIGHT", relPoint = "TOPRIGHT", x = -7, y = -7 },
@@ -294,6 +280,11 @@ local function OnEvent(self, event, ...)
                 minimapClockFormat = "24H",
                 minimapClockTimeSource = "local",
                 minimapClockOffset = { x = 0, y = -4 },
+                minimapShowCoords = false,
+                minimapCoordsFont = "Fonts\\FRIZQT__.TTF",
+                minimapCoordsFontSize = 11,
+                minimapCoordsFontColor = { r = 1, g = 1, b = 1 },
+                minimapCoordsOffset = { x = 0, y = -20 },
                 minimapBorderColor = { r = 0, g = 0, b = 0, a = 1 },
                 minimapBorderSize = 3,
                 minimapShowMail = false,
@@ -309,6 +300,23 @@ local function OnEvent(self, event, ...)
                 minimapDrawerBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
                 minimapDrawerBorderSize = 2,
                 minimapDrawerBgColor = { r = 0, g = 0, b = 0, a = 0.7 },
+            },
+            sct = {
+                enabled = false,
+                captureToFrames = false,
+                showDamage = true,
+                showHealing = true,
+                showTargetDamage = false,
+                showTargetHealing = false,
+                fontSize = 24,
+                duration = 1.5,
+                critScale = 1.5,
+                scrollDistance = 100,
+                damageColor = { r = 1, g = 0.2, b = 0.2 },
+                healingColor = { r = 0.2, g = 1, b = 0.2 },
+                damageAnchor = { point = "CENTER", x = 150, y = 0 },
+                healingAnchor = { point = "CENTER", x = -150, y = 0 },
+                locked = true,
             },
             talentReminders = {
                 enabled = false,
@@ -525,6 +533,21 @@ local function OnEvent(self, event, ...)
                 forcesBarColor = { r = 0.4, g = 0.6, b = 1.0 },
                 forcesTextColor = { r = 0.4, g = 0.8, b = 1.0 },
                 forcesCompleteColor = { r = 0.2, g = 1, b = 0.2 },
+            },
+            coordinates = {
+                enabled = false,
+                locked = true,
+                pos = { point = "CENTER", x = 0, y = 0 },
+                width = 220,
+                height = 200,
+                showBorder = true,
+                borderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 },
+                showBackground = true,
+                backgroundColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 12,
+                registerWayCommand = false,
+                waypoints = {},
             }
         }
 
@@ -576,6 +599,12 @@ local function OnEvent(self, event, ...)
 
         -- LunaUITweaks_OpenConfig is defined in ConfigMain.lua (used by Addon Compartment)
         SlashCmdList["UITHINGS"] = function(msg)
+            if msg and msg:lower():match("^paste") then
+                if addonTable.Coordinates and addonTable.Coordinates.ShowPasteDialog then
+                    addonTable.Coordinates.ShowPasteDialog()
+                end
+                return
+            end
             LunaUITweaks_OpenConfig()
         end
     end

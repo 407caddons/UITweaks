@@ -78,7 +78,8 @@ table.insert(Widgets.moduleInits, function()
         local dungeons = {}
 
         for i = 1, numInstances do
-            local name, _, reset, _, locked, extended, _, isRaid, _, difficultyName, numEncounters, encounterProgress = GetSavedInstanceInfo(i)
+            local name, _, reset, _, locked, extended, _, isRaid, _, difficultyName, numEncounters, encounterProgress =
+            GetSavedInstanceInfo(i)
             if locked or extended then
                 local entry = {
                     index = i,
@@ -144,17 +145,14 @@ table.insert(Widgets.moduleInits, function()
 
     lockoutFrame:SetScript("OnClick", function(self, button)
         if button == "LeftButton" then
-            if not RaidInfoFrame then
-                C_AddOns.LoadAddOn("Blizzard_RaidUI")
-            end
-            if RaidInfoFrame then
-                if RaidInfoFrame:IsShown() then
-                    RaidInfoFrame:Hide()
-                else
-                    RaidInfoFrame:Show()
-                end
+            if RaidInfoFrame and RaidInfoFrame:IsShown() then
+                RaidInfoFrame:Hide()
             else
-                ToggleRaidFrame()
+                ToggleFriendsFrame(3)
+                if RaidInfoFrame and not RaidInfoFrame:IsShown() then
+                    RaidInfoFrame:Show()
+                    RequestRaidInfo()
+                end
             end
         end
     end)

@@ -703,7 +703,7 @@ local function GetOrCreateImportExportFrame()
     if importExportFrame then return importExportFrame end
 
     local f = CreateFrame("Frame", "LunaTalentManagerImportExport", UIParent, "BackdropTemplate")
-    f:SetSize(400, 200)
+    f:SetSize(450, 250)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({
@@ -724,24 +724,24 @@ local function GetOrCreateImportExportFrame()
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.title:SetPoint("TOP", 0, -10)
 
-    -- ScrollFrame + EditBox for the talent string
-    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -35)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
-
-    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    local editBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetFontObject("ChatFontNormal")
-    editBox:SetWidth(350)
-    editBox:SetHeight(scrollFrame:GetHeight() or 120)
     editBox:SetMaxLetters(0)
+    editBox:SetPoint("TOPLEFT", 10, -35)
+    editBox:SetPoint("BOTTOMRIGHT", -10, 40)
+    editBox:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    editBox:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    editBox:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    editBox:SetTextInsets(6, 6, 4, 4)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    editBox:SetScript("OnCursorChanged", function(self, x, y, w, h)
-        scrollFrame:SetVerticalScroll(-y)
-    end)
     editBox:SetScript("OnMouseDown", function(self) self:SetFocus() end)
-    scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
 
     -- OK button
@@ -1202,11 +1202,8 @@ function TalentManager.ShowAddDialog(importString)
                 RAID_DIFFICULTIES[difficultyID] or GetDifficultyInfo(difficultyID) or "Unknown")
         end
     else
-        UIDropDownMenu_SetText(f.typeDropdown, "Select Type...")
-        UIDropDownMenu_SetText(f.instanceDropdown, "Select Instance...")
-        UIDropDownMenu_SetText(f.diffDropdown, "Select Difficulty...")
-        UIDropDownMenu_DisableDropDown(f.instanceDropdown)
-        UIDropDownMenu_DisableDropDown(f.diffDropdown)
+        UIDropDownMenu_SetText(f.typeDropdown, "Uncategorized")
+        OnTypeChanged("uncategorized")
     end
 
     -- Save handler
