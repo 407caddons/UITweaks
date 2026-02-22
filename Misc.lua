@@ -414,7 +414,7 @@ HookTooltipClassColors = function()
         if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
         if not UIThingsDB.misc.classColorTooltips then return end
         local _, unit = tooltip:GetUnit()
-        if not unit or not UnitIsPlayer(unit) then return end
+        if not unit or issecretvalue(unit) or not UnitIsPlayer(unit) then return end
         local _, classFile = UnitClass(unit)
         if not classFile then return end
         local color = C_ClassColor.GetClassColor(classFile)

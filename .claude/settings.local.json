@@ -26,7 +26,13 @@
       "Bash(find:*)",
       "WebFetch(domain:news.blizzard.com)",
       "Bash(ls:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" log --oneline -30)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" tag -l)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" log v1.12.0..HEAD --oneline)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD --stat)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Coordinates.lua SCT.lua widgets/Lockouts.lua widgets/XPRep.lua widgets/SessionStats.lua MinimapCustom.lua config/panels/MinimapPanel.lua TalentManager.lua config/ConfigMain.lua ActionBars.lua --stat)",
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Core.lua)"
     ]
   }
 }
