@@ -124,6 +124,14 @@ function addonTable.Config.Initialize()
                 end
             end
 
+            -- Warehousing
+            if UIThingsDB.warehousing then
+                UIThingsDB.warehousing.locked = true
+                if addonTable.Warehousing and addonTable.Warehousing.UpdateSettings then
+                    addonTable.Warehousing.UpdateSettings()
+                end
+            end
+
             -- Minimap (position, zone, clock, drawer)
             if addonTable.MinimapCustom then
                 if addonTable.MinimapCustom.SetMinimapLocked then
@@ -197,7 +205,8 @@ function addonTable.Config.Initialize()
             { id = 19, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
             { id = 20, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
             { id = 21, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 22, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 22, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
+            { id = 23, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -298,6 +307,10 @@ function addonTable.Config.Initialize()
         coordinatesPanel:SetAllPoints()
         coordinatesPanel:Hide()
 
+        local warehousingPanel = CreateFrame("Frame", nil, contentContainer)
+        warehousingPanel:SetAllPoints()
+        warehousingPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -321,6 +334,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.mplusTimer = mplusTimerPanel
         addonTable.ConfigPanels.talentManager = talentManagerPanel
         addonTable.ConfigPanels.coordinates = coordinatesPanel
+        addonTable.ConfigPanels.warehousing = warehousingPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -345,7 +359,8 @@ function addonTable.Config.Initialize()
             [19] = talentPanel,
             [20] = miscPanel,
             [21] = widgetsPanel,
-            [22] = addonVersionsPanel,
+            [22] = warehousingPanel,
+            [23] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -498,8 +513,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Widgets then
                 addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[21], configWindow)
             end
+            if addonTable.ConfigSetup.Warehousing then
+                addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[22], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[22], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[23], configWindow)
             end
         end
         ----------------------------------------------------

@@ -22,6 +22,8 @@ table.insert(Widgets.moduleInits, function()
     local goldNeedsSnap   = isStale -- snapshot gold on first PLAYER_ENTERING_WORLD
     local deathCount      = isStale and 0 or (db.deathCount or 0)
     local itemsLooted     = isStale and 0 or (db.itemsLooted or 0)
+    local xpAtLogin       = isStale and 0 or (db.xpAtLogin or 0)
+    local xpNeedsSnap     = isStale -- snapshot XP on first PLAYER_ENTERING_WORLD
 
     -- Cached display text updated on events
     local cachedText   = "Session: 0:00"
@@ -31,6 +33,7 @@ table.insert(Widgets.moduleInits, function()
         db.goldAtLogin  = goldAtLogin
         db.deathCount   = deathCount
         db.itemsLooted  = itemsLooted
+        db.xpAtLogin    = xpAtLogin
         db.lastSeen     = time()
         db.charKey      = charKey
     end
@@ -63,6 +66,20 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
+    -- Format a gold-per-hour rate (copper/hr)
+    local function FormatGoldPerHour(copperPerHour)
+        if copperPerHour == 0 then return "0|cFFFFD700g|r/hr" end
+        local sign = copperPerHour >= 0 and "+" or "-"
+        local abs = math.abs(copperPerHour)
+        local g = math.floor(abs / 10000)
+        local s = math.floor((abs % 10000) / 100)
+        if g > 0 then
+            return string.format("%s%d|cFFFFD700g|r %d|cFFC0C0C0s|r/hr", sign, g, s)
+        else
+            return string.format("%s%d|cFFC0C0C0s|r/hr", sign, s)
+        end
+    end
+
     local function UpdateCachedText()
         local elapsed = GetTime() - sessionStart
         cachedText = "Session: " .. FormatDuration(elapsed)
@@ -82,14 +99,18 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    -- PLAYER_ENTERING_WORLD fires after character data is loaded — snapshot gold here.
+    -- PLAYER_ENTERING_WORLD fires after character data is loaded — snapshot gold and XP here.
     local function OnSessionEnteringWorld()
         if not db.enabled then return end
         if goldNeedsSnap then
             goldAtLogin = GetMoney()
             goldNeedsSnap = false
-            SaveSessionData()
         end
+        if xpNeedsSnap then
+            xpAtLogin = UnitXP("player") or 0
+            xpNeedsSnap = false
+        end
+        SaveSessionData()
         UpdateCachedText()
     end
 
@@ -114,6 +135,8 @@ table.insert(Widgets.moduleInits, function()
             goldNeedsSnap   = false
             deathCount      = 0
             itemsLooted     = 0
+            xpAtLogin       = UnitXP("player") or 0
+            xpNeedsSnap     = false
             SaveSessionData()
             UpdateCachedText()
             self.text:SetText(cachedText)
@@ -128,11 +151,38 @@ table.insert(Widgets.moduleInits, function()
         GameTooltip:SetText("Session Stats", 1, 0.82, 0)
 
         local elapsed = GetTime() - sessionStart
+
         GameTooltip:AddDoubleLine("Session Time:", FormatDuration(elapsed), 1, 1, 1, 1, 1, 1)
 
+        -- Gold earned / spent
         local goldDelta = GetMoney() - goldAtLogin
         GameTooltip:AddDoubleLine("Gold " .. (goldDelta >= 0 and "Earned:" or "Spent:"),
             FormatGoldDelta(goldDelta), 1, 1, 1, 1, 1, 1)
+
+        -- Gold per hour (only meaningful after 1 minute)
+        if elapsed > 60 then
+            local goldPerHour = math.floor((goldDelta / elapsed) * 3600)
+            GameTooltip:AddDoubleLine("Gold/hr:", FormatGoldPerHour(goldPerHour), 1, 1, 1, 1, 1, 1)
+        end
+
+        -- XP per hour (only for non-max-level characters)
+        local maxXP = UnitXPMax("player") or 0
+        if maxXP > 0 and elapsed > 60 then
+            local currentXP = UnitXP("player") or 0
+            local xpDelta = currentXP - xpAtLogin
+            if xpDelta > 0 then
+                local xpPerHour = math.floor((xpDelta / elapsed) * 3600)
+                GameTooltip:AddDoubleLine("XP/hr:",
+                    string.format("%s XP", BreakUpLargeNumbers(xpPerHour)), 1, 1, 1, 0.6, 1, 0.6)
+                -- Time to level estimate
+                local xpToLevel = maxXP - currentXP
+                if xpPerHour > 0 then
+                    local hoursToLevel = xpToLevel / xpPerHour
+                    GameTooltip:AddDoubleLine("  To level:",
+                        FormatDuration(math.floor(hoursToLevel * 3600)), 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+                end
+            end
+        end
 
         GameTooltip:AddDoubleLine("Items Looted:", tostring(itemsLooted), 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("Deaths:", tostring(deathCount),

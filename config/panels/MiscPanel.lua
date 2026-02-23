@@ -65,13 +65,25 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
 
+    -- Show Spell/Item ID on Tooltips
+    local spellIDBtn = CreateFrame("CheckButton", "UIThingsMiscSpellID", panel, "ChatConfigCheckButtonTemplate")
+    spellIDBtn:SetPoint("TOPLEFT", 20, -90)
+    _G[spellIDBtn:GetName() .. "Text"]:SetText("Show Spell/Item ID on Tooltips")
+    spellIDBtn:SetChecked(UIThingsDB.misc.showSpellID)
+    spellIDBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.showSpellID = self:GetChecked()
+        if self:GetChecked() and addonTable.Misc then
+            addonTable.Misc.ApplyEvents()
+        end
+    end)
+
     -- UI Scale Section
-    Helpers.CreateSectionHeader(panel, "UI Scale", -110)
+    Helpers.CreateSectionHeader(panel, "UI Scale", -140)
 
     -- UI Scale Enable Checkbox
     local uiScaleBtn = CreateFrame("CheckButton", "UIThingsMiscUIScaleEnable", panel,
         "ChatConfigCheckButtonTemplate")
-    uiScaleBtn:SetPoint("TOPLEFT", 20, -140)
+    uiScaleBtn:SetPoint("TOPLEFT", 20, -170)
     _G[uiScaleBtn:GetName() .. "Text"]:SetText("Enable UI Scaling")
     uiScaleBtn:SetChecked(UIThingsDB.misc.uiScaleEnabled)
     uiScaleBtn:SetScript("OnClick", function(self)
@@ -85,7 +97,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
     local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
 
-    scaleSlider:SetPoint("TOPLEFT", 40, -180)
+    scaleSlider:SetPoint("TOPLEFT", 40, -210)
     scaleSlider:SetMinMaxValues(0.4, 1.25)
     scaleSlider:SetValueStep(0.001)
     scaleSlider:SetObeyStepOnDrag(true)

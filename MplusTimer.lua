@@ -86,6 +86,7 @@ local bars = {}   -- bars[1]=+3, bars[2]=+2, bars[3]=+1
 local barTexts = {}
 local forcesBar, forcesText
 local bossTexts = {}
+local bossPctTexts = {}
 local MAX_BOSSES = 8
 
 local function CreateBar(parent, index)
@@ -270,6 +271,12 @@ local function InitFrames()
         bt:SetJustifyH("LEFT")
         bt:SetTextColor(1, 1, 1)
         bossTexts[i] = bt
+
+        local bpt = mainFrame:CreateFontString(nil, "OVERLAY")
+        bpt:SetFont(fontPath, fontSize, "OUTLINE")
+        bpt:SetJustifyH("RIGHT")
+        bpt:SetTextColor(1, 1, 1)
+        bossPctTexts[i] = bpt
     end
 end
 
@@ -349,6 +356,10 @@ local function ApplyLayout()
         bossTexts[i]:ClearAllPoints()
         bossTexts[i]:SetFont(fontPath, fontSize, "OUTLINE")
         bossTexts[i]:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 10, bossY - ((i - 1) * (fontSize + 4)))
+
+        bossPctTexts[i]:ClearAllPoints()
+        bossPctTexts[i]:SetFont(fontPath, fontSize, "OUTLINE")
+        bossPctTexts[i]:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -10, bossY - ((i - 1) * (fontSize + 4)))
     end
 
     -- Calculate total frame height
@@ -536,12 +547,21 @@ local function RenderForces()
     end
 end
 
+-- Returns par time (seconds) for boss index i out of n total bosses,
+-- targeting the +2 chest time split evenly across all bosses.
+local function GetParTime(i, n)
+    if n <= 0 or state.timeLimit <= 0 then return nil end
+    local target = #state.timeLimits >= 2 and state.timeLimits[2] or state.timeLimit * 0.8
+    return (target / n) * i
+end
+
 local function RenderObjectives()
     if not mainFrame then return end
 
     -- Hide all first
     for i = 1, MAX_BOSSES do
         bossTexts[i]:SetText("")
+        bossPctTexts[i]:SetText("")
     end
 
     if not UIThingsDB.mplusTimer.showBosses then return end
@@ -551,17 +571,55 @@ local function RenderObjectives()
     local bccHex = string.format("%02X%02X%02X", bcc.r * 255, bcc.g * 255, bcc.b * 255)
     local bicHex = string.format("%02X%02X%02X", bic.r * 255, bic.g * 255, bic.b * 255)
 
+    local n = #state.objectives
+    local showSplits = UIThingsDB.mplusTimer.showSplits
+    local showBossForcePct = UIThingsDB.mplusTimer.showBossForcePct
+
+    local history = state.mapId and UIThingsDB.mplusTimer.runHistory
+        and UIThingsDB.mplusTimer.runHistory[state.mapId]
+
     for i, boss in ipairs(state.objectives) do
         if i > MAX_BOSSES then break end
         local text
+
         if boss.time then
-            -- Completed boss
+            -- Completed boss: show split delta vs par
             local timeStr = FormatTime(boss.time)
-            text = string.format("|cFF%s[%s] %s|r", bccHex, timeStr, boss.name)
+            local splitStr = ""
+            if showSplits then
+                local prevTime = history and history.bosses
+                    and history.bosses[i] and history.bosses[i].time
+                if prevTime then
+                    local delta = boss.time - prevTime
+                    local deltaHex = delta < 0 and "FFDD00" or (delta > 0 and "FF4444" or "00DD00")
+                    splitStr = string.format(" |cFF%s%s|r", deltaHex, FormatTimeSigned(delta))
+                end
+            end
+            text = string.format("|cFF%s[%s]|r |cFF%s%s|r%s",
+                bccHex, timeStr, bccHex, boss.name, splitStr)
+
+            -- Right-aligned forces % with run-to-run delta
+            if showBossForcePct and boss.forcePct then
+                if boss.forcePct >= 100 then
+                    bossPctTexts[i]:SetText(string.format("|cFF00DD00%.1f%%|r", boss.forcePct))
+                else
+                    local prevRunPct = history and history.bosses
+                        and history.bosses[i] and history.bosses[i].forcePct
+                    if prevRunPct then
+                        local delta = boss.forcePct - prevRunPct
+                        local pctHex = delta > 0 and "FFDD00" or (delta < 0 and "FF4444" or "00DD00")
+                        local deltaSign = delta > 0 and "+" or ""
+                        bossPctTexts[i]:SetText(string.format("|cFF%s%.1f%% (%s%.1f%%)|r",
+                            pctHex, boss.forcePct, deltaSign, delta))
+                    else
+                        bossPctTexts[i]:SetText(string.format("|cFFAAAAAA%.1f%%|r", boss.forcePct))
+                    end
+                end
+            end
         else
-            -- Not yet completed
             text = string.format("|cFF%s%s|r", bicHex, boss.name)
         end
+
         bossTexts[i]:SetText(text)
     end
 
@@ -642,6 +700,9 @@ local function UpdateObjectives()
 
                 if info.completed and not state.objectives[i].time then
                     state.objectives[i].time = select(2, GetWorldElapsedTime(1)) - (info.elapsed or 0)
+                    -- Snapshot forces % at the moment this boss was killed
+                    local pct = state.totalCount > 0 and (state.currentCount / state.totalCount * 100) or 0
+                    state.objectives[i].forcePct = pct
                 end
             end
         end
@@ -774,6 +835,28 @@ local function CompleteChallenge()
         state.forcesCompletionTime = state.timer
     end
 
+    -- Save boss force % snapshots only when the run completed at 100% forces
+    if state.forcesCompleted and state.mapId then
+        local db = UIThingsDB.mplusTimer
+        db.runHistory = db.runHistory or {}
+        db.runHistory[state.mapId] = db.runHistory[state.mapId] or {}
+        local entry = {
+            level = state.level,
+            time = state.completionTimeMs and math.floor(state.completionTimeMs / 1000) or state.timer,
+            onTime = state.completedOnTime,
+            bosses = {},
+        }
+        for i, obj in ipairs(state.objectives) do
+            entry.bosses[i] = {
+                name = obj.name,
+                forcePct = obj.forcePct,
+                time = obj.time,
+            }
+        end
+        -- Keep only the most recent run per map
+        db.runHistory[state.mapId] = entry
+    end
+
     RenderTimer()
     RenderForces()
     RenderObjectives()
@@ -849,6 +932,9 @@ function MplusTimer.CloseDemo()
     if not state.demoMode then return end
     state.demoMode = false
     StopTimerLoop()
+    -- Remove the seeded demo history so it doesn't persist in saved variables
+    local db = UIThingsDB.mplusTimer
+    if db and db.runHistory then db.runHistory["demo"] = nil end
     ResetState()
     if mainFrame then mainFrame:Hide() end
 end
@@ -879,12 +965,25 @@ function MplusTimer.ToggleDemo()
     wipe(state.deathLog)
     state.deathLog["DemoTank"] = 1
     state.deathLog["DemoHealer"] = 2
+    state.mapId = "demo"
     state.currentCount = 0
     state.totalCount = 100
+    -- Seed a previous run to compare against (simulates a prior completed key on this map)
+    local db = UIThingsDB.mplusTimer
+    db.runHistory = db.runHistory or {}
+    db.runHistory["demo"] = {
+        level = 29,
+        bosses = {
+            { name = "Test Boss Name 1", forcePct = 16.7, time = 490  }, -- prev: 8:10
+            { name = "Test Boss Name 2", forcePct = 44.3, time = 1080 }, -- prev: 18:00
+            { name = "Test Boss Name 3", forcePct = 74.5, time = 1620 }, -- prev: 27:00
+            { name = "Test Boss Name 4", forcePct = 100.0, time = 2100 },
+        },
+    }
     state.objectives = {
-        { name = "Test Boss Name 1", time = 520 },
-        { name = "Test Boss Name 2", time = 1040 },
-        { name = "Test Boss Name 3", time = 1560 },
+        { name = "Test Boss Name 1", time = 520,  forcePct = 14.2 }, -- split: +0:30 (red), forces: -2.5% (red)
+        { name = "Test Boss Name 2", time = 1040, forcePct = 47.8 }, -- split: -0:40 (yellow), forces: +3.5% (yellow)
+        { name = "Test Boss Name 3", time = 1560, forcePct = 74.0 }, -- split: -1:00 (yellow), forces: -0.5% (red)
         { name = "Test Boss Name 4", time = nil },
         { name = "Test Boss Name 5", time = nil },
     }

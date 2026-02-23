@@ -32,7 +32,15 @@
       "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" log v1.12.0..HEAD --oneline)",
       "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD --stat)",
       "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Coordinates.lua SCT.lua widgets/Lockouts.lua widgets/XPRep.lua widgets/SessionStats.lua MinimapCustom.lua config/panels/MinimapPanel.lua TalentManager.lua config/ConfigMain.lua ActionBars.lua --stat)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Core.lua)"
+      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Core.lua)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(dir:*)",
+      "Bash(cmd.exe /c dir \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\.claude\")",
+      "Bash(cmd.exe /c dir \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\.claude\" /a)",
+      "Bash(cmd.exe /c \"dir /a /b \"\"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\"\"\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -File -:*)"
     ]
   }
 }

@@ -133,25 +133,26 @@ local function AcquireToast()
             GameTooltip:Hide()
         end)
 
-        -- OnUpdate for Timer
-        toast:SetScript("OnUpdate", function(self, elapsed)
-            self.timeParams.elapsed = self.timeParams.elapsed + elapsed
-            local remaining = self.timeParams.duration - self.timeParams.elapsed
-
-            if remaining <= 0 then
-                Loot.RecycleToast(self)
-            elseif remaining < 0.5 then
-                self:SetAlpha(remaining * 2) -- Fade out over last 0.5s
-            else
-                self:SetAlpha(1)
-            end
-        end)
     end
 
     -- Reset type fields for reuse
     toast.toastType = nil
     toast.currencyID = nil
     toast.itemLink = nil
+
+    -- Restore OnUpdate script (cleared by RecycleToast on pooled frames)
+    toast:SetScript("OnUpdate", function(self, elapsed)
+        self.timeParams.elapsed = self.timeParams.elapsed + elapsed
+        local remaining = self.timeParams.duration - self.timeParams.elapsed
+
+        if remaining <= 0 then
+            Loot.RecycleToast(self)
+        elseif remaining < 0.5 then
+            self:SetAlpha(remaining * 2) -- Fade out over last 0.5s
+        else
+            self:SetAlpha(1)
+        end
+    end)
 
     -- Apply Settings
     local settings = UIThingsDB.loot
@@ -166,6 +167,8 @@ end
 
 function Loot.RecycleToast(toast)
     toast:Hide()
+    toast:SetScript("OnUpdate", nil)
+    toast.timeParams = nil
 
     -- Remove from active list
     for i, t in ipairs(activeToasts) do
@@ -491,7 +494,7 @@ end
 local function OnChatMsgLoot(event, msg)
     if not UIThingsDB.loot.enabled then return end
     if issecretvalue(msg) then return end
-    local itemLink = string.match(msg, "|Hitem:.-|h")
+    local itemLink = string.match(msg, "|c%x+|Hitem:.-|h.-|h|r")
     if itemLink then
         local _, _, quality = GetItemInfo(itemLink)
         if not quality then return end

@@ -4,7 +4,7 @@
 ## Author: 407c
 ## Version: 1.13.0
 ## X-Curse-Project-ID: 1450486
-## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders
+## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
 ## AddonCompartmentFunc: LunaUITweaks_OpenConfig
 
@@ -49,6 +49,7 @@ config\panels\QuestAutoPanel.lua
 config\panels\QuestReminderPanel.lua
 config\panels\MplusTimerPanel.lua
 config\panels\CoordinatesPanel.lua
+config\panels\WarehousingPanel.lua
 config\ConfigMain.lua
 
 # Feature modules
@@ -74,6 +75,7 @@ QuestAuto.lua
 QuestReminder.lua
 MplusTimer.lua
 Coordinates.lua
+Warehousing.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua
@@ -104,6 +106,12 @@ widgets\Currency.lua
 widgets\SessionStats.lua
 widgets\Lockouts.lua
 widgets\XPRep.lua
+widgets\Haste.lua
+widgets\Crit.lua
+widgets\Mastery.lua
+widgets\Vers.lua
+widgets\WaypointDistance.lua
+widgets\AddonComm.lua
 
 # Config entry point (now just a stub)
 Config.lua

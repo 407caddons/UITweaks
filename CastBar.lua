@@ -2,6 +2,8 @@ local addonName, addonTable = ...
 local CastBar = {}
 addonTable.CastBar = CastBar
 
+local EventBus = addonTable.EventBus
+
 -- == Local State ==
 
 local castBarFrame
@@ -567,9 +569,7 @@ local function Init()
     CastBar.UpdateSettings()
 end
 
-local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_LOGIN")
-f:SetScript("OnEvent", function()
+EventBus.Register("PLAYER_LOGIN", function()
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(1, Init)
     else

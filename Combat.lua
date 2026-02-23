@@ -1,6 +1,8 @@
 local addonName, addonTable = ...
 addonTable.Combat = {}
 
+local EventBus = addonTable.EventBus
+
 local timerFrame
 local timerText
 local startTime = 0
@@ -1201,9 +1203,7 @@ function addonTable.Combat.ClearConsumableUsage()
 end
 
 -- Initialize when Core loads
-local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_LOGIN")
-f:SetScript("OnEvent", function()
+EventBus.Register("PLAYER_LOGIN", function()
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(1, Init)
         addonTable.Core.SafeAfter(1, InitReminders)

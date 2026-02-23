@@ -1097,6 +1097,21 @@ function TalentReminder.ApplyTalents(reminder)
         end
     end
 
+    -- Re-capture current talent ranks after refunds so the apply step sees rank 0
+    -- for all refunded nodes (pre-refund values would cause the purchase loop to
+    -- start at the wrong rank and skip purchasing ranks 1..N)
+    for _, nodeID in ipairs(nodes) do
+        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+        if nodeInfo and nodeInfo.activeEntry then
+            currentTalents[nodeID] = {
+                entryID = nodeInfo.activeEntry.entryID,
+                rank = nodeInfo.currentRank or 0
+            }
+        else
+            currentTalents[nodeID] = nil
+        end
+    end
+
     -- Step 2: Apply all saved talents, sorted top-to-bottom (by posY) so prerequisites
     -- are purchased before dependent talents further down the tree
     local sortedNodes = {}

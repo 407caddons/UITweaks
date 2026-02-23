@@ -314,6 +314,9 @@ local function OnPlayerEnteringWorld()
         if UIThingsDB.misc.classColorTooltips then
             HookTooltipClassColors()
         end
+        if UIThingsDB.misc.showSpellID then
+            HookTooltipSpellID()
+        end
         addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
     end
 end
@@ -426,6 +429,45 @@ HookTooltipClassColors = function()
     end)
 end
 
+-- Spell/Item ID on tooltips
+local spellIDHooked = false
+HookTooltipSpellID = function()
+    if spellIDHooked then return end
+    spellIDHooked = true
+
+    local function AddIDLine(tooltip, id, label)
+        if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+        if not UIThingsDB.misc.showSpellID then return end
+        tooltip:AddLine(string.format("|cFFAAAAAA%s %d|r", label, id))
+    end
+
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
+        if tooltip ~= GameTooltip then return end
+        if data and data.id and data.id > 0 then
+            AddIDLine(tooltip, data.id, "Spell ID:")
+        end
+    end)
+
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+        if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
+        if data and data.id and data.id > 0 then
+            AddIDLine(tooltip, data.id, "Item ID:")
+        end
+    end)
+
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Action, function(tooltip, data)
+        if tooltip ~= GameTooltip then return end
+        if not data then return end
+        -- Actions backed by a spell
+        local actionType, id = GetActionInfo(data.actionSlot)
+        if actionType == "spell" and id and id > 0 then
+            AddIDLine(tooltip, id, "Spell ID:")
+        elseif actionType == "item" and id and id > 0 then
+            AddIDLine(tooltip, id, "Item ID:")
+        end
+    end)
+end
+
 ApplyMiscEvents = function()
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
@@ -472,6 +514,9 @@ ApplyMiscEvents = function()
 
     if UIThingsDB.misc.classColorTooltips then
         HookTooltipClassColors()
+    end
+    if UIThingsDB.misc.showSpellID then
+        HookTooltipSpellID()
     end
 end
 

@@ -3,6 +3,8 @@ local addonName, addonTable = ...
 local ActionBars = {}
 addonTable.ActionBars = ActionBars
 
+local EventBus = addonTable.EventBus
+
 -- Check for conflicting action bar addons — cached after first call
 local conflictAddonChecked = false
 local conflictAddonFound = false
@@ -1620,38 +1622,35 @@ end
 
 -- == Initialization ==
 
-local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-initFrame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_ENTERING_WORLD" then
-        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        if HasConflictAddon() then return end
-        -- Patch MicroMenuContainer early so it never crashes, even if drawer is disabled
-        PatchMicroMenuLayout()
-        local settings = UIThingsDB.actionBars
-        if settings then
-            if settings.enabled then
-                C_Timer.After(1, function()
-                    ActionBars.SetupDrawer()
-                end)
-            end
-            if settings.skinEnabled then
-                if InCombatLockdown() then
-                    -- Reloaded in combat — apply skin the instant combat ends
-                    local f = CreateFrame("Frame")
-                    f:RegisterEvent("PLAYER_REGEN_ENABLED")
-                    f:SetScript("OnEvent", function(self)
-                        self:UnregisterAllEvents()
-                        wipe(blizzardDefaultPositions)
-                        wipe(originalButtonPositions)
-                        ActionBars.ApplySkin()
-                    end)
-                else
-                    -- Run immediately — SetPointBase hooks will keep
-                    -- positions correct if Blizzard re-layouts later
+local function OnPlayerEnteringWorld()
+    EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+    if HasConflictAddon() then return end
+    -- Patch MicroMenuContainer early so it never crashes, even if drawer is disabled
+    PatchMicroMenuLayout()
+    local settings = UIThingsDB.actionBars
+    if settings then
+        if settings.enabled then
+            C_Timer.After(1, function()
+                ActionBars.SetupDrawer()
+            end)
+        end
+        if settings.skinEnabled then
+            if InCombatLockdown() then
+                -- Reloaded in combat — apply skin the instant combat ends
+                local f = CreateFrame("Frame")
+                f:RegisterEvent("PLAYER_REGEN_ENABLED")
+                f:SetScript("OnEvent", function(self)
+                    self:UnregisterAllEvents()
+                    wipe(blizzardDefaultPositions)
+                    wipe(originalButtonPositions)
                     ActionBars.ApplySkin()
-                end
+                end)
+            else
+                -- Run immediately — SetPointBase hooks will keep
+                -- positions correct if Blizzard re-layouts later
+                ActionBars.ApplySkin()
             end
         end
     end
-end)
+end
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)

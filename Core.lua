@@ -30,6 +30,94 @@ function addonTable.Core.SpeakTTS(message, voiceType)
     end
 end
 
+--------------------------------------------------------------
+-- Character Registry
+-- Central store for all known alts, shared across modules.
+-- Backed by the LunaUITweaks_CharacterData SavedVariable.
+--------------------------------------------------------------
+addonTable.Core.CharacterRegistry = {}
+local CharacterRegistry = addonTable.Core.CharacterRegistry
+
+local function EnsureCharDB()
+    LunaUITweaks_CharacterData = LunaUITweaks_CharacterData or {}
+    LunaUITweaks_CharacterData.characters = LunaUITweaks_CharacterData.characters or {}
+end
+
+--- Register (or update) a character in the central registry.
+-- Called by each module on login/scan with the character key and known metadata.
+-- @param key string "Name - Realm"
+-- @param class string class token e.g. "PALADIN" (optional)
+-- @param module string module name that last updated this record (optional)
+function CharacterRegistry.Register(key, class, module)
+    EnsureCharDB()
+    local existing = LunaUITweaks_CharacterData.characters[key] or {}
+    existing.class = class or existing.class
+    existing.lastSeen = time()
+    if module then
+        existing.modules = existing.modules or {}
+        existing.modules[module] = time()
+    end
+    LunaUITweaks_CharacterData.characters[key] = existing
+end
+
+--- Get all known characters sorted alphabetically by key.
+-- @return table Array of { key, class, lastSeen, modules }
+function CharacterRegistry.GetAll()
+    EnsureCharDB()
+    local chars = {}
+    for key, data in pairs(LunaUITweaks_CharacterData.characters) do
+        table.insert(chars, {
+            key = key,
+            class = data.class,
+            lastSeen = data.lastSeen or 0,
+            modules = data.modules or {},
+        })
+    end
+    table.sort(chars, function(a, b) return a.key < b.key end)
+    return chars
+end
+
+--- Get all character keys sorted alphabetically.
+-- @return table Array of key strings
+function CharacterRegistry.GetAllKeys()
+    EnsureCharDB()
+    local keys = {}
+    for key in pairs(LunaUITweaks_CharacterData.characters) do
+        table.insert(keys, key)
+    end
+    table.sort(keys)
+    return keys
+end
+
+--- Delete a character from the registry AND from all module data stores.
+-- @param key string "Name - Realm"
+function CharacterRegistry.Delete(key)
+    EnsureCharDB()
+    LunaUITweaks_CharacterData.characters[key] = nil
+
+    -- Remove from Reagents data
+    if LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.characters then
+        LunaUITweaks_ReagentData.characters[key] = nil
+    end
+
+    -- Remove from Warehousing data
+    if LunaUITweaks_WarehousingData and LunaUITweaks_WarehousingData.characters then
+        LunaUITweaks_WarehousingData.characters[key] = nil
+    end
+
+    -- Remove minKeepChars references in Warehousing items
+    if LunaUITweaks_WarehousingData and LunaUITweaks_WarehousingData.items then
+        for _, itemData in pairs(LunaUITweaks_WarehousingData.items) do
+            if itemData.minKeepChars then
+                itemData.minKeepChars[key] = nil
+                local hasAny = false
+                for _ in pairs(itemData.minKeepChars) do hasAny = true; break end
+                if not hasAny then itemData.minKeepChars = nil end
+            end
+        end
+    end
+end
+
 --- Recursively applies default values to a settings table
 -- Only sets values that are currently nil (preserves existing user settings)
 -- @param db table The settings table to populate
@@ -154,9 +242,6 @@ local function OnEvent(self, event, ...)
                 restoreSuperTrack = true,
                 collapsed = {}
             },
-            minimap = {
-                angle = 45
-            },
             vendor = {
                 enabled = false,
                 autoRepair = true,
@@ -263,8 +348,10 @@ local function OnEvent(self, event, ...)
                 autoInviteKeywords = "inv,invite",
                 quickDestroy = false,
                 classColorTooltips = false,
+                showSpellID = false,
             },
             minimap = {
+                angle = 45,
                 minimapEnabled = false,
                 minimapShape = "ROUND",
                 minimapPos = { point = "TOPRIGHT", relPoint = "TOPRIGHT", x = -7, y = -7 },
@@ -386,10 +473,16 @@ local function OnEvent(self, event, ...)
                 mail = { enabled = false, point = "CENTER", x = 0, y = -440, condition = "always" },
                 pullCounter = { enabled = false, point = "CENTER", x = 0, y = -460, condition = "instance" },
                 hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480, condition = "always" },
-                currency = { enabled = false, point = "CENTER", x = 0, y = -500, condition = "always" },
+                currency = { enabled = false, point = "CENTER", x = 0, y = -500, condition = "always", customIDs = {} },
                 sessionStats = { enabled = false, point = "CENTER", x = 0, y = -520, condition = "always" },
                 lockouts = { enabled = false, point = "CENTER", x = 0, y = -540, condition = "always" },
                 xpRep = { enabled = false, point = "CENTER", x = 0, y = -560, condition = "always" },
+                haste = { enabled = false, point = "CENTER", x = 0, y = -580, condition = "always" },
+                crit = { enabled = false, point = "CENTER", x = 0, y = -600, condition = "always" },
+                mastery = { enabled = false, point = "CENTER", x = 0, y = -620, condition = "always" },
+                vers = { enabled = false, point = "CENTER", x = 0, y = -640, condition = "always" },
+                waypointDistance = { enabled = false, point = "CENTER", x = 0, y = -660, condition = "always" },
+                addonComm = { enabled = false, point = "CENTER", x = 0, y = -680, condition = "group" },
             },
             kick = {
                 enabled = false,
@@ -512,6 +605,8 @@ local function OnEvent(self, event, ...)
                 showAffixes = true,
                 showForces = true,
                 showBosses = true,
+                showSplits = true,
+                showBossForcePct = true,
                 bgColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
                 borderSize = 1,
@@ -533,6 +628,7 @@ local function OnEvent(self, event, ...)
                 forcesBarColor = { r = 0.4, g = 0.6, b = 1.0 },
                 forcesTextColor = { r = 0.4, g = 0.8, b = 1.0 },
                 forcesCompleteColor = { r = 0.2, g = 1, b = 0.2 },
+                runHistory = {},
             },
             coordinates = {
                 enabled = false,
@@ -548,7 +644,15 @@ local function OnEvent(self, event, ...)
                 fontSize = 12,
                 registerWayCommand = false,
                 waypoints = {},
-            }
+            },
+            warehousing = {
+                enabled = false,
+                locked = true,
+                framePos = { point = "CENTER", x = 0, y = 0 },
+                frameBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                frameBorderSize = 2,
+                frameBgColor = { r = 0, g = 0, b = 0, a = 0.8 },
+            },
         }
 
         -- Expose defaults for config panels (used by reset buttons)

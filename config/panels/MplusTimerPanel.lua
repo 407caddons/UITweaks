@@ -12,7 +12,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(620, 800)
+    child:SetSize(620, 870)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -271,14 +271,38 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
         end
     end)
 
+    local showSplitsBtn = CreateFrame("CheckButton", "UIThingsMplusTimerShowSplits", child,
+        "ChatConfigCheckButtonTemplate")
+    showSplitsBtn:SetPoint("TOPLEFT", 20, -630)
+    _G[showSplitsBtn:GetName() .. "Text"]:SetText("Show Boss Split Times")
+    showSplitsBtn:SetChecked(UIThingsDB.mplusTimer.showSplits)
+    showSplitsBtn:SetScript("OnClick", function(self)
+        UIThingsDB.mplusTimer.showSplits = not not self:GetChecked()
+        if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
+            addonTable.MplusTimer.UpdateSettings()
+        end
+    end)
+
+    local showBossForcePctBtn = CreateFrame("CheckButton", "UIThingsMplusTimerShowBossForcePct", child,
+        "ChatConfigCheckButtonTemplate")
+    showBossForcePctBtn:SetPoint("TOPLEFT", 20, -655)
+    _G[showBossForcePctBtn:GetName() .. "Text"]:SetText("Show Boss Forces %")
+    showBossForcePctBtn:SetChecked(UIThingsDB.mplusTimer.showBossForcePct)
+    showBossForcePctBtn:SetScript("OnClick", function(self)
+        UIThingsDB.mplusTimer.showBossForcePct = not not self:GetChecked()
+        if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
+            addonTable.MplusTimer.UpdateSettings()
+        end
+    end)
+
     -- ============================================================
     -- Automation Section
     -- ============================================================
-    Helpers.CreateSectionHeader(child, "Automation", -640)
+    Helpers.CreateSectionHeader(child, "Automation", -715)
 
     local autoSlotBtn = CreateFrame("CheckButton", "UIThingsMplusTimerAutoSlot", child,
         "ChatConfigCheckButtonTemplate")
-    autoSlotBtn:SetPoint("TOPLEFT", 20, -670)
+    autoSlotBtn:SetPoint("TOPLEFT", 20, -745)
     _G[autoSlotBtn:GetName() .. "Text"]:SetText("Auto-Slot Keystone")
     autoSlotBtn:SetChecked(UIThingsDB.mplusTimer.autoSlotKeystone)
     autoSlotBtn:SetScript("OnClick", function(self)
@@ -286,7 +310,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     end)
 
     local autoSlotHelp = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    autoSlotHelp:SetPoint("TOPLEFT", 60, -695)
+    autoSlotHelp:SetPoint("TOPLEFT", 60, -770)
     autoSlotHelp:SetWidth(500)
     autoSlotHelp:SetJustifyH("LEFT")
     autoSlotHelp:SetText("Automatically places your keystone into the Font of Power when you interact with it.")
@@ -295,11 +319,11 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     -- ============================================================
     -- Position Section
     -- ============================================================
-    Helpers.CreateSectionHeader(child, "Position", -720)
+    Helpers.CreateSectionHeader(child, "Position", -795)
 
     local lockBtn = CreateFrame("CheckButton", "UIThingsMplusTimerLockCheck", child,
         "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 20, -750)
+    lockBtn:SetPoint("TOPLEFT", 20, -825)
     _G[lockBtn:GetName() .. "Text"]:SetText("Lock Position")
     lockBtn:SetChecked(UIThingsDB.mplusTimer.locked)
     lockBtn:SetScript("OnClick", function(self)
@@ -312,7 +336,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     -- Test / Demo Button
     local testBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     testBtn:SetSize(120, 26)
-    testBtn:SetPoint("TOPLEFT", 160, -750)
+    testBtn:SetPoint("TOPLEFT", 160, -825)
     testBtn:SetText("Toggle Demo")
     testBtn:SetScript("OnClick", function()
         if addonTable.MplusTimer and addonTable.MplusTimer.ToggleDemo then

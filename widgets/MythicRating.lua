@@ -82,25 +82,35 @@ table.insert(Widgets.moduleInits, function()
                     local bestScore, bestLevel = 0, nil
                     if intimeInfo and intimeInfo.dungeonScore and intimeInfo.dungeonScore > bestScore then
                         bestScore = intimeInfo.dungeonScore
-                        bestLevel = intimeInfo.bestRunLevel
+                        bestLevel = intimeInfo.level
                     end
                     if overtimeInfo and overtimeInfo.dungeonScore and overtimeInfo.dungeonScore > bestScore then
                         bestScore = overtimeInfo.dungeonScore
-                        bestLevel = overtimeInfo.bestRunLevel
+                        bestLevel = overtimeInfo.level
                     end
 
                     if bestScore > 0 then
                         local mapColor = C_ChallengeMode.GetSpecificDungeonScoreRarityColor(bestScore)
-                        local levelStr = bestLevel and string.format("+%d", bestLevel) or ""
+                        -- Build right-side string: highest timed level + score
+                        local timedLevel = intimeInfo and intimeInfo.level
+                        local rightStr
+                        if timedLevel then
+                            -- Show timed key level prominently; append score
+                            rightStr = string.format("+%d timed (%d)", timedLevel, bestScore)
+                        elseif bestLevel then
+                            -- Overtime only — flag it
+                            rightStr = string.format("+%d ot (%d)", bestLevel, bestScore)
+                        else
+                            rightStr = string.format("(%d)", bestScore)
+                        end
                         if mapColor then
                             GameTooltip:AddDoubleLine(
                                 name,
-                                string.format("%s (%d)", levelStr, bestScore),
+                                rightStr,
                                 1, 1, 1,
                                 mapColor.r, mapColor.g, mapColor.b)
                         else
-                            GameTooltip:AddDoubleLine(name, string.format("%s (%d)", levelStr, bestScore), 1,
-                                1, 1, 0.8, 0.8, 0.8)
+                            GameTooltip:AddDoubleLine(name, rightStr, 1, 1, 1, 0.8, 0.8, 0.8)
                         end
                     else
                         GameTooltip:AddDoubleLine(name, "No runs", 1, 1, 1, 0.5, 0.5, 0.5)

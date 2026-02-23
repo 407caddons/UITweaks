@@ -100,6 +100,24 @@ function Widgets.CreateWidgetFrame(name, configKey)
     return f
 end
 
+function Widgets.ShowStatTooltip(frame)
+    Widgets.SmartAnchorTooltip(frame)
+    GameTooltip:SetText("Secondary Stats", 1, 0.82, 0)
+    local haste = GetHaste()
+    local crit = GetCritChance()
+    local mastery = GetMasteryEffect()
+    local vers = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
+    local versMit = vers / 2
+    GameTooltip:AddDoubleLine("Haste:",       haste   and string.format("%.2f%%", haste)   or "-", 1,1,1, 1,0.8,0.4)
+    GameTooltip:AddDoubleLine("Crit:",        crit    and string.format("%.2f%%", crit)    or "-", 1,1,1, 1,0.4,0.4)
+    GameTooltip:AddDoubleLine("Mastery:",     mastery and string.format("%.2f%%", mastery) or "-", 1,1,1, 0.4,0.8,1)
+    GameTooltip:AddDoubleLine("Versatility:", vers    > 0 and string.format("%.2f%%", vers)   or "-", 1,1,1, 0.5,1,0.5)
+    if vers > 0 then
+        GameTooltip:AddDoubleLine("  Mitigation:", string.format("%.2f%%", versMit), 0.8,0.8,0.8, 0.5,1,0.5)
+    end
+    GameTooltip:Show()
+end
+
 function Widgets.SmartAnchorTooltip(owner)
     -- Ensure using correct tooltip, usually GameTooltip
     -- If owner provides GetCenter, use it.

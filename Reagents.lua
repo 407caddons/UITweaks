@@ -6,6 +6,8 @@ addonTable.Reagents = Reagents
 local ITEM_CLASS_TRADEGOODS = 7
 local SCAN_DELAY = 0.5
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
+-- Reagent bag is a separate slot beyond the normal bag range (Enum.BagIndex.ReagentBag = 5)
+local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 5
 
 -- State
 local scanTimer = nil
@@ -57,11 +59,16 @@ local function IsReagent(itemID)
     return classID2 == ITEM_CLASS_TRADEGOODS
 end
 
---- Scan bags (containerIDs 0 through NUM_BAG_SLOTS) for reagents
+--- Scan bags (containerIDs 0 through NUM_BAG_SLOTS, plus reagent bag) for reagents
 -- @return table itemID -> count mapping
 local function ScanBags()
     local items = {}
+    local bagList = {}
     for bag = 0, NUM_BAG_SLOTS do
+        bagList[#bagList + 1] = bag
+    end
+    bagList[#bagList + 1] = REAGENT_BAG_SLOT
+    for _, bag in ipairs(bagList) do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -179,6 +186,11 @@ local function ScheduleBagScan()
         charData.bagItems = bagItems
         -- bankItems preserved from last bank visit
         LunaUITweaks_ReagentData.characters[key] = charData
+
+        -- Keep central registry up to date
+        if addonTable.Core and addonTable.Core.CharacterRegistry then
+            addonTable.Core.CharacterRegistry.Register(key, GetCharacterClass(), "reagents")
+        end
     end)
 end
 
@@ -230,10 +242,15 @@ end
 
 --- Get live bag count of an item for the current character
 -- @param itemID number The item ID to count
--- @return number Total count across all bags
+-- @return number Total count across all bags (including reagent bag)
 local function GetLiveBagCount(itemID)
     local count = 0
+    local bagList = {}
     for bag = 0, NUM_BAG_SLOTS do
+        bagList[#bagList + 1] = bag
+    end
+    bagList[#bagList + 1] = REAGENT_BAG_SLOT
+    for _, bag in ipairs(bagList) do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -428,6 +445,11 @@ end
 
 local function OnPlayerLogin()
     EnsureDB()
+    -- Register current character in the central registry regardless of module state
+    local key = GetCharacterKey()
+    if addonTable.Core and addonTable.Core.CharacterRegistry then
+        addonTable.Core.CharacterRegistry.Register(key, GetCharacterClass(), "reagents")
+    end
     if UIThingsDB.reagents.enabled then
         EnableEvents()
         HookTooltip()
@@ -449,37 +471,58 @@ function Reagents.UpdateSettings()
     end
 end
 
---- Delete a character's reagent data
+--- Delete a character's data from all modules via CharacterRegistry.
 -- @param charKey string The character key to delete (e.g. "Name - Realm")
 function Reagents.DeleteCharacterData(charKey)
-    EnsureDB()
-    if LunaUITweaks_ReagentData.characters[charKey] then
+    if addonTable.Core and addonTable.Core.CharacterRegistry then
+        addonTable.Core.CharacterRegistry.Delete(charKey)
+    else
+        -- Fallback: remove only from reagents data
+        EnsureDB()
         LunaUITweaks_ReagentData.characters[charKey] = nil
-        Log("Deleted reagent data for " .. charKey, addonTable.Core.LogLevel.INFO)
     end
+    Log("Deleted all data for " .. charKey, addonTable.Core.LogLevel.INFO)
 end
 
---- Get all tracked characters (for config panel)
--- @return table Array of {key, class, lastSeen} sorted alphabetically
+--- Get all tracked characters (for config panel).
+-- Uses CharacterRegistry as the authoritative source so characters from all modules are shown.
+-- @return table Array of {key, class, lastSeen, itemCount, modules} sorted alphabetically
 function Reagents.GetTrackedCharacters()
     EnsureDB()
+
+    -- Build a set of keys from the central registry plus any local-only reagent data
+    local seen = {}
     local chars = {}
-    for key, data in pairs(LunaUITweaks_ReagentData.characters) do
+
+    local function AddChar(key, class, lastSeen, modules)
+        if seen[key] then return end
+        seen[key] = true
+        local itemCount = 0
+        local localData = LunaUITweaks_ReagentData.characters[key]
+        if localData and localData.items then
+            for _ in pairs(localData.items) do itemCount = itemCount + 1 end
+        end
         table.insert(chars, {
             key = key,
-            class = data.class,
-            lastSeen = data.lastSeen or 0,
-            itemCount = 0
+            class = class,
+            lastSeen = lastSeen or 0,
+            itemCount = itemCount,
+            modules = modules or {},
         })
-        -- Count unique items
-        if data.items then
-            local count = 0
-            for _ in pairs(data.items) do
-                count = count + 1
-            end
-            chars[#chars].itemCount = count
+    end
+
+    -- Central registry first (authoritative, covers all modules)
+    if addonTable.Core and addonTable.Core.CharacterRegistry then
+        for _, entry in ipairs(addonTable.Core.CharacterRegistry.GetAll()) do
+            AddChar(entry.key, entry.class, entry.lastSeen, entry.modules)
         end
     end
+
+    -- Fallback: also include any reagent-local characters not yet in the registry
+    for key, data in pairs(LunaUITweaks_ReagentData.characters) do
+        AddChar(key, data.class, data.lastSeen, nil)
+    end
+
     table.sort(chars, function(a, b) return a.key < b.key end)
     return chars
 end

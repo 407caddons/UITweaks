@@ -1,8 +1,8 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-22
-**Previous Review:** 2026-02-21
-**Current Version:** v1.13.0
+**Date:** 2026-02-22 (Updated: Session 3 -- Warehousing module fully in place, widget inventory confirmed)
+**Previous Review:** 2026-02-22 (Session 2)
+**Current Version:** v1.13.0+
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
 
@@ -22,68 +22,74 @@ The following features from previous reviews have been implemented:
 - **Addon Memory/CPU Monitor Widget** -- Implemented within the FPS widget tooltip, which shows per-addon memory breakdown (top addons sorted by memory), total memory, jitter calculation, bandwidth stats, and a configurable `showAddonMemory` toggle.
 - **Minimap Button Drawer** -- Implemented in `MinimapCustom.lua` with configurable button collection from minimap children, adjustable button size, padding, column count, border/background colors, lockable/draggable container frame, and toggle visibility.
 - **Quick Item Destroy** -- Implemented in `Misc.lua` as `quickDestroy` option. Bypasses the "DELETE" typing requirement on rare/epic items with a single-click DELETE button overlay on the confirmation dialog.
-- **Session Stats Widget** -- NEW (2026-02-19). Implemented as `widgets/SessionStats.lua`. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload` with true login vs reload detection. Right-click resets counters. **Updated 2026-02-22:** Added staleness detection (30-minute timeout), character switching detection via `UnitGUID`, persistent `SaveSessionData()` on every counter update.
-- **Widget Visibility Conditions** -- NEW (2026-02-19). Implemented in `Widgets.lua` with `EvaluateCondition()` supporting 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Each widget has a condition dropdown in the config panel. BattleRes and PullCounter default to `instance`.
-- **Dungeon/Raid Lockout Widget** -- NEW (2026-02-22). Previously feature #27. Fully implemented as `widgets/Lockouts.lua` (164 lines). Shows locked instance count on widget face, tooltip separates raids and dungeons with per-boss kill status for raids, difficulty names, extended lockout indicator, time remaining. Click opens Raid Info panel. Proper `ApplyEvents(enabled)` pattern.
-- **Coordinates/Waypoint Module** -- NEW (2026-02-22). Implemented as standalone `Coordinates.lua` (652 lines). Full waypoint management: `/lway` slash command with zone resolution, waypoint list UI with row pooling, paste dialog for bulk import, `C_Map.SetUserWaypoint` integration with super-tracking, configurable backdrop/border. Separate Coordinates widget (`widgets/Coordinates.lua`, 55 lines) shows live player coordinates.
-- **SCT Module Extraction** -- NEW (2026-02-22). Previously SCT was embedded in `Misc.lua` (feature #41 prerequisite). Now extracted to standalone `SCT.lua` (249 lines) with dedicated `SCTPanel.lua` config panel. Separate damage/healing anchors, frame pooling, `issecretvalue()` guards, target name display, crit scaling, configurable font/colors/duration/scroll distance.
-- **Minimap Coordinates Overlay** -- NEW (2026-02-22). Previously part of feature #36 (Minimap Enhancements). Coordinates text overlay implemented in `MinimapCustom.lua` with configurable font, size, position, and update rate. Shares clock format setting with Time widget.
+- **Session Stats Widget** -- Implemented as `widgets/SessionStats.lua`. Tracks session duration, gold delta, items looted, and deaths. Persists across `/reload` with true login vs reload detection. Right-click resets counters. **Updated 2026-02-22:** Added staleness detection (30-minute timeout), character switching detection via `UnitGUID`, persistent `SaveSessionData()` on every counter update.
+- **Widget Visibility Conditions** -- Implemented in `Widgets.lua` with `EvaluateCondition()` supporting 7 conditions: `always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`. Each widget has a condition dropdown in the config panel. BattleRes and PullCounter default to `instance`.
+- **Dungeon/Raid Lockout Widget** -- Fully implemented as `widgets/Lockouts.lua`. Shows locked instance count on widget face, tooltip separates raids and dungeons with per-boss kill status for raids, difficulty names, extended lockout indicator, time remaining. Click opens Raid Info panel. Proper `ApplyEvents(enabled)` pattern.
+- **Coordinates/Waypoint Module** -- Implemented as standalone `Coordinates.lua` (~652 lines). Full waypoint management: `/lway` slash command with zone resolution, waypoint list UI with row pooling, paste dialog for bulk import, `C_Map.SetUserWaypoint` integration with super-tracking, configurable backdrop/border. Separate Coordinates widget (`widgets/Coordinates.lua`, 55 lines) shows live player coordinates.
+- **SCT Module Extraction** -- SCT was embedded in `Misc.lua`. Now extracted to standalone `SCT.lua` (~249 lines) with dedicated `SCTPanel.lua` config panel. Separate damage/healing anchors, frame pooling, `issecretvalue()` guards, target name display, crit scaling, configurable font/colors/duration/scroll distance.
+- **Warehousing Module** -- Implemented as `Warehousing.lua` (~960 lines) with `config/panels/WarehousingPanel.lua` (~400 lines). Cross-character bag management: per-item min/max rules, overflow/deficit calculation across characters, bank sync (Warband Bank and Personal Bank deposits and withdrawals), mailbox-based item routing to other characters. CharacterRegistry in Core.lua (`LunaUITweaks_CharacterData`) centralizes character tracking shared with Reagents module. Bank sync includes retry logic (3 retries on "stayed" transfers, 0.5s delay between retries, 20-attempt WaitForItemUnlock for warband bank timing) and auto-continuation (up to 5 passes to clear residual overflow from split deposits).
+- **Minimap Coordinates Overlay** -- Coordinates text overlay implemented in `MinimapCustom.lua` with configurable font, size, position, and update rate. Shares clock format setting with Time widget.
+- **XP/Rep Widget** -- Implemented as `widgets/XPRep.lua`. Shows XP percentage with rested indicator while leveling, switches to watched reputation (with renown level for major factions, paragon tracking) at max level. Click opens Character Info or Reputation panel.
+- **Secondary Stats Widgets** -- Implemented as `widgets/Haste.lua`, `widgets/Crit.lua`, `widgets/Mastery.lua`, `widgets/Vers.lua`. All share a combined "Secondary Stats" tooltip showing all four stats together with mitigation calculation for Versatility.
+- **Waypoint Distance Widget** -- Implemented as `widgets/WaypointDistance.lua`. Shows real-time distance and 8-direction cardinal arrow to active waypoint. Cross-zone world-coordinate distance using `C_Map.GetWorldPosFromMapPos`. Updates every 0.5s via OnUpdate.
+- **AddonComm Status Widget** -- Implemented as `widgets/AddonComm.lua`. Shows how many group members have LunaUITweaks. Tooltip lists each member with version color-coded (green = same, orange = different). Left-click broadcasts presence.
 
 ---
 
-## Changes Since Last Review (2026-02-22)
+## Changes Since Last Review (2026-02-22, Session 3)
+
+This session confirmed the full widget inventory. No new modules were added but the following were confirmed implemented since earlier sessions:
+
+1. **widgets/XPRep.lua** -- XP/Reputation widget (confirmed present in TOC and on disk, not previously noted as "implemented" in the feature list).
+2. **widgets/Haste.lua, Crit.lua, Mastery.lua, Vers.lua** -- All four secondary stat widgets implemented. Each shows the individual stat in the widget face but shares a combined tooltip. Haste tooltip shows all four stats.
+3. **widgets/WaypointDistance.lua** -- Distance and direction widget for active waypoint. Already had defaults entry in Core.lua (`waypointDistance`). Now confirmed fully implemented.
+4. **widgets/AddonComm.lua** -- Group LunaUITweaks presence widget. Shows addon adoption count in group.
+5. **Warehousing.lua** -- Fully confirmed in place (previous session implemented, this session code-reviewed): `warbandAllowed` field set at add-time via `C_Bank.IsItemAllowedInBankType`, quality-tier item name matching via hyperlink parsing, `WaitForItemUnlock` polling with 20-attempt cap for warband bank API latency.
+
+---
+
+## Changes Since Last Review (2026-02-22, Session 2)
+
+New module added and bank sync fixed this session (not in a tagged commit yet):
+
+1. **NEW: Warehousing.lua** (~950 lines) -- Cross-character item management:
+   - Per-item min/max rules defining minimum stock (pulls from bank if below) and maximum stock (sends to bank if above)
+   - `CalculateOverflowDeficit()` scans all tracked characters and computes what needs moving where
+   - Bank sync: deposits overflow items to Warband Bank or Personal Bank when those banks are open
+   - Mailbox sync: routes overflow items to other characters via in-game mail when at a mailbox
+   - Retry logic: 3 retries with 0.5s delay for warband bank "stayed" deposits (API timing issue)
+   - Auto-continuation: up to 5 passes after sync to clear residual overflow from split deposits
+   - Mailbox self-filter: correctly filters items destined for the current character by both `"(you)"` suffix and plain name comparison (`dest:lower() ~= currentName:lower()`)
+
+2. **NEW: config/panels/WarehousingPanel.lua** (~400 lines) -- Config panel:
+   - Per-item rule editor with min/max sliders, destination picker
+   - Character cap configuration for individual characters
+   - Rule import/export for sharing configs between accounts
+
+3. **Core.lua CharacterRegistry** -- `LunaUITweaks_CharacterData` SavedVariable:
+   - Centralized character index shared between Reagents and Warehousing modules
+   - Eliminates per-module character tracking duplication
+
+---
+
+## Changes Since Last Review (2026-02-22, Session 1)
 
 Commit `a094160 Updates for v1.13` -- 17 files changed, 2094 insertions, 675 deletions. Key changes:
 
-1. **NEW: Coordinates.lua** (~652 lines) -- Full standalone waypoint management module:
-   - `/lway` slash command with flexible parsing: `/lway x, y`, `/lway x y name`, `/lway zone x, y name`
-   - Zone name resolution via `C_Map.GetMapChildrenInfo` across 10 cosmic map IDs with exact and partial matching
-   - Waypoint list UI with row pooling (`AcquireRow`/`RecycleRow`), scroll frame, click to set waypoint, right-click to open map
-   - Paste dialog for bulk waypoint import (strips `/lway` or `/way` prefixes)
-   - `C_Map.SetUserWaypoint` + `C_SuperTrack.SetSuperTrackedUserWaypoint` integration
-   - Optional `/way` command alias (configurable, deferred to `PLAYER_LOGIN`)
-   - Config panel (`CoordinatesPanel.lua`, 144 lines) with backdrop, border, font, size, lock controls
-
-2. **NEW: SCT.lua** (~249 lines) -- Scrolling Combat Text extracted from Misc.lua:
-   - Separate damage and healing anchor frames with independent positioning
-   - Frame pool with `SCT_MAX_ACTIVE = 30` cap, OnUpdate-driven scroll animation with alpha fade
-   - `issecretvalue()` guards on `amount` and `flagText` from `UNIT_COMBAT`
-   - Configurable font, colors, duration, scroll distance, crit scale, target name display
-   - `captureToFrames` toggle controls whether to use custom frames or Blizzard's FCT
-   - `ApplySCTEvents()` properly registers/unregisters `UNIT_COMBAT` via EventBus
-
+1. **NEW: Coordinates.lua** (~652 lines) -- Full standalone waypoint management module.
+2. **NEW: SCT.lua** (~249 lines) -- Scrolling Combat Text extracted from Misc.lua.
 3. **NEW: config/panels/CoordinatesPanel.lua** (~144 lines) -- Config panel for Coordinates module.
-
 4. **NEW: config/panels/SCTPanel.lua** (~179 lines) -- Config panel for SCT module.
-
-5. **MinimapCustom.lua** (+225 lines) -- Major additions:
-   - Coordinates text overlay on minimap with configurable font, size, and position
-   - QueueStatusButton (dungeon finder eye) persistent anchoring to minimap via hooks on OnShow, SetPoint, and UpdatePosition
-   - Additional minimap customization options in MinimapPanel
-
-6. **Misc.lua** (-247 lines) -- SCT code extracted to standalone `SCT.lua`. Misc.lua now contains only auto-invite, quick destroy, AH expansion filter, mail alerts, and tooltip class coloring.
-
-7. **config/panels/MinimapPanel.lua** (+296 lines) -- Major expansion with minimap coordinates overlay settings, clock format, additional shape/border options.
-
-8. **config/ConfigMain.lua** (+246 lines) -- Restructured config navigation with new tabs for Coordinates and SCT. Auto-lock logic updated to include SCT anchors (`addonTable.SCT.LockSCTAnchors`).
-
-9. **Core.lua** (+63 lines) -- New default settings for `coordinates` (waypoints, pos, width, height, font, locked, backdrop settings, registerWayCommand) and `sct` (enabled, font, fontSize, colors, duration, scrollDistance, critScale, anchors, target name display, captureToFrames).
-
-10. **TalentManager.lua** (+33 lines) -- Minor refinements to import/export functionality.
-
-11. **widgets/Lockouts.lua** (+18 lines) -- Polished implementation with proper `ApplyEvents` pattern, raid/dungeon separation in tooltip, per-boss kill status for raids.
-
-12. **widgets/SessionStats.lua** (+40 lines) -- Staleness detection, character key tracking, persistent `SaveSessionData()`.
-
-13. **widgets/Time.lua** (+2 lines) -- Respects `UIThingsDB.minimap.minimapClockFormat` for 12H/24H display.
-
-14. **config/panels/ActionBarsPanel.lua** (+12 lines) -- Minor layout adjustments.
-
-15. **config/panels/MiscPanel.lua** (-189 lines) -- SCT settings removed (moved to SCTPanel).
-
-16. **LunaUITweaks.toc** -- Version bump to 1.13.0, added `SCT.lua`, `Coordinates.lua`, `SCTPanel.lua`, `CoordinatesPanel.lua`.
-
-**Previously suggested features implemented:** Feature #27 (Lockout Widget) is now fully done. Feature #36 (Minimap Enhancements) partially done (coordinates overlay). Feature #41 (SCT improvements) prerequisite met (standalone module extraction). New Coordinates module was not previously suggested -- it's a new capability.
+5. **MinimapCustom.lua** (+225 lines) -- Coordinates text overlay, QueueStatusButton anchoring.
+6. **Misc.lua** (-247 lines) -- SCT code extracted to standalone `SCT.lua`.
+7. **config/panels/MinimapPanel.lua** (+296 lines) -- Minimap coordinates overlay settings.
+8. **config/ConfigMain.lua** (+246 lines) -- New tabs for Coordinates and SCT.
+9. **Core.lua** (+63 lines) -- New defaults for `coordinates` and `sct`.
+10. **TalentManager.lua** (+33 lines) -- Minor import/export refinements.
+11. **widgets/Lockouts.lua** (+18 lines) -- Polished with `ApplyEvents` pattern.
+12. **widgets/SessionStats.lua** (+40 lines) -- Staleness detection, character key tracking.
+13. **widgets/Time.lua** (+2 lines) -- Respects `minimapClockFormat` for 12H/24H.
+14. **LunaUITweaks.toc** -- Version bump to 1.13.0, added `SCT.lua`, `Coordinates.lua`, `SCTPanel.lua`, `CoordinatesPanel.lua`.
 
 ---
 
@@ -139,15 +145,15 @@ Add tooltip customization: item level on player/inspect tooltips, guild rank dis
 Extend the Vendor module with custom sell lists -- allow users to mark specific items for auto-selling beyond just grey quality. Support item name patterns, item level thresholds, specific item IDs, and a right-click "add to sell list" context menu.
 - **Ease:** Easy
 - **Impact:** Medium
-- **Rationale:** The vendor hook (`MERCHANT_SHOW`) is already in place. Adding a saved list of item IDs/patterns and iterating bags on merchant open is straightforward. The right-click menu integration needs `hooksecurefunc` on item buttons. No combat safety concerns since this only runs at merchants.
+- **Rationale:** The vendor hook (`MERCHANT_SHOW`) is already in place. Adding a saved list of item IDs/patterns and iterating bags on merchant open is straightforward. The right-click menu integration needs `hooksecurefunc` on item buttons. No combat safety concerns since this only runs at merchants. **Note:** The Warehousing module's drag-and-drop `AddItem` pattern could be reused here to let users drag items into a sell list.
 - **Files:** Vendor.lua, config/panels/VendorPanel.lua, Core.lua (defaults)
 
 ### 8. M+ Timer History and Statistics
-Extend MplusTimer to save run history (completion times, death counts, key levels, affixes, per-player death breakdowns) to a SavedVariable and display statistics: average completion time per dungeon, personal bests, upgrade/downgrade trends, and a filterable run log.
+Extend MplusTimer to save run history (completion times, death counts, key levels, affixes, per-player death breakdowns) to a SavedVariable and display statistics: average completion time per dungeon, personal bests, upgrade/downgrade trends, and a filterable run log. **Note:** `UIThingsDB.mplusTimer.runHistory = {}` is already defined in Core.lua defaults, indicating this was planned.
 - **Ease:** Medium
 - **Impact:** Medium-High for M+ players
-- **Rationale:** MplusTimer already tracks all the data during a run. Saving it on completion is trivial. The complexity is in the statistics UI -- a scrollable run log with filtering, sorting, and potentially a small chart or comparison view. Saved variable size management (pruning old runs) adds minor complexity.
-- **Files:** MplusTimer.lua, new SavedVariable or extend UIThingsDB, config panel additions
+- **Rationale:** MplusTimer already tracks all the data during a run. Saving it on completion is trivial. The complexity is in the statistics UI -- a scrollable run log with filtering, sorting, and potentially a small chart or comparison view. Saved variable size management (pruning old runs) adds minor complexity. The `runHistory` key in defaults is already reserved.
+- **Files:** MplusTimer.lua, UIThingsDB.mplusTimer.runHistory (already declared), config panel additions
 
 ### 9. Chat Tabs/Channels Manager
 Extend ChatSkin with custom chat tab presets (e.g., "M+ Group" tab that auto-joins instance chat + party), auto-join/leave channels on zone change, and per-tab color/font settings.
@@ -215,7 +221,7 @@ Add a "Global" settings page that lets users set a default font family and base 
 - **Files:** Core.lua, config/ConfigMain.lua, all modules that use fonts
 
 ### 18. Settings Reset Per-Module
-Add a "Reset to Defaults" button on each config panel that resets only that module's settings.
+Add a "Reset to Defaults" button on each config panel that resets only that module's settings. **Note:** WarehousingPanel.lua already implements a custom reset button with confirmation dialog -- this pattern could be standardized via `Helpers.lua`.
 - **Ease:** Easy
 - **Impact:** Low-Medium
 - **Files:** config/ConfigMain.lua, Core.lua
@@ -233,7 +239,7 @@ Expand keybind support: toggle all widgets, toggle combat timer, open config win
 - **Files:** Bindings.xml (new or extended), relevant modules
 
 ### 21. Search in Config Window
-Add a search box at the top of the config window that filters visible tabs. With 22+ tabs now (after adding Coordinates and SCT), finding specific settings becomes harder.
+Add a search box at the top of the config window that filters visible tabs. With 25+ tabs now (after adding Coordinates, SCT, and Warehousing), finding specific settings becomes harder.
 - **Ease:** Medium-Hard
 - **Impact:** Medium
 - **Files:** config/ConfigMain.lua, all panel files (for metadata)
@@ -255,7 +261,7 @@ Allow exporting/importing talent reminder configurations as encoded strings. Rai
 Add a widget that shows remaining cooldowns on important player abilities: major defensives, DPS cooldowns, movement abilities. Display as a small icon bar with timers.
 - **Ease:** Easy-Medium
 - **Impact:** Medium-High -- Useful across all content types
-- **Rationale:** The Kick module already tracks spell cooldowns via `C_Spell.GetSpellCooldown`. The Combat module tracks consumable buffs with clickable icons.
+- **Rationale:** The Kick module already tracks spell cooldowns via `C_Spell.GetSpellCooldown`. The Combat module tracks consumable buffs with clickable icons. A cooldown widget would extend this to arbitrary spells the user defines.
 - **Files:** New widget in widgets/ or standalone module, config panel
 
 ### 25. Auto-Screenshot on Achievement/Kill
@@ -268,6 +274,7 @@ Automatically take a screenshot when earning an achievement, timing a M+ key, ki
 Extend Reagents.lua to let users define target quantities for specific reagents. Show a "shopping list" of items needed to reach the target, factoring in stock across all tracked characters.
 - **Ease:** Medium
 - **Impact:** Medium for crafters
+- **Rationale:** The Warehousing module already implements the cross-character stock concept for bag management. A shopping list would share the same deficit calculation logic but present it as a crafting aid rather than a bank sync tool.
 - **Files:** Reagents.lua, config/panels/ReagentsPanel.lua
 
 ### 27. Chat Message Filter/Mute
@@ -366,7 +373,7 @@ Add a middle-ground option: auto-collapse all sections to just headers during co
 - **Files:** ObjectiveTracker.lua, config/panels/TrackerPanel.lua, Core.lua (defaults)
 
 ### 42. Warband Bank Integration for Reagents
-Better surface warband vs personal quantities in tooltips, add "total across warband" summary.
+Better surface warband vs personal quantities in tooltips, add "total across warband" summary. **Note (2026-02-22):** The Warehousing module's `ScanContainers` with `GetWarbandBankContainers()` demonstrates the correct pattern for scanning Warband Bank tabs in TWW using `Enum.BagIndex.AccountBankTab_1`.
 - **Ease:** Easy
 - **Impact:** Medium for multi-character crafters
 - **Files:** Reagents.lua, config/panels/ReagentsPanel.lua
@@ -397,7 +404,7 @@ Floating toolbar in instances showing all matching builds for the current zone/d
 
 ---
 
-## New Feature Ideas (Added 2026-02-22)
+## New Feature Ideas (Added 2026-02-22, Session 2)
 
 ### 47. Waypoint Sharing via AddonComm
 Share waypoints with group members via the AddonComm system. Leader sets a waypoint, all LunaUITweaks users in the group receive it automatically. Uses the existing `Comm.Send/Register` pattern with a new `WAYP` module namespace.
@@ -414,17 +421,17 @@ Support parsing TomTom-format `/way` commands from chat messages and addon guide
 - **Files:** Coordinates.lua, ChatSkin.lua or Misc.lua
 
 ### 49. Coordinates Distance Display
-Add distance-to-waypoint display on the Coordinates frame and optionally as a widget. Show arrow direction indicator. The Coordinates module already tracks `activeWaypointIndex` and stores all waypoint coordinates.
-- **Ease:** Easy-Medium
-- **Impact:** Medium
-- **Rationale:** Distance calculation using `C_Map.GetPlayerMapPosition` vs waypoint position is straightforward. Arrow direction uses `atan2`. Updates every tick via existing widget framework or a small OnUpdate.
-- **Files:** Coordinates.lua, optionally widgets/WaypointDistance.lua
+Add distance-to-waypoint display on the Coordinates frame and optionally as a widget. Show arrow direction indicator. **Status (2026-02-22 Session 3):** The `WaypointDistance` widget (`widgets/WaypointDistance.lua`) is now fully implemented and covers this feature. The Coordinates frame itself does not have integrated distance display yet.
+- **Ease:** Easy (for Coordinates frame integration)
+- **Impact:** Low -- Widget already handles this
+- **Rationale:** The WaypointDistance widget is already implemented with world-coordinate distance, 8-direction arrow, and cross-zone fallback. The remaining work is optionally embedding the distance into the Coordinates frame header or title bar.
+- **Files:** Coordinates.lua
 
 ### 50. SCT Damage School Coloring
 Add automatic damage school coloring to SCT. The `UNIT_COMBAT` event provides `schoolMask` which maps to damage types. Fire = orange, frost = blue, nature = green, shadow = purple, etc. With SCT now a standalone module, this is a clean addition.
 - **Ease:** Easy
 - **Impact:** Medium -- Visual clarity during combat
-- **Rationale:** `schoolMask` is already passed to `OnUnitCombat` (line 200 in SCT.lua) but currently unused. Adding a color lookup table and using it in `SpawnSCTText` is ~15 lines of code.
+- **Rationale:** `schoolMask` is already passed to `OnUnitCombat` in SCT.lua but currently unused. Adding a color lookup table and using it in `SpawnSCTText` is ~15 lines of code.
 - **Files:** SCT.lua, config/panels/SCTPanel.lua (toggle), Core.lua (defaults)
 
 ### 51. Lockout Widget Weekly M+ Best Display
@@ -436,6 +443,80 @@ Extend the Lockouts widget tooltip with weekly M+ best completion for each dunge
 
 ---
 
+## New Feature Ideas (Added 2026-02-22, Session 3)
+
+### 62. Warehousing Rule Templates
+Add pre-built rule templates for common use cases: "Crafting Materials" (send all to one alt), "Consumables" (keep X on all chars), "Tradeable Mats" (send to banker alt). Export/import full rule sets as encoded strings for sharing between accounts or guildmates.
+- **Ease:** Easy-Medium
+- **Impact:** Medium -- Reduces setup friction for new Warehousing users
+- **Rationale:** The Warehousing module stores rules as a simple table per itemID. Serializing a set of rules into an encoded string follows the same TalentManager import/export pattern (already proven). The config panel already has a drop target for adding items; adding a "Load Template" dropdown is ~30 lines.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+### 63. Warehousing Bag Space Widget
+Add a widget showing current total free bag slots across all tracked characters (or just the current character). Alert when bag space drops below a threshold. Cross-character data is already scanned and stored in `LunaUITweaks_WarehousingData.characters[key].bagCounts`.
+- **Ease:** Easy
+- **Impact:** Low-Medium
+- **Rationale:** The Bags widget already shows total free slots for the current character. A Warehousing-aware widget would show free slots across all known alts from saved scan data, giving a cross-character inventory overview.
+- **Files:** New widget or extend existing Bags widget, Core.lua (defaults)
+
+### 64. Secondary Stats Historical Tracking
+Extend the Haste/Crit/Mastery/Vers widgets to record a history of stat values (per spec, per date). Show a tooltip breakdown: "Last week: 32.4% Haste | Today: 34.1% Haste". Useful for tracking gear progression between patches/seasons.
+- **Ease:** Easy-Medium
+- **Impact:** Low-Medium
+- **Rationale:** `COMBAT_RATING_UPDATE` fires on every gear change. Storing a timestamped record per spec in a SavedVariable is trivial. The Haste tooltip already shows all four stats together, so displaying the delta requires only extending the tooltip.
+- **Files:** widgets/Haste.lua (or shared stat utility), Core.lua (new SavedVariable or extend UIThingsDB)
+
+### 65. XP/Rep Rate Tracker
+Extend the XPRep widget to calculate and display XP or reputation gain per hour based on recent event timestamps. Show estimated time to level up or reach next renown tier.
+- **Ease:** Easy-Medium
+- **Impact:** Medium -- Very motivating during leveling or rep grinding sessions
+- **Rationale:** `PLAYER_XP_UPDATE` fires with the new total. Storing a rolling window of (timestamp, xp) pairs and dividing delta XP by delta time gives XP/hr. Time to ding is `(maxXP - currentXP) / rate`. Renown rate follows the same pattern using `UPDATE_FACTION`. The XPRep widget already has the tooltip infrastructure.
+- **Files:** widgets/XPRep.lua, Core.lua (defaults)
+
+### 66. Loot History Log
+Extend Loot.lua to persist recent loot to a SavedVariable (last N items, configurable). Show a `/lloot` slash command that opens a scrollable history window with item icon, name, quality, time, and who looted it. Filter by quality, session, or date.
+- **Ease:** Easy-Medium
+- **Impact:** Medium -- Useful for reviewing what dropped in a session
+- **Rationale:** Loot.lua already processes every loot event and has the item quality/level/who data. Storing a ring buffer of the last 200 items (with timestamps) adds negligible overhead. The Coordinates module's row-pooled scroll list provides a proven pattern for the history UI.
+- **Files:** Loot.lua, config/panels/LootPanel.lua, Core.lua (new SavedVariable or extend UIThingsDB)
+
+### 67. Crafting Order Widget
+Add a widget showing pending personal crafting orders (currently surfaced via Misc.lua as a notification). The widget would show the count of pending orders and a tooltip listing each order's item name, requester, and time remaining. Left-click opens the Crafting Orders UI.
+- **Ease:** Easy
+- **Impact:** Medium for crafters
+- **Rationale:** The Misc.lua module already handles `CRAFTINGORDERS_PERSONAL_ORDERS_UPDATE` for the alert popup. A widget version would persistently surface this count without needing a popup. `C_CraftingOrders.GetPersonalOrders()` provides the order list.
+- **Files:** New widget widgets/CraftingOrders.lua, Core.lua (defaults for widget position/condition)
+
+### 68. Objective Tracker Campaign Quest Progress Bar
+Add a compact progress bar or percentage indicator at the top of the ObjectiveTracker's campaign section showing overall campaign completion (e.g., "War Within Campaign: 12/30"). Use `C_QuestLine.GetQuestLineInfo` and `C_QuestLine.GetQuestsForQuestLine` to aggregate campaign quest completion.
+- **Ease:** Medium
+- **Impact:** Medium -- Useful context while questing through the expansion
+- **Rationale:** The ObjectiveTracker already has a campaign quest highlight feature (`highlightCampaignQuests`). Extending it with an aggregate progress bar uses the same quest detection logic but requires iterating all quests in a campaign line via `C_CampaignInfo` APIs.
+- **Files:** ObjectiveTracker.lua, config/panels/TrackerPanel.lua, Core.lua (defaults)
+
+### 69. Minimap Node Tracking Toggles
+Add a ring of small toggle buttons around the minimap (or in the drawer) for quickly enabling/disabling gathering node tracking: herbs, minerals, fishing, treasure. Uses `C_MiniMap.SetGatheringFilter` or equivalent tracking system calls.
+- **Ease:** Medium
+- **Impact:** Medium for gatherers and treasure hunters
+- **Rationale:** Minimap tracking filters are accessible via the Blizzard tracking UI (`Minimap_SetTracking`/`C_Minimap`). The minimap drawer already exists as a toggle container. Adding gathering-specific buttons to it is a natural extension.
+- **Files:** MinimapCustom.lua, config/panels/MinimapPanel.lua
+
+### 70. Interrupt Widget Sound Alerts
+Extend the Kick module to play a configurable sound when someone in the group fails to interrupt a kick assignment, or when an interrupt becomes available after cooldown. Currently the Kick module is purely visual.
+- **Ease:** Easy
+- **Impact:** Medium for M+ groups relying on interrupt rotations
+- **Rationale:** The Kick module already tracks cooldown states and fires `UNIT_SPELLCAST_INTERRUPTED` events. Adding a `PlaySound` call on cooldown-ready (via timer on cooldown expiry) is straightforward.
+- **Files:** Kick.lua, config/panels/KickPanel.lua, Core.lua (defaults)
+
+### 71. Warehousing Auction House Integration
+When at the Auction House, display items in overflow that could be listed for sale rather than sent to bank or alts. Show current AH price estimates and optionally auto-list at a configurable undercut percentage.
+- **Ease:** Hard
+- **Impact:** Medium-High for players who craft and sell
+- **Rationale:** `C_AuctionHouse` APIs provide commodity search results and price data. The Warehousing module already detects when special UI interactions occur (bank, mailbox) via `PLAYER_INTERACTION_MANAGER_FRAME_SHOW`. Adding AH detection (type 23) follows the same pattern. AH listing automation is complex due to commodity vs non-commodity differences and requires the AH frame to be open.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+---
+
 ## Architecture Improvements
 
 ### 52. Module Enable/Disable Without Reload
@@ -444,11 +525,11 @@ Add proper teardown methods to modules that currently require `/reload` to fully
 - **Impact:** Medium
 
 ### 53. Internal Event Bus -- FULLY IMPLEMENTED
-The centralized EventBus is now fully implemented across the addon with all modules migrated. The pcall memory regression has been resolved. **Note (2026-02-19):** A new HIGH priority issue was discovered -- duplicate registration vulnerability where modules that call `EventBus.Register` in `ApplyEvents` without first calling `Unregister` accumulate duplicate listeners. Only Reagents.lua correctly prevents this.
-- **Status:** Fully implemented but needs duplicate registration fix.
+The centralized EventBus is now fully implemented across the addon with all modules migrated. The pcall memory regression has been resolved. **Note (2026-02-19):** A new HIGH priority issue was discovered -- duplicate registration vulnerability where modules that call `EventBus.Register` in `ApplyEvents` without first calling `Unregister` accumulate duplicate listeners. Only Reagents.lua correctly prevents this. **Note (2026-02-22 Session 3):** Warehousing.lua correctly guards with `eventsRegistered` flag, following the Reagents pattern. Remaining modules should be audited.
+- **Status:** Fully implemented but needs duplicate registration fix in non-guarded modules.
 
 ### 54. Shared Border/Backdrop Utility
-Extract duplicated border drawing code from 8+ modules into `Helpers.ApplyFrameBackdrop`. **Note (2026-02-22):** The Coordinates module already uses `Helpers.ApplyFrameBackdrop` (line 571-573), showing the pattern is being adopted. Continue migrating other modules.
+Extract duplicated border drawing code from 8+ modules into `Helpers.ApplyFrameBackdrop`. **Note (2026-02-22):** The Coordinates module already uses `Helpers.ApplyFrameBackdrop` (line 571-573). Warehousing.lua also uses it correctly (lines 443 and 1333). Continue migrating other modules.
 - **Ease:** Easy-Medium
 - **Impact:** Medium (code quality)
 
@@ -475,19 +556,19 @@ The `CleanupSavedVariables()` function deletes old-format entries instead of mig
 - **Files:** TalentReminder.lua
 
 ### 59. EventBus Duplicate Registration Fix
-Add deduplication to `EventBus.Register` or adopt the Reagents.lua `eventsEnabled` guard pattern across all modules. Currently, every module except Reagents.lua can accumulate duplicate listeners on repeated `ApplyEvents` calls.
+Add deduplication to `EventBus.Register` or adopt the Reagents.lua `eventsEnabled` guard pattern across all modules. Currently, every module except Reagents.lua and Warehousing.lua can accumulate duplicate listeners on repeated `ApplyEvents` calls.
 - **Ease:** Easy (fix in EventBus.lua) or Medium (fix in each module)
 - **Impact:** High (correctness -- event handlers fire multiple times)
 - **Files:** EventBus.lua or all modules with ApplyEvents functions
 
 ### 60. Config Tab Count Scalability
-With 22+ config tabs now (after adding Coordinates and SCT in v1.13), the sidebar is getting long. Consider: tab grouping/categories, collapsible sections, or the search feature (#21). The current linear list scales linearly with module count.
+With 25+ config tabs now (after adding Coordinates, SCT, and Warehousing), the sidebar is getting long. Consider: tab grouping/categories, collapsible sections, or the search feature (#21). The current linear list scales linearly with module count.
 - **Ease:** Medium
 - **Impact:** Medium (UX)
 - **Files:** config/ConfigMain.lua
 
 ### 61. Standardize issecretvalue Guards
-Audit all modules for missing `issecretvalue()` guards on WoW API return values used during combat. **Note (2026-02-22):** Bug found in Misc.lua line 417 -- `tooltip:GetUnit()` returns a secret value unit token during combat, passed unchecked to `UnitIsPlayer()`. Fixed by adding `issecretvalue(unit)` guard. Similar patterns should be audited across all tooltip hooks, `UNIT_COMBAT` handlers, and event callbacks that access unit data.
+Audit all modules for missing `issecretvalue()` guards on WoW API return values used during combat. **Note (2026-02-22):** Bug found in Misc.lua line 417 -- `tooltip:GetUnit()` returns a secret value unit token during combat, passed unchecked to `UnitIsPlayer()`. Fixed by adding `issecretvalue(unit)` guard. Similar patterns should be audited across all tooltip hooks, `UNIT_COMBAT` handlers, and event callbacks that access unit data. **Note (2026-02-22 Session 3):** SCT.lua correctly guards `amount` and `flagText` with `issecretvalue()` checks. WaypointDistance.lua has no combat-sensitive secret values. The Warehousing module has no in-combat code paths.
 - **Ease:** Easy-Medium
 - **Impact:** Medium (crash prevention)
 - **Files:** All modules with tooltip hooks or combat event handlers

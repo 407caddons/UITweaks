@@ -209,8 +209,14 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "hearthstone",   label = "Hearthstone" },
         { key = "currency",      label = "Currency Tracker" },
         { key = "sessionStats",  label = "Session Stats" },
-        { key = "lockouts",      label = "Instance Lockouts" },
-        { key = "xpRep",         label = "XP / Reputation" },
+        { key = "lockouts",         label = "Instance Lockouts" },
+        { key = "xpRep",            label = "XP / Reputation" },
+        { key = "haste",            label = "Haste" },
+        { key = "crit",             label = "Crit Chance" },
+        { key = "mastery",          label = "Mastery" },
+        { key = "vers",             label = "Versatility" },
+        { key = "waypointDistance", label = "Waypoint Distance" },
+        { key = "addonComm",        label = "Addon Comm Status" },
     }
 
     local yOffset = -250

@@ -1414,49 +1414,60 @@ local function RenderAchievements()
     end
 end
 
-local function RenderTravelersLog()
-    if not C_ContentTracking then
-        addonTable.Core.Log("Tracker", "C_ContentTracking API not available", 1)
-        return
-    end
+local function AutoUntrackCompletedPerksActivities()
+    if not C_PerksActivities then return end
+    if not C_PerksActivities.GetTrackedPerksActivities then return end
+    if not C_PerksActivities.RemoveTrackedPerksActivity then return end
 
-    -- Try multiple possible tracking types
-    local trackedActivities = {}
-    local allActivities = nil
+    local tracked = C_PerksActivities.GetTrackedPerksActivities()
+    if not tracked or #tracked == 0 then return end
 
-    -- Method 1: Try GetTrackedPerksActivities
-    if C_PerksActivities and C_PerksActivities.GetTrackedPerksActivities then
-        local tracked = C_PerksActivities.GetTrackedPerksActivities()
-        if tracked and #tracked > 0 then
-            trackedActivities = tracked
-        end
-    end
-
-    -- Method 2: Try GetPerksActivitiesInfo and filter for tracked ones
-    if #trackedActivities == 0 and C_PerksActivities and C_PerksActivities.GetPerksActivitiesInfo then
-        allActivities = C_PerksActivities.GetPerksActivitiesInfo()
-        if allActivities and allActivities.activities then
-            -- Iterate through activities and find tracked ones
-            for _, activity in ipairs(allActivities.activities) do
-                if activity and activity.tracked and activity.ID then
-                    table.insert(trackedActivities, activity.ID)
+    -- Build a lookup of all activity data so we can check completion
+    local activityData = {}
+    if C_PerksActivities.GetPerksActivitiesInfo then
+        local info = C_PerksActivities.GetPerksActivitiesInfo()
+        if info and info.activities then
+            for _, activity in ipairs(info.activities) do
+                if activity and activity.ID then
+                    activityData[activity.ID] = activity
                 end
             end
         end
     end
 
-    if #trackedActivities == 0 then
-        return
+    for _, activityID in ipairs(tracked) do
+        local activity = activityData[activityID]
+        if activity then
+            local hasRequirements = false
+            local allDone = true
+            if activity.requirementsList then
+                for _, req in ipairs(activity.requirementsList) do
+                    if req and req.requirementText and req.requirementText ~= "" then
+                        hasRequirements = true
+                        if not req.completed then
+                            allDone = false
+                            break
+                        end
+                    end
+                end
+            end
+            if hasRequirements and allDone then
+                C_PerksActivities.RemoveTrackedPerksActivity(activityID)
+            end
+        end
+    end
+end
+
+local function RenderTravelersLog()
+    if not C_PerksActivities then return end
+
+    -- Always fetch full activity info for data lookup
+    local allActivities = nil
+    if C_PerksActivities.GetPerksActivitiesInfo then
+        allActivities = C_PerksActivities.GetPerksActivitiesInfo()
     end
 
-    AddLine("Traveler's Log (" .. #trackedActivities .. ")", true, "travelersLog")
-
-    if UIThingsDB.tracker.collapsed["travelersLog"] then
-        ucState.yOffset = ucState.yOffset - ITEM_SPACING
-        return
-    end
-
-    -- Build a lookup table of activities by ID for quick access
+    -- Build a lookup table of activities by ID
     local activityLookup = {}
     if allActivities and allActivities.activities then
         for _, activity in ipairs(allActivities.activities) do
@@ -1466,16 +1477,71 @@ local function RenderTravelersLog()
         end
     end
 
+    -- Get tracked activity IDs
+    local trackedActivities = {}
+    if C_PerksActivities.GetTrackedPerksActivities then
+        local tracked = C_PerksActivities.GetTrackedPerksActivities()
+        if tracked and #tracked > 0 then
+            trackedActivities = tracked
+        end
+    end
+
+    -- Fallback: find tracked ones from the full list
+    if #trackedActivities == 0 and allActivities and allActivities.activities then
+        for _, activity in ipairs(allActivities.activities) do
+            if activity and activity.tracked and activity.ID then
+                table.insert(trackedActivities, activity.ID)
+            end
+        end
+    end
+
+    if #trackedActivities == 0 then
+        return
+    end
+
+    -- Count only activities that will actually render (not completed+hidden)
+    local renderCount = 0
+    for _, activityID in ipairs(trackedActivities) do
+        local activity = activityLookup[activityID]
+        if activity then
+            local hasRequirements = false
+            local allCompleted = true
+            if activity.requirementsList then
+                for _, req in ipairs(activity.requirementsList) do
+                    if req and req.requirementText and req.requirementText ~= "" then
+                        hasRequirements = true
+                        if not req.completed then
+                            allCompleted = false
+                            break
+                        end
+                    end
+                end
+            end
+            if not (hasRequirements and allCompleted and UIThingsDB.tracker.hideCompletedSubtasks) then
+                renderCount = renderCount + 1
+            end
+        end
+    end
+
+    if renderCount == 0 then return end
+
+    AddLine("Traveler's Log (" .. renderCount .. ")", true, "travelersLog")
+
+    if UIThingsDB.tracker.collapsed["travelersLog"] then
+        ucState.yOffset = ucState.yOffset - ITEM_SPACING
+        return
+    end
+
     for _, activityID in ipairs(trackedActivities) do
         local activity = activityLookup[activityID]
         if activity then
             -- Check if all requirements are completed
             local allCompleted = true
             local hasRequirements = false
-            if activity.requirementsList and #activity.requirementsList > 0 then
-                hasRequirements = true
+            if activity.requirementsList then
                 for _, req in ipairs(activity.requirementsList) do
                     if req and req.requirementText and req.requirementText ~= "" then
+                        hasRequirements = true
                         if not req.completed then
                             allCompleted = false
                             break
@@ -1595,6 +1661,9 @@ UpdateContent = function()
     ucState.cachedTasks = cachedTasks
 
     UIThingsDB.tracker.collapsed = UIThingsDB.tracker.collapsed or {}
+
+    -- Silently untrack any completed Traveler's Log activities
+    AutoUntrackCompletedPerksActivities()
 
     -- Wipe reusable scratch tables
     wipe(displayedIDs)

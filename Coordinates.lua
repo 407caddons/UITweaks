@@ -61,6 +61,52 @@ local function ResolveZoneName(name)
 end
 
 -- ============================================================
+-- Distance helpers (shared with RefreshList row display)
+-- ============================================================
+local function MapPosToWorld(mapID, x, y)
+    if not C_Map.GetWorldPosFromMapPos then return nil end
+    local mapPos = CreateVector2D(x, y)
+    local continentID, worldPos = C_Map.GetWorldPosFromMapPos(mapID, mapPos)
+    if not continentID or not worldPos then return nil end
+    return continentID, worldPos:GetXY()
+end
+
+local function GetDistanceToWP(wp)
+    local playerMapID = C_Map.GetBestMapForUnit("player")
+    if not playerMapID then return nil end
+    local playerPos = C_Map.GetPlayerMapPosition(playerMapID, "player")
+    if not playerPos then return nil end
+    local px, py = playerPos:GetXY()
+
+    local pCont, pwx, pwy = MapPosToWorld(playerMapID, px, py)
+    local wCont, wwx, wwy = MapPosToWorld(wp.mapID, wp.x, wp.y)
+    if pCont and wCont and pCont == wCont then
+        local dx = pwx - wwx
+        local dy = pwy - wwy
+        return math.sqrt(dx * dx + dy * dy)
+    end
+
+    if wp.mapID == playerMapID then
+        local size = C_Map.GetMapWorldSize and C_Map.GetMapWorldSize(playerMapID)
+        local yardsPerUnit = (size and size > 0) and size or 4224
+        local dx = (wp.x - px) * yardsPerUnit
+        local dy = (wp.y - py) * yardsPerUnit
+        return math.sqrt(dx * dx + dy * dy)
+    end
+
+    return nil
+end
+
+local function FormatDistanceShort(yards)
+    if not yards then return "" end
+    if yards >= 1000 then
+        return string.format("%.1fky", yards / 1000)
+    else
+        return string.format("%.0fy", yards)
+    end
+end
+
+-- ============================================================
 -- Slash command parsing
 -- ============================================================
 -- Formats supported:
@@ -69,10 +115,19 @@ end
 --   /lway x y name
 --   /lway zone x, y name
 --   /lway zone x y name
+--   /lway #mapID x, y name   (e.g. /way #2371 60.9 38.7 Castigaar)
 local function ParseWaypointString(msg)
     if not msg or msg:match("^%s*$") then return nil end
 
     msg = msg:match("^%s*(.-)%s*$") -- trim
+
+    -- Check for #mapID prefix (e.g. "#2371 60.9 38.7 Name")
+    local explicitMapID
+    local mapIDStr = msg:match("^#(%d+)%s+")
+    if mapIDStr then
+        explicitMapID = tonumber(mapIDStr)
+        msg = msg:match("^#%d+%s+(.*)$") or msg
+    end
 
     -- Try to match coordinates: look for two numbers (with optional decimals)
     -- Pattern: find the first pair of numbers that could be coordinates
@@ -101,44 +156,50 @@ local function ParseWaypointString(msg)
     x = math.max(0, math.min(1, x))
     y = math.max(0, math.min(1, y))
 
-    -- Parse zone from before-text
-    local zone = before and before:match("^%s*(.-)%s*$") or ""
-    if zone == "" then zone = nil end
-
-    -- Parse name from after-text
+    -- Parse name from after-text (when using #mapID, before-text is always empty)
     local name = after and after:match("^%s*(.-)%s*$") or ""
     if name == "" then name = nil end
 
     -- Resolve mapID
-    local mapID
-    if zone then
-        mapID = ResolveZoneName(zone)
-        if not mapID then
-            -- Maybe the "zone" text is actually part of the name and coords were first
-            -- Try current zone instead
-            Log("Coordinates", "Unknown zone: " .. zone .. ", using current zone", LogLevel.WARN)
-            mapID = C_Map.GetBestMapForUnit("player")
-            -- Prepend the unresolved zone text to the name
-            if name then
-                name = zone .. " " .. name
-            else
-                name = zone
-            end
-            zone = nil
-        end
-    else
-        mapID = C_Map.GetBestMapForUnit("player")
-    end
-
-    if not mapID then
-        Log("Coordinates", "Cannot determine current zone", LogLevel.WARN)
-        return nil
-    end
-
-    -- Get zone name for display
-    if not zone then
+    local mapID, zone
+    if explicitMapID then
+        mapID = explicitMapID
         local mapInfo = C_Map.GetMapInfo(mapID)
-        zone = mapInfo and mapInfo.name or "Unknown"
+        zone = mapInfo and mapInfo.name or ("Map " .. mapID)
+    else
+        -- Parse zone from before-text
+        zone = before and before:match("^%s*(.-)%s*$") or ""
+        if zone == "" then zone = nil end
+
+        if zone then
+            mapID = ResolveZoneName(zone)
+            if not mapID then
+                -- Maybe the "zone" text is actually part of the name and coords were first
+                -- Try current zone instead
+                Log("Coordinates", "Unknown zone: " .. zone .. ", using current zone", LogLevel.WARN)
+                mapID = C_Map.GetBestMapForUnit("player")
+                -- Prepend the unresolved zone text to the name
+                if name then
+                    name = zone .. " " .. name
+                else
+                    name = zone
+                end
+                zone = nil
+            end
+        else
+            mapID = C_Map.GetBestMapForUnit("player")
+        end
+
+        if not mapID then
+            Log("Coordinates", "Cannot determine current zone", LogLevel.WARN)
+            return nil
+        end
+
+        -- Get zone name for display
+        if not zone then
+            local mapInfo = C_Map.GetMapInfo(mapID)
+            zone = mapInfo and mapInfo.name or "Unknown"
+        end
     end
 
     -- Auto-generate name if not provided
@@ -311,7 +372,9 @@ function Coordinates.RefreshList()
         row.wpIndex = i
 
         row.text:SetFont(font, fontSize, "")
-        row.text:SetText(string.format("|cFFFFD700%.1f, %.1f|r  %s", wp.x * 100, wp.y * 100, wp.name or ""))
+        local dist = GetDistanceToWP(wp)
+        local distStr = dist and ("|cFFAAAAAA" .. FormatDistanceShort(dist) .. "|r  ") or ""
+        row.text:SetText(string.format("%s|cFFFFD700%.1f, %.1f|r  %s", distStr, wp.x * 100, wp.y * 100, wp.name or ""))
 
         -- Highlight active waypoint
         if i == activeWaypointIndex then
@@ -456,6 +519,40 @@ local function GetOrCreatePasteDialog()
     return f
 end
 
+function Coordinates.SortByDistance()
+    local db = UIThingsDB.coordinates
+    if not db.waypoints or #db.waypoints == 0 then return end
+
+    -- Compute distance for each waypoint once, then sort
+    local withDist = {}
+    for _, wp in ipairs(db.waypoints) do
+        table.insert(withDist, { wp = wp, dist = GetDistanceToWP(wp) or math.huge })
+    end
+
+    table.sort(withDist, function(a, b) return a.dist < b.dist end)
+
+    wipe(db.waypoints)
+    for _, entry in ipairs(withDist) do
+        table.insert(db.waypoints, entry.wp)
+    end
+
+    -- Preserve active index after sort
+    if activeWaypointIndex then
+        local activeWP = withDist[activeWaypointIndex] and withDist[activeWaypointIndex].wp
+        activeWaypointIndex = nil
+        if activeWP then
+            for i, entry in ipairs(withDist) do
+                if entry.wp == activeWP then
+                    activeWaypointIndex = i
+                    break
+                end
+            end
+        end
+    end
+
+    Coordinates.RefreshList()
+end
+
 function Coordinates.ShowPasteDialog()
     local f = GetOrCreatePasteDialog()
     f.editBox:SetText("")
@@ -523,6 +620,23 @@ local function CreateMainFrame()
         Coordinates.ShowPasteDialog()
     end)
 
+    -- Sort button
+    local sortBtn = CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate")
+    sortBtn:SetSize(40, 18)
+    sortBtn:SetPoint("RIGHT", pasteBtn, "LEFT", -4, 0)
+    sortBtn:SetText("Sort")
+    sortBtn:SetNormalFontObject("GameFontNormalSmall")
+    sortBtn:SetScript("OnClick", function()
+        Coordinates.SortByDistance()
+    end)
+    sortBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Sort by Distance")
+        GameTooltip:AddLine("Sorts all waypoints by distance\nfrom your current location.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    sortBtn:SetScript("OnLeave", GameTooltip_Hide)
+
     -- Divider line under title
     local divider = mainFrame:CreateTexture(nil, "ARTWORK")
     divider:SetPoint("TOPLEFT", 2, -24)
@@ -545,6 +659,13 @@ local function CreateMainFrame()
     end)
 
     mainFrame.scrollFrame = scrollFrame
+
+    -- Refresh distances every 2s while frame is visible
+    C_Timer.NewTicker(2, function()
+        if mainFrame:IsShown() then
+            Coordinates.RefreshList()
+        end
+    end)
 end
 
 -- ============================================================
@@ -636,6 +757,8 @@ function Coordinates.ApplyWayCommand()
     if db.registerWayCommand then
         SLASH_LUNAWAYALIAS1 = "/way"
         SlashCmdList["LUNAWAYALIAS"] = SlashHandler
+        -- hash_SlashCmdList maps "/WAY" -> the SlashCmdList key (not the function)
+        hash_SlashCmdList["/WAY"] = "LUNAWAYALIAS"
     else
         -- Unregister if disabled
         SLASH_LUNAWAYALIAS1 = nil

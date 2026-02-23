@@ -14,7 +14,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 500)
+    child:SetSize(600, 620)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -107,8 +107,8 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     fontSizeSlider:SetWidth(150)
     local currentSize = UIThingsDB.coordinates.fontSize or 12
     _G[fontSizeSlider:GetName() .. 'Text']:SetText("Font Size: " .. currentSize)
-    _G[fontSizeSlider:GetName() .. 'Low']:SetText("8")
-    _G[fontSizeSlider:GetName() .. 'High']:SetText("18")
+    _G[fontSizeSlider:GetName() .. 'Low']:SetText("")
+    _G[fontSizeSlider:GetName() .. 'High']:SetText("")
     fontSizeSlider:SetValue(currentSize)
     fontSizeSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value)
@@ -117,17 +117,55 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
         UpdateCoordinates()
     end)
 
+    -- Width slider
+    local widthSlider = CreateFrame("Slider", "UIThingsCoordsWidth", child, "OptionsSliderTemplate")
+    widthSlider:SetPoint("TOPLEFT", 20, -330)
+    widthSlider:SetMinMaxValues(100, 600)
+    widthSlider:SetValueStep(10)
+    widthSlider:SetObeyStepOnDrag(true)
+    widthSlider:SetWidth(200)
+    local currentWidth = UIThingsDB.coordinates.width or 220
+    _G[widthSlider:GetName() .. 'Text']:SetText("Width: " .. currentWidth)
+    _G[widthSlider:GetName() .. 'Low']:SetText("100")
+    _G[widthSlider:GetName() .. 'High']:SetText("600")
+    widthSlider:SetValue(currentWidth)
+    widthSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.coordinates.width = value
+        _G[self:GetName() .. 'Text']:SetText("Width: " .. value)
+        UpdateCoordinates()
+    end)
+
+    -- Height slider
+    local heightSlider = CreateFrame("Slider", "UIThingsCoordsHeight", child, "OptionsSliderTemplate")
+    heightSlider:SetPoint("TOPLEFT", 20, -390)
+    heightSlider:SetMinMaxValues(60, 600)
+    heightSlider:SetValueStep(10)
+    heightSlider:SetObeyStepOnDrag(true)
+    heightSlider:SetWidth(200)
+    local currentHeight = UIThingsDB.coordinates.height or 200
+    _G[heightSlider:GetName() .. 'Text']:SetText("Height: " .. currentHeight)
+    _G[heightSlider:GetName() .. 'Low']:SetText("60")
+    _G[heightSlider:GetName() .. 'High']:SetText("600")
+    heightSlider:SetValue(currentHeight)
+    heightSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.coordinates.height = value
+        _G[self:GetName() .. 'Text']:SetText("Height: " .. value)
+        UpdateCoordinates()
+    end)
+
     -- Commands section
-    Helpers.CreateSectionHeader(child, "Commands", -320)
+    Helpers.CreateSectionHeader(child, "Commands", -440)
 
     local cmdNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    cmdNote:SetPoint("TOPLEFT", 20, -345)
+    cmdNote:SetPoint("TOPLEFT", 20, -465)
     cmdNote:SetText("/lway [zone] x, y [name] - always available")
     cmdNote:SetTextColor(0.7, 0.7, 0.7)
 
     -- Register /way checkbox
     local wayBtn = CreateFrame("CheckButton", "UIThingsCoordsWayCheck", child, "ChatConfigCheckButtonTemplate")
-    wayBtn:SetPoint("TOPLEFT", 20, -370)
+    wayBtn:SetPoint("TOPLEFT", 20, -490)
     _G[wayBtn:GetName() .. "Text"]:SetText("Also register /way command")
     wayBtn:SetChecked(UIThingsDB.coordinates.registerWayCommand)
     wayBtn:SetScript("OnClick", function(self)
@@ -138,7 +176,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     end)
 
     local wayNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    wayNote:SetPoint("TOPLEFT", 20, -395)
+    wayNote:SetPoint("TOPLEFT", 20, -515)
     wayNote:SetText("Note: /way may conflict with TomTom if installed")
     wayNote:SetTextColor(1, 0.5, 0.5)
 end

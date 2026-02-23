@@ -405,55 +405,71 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
     row:EnableMouse(false)
     row:SetScript("OnMouseDown", nil)
 
+    -- Store build data on the row so click handlers always read current values
+    -- (avoids stale buildIndex captured by closure when list is re-sorted or builds deleted)
+    row.buildData = {
+        instanceID = instanceID,
+        diffID = diffID,
+        zoneKey = zoneKey,
+        buildIndex = buildIndex,
+        reminder = reminder,
+    }
+
     -- Show action buttons
     row.editBtn:Show()
-    row.editBtn:SetScript("OnClick", function()
-        TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, reminder)
+    row.editBtn:SetScript("OnClick", function(self)
+        local d = self:GetParent().buildData
+        TalentManager.ShowEditDialog(d.instanceID, d.diffID, d.zoneKey, d.buildIndex, d.reminder)
     end)
 
     row.copyBtn:Show()
-    row.copyBtn:SetScript("OnClick", function()
-        TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, reminder)
+    row.copyBtn:SetScript("OnClick", function(self)
+        local d = self:GetParent().buildData
+        TalentManager.CopyBuild(d.instanceID, d.diffID, d.zoneKey, d.buildIndex, d.reminder)
     end)
 
     row.updateBtn:Show()
-    row.updateBtn:SetScript("OnClick", function()
-        StaticPopup_Show("LUNA_TALENTMGR_UPDATE_CONFIRM", reminder.name or "this build", nil, {
-            instanceID = instanceID,
-            diffID = diffID,
-            zoneKey = zoneKey,
-            buildIndex = buildIndex,
-            reminder = reminder,
+    row.updateBtn:SetScript("OnClick", function(self)
+        local d = self:GetParent().buildData
+        StaticPopup_Show("LUNA_TALENTMGR_UPDATE_CONFIRM", d.reminder.name or "this build", nil, {
+            instanceID = d.instanceID,
+            diffID = d.diffID,
+            zoneKey = d.zoneKey,
+            buildIndex = d.buildIndex,
+            reminder = d.reminder,
         })
     end)
 
     row.deleteBtn:Show()
-    row.deleteBtn:SetScript("OnClick", function()
-        StaticPopup_Show("LUNA_TALENTMGR_DELETE_CONFIRM", reminder.name or "this build", nil, {
-            instanceID = instanceID,
-            diffID = diffID,
-            zoneKey = zoneKey,
-            buildIndex = buildIndex,
+    row.deleteBtn:SetScript("OnClick", function(self)
+        local d = self:GetParent().buildData
+        StaticPopup_Show("LUNA_TALENTMGR_DELETE_CONFIRM", d.reminder.name or "this build", nil, {
+            instanceID = d.instanceID,
+            diffID = d.diffID,
+            zoneKey = d.zoneKey,
+            buildIndex = d.buildIndex,
         })
     end)
 
     row.loadBtn:Show()
-    row.loadBtn:SetScript("OnClick", function()
-        TalentManager.LoadBuild(reminder)
+    row.loadBtn:SetScript("OnClick", function(self)
+        local d = self:GetParent().buildData
+        TalentManager.LoadBuild(d.reminder)
     end)
 
     -- Tooltip showing class/spec and zone info
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self)
+        local d = self.buildData
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(reminder.name or "Unnamed Build", 1, 0.82, 0)
-        if reminder.className and reminder.specName then
-            GameTooltip:AddLine(reminder.specName .. " " .. reminder.className, 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(d.reminder.name or "Unnamed Build", 1, 0.82, 0)
+        if d.reminder.className and d.reminder.specName then
+            GameTooltip:AddLine(d.reminder.specName .. " " .. d.reminder.className, 0.7, 0.7, 0.7)
         end
-        if type(zoneKey) == "string" and zoneKey ~= "" then
-            GameTooltip:AddLine("Zone: " .. zoneKey, 0.6, 0.8, 1)
+        if type(d.zoneKey) == "string" and d.zoneKey ~= "" then
+            GameTooltip:AddLine("Zone: " .. d.zoneKey, 0.6, 0.8, 1)
         else
-            local numZone = tonumber(zoneKey) or 0
+            local numZone = tonumber(d.zoneKey) or 0
             if numZone ~= 0 and numZone < 900000 then
                 local mapInfo = C_Map.GetMapInfo(numZone)
                 local zoneName = mapInfo and mapInfo.name or ("Map " .. tostring(numZone))
@@ -462,11 +478,11 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
                 GameTooltip:AddLine("Instance-wide", 0.6, 0.6, 0.6)
             end
         end
-        if reminder.createdDate then
-            GameTooltip:AddLine("Created: " .. reminder.createdDate, 0.5, 0.5, 0.5)
+        if d.reminder.createdDate then
+            GameTooltip:AddLine("Created: " .. d.reminder.createdDate, 0.5, 0.5, 0.5)
         end
-        if reminder.note and reminder.note ~= "" then
-            GameTooltip:AddLine(reminder.note, 0.8, 0.8, 0.8, true)
+        if d.reminder.note and d.reminder.note ~= "" then
+            GameTooltip:AddLine(d.reminder.note, 0.8, 0.8, 0.8, true)
         end
         GameTooltip:Show()
     end)

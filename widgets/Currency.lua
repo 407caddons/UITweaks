@@ -2,7 +2,7 @@ local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
 
--- Common currencies (TWW Season 3)
+-- Common currencies (TWW Season 3) — used when no custom list is configured
 local DEFAULT_CURRENCIES = {
     3008, -- Valorstones
     3056, -- Kej
@@ -15,6 +15,15 @@ local DEFAULT_CURRENCIES = {
 table.insert(Widgets.moduleInits, function()
     local currencyFrame = Widgets.CreateWidgetFrame("Currency", "currency")
     currencyFrame:RegisterForClicks("AnyUp")
+
+    -- Returns the active currency ID list: custom list (if any) or defaults
+    local function GetActiveCurrencyList()
+        local db = UIThingsDB.widgets.currency
+        if db.customIDs and #db.customIDs > 0 then
+            return db.customIDs
+        end
+        return DEFAULT_CURRENCIES
+    end
 
     -- Create detailed currency panel
     local currencyPanel = CreateFrame("Frame", "LunaUITweaksCurrencyPanel", UIParent, "BackdropTemplate")
@@ -41,15 +50,38 @@ table.insert(Widgets.moduleInits, function()
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetSize(20, 20)
 
+    -- "Add currency ID" edit box
+    local addLabel = currencyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    addLabel:SetPoint("BOTTOMLEFT", 10, 38)
+    addLabel:SetText("Add ID:")
+    addLabel:SetTextColor(0.7, 0.7, 0.7)
+
+    local addBox = CreateFrame("EditBox", "LunaUITweaksCurrencyAddBox", currencyPanel, "InputBoxTemplate")
+    addBox:SetSize(60, 20)
+    addBox:SetPoint("LEFT", addLabel, "RIGHT", 5, 0)
+    addBox:SetAutoFocus(false)
+    addBox:SetNumeric(true)
+    addBox:SetMaxLetters(8)
+
+    local addBtn = CreateFrame("Button", nil, currencyPanel, "UIPanelButtonTemplate")
+    addBtn:SetSize(50, 22)
+    addBtn:SetPoint("LEFT", addBox, "RIGHT", 5, 0)
+    addBtn:SetText("Add")
+
+    local resetBtn = CreateFrame("Button", nil, currencyPanel, "UIPanelButtonTemplate")
+    resetBtn:SetSize(55, 22)
+    resetBtn:SetPoint("LEFT", addBtn, "RIGHT", 5, 0)
+    resetBtn:SetText("Reset")
+
     local scrollFrame = CreateFrame("ScrollFrame", nil, currencyPanel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 10, -30)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 60)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetSize(260, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
-    -- Frame pool for currency rows to avoid leaking frames
+    -- Frame pool for currency rows
     local rowPool = {}
     local activeRows = {}
 
@@ -64,13 +96,17 @@ table.insert(Widgets.moduleInits, function()
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             row.nameText:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 5, -2)
             row.nameText:SetJustifyH("LEFT")
-            row.nameText:SetWidth(200)
+            row.nameText:SetWidth(160)
             row.qtyText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             row.qtyText:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 5, 2)
             row.qtyText:SetJustifyH("LEFT")
             row.weeklyText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             row.weeklyText:SetPoint("TOPRIGHT", -5, -2)
             row.weeklyText:SetTextColor(0.7, 0.7, 1)
+            -- Remove button (only shown for custom IDs)
+            row.removeBtn = CreateFrame("Button", nil, row, "UIPanelCloseButton")
+            row.removeBtn:SetSize(16, 16)
+            row.removeBtn:SetPoint("RIGHT", -2, 0)
         end
         row:Show()
         table.insert(activeRows, row)
@@ -82,6 +118,8 @@ table.insert(Widgets.moduleInits, function()
             row:Hide()
             row:ClearAllPoints()
             row.weeklyText:SetText("")
+            row.removeBtn:SetScript("OnClick", nil)
+            row.removeBtn:Hide()
             table.insert(rowPool, row)
         end
         wipe(activeRows)
@@ -98,31 +136,25 @@ table.insert(Widgets.moduleInits, function()
     end)
     dismissFrame:Hide()
 
-    currencyPanel:SetScript("OnShow", function()
-        dismissFrame:Show()
-    end)
-    currencyPanel:SetScript("OnHide", function()
-        dismissFrame:Hide()
-    end)
+    currencyPanel:SetScript("OnShow", function() dismissFrame:Show() end)
+    currencyPanel:SetScript("OnHide", function() dismissFrame:Hide() end)
 
     -- Get currency info
     local function GetCurrencyData(currencyID)
         local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
         if not info then return nil end
-
         return {
             name = info.name,
             quantity = info.quantity,
             maxQuantity = info.maxQuantity,
             iconFileID = info.iconFileID,
-            useTotalEarnedForMaxQty = info.useTotalEarnedForMaxQty,
             quantityEarnedThisWeek = info.quantityEarnedThisWeek,
             maxWeeklyQuantity = info.maxWeeklyQuantity,
             discovered = info.discovered,
         }
     end
 
-    -- "No data" label (created once, reused)
+    -- "No data" label
     local noDataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     noDataLabel:SetPoint("TOPLEFT", 10, -10)
     noDataLabel:SetText("No tracked currencies found")
@@ -133,27 +165,41 @@ table.insert(Widgets.moduleInits, function()
         ReleaseAllRows()
         noDataLabel:Hide()
 
+        local db = UIThingsDB.widgets.currency
+        local list = GetActiveCurrencyList()
+        local usingCustom = db.customIDs and #db.customIDs > 0
         local yOffset = 0
 
-        for _, currencyID in ipairs(DEFAULT_CURRENCIES) do
+        for idx, currencyID in ipairs(list) do
             local data = GetCurrencyData(currencyID)
-            if data and data.discovered then
+            if data and (data.discovered or usingCustom) then
                 local row = AcquireRow()
                 row:SetPoint("TOPLEFT", 0, yOffset)
 
                 row.icon:SetTexture(data.iconFileID)
-                row.nameText:SetText(data.name)
+                row.nameText:SetText(data.name or ("ID: " .. currencyID))
 
                 if data.maxQuantity and data.maxQuantity > 0 then
-                    row.qtyText:SetText(string.format("%s / %s", BreakUpLargeNumbers(data.quantity),
+                    row.qtyText:SetText(string.format("%s / %s",
+                        BreakUpLargeNumbers(data.quantity),
                         BreakUpLargeNumbers(data.maxQuantity)))
                 else
-                    row.qtyText:SetText(BreakUpLargeNumbers(data.quantity))
+                    row.qtyText:SetText(BreakUpLargeNumbers(data.quantity or 0))
                 end
 
                 if data.maxWeeklyQuantity and data.maxWeeklyQuantity > 0 then
-                    row.weeklyText:SetText(string.format("Weekly: %d/%d", data.quantityEarnedThisWeek or 0,
-                        data.maxWeeklyQuantity))
+                    row.weeklyText:SetText(string.format("Weekly: %d/%d",
+                        data.quantityEarnedThisWeek or 0, data.maxWeeklyQuantity))
+                end
+
+                -- Show remove button only for custom IDs
+                if usingCustom then
+                    local capturedIdx = idx
+                    row.removeBtn:Show()
+                    row.removeBtn:SetScript("OnClick", function()
+                        table.remove(db.customIDs, capturedIdx)
+                        UpdateCurrencyPanel()
+                    end)
                 end
 
                 yOffset = yOffset - 42
@@ -166,6 +212,36 @@ table.insert(Widgets.moduleInits, function()
 
         scrollChild:SetHeight(math.abs(yOffset) + 20)
     end
+
+    -- Add button handler
+    addBtn:SetScript("OnClick", function()
+        local idStr = addBox:GetText()
+        local id = tonumber(idStr)
+        if not id or id <= 0 then return end
+        local db = UIThingsDB.widgets.currency
+        db.customIDs = db.customIDs or {}
+        -- Avoid duplicates
+        for _, existing in ipairs(db.customIDs) do
+            if existing == id then
+                addBox:SetText("")
+                return
+            end
+        end
+        table.insert(db.customIDs, id)
+        addBox:SetText("")
+        UpdateCurrencyPanel()
+    end)
+
+    -- Reset button: clear custom list and revert to defaults
+    resetBtn:SetScript("OnClick", function()
+        UIThingsDB.widgets.currency.customIDs = {}
+        UpdateCurrencyPanel()
+    end)
+
+    addBox:SetScript("OnEnterPressed", function(self)
+        addBtn:Click()
+        self:ClearFocus()
+    end)
 
     currencyFrame:SetScript("OnClick", function(self, button)
         if currencyPanel:IsShown() then
@@ -184,16 +260,16 @@ table.insert(Widgets.moduleInits, function()
         Widgets.SmartAnchorTooltip(self)
         GameTooltip:SetText("Currency Tracker", 1, 1, 1)
 
-        -- Show top 3 currencies
+        local list = GetActiveCurrencyList()
         local count = 0
-        for _, currencyID in ipairs(DEFAULT_CURRENCIES) do
+        for _, currencyID in ipairs(list) do
             local data = GetCurrencyData(currencyID)
             if data and data.discovered then
                 local iconText = CreateTextureMarkup(data.iconFileID, 64, 64, 16, 16, 0, 1, 0, 1)
                 local color = data.quantity > 0 and "|cffffffff" or "|cff888888"
                 GameTooltip:AddLine(
-                    string.format("%s %s%s: %s|r", iconText, color, data.name, BreakUpLargeNumbers(data.quantity)),
-                    1, 1, 1)
+                    string.format("%s %s%s: %s|r", iconText, color, data.name,
+                        BreakUpLargeNumbers(data.quantity)), 1, 1, 1)
                 count = count + 1
                 if count >= 3 then break end
             end
@@ -213,9 +289,9 @@ table.insert(Widgets.moduleInits, function()
     end)
 
     currencyFrame.UpdateContent = function(self)
-        -- Display primary currency (first discovered one, even if 0)
+        local list = GetActiveCurrencyList()
         local primaryData = nil
-        for _, currencyID in ipairs(DEFAULT_CURRENCIES) do
+        for _, currencyID in ipairs(list) do
             local data = GetCurrencyData(currencyID)
             if data and data.discovered then
                 primaryData = data
@@ -224,20 +300,18 @@ table.insert(Widgets.moduleInits, function()
         end
 
         if primaryData then
-            -- Abbreviate name if needed
             local shortName = primaryData.name
             if #shortName > 12 then
                 shortName = shortName:sub(1, 9) .. "..."
             end
-
             local iconText = CreateTextureMarkup(primaryData.iconFileID, 64, 64, 16, 16, 0, 1, 0, 1)
-            self.text:SetText(string.format("%s %s: %s", iconText, shortName, BreakUpLargeNumbers(primaryData.quantity)))
+            self.text:SetText(string.format("%s %s: %s", iconText, shortName,
+                BreakUpLargeNumbers(primaryData.quantity)))
         else
             self.text:SetText("Currency: None")
         end
     end
 
-    -- Event handler for currency updates
     local function OnCurrencyUpdate()
         if UIThingsDB.widgets.currency.enabled then
             currencyFrame:UpdateContent()
