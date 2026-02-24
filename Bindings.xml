@@ -4,4 +4,26 @@
   <Binding name="LUNAUITWEAKS_TOGGLE_TRACKER" category="LUNAUITWEAKS">
     LunaUITweaks_ToggleTracker()
   </Binding>
+
+  <Binding name="LUNAUITWEAKS_GAME_LEFT" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_Left()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_RIGHT" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_Right()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_ROTATECW" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_RotateCW()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_ROTATECCW" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_RotateCCW()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_SOFTDROP" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_SoftDrop()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_HARDDROP" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_HardDrop()
+  </Binding>
+  <Binding name="LUNAUITWEAKS_GAME_PAUSE" category="LUNAUITWEAKS">
+    LunaUITweaks_Game_Pause()
+  </Binding>
 </Bindings>

@@ -22,10 +22,7 @@ local questItemButton = CreateFrame("Button", "LunaQuestItemButton", UIParent, "
 questItemButton:Hide()
 questItemButton:RegisterForClicks("AnyUp", "AnyDown")
 
--- Binding display name
-BINDING_HEADER_LUNAUITWEAKS = "Luna's UI Tweaks"
-_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"] = "Use Quest Item (Super Tracked)"
-_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"] = "Toggle Objective Tracker"
+-- Binding display names are defined in Core.lua
 
 -- Pending item update for when we leave combat
 local pendingQuestItemUpdate = nil

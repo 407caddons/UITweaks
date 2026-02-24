@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.13.0
+## Version: 1.15.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
@@ -47,6 +47,7 @@ config\panels\CastBarPanel.lua
 config\panels\ReagentsPanel.lua
 config\panels\QuestAutoPanel.lua
 config\panels\QuestReminderPanel.lua
+config\panels\XpBarPanel.lua
 config\panels\MplusTimerPanel.lua
 config\panels\CoordinatesPanel.lua
 config\panels\WarehousingPanel.lua
@@ -73,6 +74,7 @@ AddonVersions.lua
 Reagents.lua
 QuestAuto.lua
 QuestReminder.lua
+XpBar.lua
 MplusTimer.lua
 Coordinates.lua
 Warehousing.lua
@@ -112,6 +114,10 @@ widgets\Mastery.lua
 widgets\Vers.lua
 widgets\WaypointDistance.lua
 widgets\AddonComm.lua
+
+# Games
+games\Blocks.lua
+games\Snek.lua
 
 # Config entry point (now just a stub)
 Config.lua

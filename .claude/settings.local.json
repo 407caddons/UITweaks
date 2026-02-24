@@ -1,5 +1,11 @@
 {
   "permissions": {
-    "allow": []
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(cmd /c:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
+    ]
   }
 }

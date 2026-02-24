@@ -1,50 +1,34 @@
-# LunaUITweaks Code Review
+# `games/Blocks.lua` Code Review
 
-This code review evaluates the `LunaUITweaks` project focusing on performance, memory management, and maintainability. Per the request, no files are recommended to be broken up, but the impact of their current design is discussed.
+After reviewing the `Blocks.lua` file, I have identified a few performance issues and bugs, primarily related to garbage collection overhead and potential memory leaks in the multiplayer functionality.
 
-## 1. Executive Summary
+## 1. Frame / Memory Leak in Multiplayer
+**Severity: High**
+* **Issue:** In the `EndMPGame` function, `wipe(MP.opponents)` is called to clear the opponent data. However, the UI frames grouped under `opp.frames.container` (including mini-boards, textures, and fonts) are merely hidden, but are not tracked outside of `MP.opponents`.
+* **Impact:** The next time a multiplayer game starts (`LayoutOpponentPanels`), new tables and blank frames are generated for the opponents without reusing the old ones. This causes a frame limit leak/memory leak over multiple multiplayer games.
+* **Fix Target:** Cache/pool opponent frames in a separate table structure rather than keeping them tied to the transient `MP.opponents` lifecycle, allowing reuse when new opponents connect.
 
-`LunaUITweaks` is a large and feature-rich addon utilizing centralized settings (`UIThingsDB`) and a modular approach. While it is built with several optimizations (such as custom frame pooling and throttled updates), it also leverages extensive hooking of Blizzard's secure API and excessively large module files. These factors can introduce fragility, taint risks, and slight performance degradation during intense combat.
+## 2. Heavy Table Allocation (Garbage Collection Overhead)
+**Severity: Medium (Performance)**
+* **Issue:** The `PieceBlocks(pieceIdx, rot, px, py)` function creates and returns a brand new table of block `{c = x, r = y}` coordinate dictionary entries on **every** call. 
+* **Impact:** `PieceBlocks` is called continuously during the update loop. Most notably, it is called many times successively during `GhostY()` to calculate the ghost piece position on **every vertical line step**, which itself is called every time `RenderAll()` runs. Generating this many short-lived tables creates heavy overhead for the Lua Garbage Collector, leading to micro-stutters during gameplay.
+* **Fix Target:** Rewrite `IsValid` and `GhostY()` so they iterate over the `PIECES[curPiece].rotations[curRot]` offsets logically instead of constructing intermediate tables. `PieceBlocks` should only be used where strictly necessary (e.g. for `LockPiece`), or refactored to populate and return a single reused table.
 
-## 2. Performance Issues
+## 3. Potential Nil Errors with Saved Variables
+**Severity: Medium (Bug)**
+* **Issue:** In `AddScore()` and `GameOver()`, the script accesses `UIThingsDB.games.tetris.highScore` to save the player's best score.
+* **Impact:** If `UIThingsDB.games` or `UIThingsDB.games.tetris` hasn't been initialized by the main addon's database loader yet (or if the user's DB has been wiped), assigning a value to `UIThingsDB.games.tetris.highScore` will throw an `"attempt to index field 'tetris' (a nil value)"` Lua error.
+* **Fix Target:** Add a safety check/initialization step before assigning the high score.
+```lua
+UIThingsDB.games = UIThingsDB.games or {}
+UIThingsDB.games.tetris = UIThingsDB.games.tetris or {}
+UIThingsDB.games.tetris.highScore = highScore
+```
 
-### Heavy Use of `hooksecurefunc` in Hot Paths
-- **`Combat.lua`**: Hooks `UseAction`, `UseContainerItem`, and `C_Container.UseContainerItem`. These functions are executed every time the player presses a button or uses an item in their bags. While checking consumables is fast, adding any overhead to these core interactions can lead to micro-stutters during heavy combat sequences, especially for classes with high APM.
-- **`ActionBars.lua`**: Hooks functions like `UpdateMicroButtons` and `QueueStatusButton:SetPoint`. Since these UI elements can update dynamically, hooking them means your addon's logic will run often. 
+## 4. Multiplayer Addon Hook
+**Severity: Low**
+* **Issue:** In `BuildUI()`, the addon overrides `addonTable.AddonVersions.onVersionsUpdated` to inject `UpdateMultiBtn()`.
+* **Impact:** If `BuildUI()` somehow gets called more than once, it could create a recursive chain. Since `gameFrame` is set globally, it only gets called once right now, so it is safe.
+* **Fix Target:** Ensure `AddonVersions` uses a generic event payload system rather than overriding functions, or rely exclusively on `GROUP_ROSTER_UPDATE`.
 
-### Event and Update Loops
-- The addon features multiple `OnUpdate` scripts across different files (e.g., `Widgets.lua`, `CastBar.lua`, `Combat.lua`, `Speed.lua`). While some are accurately throttled (like `TimerOnUpdate` in `Combat.lua` which is set to 1.0s), multiple unthrottled or individually handled `OnUpdate` scripts cause unnecessary UI frame delays.
-- **Recommendation**: Consider a centralized `OnUpdate` or `C_Timer.NewTicker` manager in `Core.lua` that dispatches to modules. This reduces the number of function closures executed uniquely every frame.
-
-### Aura Scanning
-- Inside `Combat.lua`, `ScanConsumableBuffs` uses a manual loop over 40 aura slots instead of specific targeted searches (e.g., using `AuraUtil.FindAura` with a predicate or `AuraUtil.AuraFilters.Helpful`). While mitigated by caching (`lastAuraScanTime`), standardizing this could increase combat efficiency slightly.
-
-## 3. Memory & API Safety
-
-### Frame Pooling vs. Garbage Collection
-- **`ObjectiveTracker.lua`**: Has its own manual pooling implementation (`itemPool` array). While effective at preventing raw memory leaks, reinventing the wheel prevents taking advantage of Blizzard's `CreateFramePool` or `CreateFramePoolCollection`, which are highly optimized internally.
-- By managing frames manually (looping over them to hide and set their content), `ReleaseItems` and `AcquireItem` introduce slight O(N) linear time scanning whenever objectives are updated.
-
-### Taint and UI Fragility
-- **`ActionBars.lua`**: Aggressively overrides Blizzard's layout engines to re-parent the micro-menu (`PatchMicroMenuLayout` overriding `MicroMenuContainer.GetEdgeButton` and patching its metatable). This is an extremely dangerous pattern in modern WoW Addon development. 
-- Overwriting metatables of secure Blizzard UI elements often directly leads to `ADDON_ACTION_BLOCKED` errors in combat. It also means that any minor UI patch by Blizzard could silently break your whole ActionBars module. 
-
-## 4. Maintainability
-
-- **Monolithic Files**: Although you requested not to split files up, the file size must be reported as a serious maintainability drag:
-  - `ObjectiveTracker.lua` (~2200 lines / 88 KB)
-  - `TalentManager.lua` (~1800 lines / 73 KB)
-  - `ActionBars.lua` (~1650 lines / 61 KB)
-  - `Kick.lua` (~57 KB)
-  - `Combat.lua` (~1200 lines / 42 KB)
-- These monolithic structures result in vast scope complexities, deeply nested logic, and large amounts of local state variables acting essentially as file-wide globals. Finding a bug or feature in a 2000-line file requires intricate knowledge of the entire file's scope. 
-- **Recommendation**: If splitting is forbidden, ensure robust and heavily standardized section headers, consistent local variable declarations strictly at the top, and well-documented forward declarations.
-
-## 5. Summary Fixes and Actionable Items
-
-1. **Remove / Reduce Hot Hooks**: Re-evaluate the necessity of `UseAction` hooks in `Combat.lua`. Consider if consumable tracking can be performed on an event like `UNIT_AURA` or `SPELL_UPDATE_USABLE` or even a soft `C_Timer` ticker.
-2. **Refactor ActionBars Patching**: The overriding of `MicroMenuContainer` methods in `ActionBars.lua` is a ticking time-bomb for Taint errors. Try to achieve visual modifications via `ClearAllPoints()` and overlay frames rather than fundamentally hacking Blizzard's Layout engines.
-3. **Consolidate OnUpdate**: Use a single update ticker for non-frame-perfect updates (like speed calculations, combat durations) to alleviate CPU burden.
-
----
-*Review complete based on current directory state.*
+Would you like me to go ahead and implement fixes for these issues?

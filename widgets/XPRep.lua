@@ -1,6 +1,7 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
+local AbbreviateNumber = addonTable.Core.AbbreviateNumber
 
 table.insert(Widgets.moduleInits, function()
     local xpRepFrame = Widgets.CreateWidgetFrame("XPRep", "xpRep")
@@ -30,15 +31,6 @@ table.insert(Widgets.moduleInits, function()
         [7] = { r = 0.0, g = 0.6, b = 0.0 },       -- Revered
         [8] = { r = 0.0, g = 0.6, b = 0.0 },       -- Exalted
     }
-
-    local function AbbreviateNumber(value)
-        if value >= 1000000 then
-            return string.format("%.1fM", value / 1000000)
-        elseif value >= 10000 then
-            return string.format("%.1fK", value / 1000)
-        end
-        return tostring(value)
-    end
 
     local function RefreshCache()
         local level = UnitLevel("player")

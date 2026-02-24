@@ -3,6 +3,20 @@ _G[addonName] = addonTable
 
 addonTable.Core = {}
 
+-- ============================================================
+-- Key Binding display names (read by WoW's Key Bindings UI)
+-- ============================================================
+BINDING_HEADER_LUNAUITWEAKS                              = "Luna's UI Tweaks"
+_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"]  = "Use Quest Item (Super Tracked)"
+_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"]           = "Toggle Objective Tracker"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]                = "Game: Move Left / Snek Left"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]               = "Game: Move Right / Snek Right"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]            = "Game: Rotate CW / Snek Up"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECCW"]           = "Game: Rotate CCW / Snek Down"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_SOFTDROP"]            = "Block Game: Soft Drop"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_HARDDROP"]            = "Block Game: Hard Drop"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_PAUSE"]               = "Game: Pause / Snek Pause"
+
 -- Centralized Safe Timer Wrapper
 --- Safely executes a function after a delay using C_Timer
 -- @param delay number Delay in seconds
@@ -28,6 +42,18 @@ function addonTable.Core.SpeakTTS(message, voiceType)
     elseif C_VoiceChat and C_VoiceChat.SpeakText then
         pcall(C_VoiceChat.SpeakText, 0, message, voiceType, 1.0, false)
     end
+end
+
+--- Abbreviate large numbers for display (e.g. 1500000 -> "1.5M", 12500 -> "12.5K")
+-- @param value number
+-- @return string
+function addonTable.Core.AbbreviateNumber(value)
+    if value >= 1000000 then
+        return string.format("%.1fM", value / 1000000)
+    elseif value >= 10000 then
+        return string.format("%.1fK", value / 1000)
+    end
+    return tostring(value)
 end
 
 --------------------------------------------------------------
@@ -656,6 +682,32 @@ local function OnEvent(self, event, ...)
                 autoBuyEnabled = true,
                 goldReserve = 500,      -- never spend below this many gold
                 confirmAbove = 100,     -- confirm popup if purchase total exceeds this many gold
+            },
+            xpBar = {
+                enabled = false,
+                locked = true,
+                pos = { point = "BOTTOM", x = 0, y = 10 },
+                width = 600,
+                height = 20,
+                font = "Fonts\\FRIZQT__.TTF",
+                fontSize = 11,
+                barColor = { r = 0.337, g = 0.388, b = 1, a = 1 },
+                restedColor = { r = 0.3, g = 0.1, b = 0.8, a = 0.6 },
+                bgColor = { r = 0, g = 0, b = 0, a = 0.6 },
+                showLevel = true,
+                showXPText = true,
+                showPercent = true,
+                showTimers = true,
+                showAtMaxLevel = false,
+                hideBlizzardBar = false,
+            },
+            games = {
+                tetris = {
+                    highScore = 0,
+                },
+                snek = {
+                    highScore = 0,
+                },
             },
         }
 

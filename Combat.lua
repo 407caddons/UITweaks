@@ -22,6 +22,9 @@ function addonTable.Combat.UpdateSettings()
     if addonTable.Combat.ApplyLogFrameEvents then
         addonTable.Combat.ApplyLogFrameEvents()
     end
+    if addonTable.Combat.ApplyReminderEvents then
+        addonTable.Combat.ApplyReminderEvents()
+    end
 
     if not UIThingsDB.combat.enabled then
         timerFrame:Hide()
@@ -1165,7 +1168,7 @@ end
 local function ApplyReminderEvents()
     if not reminderEventFrame then return end
     local settings = UIThingsDB.combat.reminders
-    if settings and settings.enabled ~= false then
+    if UIThingsDB.combat.enabled and settings and settings.enabled ~= false then
         reminderEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
         reminderEventFrame:RegisterUnitEvent("UNIT_AURA", "player")
         reminderEventFrame:RegisterUnitEvent("UNIT_PET", "player")

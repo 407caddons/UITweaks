@@ -454,6 +454,31 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     local resetAllBtn = Helpers.CreateResetAllButton(panel)
     resetAllBtn:SetPoint("LEFT", exportSettingsBtn, "RIGHT", 5, 0)
 
+    -- Block Game button
+    local blockGameBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    blockGameBtn:SetSize(80, 24)
+    blockGameBtn:SetPoint("LEFT", resetAllBtn, "RIGHT", 10, 0)
+    blockGameBtn:SetText("Blocks")
+    blockGameBtn:SetScript("OnClick", function()
+        if addonTable.AddonVersions then
+            addonTable.AddonVersions.RefreshVersions()
+        end
+        if addonTable.Tetris and addonTable.Tetris.ShowGame then
+            addonTable.Tetris.ShowGame()
+        end
+    end)
+
+    -- Snek button
+    local snekBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    snekBtn:SetSize(60, 24)
+    snekBtn:SetPoint("LEFT", blockGameBtn, "RIGHT", 5, 0)
+    snekBtn:SetText("Snek")
+    snekBtn:SetScript("OnClick", function()
+        if addonTable.Snek and addonTable.Snek.ShowGame then
+            addonTable.Snek.ShowGame()
+        end
+    end)
+
     -- Column headers
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     nameHeader:SetPoint("TOPLEFT", refreshBtn, "BOTTOMLEFT", 0, -10)

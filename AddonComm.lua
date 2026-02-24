@@ -13,6 +13,11 @@ local LEGACY_PREFIXES = {
 local MIN_SEND_INTERVAL = 1.0 -- seconds between sends per module:action
 local DEDUP_WINDOW = 1.0      -- seconds to ignore duplicate messages from same sender
 
+-- Modules exempt from rate limiting (high-frequency game sync)
+local RATE_LIMIT_EXEMPT = {
+    GAME = true,
+}
+
 -- == STATE ==
 
 -- Handler registry: handlers[module][action] = callback(senderShort, payload, senderFull)
@@ -65,13 +70,15 @@ function Comm.Send(module, action, payload, legacyPrefix, legacyMessage)
     local channel = Comm.GetChannel()
     if not channel then return false end
 
-    -- Rate limit per module:action
+    -- Rate limit per module:action (exempt modules bypass this check)
     local key = module .. ":" .. action
     local now = GetTime()
-    if lastSendTime[key] and (now - lastSendTime[key]) < MIN_SEND_INTERVAL then
-        return false
+    if not RATE_LIMIT_EXEMPT[module] then
+        if lastSendTime[key] and (now - lastSendTime[key]) < MIN_SEND_INTERVAL then
+            return false
+        end
+        lastSendTime[key] = now
     end
-    lastSendTime[key] = now
 
     -- Build and send new format: "MODULE:ACTION:PAYLOAD"
     local message = module .. ":" .. action
