@@ -102,11 +102,8 @@ table.insert(Widgets.moduleInits, function()
         if not yards then return "?" end
         if yards >= 1000 then
             return string.format("%.1fky", yards / 1000)
-        elseif yards >= 100 then
-            return string.format("%.0fy", yards)
-        else
-            return string.format("%.0fy", yards)
         end
+        return string.format("%.0fy", yards)
     end
 
     wpFrame:SetScript("OnEnter", function(self)

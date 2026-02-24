@@ -219,6 +219,23 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "addonComm",        label = "Addon Comm Status" },
     }
 
+    local CONDITIONS = {
+        { value = "always",   text = "Always" },
+        { value = "combat",   text = "In Combat" },
+        { value = "nocombat", text = "Out of Combat" },
+        { value = "group",    text = "In Group" },
+        { value = "solo",     text = "Solo" },
+        { value = "instance", text = "In Instance" },
+        { value = "world",    text = "In World" },
+    }
+
+    local function GetConditionLabel(value)
+        for _, cond in ipairs(CONDITIONS) do
+            if cond.value == value then return cond.text end
+        end
+        return "Always"
+    end
+
     local yOffset = -250
     for i, widget in ipairs(widgets) do
         local cb = CreateFrame("CheckButton", "UIThingsWidget" .. widget.key .. "Check", panel,
@@ -251,16 +268,6 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         conditionDropdown:SetPoint("LEFT", anchorDropdown, "RIGHT", 10, 0)
         UIDropDownMenu_SetWidth(conditionDropdown, 85)
 
-        local CONDITIONS = {
-            { value = "always",   text = "Always" },
-            { value = "combat",   text = "In Combat" },
-            { value = "nocombat", text = "Out of Combat" },
-            { value = "group",    text = "In Group" },
-            { value = "solo",     text = "Solo" },
-            { value = "instance", text = "In Instance" },
-            { value = "world",    text = "In World" },
-        }
-
         local function ConditionOnClick(self)
             UIThingsDB.widgets[widget.key].condition = self.value
             UIDropDownMenu_SetText(conditionDropdown, self:GetText())
@@ -279,12 +286,6 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
             end
         end)
 
-        local function GetConditionLabel(value)
-            for _, cond in ipairs(CONDITIONS) do
-                if cond.value == value then return cond.text end
-            end
-            return "Always"
-        end
         UIDropDownMenu_SetText(conditionDropdown,
             GetConditionLabel(UIThingsDB.widgets[widget.key].condition or "always"))
 

@@ -50,12 +50,16 @@ local function ResolveZoneName(name)
     -- Exact match
     if zoneCache[lower] then return zoneCache[lower] end
 
-    -- Partial match (first match wins)
+    -- Partial match (shortest name wins to prefer more specific matches)
+    local bestName, bestID = nil, nil
     for cachedName, mapID in pairs(zoneCache) do
         if cachedName:find(lower, 1, true) then
-            return mapID
+            if not bestName or #cachedName < #bestName then
+                bestName, bestID = cachedName, mapID
+            end
         end
     end
+    if bestID then return bestID end
 
     return nil
 end
@@ -235,6 +239,12 @@ end
 
 function Coordinates.AddWaypoint(mapID, x, y, name, zone)
     local db = UIThingsDB.coordinates
+    for _, wp in ipairs(db.waypoints) do
+        if wp.mapID == mapID and math.abs(wp.x - x) < 0.001 and math.abs(wp.y - y) < 0.001 then
+            Log("Coordinates", "Duplicate waypoint, skipping.", LogLevel.WARN)
+            return
+        end
+    end
     table.insert(db.waypoints, {
         mapID = mapID,
         x = x,
@@ -751,23 +761,41 @@ EventBus.Register("USER_WAYPOINT_UPDATED", OnUserWaypointUpdated)
 SLASH_LUNAWAY1 = "/lway"
 SlashCmdList["LUNAWAY"] = SlashHandler
 
--- /way alias: registered conditionally
-function Coordinates.ApplyWayCommand()
-    local db = UIThingsDB.coordinates
-    if db.registerWayCommand then
-        SLASH_LUNAWAYALIAS1 = "/way"
-        SlashCmdList["LUNAWAYALIAS"] = SlashHandler
-        -- hash_SlashCmdList maps "/WAY" -> the SlashCmdList key (not the function)
-        hash_SlashCmdList["/WAY"] = "LUNAWAYALIAS"
-    else
-        -- Unregister if disabled
-        SLASH_LUNAWAYALIAS1 = nil
-        SlashCmdList["LUNAWAYALIAS"] = nil
-        hash_SlashCmdList["/WAY"] = nil
+-- /way alias: intercept via editbox hook so TomTom cannot override us
+local wayHooked = false
+
+local function HookChatEditBoxes()
+    local function HookBox(box)
+        box:HookScript("OnKeyDown", function(self, key)
+            if not UIThingsDB.coordinates.registerWayCommand then return end
+            if key ~= "ENTER" and key ~= "NUMPADENTER" then return end
+            local text = self:GetText()
+            if not text then return end
+            local args = text:match("^%s*/[Ww][Aa][Yy]%s+(.+)$")
+            if not args then return end
+            -- Swallow the keypress so OnEnterPressed (and TomTom) never fire
+            self:SetPropagateKeyboardInput(false)
+            self:SetText("")
+            self:ClearFocus()
+            self:Hide()
+            SlashHandler(args)
+        end)
+    end
+
+    for i = 1, NUM_CHAT_WINDOWS do
+        local box = _G["ChatFrame" .. i .. "EditBox"]
+        if box then HookBox(box) end
     end
 end
 
--- Defer /way registration to after all addons load
+function Coordinates.ApplyWayCommand()
+    if UIThingsDB.coordinates.registerWayCommand and not wayHooked then
+        HookChatEditBoxes()
+        wayHooked = true
+    end
+end
+
+-- Defer hook to after all addons load
 local function OnPlayerLogin()
     EventBus.Unregister("PLAYER_LOGIN", OnPlayerLogin)
     Coordinates.ApplyWayCommand()

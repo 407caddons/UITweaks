@@ -1,7 +1,7 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-22 (Updated: Session 3 -- Warehousing module fully in place, widget inventory confirmed)
-**Previous Review:** 2026-02-22 (Session 2)
+**Date:** 2026-02-23 (Updated: Session 7 -- Auto-buy feature complete, isLocked fix in Reagents, C_MerchantFrame migration, 9 new features)
+**Previous Review:** 2026-02-22 (Session 5)
 **Current Version:** v1.13.0+
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
@@ -572,3 +572,281 @@ Audit all modules for missing `issecretvalue()` guards on WoW API return values 
 - **Ease:** Easy-Medium
 - **Impact:** Medium (crash prevention)
 - **Files:** All modules with tooltip hooks or combat event handlers
+
+---
+
+## Changes Since Last Review (2026-02-22, Session 5)
+
+This session reviewed the code for newly implemented features since Session 3, and confirmed the following:
+
+1. **Vendor Bag Space Warning** -- Fully implemented in `Vendor.lua`. A separate movable `bagWarningFrame` shows an orange warning text ("Bag space low", "X bag slots remaining", "Bags full!") when free bag slots fall below a configurable threshold. Defaults are in Core.lua: `bagWarningEnabled = true`, `bagWarningThreshold = 5`, `bagWarningPos`. The warning hides at the merchant frame and during combat (when `warningLocked`). This feature was in defaults since Session 3 but not previously noted as implemented.
+
+2. **Misc Spell/Item ID Tooltips** -- Implemented in `Misc.lua` as `showSpellID` option. Hooks `TooltipDataProcessor` for `Enum.TooltipDataType.Spell`, `Item`, and `Action` to append a gray "Spell ID: X" or "Item ID: X" line. Works on all three tooltip types including action bar buttons. Not previously documented.
+
+3. **MythicRating Widget Party Key Estimates** -- The `widgets/MythicRating.lua` tooltip now integrates with `addonTable.AddonVersions.GetPlayerData()` to show party members' keystones and estimated rating gain (`Widgets.EstimateRatingGain`) when in a group. This cross-widget integration was not previously documented.
+
+4. **Warehousing minKeepChars** -- `Warehousing.SetMinKeepChars()` allows per-item min-keep rules to be restricted to specific characters (rather than applying to all). The `LunaUITweaks_WarehousingData.items[id].minKeepChars` table stores per-key overrides. `CharacterRegistry.Delete` correctly cascades to wipe `minKeepChars` references. Not previously documented.
+
+---
+
+## New Feature Ideas (Added 2026-02-22, Session 5)
+
+### 72. Bag Space Warning Sound Alert
+Extend the existing Vendor bag space warning (now confirmed implemented) to optionally play a configurable sound when the warning triggers. Currently the warning is visual only (orange text frame). Adding a sound on first-trigger (not every bag-change event) and a "play test sound" button in the config panel would complete the feature.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- The visual warning exists; this is a one-line addition
+- **Rationale:** `PlaySoundFile` or `PlaySound` with a sound ID is already used by TalentReminder and QuestReminder. The bag warning frame already has all the threshold logic in place. Adding a `soundID` and `playSound` default to `UIThingsDB.vendor` and one `PlaySound` call in `CheckBagSpace()` is trivial.
+- **Files:** Vendor.lua, config/panels/VendorPanel.lua, Core.lua (defaults)
+
+### 73. Spec Widget Loot Spec Mismatch Warning
+Add a visible indicator on the Spec widget face when the loot specialization differs from the active specialization. Currently the widget shows both spec icons side-by-side but there is no explicit warning state. A red border, exclamation overlay, or distinct color tint on the loot spec icon when there is a mismatch would surface this without requiring the user to read two icons.
+- **Ease:** Easy
+- **Impact:** Medium -- Prevents loot going to wrong spec, extends an already-noted gap (#38)
+- **Rationale:** `GetSpecialization()` vs `GetLootSpecialization()` comparison is already done in `UpdateContent`. If they differ and loot spec is non-zero, tinting the loot icon red or adding an overlay texture is a one-line change.
+- **Files:** widgets/Spec.lua
+
+### 74. Warehousing Per-Item Notes
+Add a text note field to each Warehousing rule so users can annotate why an item is tracked (e.g., "for crafting Algari armor", "keep for future season"). Display the note in the config panel row tooltip and optionally in the popup summary. The config panel already has per-item rows with sliders; adding an `EditBox` for a short note is a natural extension.
+- **Ease:** Easy-Medium
+- **Impact:** Low-Medium -- Quality of life for users with many tracked items
+- **Rationale:** The `LunaUITweaks_WarehousingData.items[id]` table is a plain Lua table; adding a `note` string field requires no schema change. The WarehousingPanel already builds per-item rows with multiple controls; appending an `EditBox` or right-click "Set Note" action is straightforward.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+### 75. Multi-Character Vault Progress Comparison
+Extend the Vault widget tooltip to show Great Vault progress for other tracked characters (from CharacterRegistry / a new SavedVariable). When on alt characters, save their vault state on login. Show a cross-character summary: "Main: 5/9 | Alt1: 3/9 | Alt2: 9/9". Vault progress is available via `C_WeeklyRewards.GetActivities()` when logged in.
+- **Ease:** Medium
+- **Impact:** Medium for multi-character players
+- **Rationale:** The CharacterRegistry already tracks known alts. Adding a `vaultProgress` field to the per-character registry entry (populated on `WEEKLY_REWARDS_UPDATE` for the current character) and displaying the saved data for all alts in the tooltip is a natural extension. Data is stale between logins but still useful as a planning tool.
+- **Files:** widgets/Vault.lua, Core.lua (CharacterRegistry extension or new SavedVariable)
+
+### 76. Dungeon/Raid Lockout Cross-Character View
+Extend the Lockouts widget to display saved instance lockouts across all tracked characters, not just the current one. Save the current character's lockout state to a SavedVariable on login. Show each alt's lockouts in a separate tooltip section. Useful for deciding which alt to use for a specific lockout-free run.
+- **Ease:** Medium
+- **Impact:** Medium for multi-character players
+- **Rationale:** `GetNumSavedInstances` / `GetSavedInstanceInfo` data can be persisted per character on `PLAYER_ENTERING_WORLD`. The Lockouts widget tooltip already has a two-section (raid/dungeon) layout that could gain a third "Other Characters" section. The CharacterRegistry provides the character list.
+- **Files:** widgets/Lockouts.lua, Core.lua (new SavedVariable entry or CharacterRegistry extension)
+
+### 77. Consumable Usage Tracking in Tooltip
+The Combat module already tracks which consumables the player has used this session via `TrackConsumableUsage()` and stores them in `UIThingsDB.combat.reminders.consumableUsage`. Surface this data as a tooltip on the reminder frame or as a widget: "Today's flasks: Phial of Elemental Chaos (x2), Flask of Supreme Power (x1)". This gives crafters visibility into which consumables see actual use.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- The data is already collected; the display is missing
+- **Rationale:** `consumableUsage.flask`, `.food`, and `.weapon` arrays already accumulate item name and icon per usage. Displaying them as a right-click or hover tooltip on the reminder frame, or as a small "Recent Consumables" widget, requires only reading the already-stored table.
+- **Files:** Combat.lua, config/panels/CombatPanel.lua (or new widget)
+
+### 78. MythicRating Seasonal Progress Goal
+Add a configurable target rating to the MythicRating widget (e.g., "Goal: 3000"). Display the delta to goal on the widget face when goal is set, and color it green when achieved. Show the percentage progress to the goal in the tooltip. Useful for players working toward seasonal rewards (Mythic title, Portals, etc.).
+- **Ease:** Easy
+- **Impact:** Medium for players with a rating goal
+- **Rationale:** `C_ChallengeMode.GetOverallDungeonScore()` already provides the current score. The rating widget already caches the score in `cachedScore`. Adding a `ratingGoal` setting to `UIThingsDB.widgets.mythicRating` and computing `cachedScore - goal` for the face display is trivial.
+- **Files:** widgets/MythicRating.lua, Core.lua (defaults), config/panels/WidgetsPanel.lua
+
+### 79. Reagent Crafting Deficit Widget
+Add a small widget that shows the count of reagents currently below their target quantity (as defined in Reagents.lua). Display a number badge (e.g., "Crafting: 3 low") and a tooltip listing which reagents need restocking and by how much. This bridges the Reagents module's cross-character data with the widget system.
+- **Ease:** Easy-Medium
+- **Impact:** Medium for crafters who use the Reagents module
+- **Rationale:** The Reagents module already scans all characters and stores per-item counts in `LunaUITweaks_ReagentData`. A widget can iterate that data against user-defined targets (new `minStock` field per reagent) and produce a deficit count. The tooltip pattern (name + shortage) matches the existing Currency and Lockouts widgets.
+- **Files:** New widget widgets/ReagentDeficit.lua, Reagents.lua (add minStock concept), Core.lua (defaults)
+
+### 80. Waypoint Route Mode
+Extend Coordinates.lua to support ordered routes -- a named sequence of waypoints that activate one after another as each is reached (within a configurable proximity threshold). Completing one waypoint auto-activates the next via `C_Map.SetUserWaypoint`. Useful for farming routes, treasure hunts, or guiding group members through a zone.
+- **Ease:** Medium
+- **Impact:** Medium-High for gatherers and explorers
+- **Rationale:** Coordinates.lua already has `AddWaypoint`, `C_Map.SetUserWaypoint` integration, and waypoint persistence. The WaypointDistance widget provides real-time distance to the active waypoint. Adding a `routes` table to the saved variables and a "next waypoint on proximity" timer check is the primary work. The Coordinates paste dialog UI pattern already handles bulk waypoint import.
+- **Files:** Coordinates.lua, config/panels/CoordinatesPanel.lua, Core.lua (defaults)
+
+### 81. M+ Timer Run Completion Sound/Fanfare
+Play a configurable sound or TTS announcement when a Mythic+ key is timed (all bosses killed within the +2 or +3 timer). Currently MplusTimer changes the timer color to green but produces no audio feedback. Uses `Core.SpeakTTS` for TTS or `PlaySoundFile` for a custom sound file.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- Celebratory feedback for successful key timing
+- **Rationale:** MplusTimer already detects run completion and key timing tier (the `timerSuccessColor` is already applied). Adding a `PlaySound` or `SpeakTTS` call at the moment the key is timed (when `challengeCompleted` and `timerGrade >= 2`) is a 5-line addition.
+- **Files:** MplusTimer.lua, config/panels/MplusTimerPanel.lua, Core.lua (defaults)
+
+### 82. Action Bar Hotkey Coloring by Spell State
+Extend ActionBars.lua to optionally color-code action button keybind text based on the spell state: green when the spell is ready, orange when on cooldown, red when out of range or missing reagents. This provides visual feedback without requiring the user to look at the button icon.
+- **Ease:** Hard
+- **Impact:** Medium-High -- Significant visual improvement to action bar readability
+- **Rationale:** `GetActionInfo`, `IsActionInRange`, `IsUsableAction`, and `GetActionCooldown` are the relevant APIs. The challenge is the performance cost of polling every button every frame (or on `ACTIONBAR_UPDATE_STATE`/`ACTIONBAR_UPDATE_COOLDOWN` events). Hooking `ACTIONBAR_UPDATE_STATE` and iterating only visible buttons is manageable. The ActionBars module already hooks into button sizing/skinning, so the infrastructure for iterating action buttons is proven.
+- **Files:** ActionBars.lua, config/panels/ActionBarsPanel.lua, Core.lua (defaults)
+
+### 83. Personal Crafting Order Queue Widget
+Add a widget that shows the count and details of pending personal crafting orders without the popup notification in Misc.lua. The widget face displays the order count (e.g., "Orders: 3"). Tooltip lists each order: item name, requester, profession, and expiry. Left-click opens the Crafting Orders frame. Complements the existing Misc.lua order notification (which fires on arrival) with a persistent status widget.
+- **Ease:** Easy
+- **Impact:** Medium for crafters
+- **Rationale:** `C_CraftingOrders.GetPersonalOrdersInfo()` and `C_CraftingOrders.GetMyOrders()` (as already used in Misc.lua's `CheckForPersonalOrders()`) provide the data. The widget pattern from Vault, Currency, and Lockouts is directly applicable. The `CRAFTINGORDERS_PERSONAL_ORDERS_UPDATE` event is already used by Misc.lua for the alert, so no new event investigation needed.
+- **Files:** New widget widgets/CraftingOrders.lua, Core.lua (defaults for widget position/condition)
+
+### 84. Quest Completion History Log
+Extend QuestAuto.lua to record a log of completed quests this session (or persisted to SavedVariables). Show via a `/lqlog` slash command or config panel: quest name, completion time, whether it was auto-turned-in, and zone. Useful for verifying that automation correctly completed expected quests, and for players who want a session recap.
+- **Ease:** Easy-Medium
+- **Impact:** Low-Medium -- Primarily a diagnostic and session review tool
+- **Rationale:** `QUEST_TURNED_IN` fires with `questID`. `C_QuestLog.GetQuestInfo(questID)` provides the quest name. `GetZoneText()` gives the zone at the time of completion. Storing a ring buffer of the last 100 quests (with timestamps) is trivial. The Coordinates module's paste-dialog-based scroll list is a proven UI pattern for the history display.
+- **Files:** QuestAuto.lua, config/panels/QuestAutoPanel.lua, Core.lua (new SavedVariable or UIThingsDB key)
+
+### 85. WeeklyReset Widget Dungeon/Raid Reset Countdown
+Extend the WeeklyReset widget to also show countdown to the next daily reset alongside the weekly reset, and add a "reset soon" sound alert at configurable thresholds (e.g., 30 minutes before weekly). The widget already shows both timers in its tooltip; surfacing one of them on the widget face (currently only the weekly countdown) and adding an audible alert at threshold would complete the feature.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- Useful for players who time crafting order pickups or daily quests around resets
+- **Rationale:** `C_DateAndTime.GetSecondsUntilDailyReset()` and `GetSecondsUntilWeeklyReset()` are already called in `WeeklyReset.lua`. The widget face currently only shows the weekly timer. Adding a threshold check in `UpdateContent` and a `PlaySound` or TTS call when the threshold is first crossed (using a flag to avoid repeated alerts) is straightforward.
+- **Files:** widgets/WeeklyReset.lua, Core.lua (defaults), config/panels/WidgetsPanel.lua
+
+---
+
+## Changes Since Last Review (2026-02-23, Session 6)
+
+Fixes and enhancements made this session:
+
+1. **Coordinates.lua -- `/way` command via chat editbox hook** -- The `/way` slash command registration approach was broken because TomTom overwrites `hash_SlashCmdList["/WAY"]` after addon loading, making any re-registration futile. The fix bypasses the WoW slash command system entirely: `HookChatEditBoxes()` hooks all `ChatFrame*EditBox` frames with an `OnKeyDown` handler. When Enter is pressed with a `/way` pattern in the editbox, `SetPropagateKeyboardInput(false)` swallows the keypress before WoW or TomTom processes it, clears the editbox, and calls `SlashHandler(args)` directly. This correctly fires before `OnEnterPressed` and before Blizzard's slash dispatch.
+
+2. **Coordinates.lua -- Duplicate waypoint detection** -- `AddWaypoint()` now checks if a waypoint with the same `mapID`, `x` (within 0.001), and `y` (within 0.001) already exists before inserting. If a duplicate is found, it logs a WARN and returns early. Prevents accidentally stacking multiple waypoints at the same location from paste imports or repeated `/way` commands.
+
+3. **Reagents.lua -- Optional non-soulbound item tracking** -- Added `ShouldTrackItem(itemID, isBound)` function replacing direct `IsReagent()` calls in all four scan paths (`ScanBags`, `ScanCharacterBank`, `ScanWarbandBank`). When `UIThingsDB.reagents.trackAllItems` is true, any non-soulbound item (potions, gear, consumables, etc.) is tracked in addition to reagents. `isBound` comes from `C_Container.GetContainerItemInfo().isBound`. The tooltip hook also respects the new setting.
+
+4. **config/panels/ReagentsPanel.lua -- trackAllItems checkbox** -- Added a "Also track non-soulbound items (potions, gear, etc.)" checkbox at TOPLEFT 20, -70 in the Reagents config panel. Calls `Reagents.UpdateSettings()` on change. Shifted all downstream layout elements down 20px to accommodate.
+
+5. **config/panels/ReagentsPanel.lua -- Column header alignment fix** -- The single "Modules" header at x=320 was misaligned relative to the two badge columns. Replaced with separate "Reagents" header at x=315 and "Warehousing" header at x=395, matching the actual row column offsets (reagentsBadge at LEFT+295, warehousingBadge at LEFT+375 within the scrollFrame starting at panel x=20).
+
+6. **Core.lua -- trackAllItems default** -- Added `trackAllItems = false` to the `reagents` defaults block in `DEFAULTS`.
+
+---
+
+## New Feature Ideas (Added 2026-02-23, Session 6)
+
+### 86. Coordinates `/way` Hook Extension to Addon-Created Editboxes
+The current `HookChatEditBoxes()` only hooks the 10 standard `ChatFrame*EditBox` frames. Some addons create additional editbox frames for chat input (e.g., floating chat windows). Extend the hook by also listening to `UI_SCALE_CHANGED` or `PLAYER_ENTERING_WORLD` to pick up late-registered boxes, or hook `FCFDock_UpdateChatFrameList` to detect new chat frames dynamically.
+- **Ease:** Easy
+- **Impact:** Low -- Only affects users with custom chat frame addons
+- **Files:** Coordinates.lua
+
+### 87. Reagents Cross-Character Shopping List
+Leverage the new `trackAllItems` mode to generate a cross-character shopping list: items where total stock across all characters falls below a user-defined target. Display via a `/lreagents shopping` subcommand or a button in the Reagents config panel. Shows "Need 20x Ironclaw Ore (have 14 total across 3 chars)". Complements the existing tracker by converting data into actionable restocking targets.
+- **Ease:** Medium
+- **Impact:** Medium-High for crafters and traders
+- **Rationale:** `LunaUITweaks_ReagentData.characters[key].items` already stores per-item counts. Summing across all characters and comparing to a `minTarget` table (new `UIThingsDB.reagents.targets[itemID]`) produces the deficit. The Coordinates paste dialog and the existing scroll list patterns provide proven UI templates for the shopping list display.
+- **Files:** Reagents.lua, config/panels/ReagentsPanel.lua, Core.lua (defaults)
+
+### 88. Waypoint Proximity Alert
+Add an optional sound or TTS alert when the player comes within a configurable distance of the active waypoint. Currently the WaypointDistance widget shows the distance visually but produces no audio feedback. A threshold alert (e.g., "Waypoint reached" when within 20 yards) helps with gathering routes and navigation without needing to watch the screen.
+- **Ease:** Easy
+- **Impact:** Low-Medium
+- **Rationale:** The WaypointDistance widget already calculates real-time distance every 0.5s. Adding a threshold check and a one-shot `PlaySound` or `Core.SpeakTTS` call (with a flag to prevent repeated firing) is a ~10 line addition. The proximity threshold would be a config option.
+- **Files:** widgets/WaypointDistance.lua, Core.lua (defaults)
+
+### 89. Non-Soulbound Item Value Tracking
+Extend the `trackAllItems` Reagents mode to also record each tracked item's vendor sell price and AH price estimate. Display in the tooltip alongside the per-character counts: "Total: 47 | Est. value: 23,500g". Uses `GetItemInfo()` for vendor price and could optionally query `C_AuctionHouse.GetItemKeyInfo()` for market price. Useful for quickly seeing the total value of stockpiled tradeable items across all alts.
+- **Ease:** Medium
+- **Impact:** Medium for traders and crafters
+- **Rationale:** `GetItemInfo()` returns `vendorPrice` (item 11 in the return tuple). AH pricing requires the AH frame to be open for fresh data, but `C_AuctionHouse.GetCommoditySearchResultsQuantity()` can return cached data if a recent search was done. The tooltip hook pattern is already in place.
+- **Files:** Reagents.lua, config/panels/ReagentsPanel.lua
+
+### 90. Vendor Module: Auto-Buy Reagents — **DONE (2026-02-23, Session 7)**
+Fully implemented in `Warehousing.lua` as `RunAutoBuy()`, not `Vendor.lua` as originally suggested. Called on `MERCHANT_SHOW` via `C_Timer.After(0.3, RunAutoBuy)`. Per-item `autoBuy` flag set via `Warehousing.RegisterVendorItem(itemID)` at merchant. Gold reserve/confirm-above thresholds enforced. Warband Bank stock deducted from deficit before purchasing. `BuyMerchantItem` API used for purchases. Config defaults: `autoBuyEnabled = true`, `goldReserve = 500`, `confirmAbove = 100` in `UIThingsDB.warehousing`. `FindOnMerchant()` uses `C_MerchantFrame.GetItemInfo(i)` (the current TWW API replacing removed global `GetMerchantItemInfo`).
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua, Core.lua (defaults)
+
+### 91. Spec-Aware Widget Visibility Condition
+Add `spec:N` as a new condition option in `EvaluateCondition()` in `Widgets.lua`, where N is the spec index (1-4). When set, the widget only shows when `GetSpecialization() == N`. Extends the existing 7-condition system (`always`, `combat`, `nocombat`, `group`, `solo`, `instance`, `world`) with zero architectural changes needed -- just an additional branch in the existing function.
+- **Ease:** Easy
+- **Impact:** Medium -- Enables spec-specific widget layouts (e.g., show Haste widget only in a haste-scaling spec)
+- **Rationale:** `PLAYER_SPECIALIZATION_CHANGED` is already dispatched through EventBus. `GetSpecialization()` returns 1-4. The condition dropdown in the config panel would need a new entry per spec (localized via `GetSpecializationInfo`). Pure 5-line change to `EvaluateCondition()` plus dropdown extension.
+- **Files:** widgets/Widgets.lua, config/panels/WidgetsPanel.lua
+
+### 92. Per-Character Widget Layout Presets
+Save and load named widget layout presets (positions, enabled states, conditions). Each preset is a snapshot of the relevant keys in `UIThingsDB.widgets`. A "Layouts" dropdown in WidgetsPanel allows saving the current layout as a named preset and restoring any saved preset. Useful for players who switch between solo and group UI setups.
+- **Ease:** Medium
+- **Impact:** Medium for players with multiple play contexts
+- **Rationale:** Widget position/state data is entirely within `UIThingsDB.widgets`. Serializing a subset of that table into a named entry under `UIThingsDB.widgetPresets` is straightforward. Restoring applies the preset values and calls `UpdateSettings()` for each widget. The TalentManager's named-build storage is a proven pattern for this.
+- **Files:** widgets/Widgets.lua, config/panels/WidgetsPanel.lua, Core.lua (defaults)
+
+### 93. Minimap Ping History
+Maintain a small ring buffer of the last N `MINIMAP_PING` events (unit, x, y, timestamp). Display the history as a tooltip on the minimap button or as a small overlay near the minimap showing "Ping by Tankname -- 23s ago". Helps players catch pings they missed during a hectic fight.
+- **Ease:** Easy
+- **Impact:** Low-Medium
+- **Rationale:** `MINIMAP_PING` fires with `unitID`, `x`, `y` for each ping. Storing a ring buffer of the last 5-10 pings in a local table is trivial. UnitName(unitID) at ping time gives the pinger's name. Displaying it in the minimap button tooltip extends the existing button code with ~20 lines.
+- **Files:** MinimapButton.lua or MinimapCustom.lua, config/panels/MinimapPanel.lua
+
+### 94. Frames.lua Text Label Overlay
+Add an optional text label to each colored rectangle created by the Frames module. The label (configurable font, size, color, alignment) renders as a `FontString` child of the frame. Useful for labeling layout anchors (e.g., "Tank", "Healer 1", "Boss Frames") while the UI is unlocked.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- Quality of life for users with many layout frames
+- **Rationale:** Each frame in Frames.lua is already a `CreateFrame("Frame")` with a configurable backdrop. Adding a `FontString` child with per-frame label text stored in `UIThingsDB.frames[i].label` requires extending the creation and config panel row with a text input field.
+- **Files:** Frames.lua, config/panels/FramesPanel.lua, Core.lua (defaults)
+
+---
+
+## Changes Since Last Review (2026-02-23, Session 7)
+
+Key changes made this session:
+
+1. **Warehousing.lua -- Auto-buy feature completed (#90 DONE)** -- `RunAutoBuy()` is fully implemented with gold reserve checks, deficit calculation, Warband Bank stock deduction, per-stack purchasing math, and confirm-above popup. `Warehousing.RegisterVendorItem(itemID)` links an item to a specific merchant. `FindOnMerchant()` migrated from removed global `GetMerchantItemInfo` to `C_MerchantFrame.GetItemInfo(i)` which returns a struct with `info.name`, `info.price`, `info.stackCount`. `GetMerchantNumItems()` and `BuyMerchantItem()` remain valid globals. Warband Bank stock from `LunaUITweaks_ReagentData.warband.items` subtracted from deficit before buying. `goto continue` replaced with `if needed > 0 then` block (Lua 5.1 has no `goto`).
+
+2. **Reagents.lua -- `isLocked` guard added to all 4 scan functions** -- `GetLiveBagCount`, `ScanBags`, `ScanCharacterBank` (3 loops), and `ScanWarbandBank` now all check `and not info.isLocked`. WoW marks slots as `isLocked = true` during vendor sell animations, causing tooltip counts to show pre-sell values. Fix ensures counts update immediately after selling.
+
+3. **config/panels/WarehousingPanel.lua -- Auto-Buy Settings section** -- Three new controls added between "Popup Frame Appearance" and "Tracked Items": `autoBuyEnabled` checkbox, `goldReserve` editbox (numeric), `confirmAbove` threshold editbox (numeric). Buy column header anchor fixed to `TOPRIGHT` of scrollFrame.
+
+4. **Core.lua** -- `autoBuyEnabled = true`, `goldReserve = 500`, `confirmAbove = 100` confirmed present in `warehousing` defaults block.
+
+---
+
+## New Feature Ideas (Added 2026-02-23, Session 7)
+
+### 95. Warehousing Auto-Buy History Log
+Maintain a ring buffer of the last 100 auto-buy transactions (item name, quantity purchased, vendor name, timestamp, gold spent). Display via a `/lwh buylog` slash command or a "Buy Log" button in the WarehousingPanel. Each log entry shows: "Bought 20x Granulated Spices from Vendor X for 12g 50s".
+- **Ease:** Easy
+- **Impact:** Low-Medium -- Audit trail for auto-buy activity
+- **Rationale:** `RunAutoBuy()` already has all required data at the moment of purchase: `item.name`, quantity, `mPrice`, vendor name (from `GetUnitName("target")`). Appending to a capped array in `UIThingsDB.warehousing.buyLog` and displaying via a scroll frame follows the Coordinates paste dialog pattern exactly. No new events needed.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua, Core.lua (defaults)
+
+### 96. Auto-Buy Vendor Favorites (Allowlist)
+Add a per-item vendor allowlist: only auto-buy from pre-approved vendor names. When `item.vendorNames` is set, `FindOnMerchant` checks `GetUnitName("target")` before purchasing. Prevents accidentally buying from unexpected vendors (e.g., a grey-selling vendor that happens to stock a tracked item at inflated price).
+- **Ease:** Easy
+- **Impact:** Medium -- Safety guardrail for auto-buy
+- **Rationale:** `GetUnitName("target")` returns the current merchant name while at a vendor. Storing an allowlist `item.vendorNames = { "Supplies Vendor" }` and checking it in `RunAutoBuy` before calling `FindOnMerchant` is a 5-line addition. The WarehousingPanel per-item row could show the approved vendor name (or "Any") and a button to register the current vendor.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+### 97. Gold Budget Widget
+A widget showing current gold minus the configured `goldReserve` as "spendable headroom" (e.g., "Budget: 1,234g"). Tooltip shows total gold, gold reserve, and headroom. Ties directly into the Warehousing auto-buy settings so players can verify they have enough headroom before a crafting session.
+- **Ease:** Easy
+- **Impact:** Low-Medium -- Surfacing an existing setting as a widget
+- **Rationale:** `GetMoney()` is a zero-cost API call. `UIThingsDB.warehousing.goldReserve` is already stored. Widget face = `(GetMoney() - goldReserve * 10000)` formatted as gold. `PLAYER_MONEY` event drives updates. Under 50 lines. Natural companion to the Warband Gold Tracker widget idea (#7 in widgets.md).
+- **Files:** New widget widgets/GoldBudget.lua, Core.lua (defaults)
+
+### 98. Warehousing Sync Status Tooltip
+Extend the WarehousingPanel (or add a widget) showing the last bank sync/mailbox send/auto-buy action time and result. Tooltip format: "Last bank sync: 2h ago (14 items moved) | Last mailbox: 45m ago (3 items sent) | Last auto-buy: just now (Granulated Spices x20)". Helps players confirm that automation ran correctly.
+- **Ease:** Easy-Medium
+- **Impact:** Low-Medium -- Diagnostic/confidence feature
+- **Rationale:** `Warehousing.lastSyncResult`, `lastMailResult`, and `lastBuyResult` tables would be populated by the three automation paths and stored in `UIThingsDB.warehousing.syncHistory`. Displaying them in a panel status row or as a widget tooltip follows existing patterns. The buy log from #95 already covers auto-buy; this extends to all three sync types.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua, Core.lua (defaults)
+
+### 99. Auto-Buy Per-Character Restriction
+Add per-item `autoBuyChars` table (analogous to the existing `minKeepChars`) so auto-buy only runs for specific characters. For example, a crafter main always buys Granulated Spices, but alts should not. On `RunAutoBuy`, check `item.autoBuyChars` against `Core.CharacterRegistry.GetCurrentKey()` before purchasing.
+- **Ease:** Easy
+- **Impact:** Medium for multi-character players
+- **Rationale:** `LunaUITweaks_WarehousingData.items[id].minKeepChars` already implements the per-character restriction pattern for min-keep rules. Auto-buy uses the same data structure and the same `CharacterRegistry` key lookup. The WarehousingPanel can reuse the same "per-character" toggle UI pattern.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+### 100. Reagents Module: Min-Stock Alerts
+Add an optional toast or chat alert when the cross-character reagent total for a tracked item falls below a user-defined minimum. Fires a post-scan check on `BAG_UPDATE_DELAYED`. Alert format: "[Reagents] Granulated Spices: 14 total (below min 50)". Off by default.
+- **Ease:** Easy-Medium
+- **Impact:** Medium for crafters who depend on consistent reagent stock
+- **Rationale:** `LunaUITweaks_ReagentData` already stores per-character and total counts. Adding a `minStock` field per tracked reagent (stored in `UIThingsDB.reagents.minStock[itemID]`) and a post-scan comparison in `ScanBags`'s delayed callback requires ~25 lines. The alert uses `addonTable.Core.Log` or a loot-toast for visibility. A "Set minimum stock" field in the Reagents panel per row completes the feature.
+- **Files:** Reagents.lua, config/panels/ReagentsPanel.lua, Core.lua (defaults)
+
+### 101. Warehousing Import/Export Rule Strings
+Export the full Warehousing rule set (all tracked items, min/max values, destinations, autoBuy flags) as an encoded string for sharing between accounts or guildmates. Import reverses the process with a merge/replace option. Follows the TalentManager import/export pattern already proven in the addon.
+- **Ease:** Medium
+- **Impact:** Medium -- Reduces setup friction for new installations or alts
+- **Rationale:** `LunaUITweaks_WarehousingData.items` is a plain Lua table. Serializing it via a simple key=value format (similar to TalentManager's export) and Base64-encoding it produces a shareable string. The import paste dialog follows the Coordinates paste dialog pattern. A "merge" option preserves existing rules for items not in the import string; "replace" overwrites completely.
+- **Files:** Warehousing.lua, config/panels/WarehousingPanel.lua
+
+### 102. Consumable Reminder: Augmentation Rune Tracking
+Extend the Combat module's consumable reminder system to track Augmentation Runes (and optional combat potions) alongside flasks, food, and weapon buffs. Scan bags for known rune item IDs on `PLAYER_ENTERING_WORLD` and check `UNIT_AURA` for the rune buff (spell ID). Alert if entering a raid or M+ without runes in bags and the rune buff is not active.
+- **Ease:** Easy
+- **Impact:** Medium -- Completes the consumable reminder system
+- **Rationale:** `TrackConsumableUsage()` in `Combat.lua` already handles flask (`category == "flask"`), food, weapon buff, and class buff categories. Runes follow the exact same aura detection pattern: check for the rune buff via `C_UnitAuras.GetAuraDataBySpellName` and check bag stock via known item IDs. The `instance` visibility condition prevents false alerts while questing. Under 20 lines added to the existing system.
+- **Files:** Combat.lua, config/panels/CombatPanel.lua, Core.lua (defaults)
+
+### 103. Reagent Module: Scan-on-Demand Button
+Add a "Scan Now" button in the Reagents config panel that bypasses the 2-second `BAG_UPDATE_DELAYED` debounce and triggers an immediate full bag scan. Useful when the user manually moves items and wants the tooltip counts to update instantly without waiting for the next natural bag event.
+- **Ease:** Easy
+- **Impact:** Low -- Minor UX improvement
+- **Rationale:** `Reagents.ScanBags()` is already a callable function. A button that calls `ScanBags()` directly (followed by `UpdateAllTooltips()` if that function exists, or simply relying on the next tooltip open) is a 3-line addition to the config panel. The button grays out during the scan (or simply has no state, since scans are instant).
+- **Files:** Reagents.lua, config/panels/ReagentsPanel.lua

@@ -230,7 +230,7 @@ table.insert(Widgets.moduleInits, function()
     xpRepFrame:SetScript("OnLeave", GameTooltip_Hide)
 
     xpRepFrame:SetScript("OnClick", function(self, button)
-        if button == "LeftButton" then
+        if button == "LeftButton" and not InCombatLockdown() then
             if isMaxLevel then
                 ToggleCharacter("ReputationFrame")
             else

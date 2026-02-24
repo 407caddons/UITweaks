@@ -32,9 +32,17 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
-    EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
-    EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability)
+    durabilityFrame.ApplyEvents = function(enabled)
+        if enabled then
+            EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
+            EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
+            EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability)
+        else
+            EventBus.Unregister("MERCHANT_SHOW", OnMerchantShow)
+            EventBus.Unregister("MERCHANT_CLOSED", OnMerchantClosed)
+            EventBus.Unregister("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability)
+        end
+    end
 
     durabilityFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end

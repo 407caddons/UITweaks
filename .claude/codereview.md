@@ -1,9 +1,159 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-22 (Twelfth Pass -- Coordinates, Misc, Warehousing Fixes)
-**Previous Review:** 2026-02-22 (Eleventh Pass -- New Widgets)
-**Scope:** Full review of all changes since Eleventh Pass. Confirmed fixes for stat widget tooltip duplication, WaypointDistance OnUpdate hook, Core.lua duplicate minimap key. New features: Spell/Item ID tooltips (Misc.lua), Coordinates distance display, Sort by Distance, #mapID support, /way chat fix. Warehousing mail dialog self-filter bug fixed.
+**Review Date:** 2026-02-23 (Seventeenth Pass -- Next 5 bug fixes applied)
+**Previous Review:** 2026-02-23 (Sixteenth Pass -- Trivial bug fixes applied)
+**Scope:** Applied 4 bug fixes: Warehousing sync limit message, Coordinates ResolveZoneName ordering, Friends.lua BNet classFileName, MinimapCustom SetDrawerCollapsed combat guard. MythicRating nil check confirmed already safe in code.
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
+
+---
+
+## Changes Since Last Review (Seventeenth Pass -- 2026-02-23)
+
+### Confirmed Fixed Since Sixteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| Warehousing "Sync complete!" shown when 5-pass limit hit with overflow remaining | Changed the `continuationPass >= 5` branch message to `"Sync limit reached — overflow may remain."` |
+| `Coordinates.lua` `ResolveZoneName` partial match non-deterministic | Replaced `pairs` first-match with shortest-name-wins: iterates all matches, returns the one with the shortest cached name (most specific). |
+| `Friends.lua` BNet `gameAccount.className` (localized) passed to `GetClassColor` | Changed to `gameAccount.classFileName` (English token) to match the WoW Friends section which already used `classFilename`. |
+| `MinimapCustom.lua` `SetDrawerCollapsed` no `InCombatLockdown()` guard | Added `if InCombatLockdown() then return end` at top of function to prevent hiding/showing potentially protected minimap buttons during combat. |
+
+### Verified Already Safe (Seventeenth Pass)
+
+- **`MythicRating.lua` nil `bestRunLevel`** — Code review referenced "lines 85, 94" but reading the actual code, `bestLevel` is a local variable set from `intimeInfo.level`/`overtimeInfo.level` with nil guards. The `string.format` calls at lines 99/102 only execute inside `if timedLevel then` / `elseif bestLevel then` branches. No nil crash path exists. No change needed.
+
+---
+
+## Changes Since Last Review (Sixteenth Pass -- 2026-02-23)
+
+### Confirmed Fixed Since Fifteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `WaypointDistance.lua` `FormatDistance` dead `else` branch | Removed redundant `else` — `>= 1000` already handled above, `else` was identical to the fallthrough. |
+| `Durability.lua` unconditional event registration | Added `ApplyEvents(enabled)` function with proper `EventBus.Register`/`Unregister` for `MERCHANT_SHOW`, `MERCHANT_CLOSED`, `UPDATE_INVENTORY_DURABILITY`. Events now only fire when widget is enabled. |
+| `AddonComm` widget `GetGroupSize()` overcounts party by 1 | Collapsed duplicate `IsInRaid`/`IsInGroup` branches — both called `GetNumGroupMembers()` identically. Now a single `IsInGroup()` check. `GetNumGroupMembers()` returns inclusive count in all group types. |
+| `TalentReminder.ReleaseAlertFrame()` not clearing `currentMismatches` | Added `alertFrame.currentMismatches = nil` alongside existing `alertFrame.currentReminder = nil`. |
+| `Vers.lua` widget showing only offensive versatility | `Refresh()` now reads both `CR_VERSATILITY_DAMAGE_DONE` and `CR_VERSATILITY_DAMAGE_TAKEN`, displays as `"Vers: X.X% / Y.Y%"` — consistent with tooltip. |
+| `StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"]` redefined per `RunAutoBuy` call | Moved definition to file scope with `text = "%s"`. `RunAutoBuy` now only sets `OnAccept` and passes the formatted string as the format arg to `StaticPopup_Show`. |
+
+### Verified Already Fixed (Sixteenth Pass)
+
+- **`Misc.lua` `HookTooltipSpellID` forward declaration** — Confirmed `local HookTooltipSpellID -- forward declaration` already present at line 303 from a prior session. No change needed.
+- **`Combat.lua` comment "Create 4 text lines"** — Confirmed already reads "Create 5 text lines" at line 1115 from a prior session. No change needed.
+
+---
+
+## Changes Since Last Review (Fifteenth Pass -- 2026-02-23)
+
+### Confirmed Fixed Since Fourteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `GetMerchantItemInfo` nil error when opening vendor | Migrated to `C_MerchantFrame.GetItemInfo(i)` returning `info.name`, `info.price`, `info.stackCount` struct fields. `GetMerchantNumItems()` and `BuyMerchantItem()` remain as valid globals. |
+| `goto continue` Lua 5.1 syntax error in `RunAutoBuy` | Replaced `goto`/label pattern with `if needed > 0 then` block — Lua 5.1 does not support `goto`. |
+| Reagent tooltip counts not updating after selling items | Added `and not info.isLocked` guard to all four scan functions: `GetLiveBagCount`, `ScanBags`, `ScanCharacterBank`, `ScanWarbandBank`. Locked slots (items mid-transaction) are now excluded from counts. |
+
+### New Features Added Since Fourteenth Pass
+
+**Auto-Buy Vendor Mats (Warehousing.lua + WarehousingPanel.lua + Core.lua):**
+- `FindOnMerchant(itemID)` — scans current vendor using `C_MerchantFrame.GetItemInfo` + name matching for quality-tier variants
+- `Warehousing.RegisterVendorItem(itemID)` — registers vendor price/name when toggling autoBuy while merchant is open
+- `RunAutoBuy()` — calculates deficit, subtracts warband bank cached stock, respects gold reserve, buys or shows confirm popup
+- `Warehousing.MerchantHasAutoBuyItems()` / `Warehousing.IsAtMerchant()` — state queries
+- `MERCHANT_SHOW` / `MERCHANT_CLOSED` event handlers
+- New defaults in Core.lua: `autoBuyEnabled = true`, `goldReserve = 500`, `confirmAbove = 100`
+- Auto-Buy Settings section in WarehousingPanel with enable checkbox, gold reserve editbox, confirm threshold editbox
+- Buy toggle button column in tracked items list with per-button tooltip showing vendor name, price, status
+
+### New Findings (Fifteenth Pass -- 2026-02-23)
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `RunAutoBuy` warband bank name-lookup calls `C_Item.GetItemNameByID(wbID)` for every warband bank item on every merchant open, even for the exact-ID hit case | Warehousing.lua:1286-1291 | The name fallback loop only runs when `warbandHas == 0` (exact ID miss), so it's not a hot path. However `C_Item.GetItemNameByID` may trigger async item data loads. Low impact in practice. |
+| Low | `RunAutoBuy` uses `confirmAbove = 0` as "always confirm" but the logic is `totalCost > confirmAbove`, so setting confirmAbove to 0 means any purchase > 0 copper confirms — correct, but the UI label "0 = always confirm" is slightly misleading since a 0-copper purchase (impossible in practice) would not confirm | Warehousing.lua:1328 | Documentation/UX issue only. No code bug. |
+| Low | `OnMerchantShow` fires `RunAutoBuy` after 0.3s delay. If the merchant is closed within 0.3s (rapid open/close), `RunAutoBuy` runs with `atMerchant = false` from `OnMerchantClosed`. The `if not atMerchant` guard in `RunAutoBuy` via `FindOnMerchant` (which checks `atMerchant`) would correctly abort. | Warehousing.lua | Correctly handled. Noted for clarity. |
+| Low | `WarehousingPanel` Buy button `OnEnter` tooltip calls `GetCoinTextureString(item.vendorPrice)` — if `vendorPrice` is nil (autoBuy flagged but no merchant registered yet), this will error | WarehousingPanel.lua:556 | `item.vendorPrice` is only shown when `item.autoBuy` is true AND `item.vendorName` is set. The nil path is guarded by `if item.vendorPrice then` at line 555. Correctly handled. |
+| ~~Low~~ | ~~`Misc.lua` `HookTooltipSpellID` not forward-declared~~ | Misc.lua | **FIXED (Sixteenth Pass)** — `local HookTooltipSpellID` forward declaration confirmed present at line 303. |
+| ~~Low~~ | ~~`StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"]` redefined inside `RunAutoBuy` on every call~~ | Warehousing.lua | **FIXED (Sixteenth Pass)** — Moved to file scope; `RunAutoBuy` only sets `OnAccept` and passes text as format arg. |
+
+### Verified Correct (Fifteenth Pass)
+
+- **`C_MerchantFrame.GetItemInfo` migration** (Warehousing.lua:1218): Returns a `MerchantItemInfo` struct. Fields `info.name`, `info.price`, `info.stackCount` are correct per API docs. `GetMerchantNumItems()` and `BuyMerchantItem()` remain valid globals not yet moved to `C_MerchantFrame`.
+- **`isLocked` guard in all four scan functions** (Reagents.lua): `GetLiveBagCount` (line 267), `ScanBags` (line 83), `ScanCharacterBank` (lines 101, 113, 124), `ScanWarbandBank` (line 152) — all correctly exclude `info.isLocked == true` slots.
+- **Warband bank deficit reduction** (Warehousing.lua:1270-1292): Reads `LunaUITweaks_ReagentData.warband.items` (keyed by itemID from last bank visit scan). Falls back to name matching for quality-tier ID variants. `math.max(0, data.count - warbandHas)` correctly floors at 0. `if needed > 0 then` correctly skips items fully covered by warband stock.
+- **Auto-Buy Settings UI** (WarehousingPanel.lua:101-172): Three controls correctly wired — checkbox writes `autoBuyEnabled`, gold reserve editbox writes `goldReserve` (with `OnEnterPressed`/`OnEscapePressed`), confirm editbox writes `confirmAbove`. Layout at -190/-215/-245/-273 provides adequate spacing.
+- **`WidgetsPanel.lua` `CONDITIONS` table** — Confirmed defined OUTSIDE the `for i, widget` loop (line 222). Previously flagged as inside the loop; **FIXED** in a prior session.
+- **`WidgetsPanel.lua` `GetConditionLabel`** — Confirmed defined OUTSIDE the loop (line 232). **FIXED** in a prior session.
+- **`ConfigMain.lua` module 22 `RefreshWarehousingList`** — Confirmed present at lines 407-409 in `SelectModule`. **FIXED** in a prior session.
+- **`Friends.lua` `classFilename`** — Confirmed uses `info.classFilename` (line 22). **FIXED** in a prior session.
+- **`XPRep.lua` `ToggleCharacter` combat guard** — Confirmed `not InCombatLockdown()` guard present (line 233). **FIXED** in a prior session.
+
+---
+
+## Changes Since Last Review (Fourteenth Pass -- 2026-02-23)
+
+### Confirmed Fixed Since Thirteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `/way` command not working (TomTom override) | `HookChatEditBoxes()` hooks `OnKeyDown` on all chat editboxes. `SetPropagateKeyboardInput(false)` on Enter with `/way` text swallows the keypress before TomTom's `OnEnterPressed` fires. `wayHooked` flag and `PLAYER_LOGIN` deferral ensure single registration. |
+| Duplicate waypoints via `/lway` or paste | `AddWaypoint` now checks all existing waypoints with `mapID` equality + `math.abs(x-x2) < 0.001` epsilon before inserting. |
+
+### New Findings (Fourteenth Pass -- 2026-02-23)
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `HookChatEditBoxes` only hooks the 10 default chat frames (`ChatFrame1EditBox`–`ChatFrame10EditBox`). Addon-created chat frames are not hooked. | Coordinates.lua:775 | Acceptable limitation for most users. Would need `CHAT_FRAME_ADDED` event or frame enumeration to handle addon chat windows. |
+| Low | `GetLiveBagCount` rebuilds its own `bagList` table on every tooltip hover | Reagents.lua:254 | Same allocation pattern as `ScanBags`. Minor GC pressure on frequent tooltip use. |
+| Low | `StaticPopupDialogs["LUNA_CHAR_REGISTRY_DELETE"]` redefined inside `OnClick` on every click (to include dynamic character name in text) | ReagentsPanel.lua:220 | Works correctly but inconsistent with Warehousing's single-definition pattern. Could use a module-level dialog with a `text` callback function. |
+| Low | `GetClassRGB` defined locally in both `ReagentsPanel.lua` (line ~74) and `Reagents.lua` (line 243) | Both files | Identical helper duplicated. Could be shared via `addonTable.Reagents.GetClassRGB` or `Helpers`. |
+| Low | `Coordinates.lua` `RefreshList` creates new `OnClick`/`deleteBtn:SetScript` closures per row on every refresh | Coordinates.lua:389-401 | `row.wpIndex` is already stored at line 378 — handlers could read from `self.wpIndex`/`self:GetParent().wpData` instead of capturing `i`/`wp` via closure, saving N closure allocations per refresh. |
+
+### Verified Correct (Fourteenth Pass)
+
+- **`ShouldTrackItem(itemID, isBound)`** (Reagents.lua:64): Correctly calls `IsReagent(itemID)` first (always track), then `UIThingsDB.reagents.trackAllItems and not isBound` as fallback. All three scan functions updated.
+- **Tooltip hook** (Reagents.lua:358): `if not IsReagent(itemID) and not UIThingsDB.reagents.trackAllItems then return end` correctly gates display for non-reagents when setting is off.
+- **`trackAllItems` default** (Core.lua): `reagents = { enabled = false, trackAllItems = false }` — correct.
+- **ReagentsPanel column headers**: x=25/195/315/395 match row column offsets (LEFT+5, LEFT+175, LEFT+295, LEFT+375 inside scroll at x=20). Correct.
+- **`trackAllBtn` checkbox**: Correctly writes `UIThingsDB.reagents.trackAllItems` and calls `UpdateSettings()`. Correct.
+
+---
+
+## Changes Since Last Review (Thirteenth Pass -- 2026-02-22)
+
+### Confirmed Fixed Since Twelfth Pass
+
+None. No files were changed between the Twelfth and Thirteenth passes (no new commits touching the reviewed files). All Twelfth Pass fixes remain in place.
+
+### Re-Verified Open Issues (Still Open)
+
+The following issues from the Twelfth Pass were re-read and confirmed still present:
+
+| Issue | File | Location | Status |
+|-------|------|----------|--------|
+| `HookTooltipSpellID` not forward-declared | Misc.lua | Line 318 calls it; defined at line 434 as bare assignment (no `local` declaration) | Still open. `local HookTooltipClassColors` is forward-declared at line 302; `HookTooltipSpellID` is not. |
+| `C_Timer.NewTicker(2, ...)` never cancelled | Coordinates.lua | Line 664 | Still open. Ticker result not stored; runs forever even when module disabled. |
+| Distance helpers duplicated | Coordinates.lua + widgets/WaypointDistance.lua | Lines 66-107 (Coordinates) | Still open. `MapPosToWorld`, `GetDistanceToWP`, `FormatDistanceShort` are near-identical in both files. |
+| `ResolveZoneName` partial match unordered | Coordinates.lua | Lines 54-58 | Still open. `pairs` iteration is non-deterministic for ambiguous names. |
+| `GetCharacterKey()` duplicated | Warehousing.lua:38, Reagents.lua:25 | Both files | Still open. Both define identical local functions. Core.lua does not expose a shared version. |
+| `WaitForItemUnlock` polling unreliable | Warehousing.lua | Line 837 | Still open. |
+| `CalculateOverflowDeficit` calls `ScanBags()` synchronously | Warehousing.lua | Line 306 | Still open. |
+| `bagList` rebuilt per `ScanBags()` call | Warehousing.lua | Lines 156, 360, 401 | Still open. Three separate allocation sites. |
+| `GetCharacterNames()` not using `CharacterRegistry` | Warehousing.lua | Lines 54-68 | Still open. Iterates `LunaUITweaks_WarehousingData.characters` directly; alts known only via Reagents do not appear in mail dropdown. |
+| `SelectModule` id=22 missing refresh call | config/ConfigMain.lua | Lines 397-406 | Still open. Module 22 (Warehousing) has no `addonTable.Config.RefreshWarehousingList()` call in `SelectModule`, despite `RefreshWarehousingList` being stored at WarehousingPanel.lua line 529. Pattern used by ids 2, 17, 19 is not applied to 22. |
+| EventBus snapshot table allocation per dispatch | EventBus.lua | Lines 18-20 | Still open. A new `snapshot` table is allocated on every event dispatch. |
+| Reagents.lua `ScanCharacterBank` legacy IDs | Reagents.lua | Bank scan section | Still open. |
+
+### New Findings (Thirteenth Pass -- 2026-02-22)
+
+No new bugs or issues found in this pass. The codebase is stable with respect to the files reviewed.
+
+One observation worth noting for clarity:
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `WarehousingPanel.lua` `OpenCharPicker` position clamping uses `select(5, popup:GetPoint())` after `ClearAllPoints()` | WarehousingPanel.lua:276 | `popup:ClearAllPoints()` is called at line 272, then immediately `popup:SetPoint(...)` at line 273, then `select(5, popup:GetPoint())` at line 276 to read back the Y. After a `SetPoint` call, `GetPoint()` on an anchored frame returns correct values in WoW's API only if the frame's position has been committed to the layout engine. In practice this works but is fragile — the read-back at line 276 occurs before any layout pass, so the screen Y is computed from the anchor parameters rather than the rendered position. On very large popup frames this may produce slightly incorrect screen-clamp behavior. |
 
 ---
 
@@ -86,12 +236,12 @@ LunaUITweaks is a well-structured addon with consistent patterns, good combat lo
 
 The Warehousing module is a substantial addition that is architecturally sound. The CharacterRegistry in Core.lua is a good centralization step. The four new secondary stat widgets are clean and event-driven but have a significant code duplication problem in their tooltip logic.
 
-### Issue Counts (Twelfth Pass)
+### Issue Counts (Seventeenth Pass)
 
-**Critical Issues:** 0 (all previously critical items fixed)
-**High Priority:** 0 (all previously high items fixed)
-**Medium Priority:** ~35 total (3 new: Coordinates distance duplication, Coordinates ticker leak, Misc.lua forward-declaration inconsistency; 5 closed from Eleventh Pass)
-**Low Priority / Polish:** ~35 total (2 new: Coordinates partial-match unordered, Misc forward-declaration; several closed)
+**Critical Issues:** 0 (unchanged)
+**High Priority:** 0 (unchanged)
+**Medium Priority:** ~31 total (2 fixed: Friends.lua class name, MinimapCustom SetDrawerCollapsed)
+**Low Priority / Polish:** ~34 total (2 fixed: Warehousing sync limit message, Coordinates ResolveZoneName ordering)
 
 ---
 
@@ -123,18 +273,23 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 ---
 
-### Warehousing.lua (~1,362 lines)
+### Warehousing.lua (~1,400 lines)
 
-**Status:** Functional. Two medium issues remain. Three low issues.
+**Status:** Functional. Two medium issues remain. Five low issues.
 
-- **FIXED: Mail dialog self-filter bug.** `destPlain = dest:match("^(.+) %(you%)$") or dest` now correctly strips the stored `" (you)"` suffix in `OnMailShow`, `RefreshPopup`, and `BuildMailQueue` before comparing against current character name. Destinations like "Lunaleap (you)" on other characters are now correctly treated as valid mail targets.
-- **Medium: `WaitForItemUnlock` polling unreliable for warband bank.** Polls `isLocked` at 0.1s intervals. Warband bank transfers via `C_Container.UseContainerItem(..., bankType)` may not set `isLocked` client-side, or clear the lock before first poll. Retry logic (3 retries x 0.5s) mitigates but root cause is unreliable detection. A more robust approach: detect item disappearance from the source slot, or listen to `ITEM_LOCK_CHANGED`.
-- **Medium: `CalculateOverflowDeficit` calls `ScanBags()` synchronously on every call.** During auto-continuation, the follow-up pass calls `CalculateOverflowDeficit()` after `SCAN_DELAY + 0.1s`. If bags have not fully settled, intermediate state causes incorrect overflow calculations. Explicit `BAG_UPDATE_DELAYED` event wait before re-check would be more reliable.
-- **Medium: `GetCharacterKey()` duplicated** -- defined locally in Warehousing.lua (line 38) and also in Reagents.lua (line 25). Core.lua exposes `CharacterRegistry` but no `GetCharacterKey()` helper. The CharacterRegistry centralizes storage but not the key-generation function itself.
-- **Low: `bagList` rebuilt as new table on every `ScanBags()` call.** Both `ScanBags()` (line 156) and `FindItemSlots()` (line 359) and `FindEmptyBagSlot()` (line 401) all build their own `bagList` tables inline. Three separate allocation sites for identical logic. Module-level constant table would reduce GC pressure.
-- **Low: Auto-continuation capped at 5 passes but "Sync complete!" shown regardless.** If 5 passes were needed and overflow remains, user sees success message.
-- **Low: `GetCharacterNames()` uses `LunaUITweaks_WarehousingData.characters` only.** Does not use `CharacterRegistry`, so alts known only through Reagents module do not appear in the mail destination dropdown.
-- **Low: Mail queue sends items one per `C_Mail.SendMail` call without rate limiting.** Could hit server throttles for large overflow lists.
+- **FIXED: Mail dialog self-filter bug.** `destPlain = dest:match("^(.+) %(you%)$") or dest` now correctly strips the stored `" (you)"` suffix.
+- **FIXED: `GetMerchantItemInfo` nil error.** Migrated to `C_MerchantFrame.GetItemInfo(i)` with struct field access.
+- **FIXED: `goto continue` Lua 5.1 syntax error.** Replaced with `if needed > 0 then` block.
+- **NEW: Auto-buy feature.** `FindOnMerchant`, `RegisterVendorItem`, `RunAutoBuy`, `MerchantHasAutoBuyItems`, `IsAtMerchant` added. `MERCHANT_SHOW`/`MERCHANT_CLOSED` events registered. Warband bank cached counts subtracted from deficit before calculating purchase quantity. Gold reserve and confirm threshold respected.
+- **NEW: isLocked fix.** All scan functions now skip locked bag slots.
+- **Medium: `WaitForItemUnlock` polling unreliable for warband bank.** Polls `isLocked` at 0.1s intervals. Retry logic (3 retries x 0.5s) mitigates but root cause is unreliable. A more robust approach: detect item disappearance from the source slot, or listen to `ITEM_LOCK_CHANGED`.
+- **Medium: `CalculateOverflowDeficit` calls `ScanBags()` synchronously on every call.** During auto-continuation, bags may not have fully settled. Explicit `BAG_UPDATE_DELAYED` event wait before re-check would be more reliable.
+- **Medium: `GetCharacterKey()` duplicated** -- defined locally in Warehousing.lua (line 38) and also in Reagents.lua (line 25). Should be centralized as `addonTable.Core.GetCharacterKey()`.
+- **Low: `bagList` rebuilt as new table on every `ScanBags()` call.** Three separate allocation sites for identical logic. Module-level constant would reduce GC pressure.
+- **FIXED: Auto-continuation capped at 5 passes now shows "Sync limit reached — overflow may remain." instead of "Sync complete!".** **(Seventeenth Pass)**
+- **Low: `GetCharacterNames()` uses `LunaUITweaks_WarehousingData.characters` only.** Alts known only through Reagents do not appear in mail dropdown.
+- **Low: Mail queue sends items one per `C_Mail.SendMail` call without rate limiting.**
+- **FIXED: `StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"]` redefined inside `RunAutoBuy` on every call.** Moved to file scope. **(Sixteenth Pass)**
 
 ---
 
@@ -221,15 +376,16 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 ### Reagents.lua (~529 lines)
 
-**Status:** Clean. Exemplary EventBus usage. One low issue carried forward.
+**Status:** Clean. Exemplary EventBus usage. Two low issues carried forward.
 
 - `eventsEnabled` guard prevents duplicate EventBus registration. Exemplary pattern.
-- `TooltipDataProcessor` hook (line 340) is the correct modern WoW API.
+- `TooltipDataProcessor` hook is the correct modern WoW API.
 - `IsReagent` optimization: tries `GetItemInfoInstant` first, falls back to `GetItemInfo`.
 - `ScanBags()` properly debounced at 0.5s.
 - `GetTrackedCharacters` uses `CharacterRegistry.GetAll()` as authoritative source.
+- **FIXED:** `isLocked` guard added to all four scan functions — `GetLiveBagCount`, `ScanBags`, `ScanCharacterBank`, `ScanWarbandBank`. Tooltip counts now correctly drop to 0 immediately after selling items, rather than showing the pre-sell count until the lock animation clears.
 - **Low:** `ScanCharacterBank()` still uses legacy container IDs (`-1` for BANK_CONTAINER, bag slots 5-11, `-3` for REAGENTBANK_CONTAINER). TWW restructured the bank to use `CharacterBankTab_1` enum. These legacy IDs may return 0 slots on TWW clients, causing the bank scan to silently return empty.
-- **Low:** `sortedChars` table in `AddReagentLinesToTooltip` (line 284) builds a new table per tooltip hover.
+- **Low:** `sortedChars` table in `AddReagentLinesToTooltip` builds a new table per tooltip hover.
 
 ---
 
@@ -272,7 +428,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 - **FIXED:** `CleanupSavedVariables()` now wraps old-format builds in arrays.
 - **FIXED:** `ApplyTalents` stale rank bug fixed -- `currentTalents` re-captured after refund.
 - **Medium:** No prerequisite chain validation in `ApplyTalents`. Talents sorted by `posY` approximates prerequisite order but lateral dependencies can fail silently.
-- **Low:** `ReleaseAlertFrame()` clears `currentReminder` but not `currentMismatches`. Memory reference persists.
+- **FIXED:** `ReleaseAlertFrame()` now clears both `currentReminder` and `currentMismatches`. **(Sixteenth Pass)**
 
 ---
 
@@ -324,7 +480,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 - **Medium:** `AnchorQueueEyeToMinimap()` calls `QueueStatusButton:SetParent(Minimap)` without `InCombatLockdown()` guard. Called from deferred `C_Timer.After(0)` which can fire during combat.
 - **Medium:** Triple redundant `C_Timer.After(0)` scheduling from OnShow/SetPoint/UpdatePosition hooks. Coalescing flag would eliminate redundant calls.
 - **Medium:** Potential hook conflict with ActionBars.lua over QueueStatusButton positioning.
-- **Medium:** `SetDrawerCollapsed` shows/hides minimap buttons without `InCombatLockdown()` check.
+- **FIXED:** `SetDrawerCollapsed` now guards with `if InCombatLockdown() then return end` at function entry. **(Seventeenth Pass)**
 - **Medium:** `CollectMinimapButtons` iterates all Minimap children on every call. Not cached.
 - **Low:** `GetMinimapShape = nil` for round shape; should return `"ROUND"`.
 - **Low:** Dead code in zone drag handler.
@@ -439,24 +595,28 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 ---
 
-### config/panels/WarehousingPanel.lua (~531 lines)
+### config/panels/WarehousingPanel.lua (~647 lines)
 
-**Status:** One medium concern. One low resolved.
+**Status:** One medium concern. Several low concerns.
 
-- **RESOLVED:** `StaticPopupDialogs["LUNA_RESET_WAREHOUSING_CONFIRM"]` guarded with `if not` check at file load. Correctly defined once.
-- **Medium:** `RefreshItemList` calls `GetItemInfo(itemID)` (line 446) on every row render to get quality color. `GetItemInfo` may return nil for uncached items. The nil-check on `quality` is present but the call itself happens synchronously for every tracked item on every panel open. For users with many tracked items, this could cause frame hitches or silently use white text for uncached items.
-- **Low:** `BuildDestinationDropdown` is called once per item per `RefreshItemList`. For N items and K destinations, this creates N×K `UIDropDownMenu_CreateInfo()` tables per refresh.
-- **Low:** `OpenCharPicker` recalculates `keys` via `GetAllCharacterKeys()` on every open. For large character registries this is a minor allocation.
-- **Low (new):** `SelectModule` in `ConfigMain.lua` does not call `addonTable.Config.RefreshWarehousingList()` when module 22 is selected, unlike the pattern used by quest reminders (id=2), reagents (id=17), and talent reminders (id=19). The warehousing list may be stale when switching to the tab.
+- **FIXED:** `StaticPopupDialogs["LUNA_RESET_WAREHOUSING_CONFIRM"]` guarded with `if not` check at file load.
+- **FIXED:** `SelectModule` (ConfigMain.lua) confirmed to call `addonTable.Config.RefreshWarehousingList()` for module 22. Previously flagged as missing — confirmed present.
+- **NEW:** Auto-Buy Settings section added (lines 101-172): enable checkbox, gold reserve editbox, confirm threshold editbox. All correctly wired to `UIThingsDB.warehousing.*`.
+- **NEW:** Buy toggle button column in tracked items list. OnEnter tooltip shows status, vendor name, price.
+- **NEW:** Column header `MakeColumnHeader` now supports `anchorSide = "RIGHT"` parameter for the Buy column header.
+- **Medium:** `RefreshItemList` calls `GetItemInfo(itemID)` on every row render for quality color. May return nil for uncached items; nil-check present but synchronous call on panel open could hitch for many tracked items.
+- **Low:** `BuildDestinationDropdown` called once per item per `RefreshItemList` — N×K `UIDropDownMenu_CreateInfo()` tables per refresh.
+- **Low:** `OpenCharPicker` recalculates `keys` via `GetAllCharacterKeys()` on every open.
+- **Low:** `UpdateBuyBtn` closure created inside `RefreshItemList` loop — one new closure per row per refresh. Minor allocation churn.
 
 ---
 
 ### config/panels/WidgetsPanel.lua (~413 lines)
 
-**Status:** Two medium observations from 2026-02-20, still open.
+**Status:** Both previously flagged medium issues confirmed FIXED.
 
-- **Medium (2026-02-20):** `CONDITIONS` table (7 entries) defined inside the `for i, widget in ipairs(widgets)` loop body. Creates 182 table objects every time the panel is opened. Should be hoisted to file scope.
-- **Medium (2026-02-20):** `GetConditionLabel` defined inside the same loop. Creates 26 closure allocations per panel open. Should be hoisted to file scope.
+- **FIXED:** `CONDITIONS` table confirmed defined at line 222 OUTSIDE the `for i, widget` loop. Previously flagged as inside the loop — was corrected in a prior session.
+- **FIXED:** `GetConditionLabel` confirmed defined at line 232 OUTSIDE the loop. Also corrected in a prior session.
 
 ---
 
@@ -486,7 +646,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 - **FIXED:** `Widgets.ShowStatTooltip(frame)` extracted to `Widgets.lua`. All four `OnEnter` handlers now call this single function. Each file is now ~45 lines of clean, non-duplicated code.
 - All four correctly implement `ApplyEvents(enabled)` with `COMBAT_RATING_UPDATE` and `PLAYER_ENTERING_WORLD`.
 - **Low:** All four update via the framework's `UpdateContent` ticker (1s interval). Since `COMBAT_RATING_UPDATE` already fires on stat change, the 1s ticker is redundant for these widgets.
-- **Low:** `Vers.lua` widget text shows only the offensive versatility value. The tooltip correctly shows both offensive and mitigation. The asymmetry may be slightly confusing.
+- **FIXED:** `Vers.lua` widget text now shows both offensive and mitigation values as `"Vers: X.X% / Y.Y%"`. Consistent with tooltip. **(Sixteenth Pass)**
 
 ---
 
@@ -496,7 +656,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 - **FIXED:** `HookScript("OnUpdate")` replaced with `C_Timer.NewTicker(0.5, ...)` managed inside `ApplyEvents(enabled)`. Ticker is properly created on enable and cancelled on disable.
 - `GetActiveWaypoint()` iterates all saved waypoints on each 0.5s tick. For typical use (< 50 waypoints) this is negligible.
-- **Low:** `FormatDistance` has redundant branches (lines 104-109). Both `yards >= 100` and the `else` branch produce `"%.0fy"`. The `>= 100` branch is unreachable dead code since the outer `>= 1000` check already handles large values.
+- **FIXED:** `FormatDistance` dead branch removed. `>= 100` was unreachable dead code; simplified to early return for `>= 1000` and plain return otherwise. **(Sixteenth Pass)**
 - `GetDirectionArrow` is a clean and efficient compass-bearing implementation.
 - World-coordinate distance calculation (`MapPosToWorld`) is the correct approach for cross-zone waypoints.
 
@@ -513,7 +673,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 - **Medium (new): Distance helpers duplicated from `widgets/WaypointDistance.lua`.** `MapPosToWorld`, `GetDistanceToWP`, and `FormatDistanceShort` in Coordinates.lua are near-identical copies of the same logic in WaypointDistance.lua. If the distance calculation algorithm is updated in one place, the other will drift. Should be exposed as `addonTable.Coordinates.GetDistance(wp)` or moved to a shared utility.
 - **Medium (new): `C_Timer.NewTicker(2, ...)` created in `CreateMainFrame` is never cancelled.** When the coordinates module is disabled or the frame is hidden, the ticker still fires every 2s and checks `mainFrame:IsShown()`. For a disabled module this is a minor waste. The ticker should be stored and cancelled in `UpdateSettings` when `enabled = false`.
 - **Low (new): `RefreshList` is called from `UpdateSettings` which is itself called from the 2s ticker path.** `UpdateSettings` calls `Coordinates.RefreshList()` at the end, and `RefreshList` is also called by the ticker. On the ticker path: ticker → `RefreshList()`. On settings change: `UpdateSettings()` → `RefreshList()`. No double-call issue since the ticker only calls `RefreshList` directly, not `UpdateSettings`. Pattern is fine.
-- **Low (new): `ResolveZoneName` partial match is unordered.** `pairs` iteration on a hash table has no defined order. For zone names that are substrings of multiple zone names (e.g., "Storm"), the match is non-deterministic. Could be improved with sorted key iteration.
+- **FIXED:** `ResolveZoneName` partial match now returns the shortest matching name (most specific). Replaces non-deterministic `pairs` first-match. **(Seventeenth Pass)**
 
 ---
 
@@ -521,7 +681,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 **Status:** One low issue. Otherwise clean.
 
-- **Low (NEW): `GetGroupSize()` over-counts in party mode** (lines 9-15). `GetNumGroupMembers()` returns count including the player in party (5-player groups return 5). Adding `+1` in the `IsInGroup()` branch makes a 5-person party show as 6. In raid mode `GetNumGroupMembers()` also includes self, so no correction needed. The correct logic: `GetNumGroupMembers()` alone for both party and raid, as WoW returns inclusive counts in all group types as of TWW.
+- **FIXED:** `GetGroupSize()` overcount — collapsed duplicate `IsInRaid`/`IsInGroup` branches into a single `IsInGroup()` check. `GetNumGroupMembers()` returns inclusive count in all group types. **(Sixteenth Pass)**
 - `UpdateCachedText` correctly checks `addonTable.AddonVersions` for nil.
 - `ApplyEvents` pattern with `GROUP_ROSTER_UPDATE` and `PLAYER_ENTERING_WORLD` is correct.
 - Tooltip correctly uses `C_ClassColor.GetClassColor(classToken)` with `classToken` (English token), not localized class name. Fixes the Friends.lua issue pattern.
@@ -575,7 +735,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 **Status:** One medium issue.
 
-- **Medium:** `C_ClassColor.GetClassColor` given localized class name from `C_FriendList.GetFriendInfoByIndex`. Should use `classFilename` (English token).
+- **FIXED:** BNet `gameAccount.className` (localized) changed to `gameAccount.classFileName` (English token) for `GetClassColor`. WoW Friends section already used `classFilename` correctly. **(Seventeenth Pass)**
 
 ---
 
@@ -583,7 +743,7 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 **Status:** One medium observation.
 
-- Event registrations happen unconditionally outside `ApplyEvents`. Events fire even when the widget is disabled. Should move into `ApplyEvents`.
+- **FIXED:** Event registrations moved into `ApplyEvents(enabled)`. `MERCHANT_SHOW`, `MERCHANT_CLOSED`, `UPDATE_INVENTORY_DURABILITY` now correctly register/unregister based on enabled state. **(Sixteenth Pass)**
 
 ---
 
@@ -821,6 +981,17 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 11d. **FIXED:** Warehousing mail dialog self-filter -- `destPlain` stripping applied in 3 places.
 11e. **FIXED:** `/way` command from chat box -- `hash_SlashCmdList` value corrected.
 
+### Fixed Since Fourteenth Pass (Fifteenth Pass)
+
+15a. **FIXED:** `GetMerchantItemInfo` nil error -- migrated to `C_MerchantFrame.GetItemInfo`.
+15b. **FIXED:** `goto continue` Lua 5.1 syntax error -- replaced with `if needed > 0 then`.
+15c. **FIXED:** Reagent tooltip counts stale after selling -- `isLocked` guard added to all 4 scan functions.
+15d. **FIXED:** `WidgetsPanel.lua` `CONDITIONS` inside loop -- confirmed fixed in prior session.
+15e. **FIXED:** `WidgetsPanel.lua` `GetConditionLabel` inside loop -- confirmed fixed in prior session.
+15f. **FIXED:** `ConfigMain.lua` module 22 missing `RefreshWarehousingList` -- confirmed present.
+15g. **FIXED:** `Friends.lua` localized class name -- confirmed uses `classFilename`.
+15h. **FIXED:** `XPRep.lua` `ToggleCharacter` no combat guard -- confirmed guard present.
+
 ### Medium Priority (New -- Twelfth Pass)
 
 12a. **Coordinates.lua distance helpers duplicated from WaypointDistance widget** -- `MapPosToWorld`, `GetDistanceToWP`, `FormatDistanceShort` are near-identical copies in both files. Should be shared to avoid drift.
@@ -840,12 +1011,12 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 21. **Combat.lua infinite retry in `TrackConsumableUsage`** -- Add retry counter (max 5 attempts).
 22. **MinimapCustom.lua `AnchorQueueEyeToMinimap` combat guard** -- Add `InCombatLockdown()` check.
 23. **MinimapCustom.lua triple redundant `C_Timer.After(0)` scheduling** -- Add coalescing flag.
-24. **MinimapCustom.lua `SetDrawerCollapsed` combat guard** -- Add `InCombatLockdown()` check.
+24. ~~**MinimapCustom.lua `SetDrawerCollapsed` combat guard**~~ **FIXED (Seventeenth Pass)** — `InCombatLockdown()` guard added.
 25. **ChatSkin.lua `SetItemRef` override** -- Use `hooksecurefunc` instead.
 26. **Vault.lua / WeeklyReset.lua `ShowUIPanel` combat guard** -- Add `InCombatLockdown()` check.
 27. **Spec.lua menu click combat guard** -- Check `InCombatLockdown()` in menu callbacks.
-28. **Friends.lua localized class name** -- Use `classFilename` instead of `className`.
-29. **Durability.lua unconditional event registration** -- Move into `ApplyEvents`.
+28. ~~**Friends.lua localized class name**~~ **FIXED (Seventeenth Pass)** — BNet section now uses `classFileName`.
+29. ~~**Durability.lua unconditional event registration**~~ **FIXED (Sixteenth Pass)** — `ApplyEvents(enabled)` added with proper register/unregister.
 30. **EventBus snapshot allocation per dispatch** -- Consider scratch table reuse.
 31. **WidgetsPanel.lua `CONDITIONS` table inside loop** -- Hoist to file-scope constant.
 32. **WidgetsPanel.lua `GetConditionLabel` closure inside loop** -- Hoist to file scope.
@@ -886,7 +1057,7 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 64. ObjectiveTracker `OnAchieveClick` type guard
 65. TalentManager.lua deprecated `UIDropDownMenuTemplate` API
 66. TalentManager.lua `DecodeImportString` type safety
-67. TalentReminder.lua `ReleaseAlertFrame` does not clear `currentMismatches`
+67. ~~TalentReminder.lua `ReleaseAlertFrame` does not clear `currentMismatches`~~ **FIXED (Sixteenth Pass)**
 68. Reagents.lua `sortedChars` tooltip table allocation per hover
 69. DarkmoonFaire.lua tick rate for DMF info
 70. Bags.lua currency list caching per hover
@@ -898,14 +1069,18 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 76. ConfigMain.lua boilerplate reduction (data-driven panel creation)
 77. ~100 global frame names with generic "UIThings" prefix
 78. CastBar.lua color table allocation per cast start
-79. XPRep.lua `ToggleCharacter` without `InCombatLockdown()` guard
-80. Vers.lua text shows only offensive versatility, not combined
-81. WaypointDistance.lua `FormatDistance` redundant branches (100+ and else identical)
-82. AddonComm widget `GetGroupSize()` overcounts party by 1
+79. ~~XPRep.lua `ToggleCharacter` without `InCombatLockdown()` guard~~ **FIXED (15g)**
+80. ~~Vers.lua text shows only offensive versatility, not combined~~ **FIXED (Sixteenth Pass)**
+81. ~~WaypointDistance.lua `FormatDistance` redundant branches (100+ and else identical)~~ **FIXED (Sixteenth Pass)**
+82. ~~AddonComm widget `GetGroupSize()` overcounts party by 1~~ **FIXED (Sixteenth Pass)**
 83. Warehousing.lua `bagList` rebuilt per `ScanBags()` call (3 separate sites)
-84. Warehousing.lua auto-continuation shows "Sync complete!" even if 5 passes hit limit with overflow remaining
-85. Coordinates.lua `ResolveZoneName` partial match unordered (ambiguous zone names non-deterministic)
+84. ~~Warehousing.lua auto-continuation shows "Sync complete!" even if 5 passes hit limit with overflow remaining~~ **FIXED (Seventeenth Pass)**
+85. ~~Coordinates.lua `ResolveZoneName` partial match unordered (ambiguous zone names non-deterministic)~~ **FIXED (Seventeenth Pass)**
 86. Misc.lua `HookTooltipSpellID` not forward-declared (inconsistent with `HookTooltipClassColors`)
+87. ~~Warehousing.lua `StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"]` redefined inside `RunAutoBuy` per call~~ **FIXED (Sixteenth Pass)**
+88. Warehousing.lua `RunAutoBuy` warband name-lookup calls `C_Item.GetItemNameByID` per warband item on merchant open (low frequency, acceptable)
+89. WarehousingPanel.lua `UpdateBuyBtn` closure created per row per `RefreshItemList` call
+90. Reagents.lua `ScanCharacterBank` legacy container IDs (`-1`, `-3`) may return 0 slots on TWW clients
 
 ---
 

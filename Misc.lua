@@ -300,6 +300,7 @@ end
 local EventBus = addonTable.EventBus
 local ApplyMiscEvents -- forward declaration
 local HookTooltipClassColors -- forward declaration
+local HookTooltipSpellID -- forward declaration
 
 -- Named event callbacks
 local function OnPlayerEnteringWorld()

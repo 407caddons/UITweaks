@@ -1,7 +1,7 @@
 # Widget Ideas & Improvements - LunaUITweaks
 
-**Date:** 2026-02-22 (Updated: Session 4 — review pass, 7 new ideas added, no new widgets implemented this session)
-**Previous Review:** 2026-02-22
+**Date:** 2026-02-23 (Updated: Session 7 — auto-buy feature complete, isLocked fix in Reagents, 7 new ideas added)
+**Previous Review:** 2026-02-22 (Session 4)
 **Current Widgets (35):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats, Lockouts, XPRep, Haste, Crit, Mastery, Vers, WaypointDistance, AddonComm
 
 **New Standalone Modules (not widgets):** MplusTimer -- full M+ timer overlay. QuestAuto -- auto accept/turn-in quests. QuestReminder -- zone-based quest pickup reminders. TalentManager -- dedicated talent build management panel. Coordinates -- waypoint management with `/lway` command. SCT -- scrolling combat text (extracted from Misc.lua). **Warehousing** -- cross-character bag management with bank sync and mailbox routing (NEW 2026-02-22).
@@ -303,5 +303,218 @@ Per-widget configurable background color and padding. Currently the green drag b
 - #13 Class Resource -- fills a combat information gap, unique among widgets
 - #16 Hearthstone selection menu -- addresses common user desire for toy selection
 - #26 Crafting Order Status -- complements existing Misc module notifications
+- #31 Warehousing Status Widget -- surfaces Warehousing module data at a glance, zero new infrastructure
+- #33 Mail Tracking Widget -- leverages existing Mail widget base, adds cross-character view
 - ~~#12 Waypoint Distance~~ -- DONE
 - ~~#18 Currency configurable list~~ -- DONE
+
+---
+
+## Changes Since Last Review (2026-02-22, Session 5)
+
+No new widgets implemented this session. Review pass only — 5 new ideas added in sections 31–35 below, plus 3 targeted improvements to existing widgets (sections 36–38). All Session 4 widgets confirmed still present (count remains 35). No new widget files detected in `widgets/` directory.
+
+---
+
+## New Widget Ideas (Session 5, 2026-02-22)
+
+### 31. Warehousing Status Widget
+Show a compact overflow/deficit summary from the Warehousing module on the widget face: e.g., "WH: 3 over / 2 low". Tooltip lists each tracked item by name with current bag count versus the configured min-keep amount, color-coded green (surplus) or red (deficit). Right-click opens the Warehousing config panel. Only shows meaningful data once items are tracked.
+- **Ease:** Easy
+- **Rationale:** `Warehousing.GetTrackedItems()` already returns `LunaUITweaks_WarehousingData.items`, which contains each item's `name`, `minKeep`, and destination. The per-character bag count scan runs on `BAG_UPDATE_DELAYED` via Warehousing's own `ScheduleBagScan`. A widget just reads the already-populated data store — no new scanning, no new events. The same cross-character pattern as Bags (`goldData`) and Reagents applies. Widget face text derived by counting items where `currentCount < minKeep` vs. `> minKeep`. Under 90 lines. The `world` or `always` visibility condition is appropriate since warehouse management is a non-combat activity.
+
+### 32. Zone Threat / PvP Status Widget
+Show the player's current PvP status in detail: war mode state, active PvP combat flag, honor level, and whether the player is currently in a war mode-active zone. Widget face shows "PvP: Off", "War Mode", or "In Combat" with color coding (gray / orange / red). Tooltip shows honor level, conquest progress if applicable, and whether war mode rewards are active.
+- **Ease:** Easy-Medium
+- **Rationale:** The existing PvP widget (`widgets/PvP.lua`) shows a simple PvP indicator. This idea is a substantial enrichment, not a duplicate. `C_PvP.IsWarModeDesired()`, `C_PvP.IsWarModeActive()`, `UnitIsWarModePhased("player")`, and `UnitAffectingCombat("player")` cover the face text logic. Honor level via `C_PvP.GetHonorLevel()`. Conquest progress via `C_CurrencyInfo.GetCurrencyInfo()` using the Conquest currency ID. Events: `PVP_TIMER_UPDATE`, `HONOR_LEVEL_UPDATE`, `PLAYER_FLAGS_CHANGED` (for PvP flag). The `world` visibility condition suits players who only need this context when questing. Under 100 lines as a new widget, or could be folded into the existing PvP widget as an enhancement mode.
+
+### 33. Mail Tracking Widget (Cross-Character)
+Extend the existing Mail widget concept with cross-character inbox awareness. Widget face shows "Mail: X" for the current character as it does now, but tooltip breaks down mail count across all characters that have logged in recently (using the CharacterRegistry from Core.lua). Color-code entries: green if mail present, gray if last checked more than 24h ago (stale data). Click opens the mailbox UI if at a mailbox, otherwise shows a "Not at mailbox" note.
+- **Ease:** Easy-Medium
+- **Rationale:** The existing `widgets/Mail.lua` already handles single-character mail detection via `MAIL_INBOX_UPDATE` and `PLAYER_ENTERING_WORLD`. Adding cross-character awareness requires saving a `mailCount` snapshot per character to `UIThingsDB.widgets.mail.charData[key]` on `PLAYER_LOGOUT` (same pattern as `bags.goldData`). `addonTable.Core.CharacterRegistry.GetAllKeys()` is available from Core.lua, shared with Warehousing and Reagents. The tooltip display mirrors the Bags widget's cross-character gold list. The staleness timestamp prevents showing stale data as current. Under 40 lines of new code layered on top of the existing Mail widget — strongest candidate for an in-place widget improvement rather than a separate new widget.
+
+### 34. Active Timers Widget
+Show a count of custom timers running in the current session. Widget face shows "Timers: 2 active" when any user-created timers are running (set via a simple `/luittimer <seconds> <label>` command), or stays hidden when no timers are active. Tooltip lists each active timer with label and remaining time, color-coded yellow when under 30 seconds. Auto-hides when all timers expire.
+- **Ease:** Medium
+- **Rationale:** There is no timer utility widget in the addon currently. Timers are useful for tracking pull countdowns outside M+ (PvP respawn, quest timers, manual cooldowns). A new slash command `/luittimer` would register a named countdown entry stored in a module-level table (not persisted). The widget polls the table every second via `UpdateContent` — the standard 1s ticker suffices. The command itself is under 10 lines; the widget display is under 80 lines. The `/pulltimer` in PullCounter provides the pattern for slash-driven widget state changes. Because the timer state is transient (session-only, not saved), implementation is simpler than persistent session data.
+
+### 35. Covenant / Renown Overview Widget (Warband)
+Show a compact cross-character renown progress overview for TWW major factions. Widget face shows the faction name and current renown level for the watched faction of the active character (same data as XPRep at max level, shown without the faction name truncation). Tooltip adds renown levels for the same faction across all characters via `LunaUITweaks_ReagentData.characters` (which stores per-character snapshot data). Left-click opens the Reputation frame.
+- **Ease:** Easy-Medium
+- **Rationale:** The XPRep widget already covers single-character renown display perfectly. This widget's value is the cross-character comparison in the tooltip — for players running multiple alts through the same faction content. The data requirement is light: save `factionID -> renownLevel` per character in `UIThingsDB.widgets.renown.charData[key]` on `UPDATE_FACTION` using `C_MajorFactions.GetCurrentRenownLevel(factionID)`. The CharacterRegistry provides the character enumeration. This is a direct analog of how the Bags widget aggregates gold across characters. Renown data updates infrequently (only on reputation gains), so the cache remains accurate for long sessions. The `world` visibility condition makes sense since renown gains happen outside instances. Under 100 lines.
+
+---
+
+## Improvements to Existing Widgets (Session 5 Additions)
+
+### 36. Bags Widget - Free Slot Type Breakdown (Improvement to Bags)
+Add a free slot breakdown by bag type to the Bags widget tooltip: normal bag slots, reagent bag slots, and profession bag slots listed separately. Add a configurable low-space color warning on the widget face text (e.g., text turns red when fewer than 5 total free slots remain). The current widget face shows only total free slots with no type distinction and no warning color.
+- **Ease:** Easy
+- **Rationale:** `C_Container.GetContainerNumFreeSlots(bag)` returns both `numFreeSlots` and `bagFamily` as return values. `bagFamily == 0` is a normal bag; non-zero values indicate specialty bags (reagent = specific bit flag). The reagent bag is at `Enum.BagIndex.ReagentBag` (slot 5), which Reagents.lua already references. The low-space warning color requires one conditional in `UpdateContent`: compare total free slots against a configurable threshold (default 5) and call `frame.text:SetTextColor()` accordingly. The threshold value could be stored in `UIThingsDB.widgets.bags.warnThreshold`. This is the original idea #14, made concrete by reading the actual `Bags.lua` implementation — `UpdateContent` iterates slots 0 through `NUM_BAG_SLOTS` already; extending to slot 5 and tracking bag family is a small addition.
+
+### 37. Lockouts Widget - World Boss Status (Improvement to Lockouts)
+Add a "World Bosses" section to the Lockouts tooltip showing each current-tier world boss and whether it has been killed this week. The widget face count should include world boss kills in the lock count.
+- **Ease:** Easy-Medium
+- **Rationale:** `GetNumSavedWorldBosses()` and `GetSavedWorldBossInfo(i)` (returns name, id, reset) give all world boss lockouts. The Lockouts widget already uses `GetSavedInstanceInfo` in the same pattern, so adding a third `worldBosses` section after raids and dungeons is structurally identical. The main complexity is curating a list of current-tier boss names to show (Warlords of Draenor-style bosses are no longer relevant, TWW world bosses should be shown). However, since `GetSavedWorldBossInfo` returns only bosses the player has saved lockouts for, no hardcoded list is needed — the function already filters to killed-only entries. This is a clean addition of under 25 lines inside the existing `OnEnter` handler.
+
+### 38. SessionStats Widget - Boss Kill Counter (Improvement to SessionStats)
+Add a boss kills counter to the SessionStats tooltip. Track `BOSS_KILL` events during the session and display "Boss Kills: X" alongside deaths and items looted. Reset with the rest of the session data on right-click.
+- **Ease:** Easy
+- **Rationale:** `BOSS_KILL` fires when a boss encounter ends successfully. The event payload includes `(encounterID, encounterName, difficultyID, groupSize)`. Incrementing a session-local `bossKills` counter is identical to how `deathCount` is incremented on `PLAYER_DEAD`. Persisting it follows the exact `SaveSessionData()` pattern already in place. The tooltip addition is one `AddDoubleLine` call. The counter provides useful session context for players doing multiple raid or dungeon runs. Under 15 lines of new code, making this the single cheapest improvement in this session's list.
+
+---
+
+## Changes Since Last Review (2026-02-23, Session 6)
+
+No new widgets implemented this session. Key changes to existing modules:
+- **Coordinates.lua** — `/way` interception now uses `OnKeyDown` editbox hook (bypasses TomTom). Duplicate waypoint detection added (epsilon 0.001).
+- **Reagents.lua** — `ShouldTrackItem()` added; `trackAllItems` setting optionally tracks all non-soulbound items. Scan functions updated to pass `isBound` from `GetContainerItemInfo`.
+- **ReagentsPanel.lua** — "Track non-soulbound items" checkbox added. Column headers fixed (split into Reagents + Warehousing columns, aligned to actual data positions).
+
+7 new ideas added in sections 39–45 below.
+
+---
+
+## New Widget Ideas (Session 6, 2026-02-23)
+
+### 39. Combat Widget - Elapsed Timer (Improvement to Combat)
+Change the existing Combat widget face from a static "In Combat" string to a live elapsed timer ("Combat: 1:23"). Snapshot `GetTime()` at `PLAYER_REGEN_DISABLED`, display elapsed MM:SS via the existing 1s ticker already in the widget.
+- **Ease:** Easy
+- **Rationale:** `widgets/Combat.lua` is currently ~40 lines and shows only a static string. A `combatStart` local variable snapped at `PLAYER_REGEN_DISABLED` and formatted on the ticker is a 10-line addition. The ticker already fires every second. Reset `combatStart = nil` on `PLAYER_REGEN_ENABLED`. This is the sparsest widget in the codebase and the single cheapest win in this session's list.
+
+### 40. Mail Widget - Expiry Warning (Improvement to Mail)
+When at a mailbox, scan the inbox for messages expiring within 24 hours and flash a warning indicator on the widget face ("Mail: 3 (!)"). Tooltip lists expiring message subjects and days remaining.
+- **Ease:** Easy-Medium
+- **Rationale:** `C_MailInfo.GetInboxHeaderInfo(index)` returns `daysLeft` among other fields. The Mail widget already hooks `MAIL_INBOX_UPDATE`. When the inbox is open, iterate all messages and flag those with `daysLeft < 1`. Show count of expiring items in orange on the face text. Only active while at a mailbox (same guard the widget already uses). Under 30 lines of new code inside the existing `Mail.lua`.
+
+### 41. Spec Widget - GCD Indicator (Improvement to Spec)
+Add a "GCD: 1.12s" line to the Spec widget tooltip showing the player's current global cooldown duration derived from haste. The Haste widget already exposes `GetHaste()` — this just surfaces it in a second location where it's more contextually relevant (alongside spec/talents).
+- **Ease:** Easy
+- **Rationale:** `GetHaste()` is available globally. GCD = `1.5 / (1 + GetHaste()/100)`. Three lines added to the existing `OnEnter` handler in `widgets/Spec.lua`. No new events, no new data. Useful for players tuning haste breakpoints for specific GCD values.
+
+### 42. Volume Widget - Per-Channel Sliders (Improvement to Volume)
+Extend the Volume widget tooltip to show all sound CVars (Master, Music, SFX, Ambience, Dialog). Right-click opens a small floating panel with individual sliders for each channel, calling `SetCVar()` on change.
+- **Ease:** Medium
+- **Rationale:** The current Volume widget shows a single master volume knob. `GetCVar("Sound_MasterVolume")`, `Sound_MusicVolume`, `Sound_SFXVolume`, `Sound_AmbienceVolume`, `Sound_DialogVolume` are all settable via `SetCVar()`. The tooltip extension is easy; the floating slider panel follows the same pattern as the Warehousing popup frame. `CVAR_UPDATE` event keeps the widget in sync. Under 120 lines total for the popup panel.
+
+### 43. Friends Widget - Online Alert (Improvement to Friends)
+Track previous `connected` state per friend and show a brief toast notification when a friend comes online. Off by default. Uses the existing Loot toast system for display.
+- **Ease:** Easy-Medium
+- **Rationale:** `FRIENDLIST_UPDATE` fires on any friends list change. `C_FriendList.GetFriendInfoAtIndex(i)` returns `connected` boolean. Cache previous state per friend name in a local table. On transition `false → true`, call `addonTable.Loot` toast with the friend's name and class color. The `addonTable.Loot` public API (or a direct toast call) is already used by other modules. A config checkbox in the Friends widget panel controls the feature. Under 40 lines.
+
+### 44. PvP Widget - Rated Rating on Face (Improvement to PvP)
+Change the PvP widget face to show the player's highest active rated bracket rating (e.g., "PvP: 1847") when any bracket has rating > 0, falling back to honor/conquest summary otherwise.
+- **Ease:** Easy
+- **Rationale:** `C_PvP.GetPvpTierID()` and `C_PvP.GetPvpTierInfo()` expose rated bracket ratings. Iterate the three brackets (2v2, 3v3, RBG) in `RefreshPvPCache()` and pick the highest non-zero rating. Under 15 lines in the existing function. The current face text shows "PvP" with no numeric context — adding the rating makes the widget informative at a glance without opening the tooltip.
+
+### 45. Vault Widget - Item Level Upgrade Estimate (Improvement to Vault)
+Add "Est. ilvl: ~XXX" per vault slot based on a hardcoded M+ key level to item level lookup table (community-documented, static per season). Shows the approximate gear reward for each completed activity threshold.
+- **Ease:** Medium
+- **Rationale:** The Vault widget already shows per-slot progress via `C_WeeklyRewards.GetActivities()`. Each activity has a `level` field (key level for M+, boss difficulty for raids). A static `M_PLUS_ILVL_BY_LEVEL` table mapping key levels 2–20+ to expected vault ilvls covers M+ slots. Raid slots map difficulty ID to ilvl range. The table needs updating once per season but provides direct planning value (e.g., "need +12 to unlock 636 ilvl"). Under 40 lines including the lookup table.
+
+---
+
+## Prioritization Summary (Updated 2026-02-23)
+
+**Quickest wins (Easy, highest return on effort):**
+- #3 M+ Affix Widget — under 60 lines, simplest new widget
+- #7 Warband Gold Tracker — reuses existing Bags data layer entirely
+- #14 Bags low-space warning — single conditional added to existing code
+- #21 Interrupt Tracker Widget — reads from existing Kick module events, under 70 lines
+- #22 Reagents Summary Widget — reads from existing ReagentData, purely display layer
+- #25 Target Health Widget — two API calls + two events, trivially simple
+- #30 XPRep Rep/hr — direct copy of SessionStats XP/hr pattern, under 20 lines
+- **#38 SessionStats boss kills** — under 15 lines, cheapest improvement this session
+- **#39 Combat elapsed timer** — 10-line addition to existing widget
+- **#44 PvP rated rating on face** — under 15 lines in existing function
+- Framework improvement F (widget background) — `bg` texture already exists, tiny change
+
+**Highest strategic value:**
+- #2 Talent Loadout — leverages TalentManager and TalentReminder investment
+- #13 Class Resource — fills a combat information gap, unique among widgets
+- #16 Hearthstone selection menu — addresses common user desire for toy selection
+- #26 Crafting Order Status — complements existing Misc module notifications
+- #31 Warehousing Status Widget — surfaces Warehousing module data at a glance
+- #33 Mail Tracking Widget — leverages existing Mail widget base, adds cross-character view
+- **#42 Volume per-channel sliders** — high usability improvement, medium effort
+- **#45 Vault ilvl estimate** — direct planning value, needs seasonal table maintenance
+
+---
+
+## Changes Since Last Review (2026-02-23, Session 7)
+
+No new widgets implemented this session. Key changes to existing modules:
+- **Warehousing.lua** — Auto-buy feature completed: `FindOnMerchant` migrated from removed global `GetMerchantItemInfo` to `C_MerchantFrame.GetItemInfo(i)` (returns struct with `info.name`, `info.price`, `info.stackCount`). Warband bank stock (`LunaUITweaks_ReagentData.warband.items`) now subtracted from deficit before buying. `goto continue` replaced with `if needed > 0 then` block (Lua 5.1 has no `goto`).
+- **Reagents.lua** — `isLocked` guard added to all 4 scan functions (`GetLiveBagCount`, `ScanBags`, `ScanCharacterBank`, `ScanWarbandBank`). Fixes stale tooltip counts immediately after selling items at a vendor (locked slots were included in the scan during the sell animation).
+- **WarehousingPanel.lua** — Auto-Buy Settings section added (enabled toggle, gold reserve editbox, confirm-above threshold editbox). Buy column header anchor fixed to `TOPRIGHT`.
+
+7 new ideas added in sections 46–52 below.
+
+---
+
+## New Widget Ideas (Session 7, 2026-02-23)
+
+### 46. Spell Queue / GCD Bar Widget
+Show a thin, always-visible GCD progress bar that fills and drains with the global cooldown. The horizontal bar is the primary display; the face shows a "GCD" label.
+- **Ease:** Medium
+- **WoW API:** `C_Spell.GetSpellCooldown(61304)` (GCD spell ID), `GetHaste()`, `SPELL_UPDATE_COOLDOWN`
+- **Rationale:** GCD duration = `1.5 / (1 + GetHaste()/100)`, clamped to 0.75s minimum. A `StatusBar` child frame polls elapsed vs. duration on a 0.05s OnUpdate. `C_Spell.GetSpellCooldown(61304)` directly returns GCD remaining without needing to filter `SPELL_UPDATE_COOLDOWN` for GCD vs. regular cooldowns. The `combat` visibility condition is natural. Under 80 lines.
+
+### 47. Death Recap / Last Death Widget
+After a player death, show the last cause of death on the widget face ("Died: Fire Damage") until reset or next combat. Tooltip shows the last 3–5 lethal hits with damage type and amount.
+- **Ease:** Hard
+- **WoW API:** `UNIT_COMBAT` (still available for "player" unit), `PLAYER_DEAD`, `PLAYER_REGEN_ENABLED`
+- **Rationale:** `COMBAT_LOG_EVENT_UNFILTERED`/`COMBAT_LOG_EVENT` are removed from the addon API in 12.0. `UNIT_COMBAT` still fires for the player with `actionType`, `damage`, and `overkill` fields. Tracking `overkill > 0` captures the killing blow. Display is limited to "Died: X Physical" or similar — no spell names. Not as informative as a full death recap but achievable within current constraints. Under 60 lines.
+
+### 48. Dungeon / Scenario Progress Widget
+During an active instance, show scenario/dungeon objective progress on the widget face ("Stage 2/4" or "Obj: 3/5"). Auto-hides outside instances.
+- **Ease:** Medium
+- **WoW API:** `C_ScenarioInfo.GetStepInfo()`, `C_ScenarioInfo.GetCriteriaInfo(i)`, `SCENARIO_UPDATE`, `CRITERIA_UPDATE`
+- **Rationale:** Widget face shows compact summary; tooltip shows all objectives with green/gray completion indicators. The `instance` visibility condition is perfect. Fills the gap between MplusTimer (M+ specific) and the Group widget (role display). Under 90 lines.
+
+### 49. Emote Shortcuts Widget
+A small widget showing 3–5 configurable quick-emote buttons as icons. Clicking fires the corresponding emote command.
+- **Ease:** Easy-Medium
+- **WoW API:** `DoEmote()`, `SecureActionButtonTemplate`, `SetAttribute("macrotext", ...)`
+- **Rationale:** `SecureActionButtonTemplate` with `type = "macro"` and `macrotext = "/emote WAVE"` handles combat-safe emote execution. The panel has an editbox per slot for the emote name. The main challenge is fitting 5 small buttons into the widget frame layout. Under 100 lines.
+
+### 50. Mount Speed Widget (Improvement to Speed)
+Extend the Speed widget to show both current movement speed and current mount speed cap side by side when mounted ("150% / 310%"). Tooltip distinguishes ground, fly, and swim speed.
+- **Ease:** Easy
+- **WoW API:** `GetUnitSpeed("player")`, `C_MountJournal`, `UNIT_AURA`
+- **Rationale:** The Speed widget already shows one speed percentage derived from `GetUnitSpeed("player")` vs. base 7 yards/s. Showing the current mount speed cap alongside requires detecting the active speed bonus aura. Under 20 additional lines. Confirmed: Speed widget currently shows one value only.
+
+### 51. Quest Objective Tracker Widget
+Show count of active quests and how many are ready to turn in on the widget face ("Quests: 5 (2 done)"). Tooltip lists ready-to-turn-in quests with zone names. Left-click opens the objective tracker.
+- **Ease:** Easy-Medium
+- **WoW API:** `C_QuestLog.GetNumQuestLogEntries()`, `C_QuestLog.IsComplete()`, `C_QuestLog.GetQuestObjectives()`, `QUEST_LOG_UPDATE`
+- **Rationale:** Pure summary layer over `C_QuestLog`. ObjectiveTracker module already iterates quests extensively. The `world` visibility condition keeps it from cluttering instance UIs. Under 80 lines.
+
+### 52. Achievement Progress Widget
+Show progress on the most recently updated tracked achievement on the widget face ("Achiev: 3/10"). Tooltip shows achievement name, description, and all criteria with checkmarks. Left-click opens the achievement frame.
+- **Ease:** Easy-Medium
+- **WoW API:** `GetNumTrackedAchievements()`, `GetTrackedAchievements()`, `GetAchievementInfo()`, `GetAchievementCriteriaInfo()`, `TRACKED_ACHIEVEMENT_UPDATE`
+- **Rationale:** Reads achievements displayed in the objective tracker. Under 70 lines. Natural companion to the Quest Objective Tracker widget (#51).
+
+---
+
+## Prioritization Summary (Updated Session 7)
+
+**Quickest wins (Easy, confirmed not yet implemented):**
+- #38 SessionStats boss kills — under 15 lines
+- #39 Combat elapsed timer — 10-line addition
+- #44 PvP rated rating on face — under 15 lines
+- **#50 Mount Speed improvement** — under 20 lines added to Speed widget
+- **#51 Quest Objective Tracker** — under 80 lines
+- **#52 Achievement Progress** — under 70 lines
+- #3 M+ Affix Widget — under 60 lines
+- #7 Warband Gold Tracker — reuses existing Bags data layer
+- #14/#36 Bags low-space warning + type breakdown — single conditional
+
+**Highest strategic value:**
+- **#46 GCD Bar Widget** — unique ambient display not covered by any existing widget
+- **#48 Dungeon/Scenario Progress** — fills gap between MplusTimer and Group widget
+- #2 Talent Loadout — leverages TalentManager/TalentReminder investment
+- #13 Class Resource — fills combat information gap
+- #42 Volume per-channel sliders — tooltip already done, only interactive panel remains
+- #26 Crafting Order Status — complements existing Misc module

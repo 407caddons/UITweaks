@@ -1526,6 +1526,7 @@ function TalentReminder.ReleaseAlertFrame()
     -- Hide and clear all references
     alertFrame:Hide()
     alertFrame.currentReminder = nil
+    alertFrame.currentMismatches = nil
 
     -- Clear content to release string references
     if alertFrame.content then

@@ -1,46 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "mcp__acp__Edit",
-      "mcp__acp__Write",
-      "mcp__acp__Bash",
-      "WebFetch(domain:wowpedia.fandom.com*)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:www.icy-veins.com)",
-      "WebFetch(domain:warcraft.wiki.gg)",
-      "WebFetch(domain:www.curseforge.com)",
-      "WebFetch(domain:breezewiki.com)",
-      "WebFetch(domain:wowwiki-archive.fandom.com)",
-      "WebFetch(domain:www.wowinterface.com)",
-      "WebFetch(domain:www.mmo-champion.com)",
-      "WebFetch(domain:dotesports.com)",
-      "WebFetch(domain:wowpedia.fandom.com)",
-      "WebFetch(domain:www.wowace.com)",
-      "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:www.iriel.org)",
-      "WebFetch(domain:us.forums.blizzard.com)",
-      "WebFetch(domain:addonstudio.org)",
-      "WebFetch(domain:git.wowinterface.com)",
-      "WebFetch(domain:www.wowhead.com)",
-      "Bash(find:*)",
-      "WebFetch(domain:news.blizzard.com)",
-      "Bash(ls:*)",
-      "Bash(cd:*)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" log --oneline -30)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" tag -l)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" log v1.12.0..HEAD --oneline)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD --stat)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Coordinates.lua SCT.lua widgets/Lockouts.lua widgets/XPRep.lua widgets/SessionStats.lua MinimapCustom.lua config/panels/MinimapPanel.lua TalentManager.lua config/ConfigMain.lua ActionBars.lua --stat)",
-      "Bash(git -C \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\" diff v1.12.0..HEAD -- Core.lua)",
-      "Bash(cat:*)",
-      "Bash(grep:*)",
-      "Bash(dir:*)",
-      "Bash(cmd.exe /c dir \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\.claude\")",
-      "Bash(cmd.exe /c dir \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\.claude\" /a)",
-      "Bash(cmd.exe /c \"dir /a /b \"\"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\"\"\")",
-      "Bash(powershell -Command:*)",
-      "Bash(powershell -File -:*)"
-    ]
+    "allow": []
   }
 }

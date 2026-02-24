@@ -4,6 +4,9 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 
 local Helpers = addonTable.ConfigHelpers
 
+-- Signals to the Reagents tooltip hook that we're hovering a warehousing icon (allow non-reagent items)
+addonTable.WarehousingTooltipItemID = nil
+
 -- Warehousing-specific reset: wipes UIThingsDB.warehousing AND tracked item list
 if not StaticPopupDialogs["LUNA_RESET_WAREHOUSING_CONFIRM"] then
     StaticPopupDialogs["LUNA_RESET_WAREHOUSING_CONFIRM"] = {
@@ -95,18 +98,91 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         end
     end, 220, -155)
 
+    -- Auto-Buy Settings Section
+    Helpers.CreateSectionHeader(panel, "Auto-Buy Settings", -190)
+
+    -- autoBuyEnabled checkbox
+    local autoBuyCheck = CreateFrame("CheckButton", "UIThingsWarehousingAutoBuyCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    autoBuyCheck:SetPoint("TOPLEFT", 20, -215)
+    _G[autoBuyCheck:GetName() .. "Text"]:SetText("Enable auto-buy from vendors")
+    autoBuyCheck:SetChecked(UIThingsDB.warehousing.autoBuyEnabled)
+    autoBuyCheck:SetScript("OnClick", function(self)
+        UIThingsDB.warehousing.autoBuyEnabled = not not self:GetChecked()
+    end)
+
+    -- Gold reserve editbox
+    local goldReserveLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    goldReserveLabel:SetPoint("TOPLEFT", 20, -245)
+    goldReserveLabel:SetText("Gold reserve (never spend below this amount):")
+    goldReserveLabel:SetTextColor(0.7, 0.7, 0.7)
+
+    local goldReserveEditBox = CreateFrame("EditBox", "UIThingsWH_GoldReserve", panel, "InputBoxTemplate")
+    goldReserveEditBox:SetSize(60, 20)
+    goldReserveEditBox:SetPoint("LEFT", goldReserveLabel, "RIGHT", 8, 0)
+    goldReserveEditBox:SetAutoFocus(false)
+    goldReserveEditBox:SetNumeric(true)
+    goldReserveEditBox:SetMaxLetters(6)
+    goldReserveEditBox:SetText(tostring(UIThingsDB.warehousing.goldReserve or 500))
+    goldReserveEditBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText()) or 500
+        if val < 0 then val = 0 end
+        UIThingsDB.warehousing.goldReserve = val
+        self:SetText(tostring(val))
+        self:ClearFocus()
+    end)
+    goldReserveEditBox:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(UIThingsDB.warehousing.goldReserve or 500))
+        self:ClearFocus()
+    end)
+
+    local goldReserveSuffix = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    goldReserveSuffix:SetPoint("LEFT", goldReserveEditBox, "RIGHT", 4, 0)
+    goldReserveSuffix:SetText("gold")
+    goldReserveSuffix:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Confirm above editbox
+    local confirmLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    confirmLabel:SetPoint("TOPLEFT", 20, -273)
+    confirmLabel:SetText("Show confirmation if total purchase exceeds:")
+    confirmLabel:SetTextColor(0.7, 0.7, 0.7)
+
+    local confirmEditBox = CreateFrame("EditBox", "UIThingsWH_ConfirmAbove", panel, "InputBoxTemplate")
+    confirmEditBox:SetSize(60, 20)
+    confirmEditBox:SetPoint("LEFT", confirmLabel, "RIGHT", 8, 0)
+    confirmEditBox:SetAutoFocus(false)
+    confirmEditBox:SetNumeric(true)
+    confirmEditBox:SetMaxLetters(6)
+    confirmEditBox:SetText(tostring(UIThingsDB.warehousing.confirmAbove or 100))
+    confirmEditBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText()) or 100
+        if val < 0 then val = 0 end
+        UIThingsDB.warehousing.confirmAbove = val
+        self:SetText(tostring(val))
+        self:ClearFocus()
+    end)
+    confirmEditBox:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(UIThingsDB.warehousing.confirmAbove or 100))
+        self:ClearFocus()
+    end)
+
+    local confirmSuffix = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    confirmSuffix:SetPoint("LEFT", confirmEditBox, "RIGHT", 4, 0)
+    confirmSuffix:SetText("gold  (0 = always confirm)")
+    confirmSuffix:SetTextColor(0.7, 0.7, 0.7)
+
     -- Item List Section
-    Helpers.CreateSectionHeader(panel, "Tracked Items", -190)
+    Helpers.CreateSectionHeader(panel, "Tracked Items", -300)
 
     local instrText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    instrText:SetPoint("TOPLEFT", 20, -215)
+    instrText:SetPoint("TOPLEFT", 20, -325)
     instrText:SetText("Drag an item from your bags and drop it here to add it to the list.")
     instrText:SetTextColor(0.5, 0.5, 0.5)
 
     -- Scroll frame for item list
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsWarehousingItemScroll", panel,
         "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 20, -235)
+    scrollFrame:SetPoint("TOPLEFT", 20, -345)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 20)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -302,6 +378,28 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         row.icon:SetSize(20, 20)
         row.icon:SetPoint("LEFT", 4, 0)
 
+        -- Invisible button over icon to capture mouse for tooltip
+        row.iconBtn = CreateFrame("Button", nil, row)
+        row.iconBtn:SetSize(20, 20)
+        row.iconBtn:SetPoint("LEFT", 4, 0)
+        row.iconBtn:SetScript("OnEnter", function(self)
+            local parent = self:GetParent()
+            local itemID = parent.tooltipItemID
+            if not itemID then return end
+            addonTable.WarehousingTooltipItemID = itemID
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if parent.tooltipItemLink then
+                GameTooltip:SetHyperlink(parent.tooltipItemLink)
+            else
+                GameTooltip:SetItemByID(itemID)
+            end
+            GameTooltip:Show()
+        end)
+        row.iconBtn:SetScript("OnLeave", function()
+            addonTable.WarehousingTooltipItemID = nil
+            GameTooltip:Hide()
+        end)
+
         -- Item name
         row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.nameText:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
@@ -336,6 +434,12 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         row.destDropdown = CreateFrame("Frame", "UIThingsWH_Dest_" .. index, row, "UIDropDownMenuTemplate")
         row.destDropdown:SetPoint("LEFT", row.destLabel, "RIGHT", -12, -2)
         UIDropDownMenu_SetWidth(row.destDropdown, 100)
+
+        -- Auto-buy toggle button
+        row.buyBtn = CreateFrame("Button", "UIThingsWH_Buy_" .. index, row, "UIPanelButtonTemplate")
+        row.buyBtn:SetSize(36, 20)
+        row.buyBtn:SetPoint("RIGHT", -30, 0)
+        row.buyBtn:SetNormalFontObject("GameFontNormalSmall")
 
         -- Remove button
         row.removeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
@@ -439,6 +543,8 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
                 local itemID = entry.itemID
                 local data = entry.data
 
+                row.tooltipItemID = itemID
+                row.tooltipItemLink = data.itemLink
                 row.icon:SetTexture(data.icon or 134400)
                 row.nameText:SetText(data.name or ("Item " .. itemID))
 
@@ -475,6 +581,66 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
                 -- Destination dropdown
                 BuildDestinationDropdown(row.destDropdown, itemID)
                 UIDropDownMenu_SetText(row.destDropdown, data.destination or "Warband Bank")
+
+                -- Auto-buy button
+                local function UpdateBuyBtn()
+                    local item = LunaUITweaks_WarehousingData.items[itemID]
+                    if item and item.autoBuy then
+                        row.buyBtn:SetText("|cff66cc66Buy|r")
+                    else
+                        row.buyBtn:SetText("Buy")
+                    end
+                end
+                UpdateBuyBtn()
+                row.buyBtn:SetScript("OnClick", function()
+                    local item = LunaUITweaks_WarehousingData.items[itemID]
+                    if not item then return end
+                    if item.autoBuy then
+                        -- Toggle off
+                        item.autoBuy = false
+                        item.vendorPrice = nil
+                        item.vendorStackSize = nil
+                        item.vendorName = nil
+                    else
+                        -- Toggle on: try to register from open merchant, else just flag
+                        if addonTable.Warehousing and addonTable.Warehousing.IsAtMerchant() then
+                            local ok = addonTable.Warehousing.RegisterVendorItem(itemID)
+                            if not ok then
+                                item.autoBuy = true  -- flag anyway; will match by name at merchant
+                            end
+                        else
+                            item.autoBuy = true
+                            addonTable.Core.Log("Warehousing",
+                                (item.name or itemID) .. " flagged for auto-buy. Open a vendor to register its price.", 1)
+                        end
+                    end
+                    UpdateBuyBtn()
+                end)
+                row.buyBtn:SetScript("OnEnter", function(self)
+                    local item = LunaUITweaks_WarehousingData.items[itemID]
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+                    if item and item.autoBuy then
+                        GameTooltip:AddLine("Auto-Buy: |cff66cc66ON|r", 1, 1, 1)
+                        if item.vendorName then
+                            GameTooltip:AddLine("Vendor: " .. item.vendorName, 0.7, 0.7, 0.7)
+                        end
+                        if item.vendorPrice then
+                            GameTooltip:AddLine("Price: " .. GetCoinTextureString(item.vendorPrice), 0.7, 0.7, 0.7)
+                        end
+                        GameTooltip:AddLine("Click to disable.", 0.5, 0.5, 0.5)
+                    else
+                        GameTooltip:AddLine("Auto-Buy: |cffccccccOFF|r", 1, 1, 1)
+                        GameTooltip:AddLine("Click to enable.", 0.5, 0.5, 0.5)
+                        if addonTable.Warehousing and addonTable.Warehousing.IsAtMerchant() then
+                            GameTooltip:AddLine("Vendor is open — will register price.", 0.4, 0.8, 0.4)
+                        else
+                            GameTooltip:AddLine("Open a vendor to register the price.", 0.7, 0.7, 0.7)
+                        end
+                    end
+                    GameTooltip:Show()
+                end)
+                row.buyBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
                 -- Remove button
                 row.removeBtn:SetScript("OnClick", function()
@@ -514,6 +680,30 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     if addonTable.Warehousing and addonTable.Warehousing.SetupDropTarget then
         addonTable.Warehousing.SetupDropTarget(panel)
     end
+
+    -- Column headers above the scroll frame
+    -- Positions derived from CreateItemRow:
+    --   icon LEFT+4(20w), name LEFT+28(120w)
+    --   minLabel LEFT+150, minEditBox LEFT+168(40w)
+    --   charBtn LEFT+212(46w)
+    --   destLabel LEFT+264("To:"), destDropdown LEFT+266 (UIDropDown adds ~16px internal pad → text ~LEFT+282)
+    local function MakeColumnHeader(labelText, xOffset, anchorSide)
+        local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        if anchorSide == "RIGHT" then
+            h:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", xOffset, 14)
+        else
+            h:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", xOffset, 14)
+        end
+        h:SetText(labelText)
+        h:SetTextColor(1, 0.82, 0)
+        return h
+    end
+
+    MakeColumnHeader("Item",          4)          -- aligns with icon/name
+    MakeColumnHeader("Min",         168)          -- aligns with min editbox (after "Min:" label)
+    MakeColumnHeader("On Char",     212)          -- aligns with char picker button
+    MakeColumnHeader("Destination", 282)          -- aligns with dest dropdown text area
+    MakeColumnHeader("Buy",         -62, "RIGHT") -- aligns with buy button (RIGHT-30, width 36)
 
     -- Refresh button
     local refreshBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")

@@ -404,6 +404,9 @@ function addonTable.Config.Initialize()
             if id == 17 and addonTable.Config.RefreshReagentsList then
                 addonTable.Config.RefreshReagentsList()
             end
+            if id == 22 and addonTable.Config.RefreshWarehousingList then
+                addonTable.Config.RefreshWarehousingList()
+            end
         end
 
         ----------------------------------------------------

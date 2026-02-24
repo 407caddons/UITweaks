@@ -27,9 +27,22 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.reagents.enabled)
 
+    -- Track all items checkbox
+    local trackAllBtn = CreateFrame("CheckButton", "UIThingsReagentsTrackAllCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    trackAllBtn:SetPoint("TOPLEFT", 20, -70)
+    _G[trackAllBtn:GetName() .. "Text"]:SetText("Also track non-soulbound items (potions, gear, etc.)")
+    trackAllBtn:SetChecked(UIThingsDB.reagents.trackAllItems)
+    trackAllBtn:SetScript("OnClick", function(self)
+        UIThingsDB.reagents.trackAllItems = not not self:GetChecked()
+        if addonTable.Reagents and addonTable.Reagents.UpdateSettings then
+            addonTable.Reagents.UpdateSettings()
+        end
+    end)
+
     -- Description
     local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    desc:SetPoint("TOPLEFT", 40, -80)
+    desc:SetPoint("TOPLEFT", 40, -100)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
     desc:SetText(
@@ -38,10 +51,10 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     desc:SetTextColor(0.7, 0.7, 0.7)
 
     -- Character Data Section
-    Helpers.CreateSectionHeader(panel, "Known Characters", -130)
+    Helpers.CreateSectionHeader(panel, "Known Characters", -150)
 
     local sectionDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    sectionDesc:SetPoint("TOPLEFT", 20, -153)
+    sectionDesc:SetPoint("TOPLEFT", 20, -173)
     sectionDesc:SetWidth(560)
     sectionDesc:SetJustifyH("LEFT")
     sectionDesc:SetText("All characters seen by any Luna module. Deleting a character removes its data from Reagents and Warehousing.")
@@ -50,7 +63,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     -- Scroll frame for character list
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsReagentsCharScroll", panel,
         "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 20, -185)
+    scrollFrame:SetPoint("TOPLEFT", 20, -205)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 20)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -60,6 +73,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
 
     -- Store character row frames for reuse
     local charRows = {}
+    local warbandRow = nil  -- separate from charRows to prevent index collision
 
     local function FormatLastSeen(timestamp)
         if not timestamp or timestamp == 0 then return "Never" end
@@ -84,6 +98,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
         for _, row in ipairs(charRows) do
             row:Hide()
         end
+        if warbandRow then warbandRow:Hide() end
 
         local chars
         if addonTable.Reagents and addonTable.Reagents.GetTrackedCharacters then
@@ -247,8 +262,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
                 warbandItemCount = warbandItemCount + 1
             end
             if warbandItemCount > 0 then
-                local idx = #chars + 1
-                local row = charRows[idx]
+                local row = warbandRow
                 if not row then
                     row = CreateFrame("Frame", nil, scrollChild)
                     row:SetHeight(ROW_HEIGHT)
@@ -273,11 +287,6 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
                     row.lastSeenText:SetWidth(110)
                     row.lastSeenText:SetJustifyH("LEFT")
 
-                    row.realmText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                    row.realmText:SetPoint("LEFT", 5, -8)
-                    row.realmText:SetWidth(160)
-                    row.realmText:SetJustifyH("LEFT")
-
                     row.reagentsBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                     row.reagentsBadge:SetPoint("LEFT", 295, 0)
                     row.reagentsBadge:SetWidth(75)
@@ -288,7 +297,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
                     row.warehousingBadge:SetWidth(80)
                     row.warehousingBadge:SetJustifyH("LEFT")
 
-                    charRows[idx] = row
+                    warbandRow = row
                 end
 
                 row:SetPoint("TOPLEFT", 0, -yOffset)
@@ -324,20 +333,26 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     refreshBtn:SetScript("OnClick", RefreshCharacterList)
 
     -- Column headers
+    -- scrollFrame starts at x=20; row columns: name=LEFT+5, lastSeen=LEFT+175, reagents=LEFT+295, warehousing=LEFT+375, delete=RIGHT-5
     local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    nameHeader:SetPoint("TOPLEFT", 25, -173)
+    nameHeader:SetPoint("TOPLEFT", 25, -193)
     nameHeader:SetText("Character")
     nameHeader:SetTextColor(1, 0.82, 0)
 
     local lastSeenHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lastSeenHeader:SetPoint("TOPLEFT", 200, -173)
+    lastSeenHeader:SetPoint("TOPLEFT", 195, -193)
     lastSeenHeader:SetText("Last Seen")
     lastSeenHeader:SetTextColor(1, 0.82, 0)
 
-    local modulesHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    modulesHeader:SetPoint("TOPLEFT", 320, -173)
-    modulesHeader:SetText("Modules")
-    modulesHeader:SetTextColor(1, 0.82, 0)
+    local reagentsHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    reagentsHeader:SetPoint("TOPLEFT", 315, -193)
+    reagentsHeader:SetText("Reagents")
+    reagentsHeader:SetTextColor(1, 0.82, 0)
+
+    local warehousingHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    warehousingHeader:SetPoint("TOPLEFT", 395, -193)
+    warehousingHeader:SetText("Warehousing")
+    warehousingHeader:SetTextColor(1, 0.82, 0)
 
     -- Initial refresh
     RefreshCharacterList()

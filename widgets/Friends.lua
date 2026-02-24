@@ -18,7 +18,7 @@ table.insert(Widgets.moduleInits, function()
             local info = C_FriendList.GetFriendInfoByIndex(i)
             if info and info.connected then
                 hasWoWFriends = true
-                local classColor = C_ClassColor.GetClassColor(info.className)
+                local classColor = C_ClassColor.GetClassColor(info.classFilename)
                 local nameText = info.name:match("^([^-]+)") or info.name
                 local zone = (info.area and info.area ~= "") and info.area or ""
                 local rightText = zone .. "  " .. (info.level or "")
@@ -66,8 +66,8 @@ table.insert(Widgets.moduleInits, function()
                     end
 
                     local r, g, b = 0.51, 0.77, 1 -- BNet Blue
-                    if gameAccount.className then
-                        local classColor = C_ClassColor.GetClassColor(gameAccount.className)
+                    if gameAccount.classFileName then
+                        local classColor = C_ClassColor.GetClassColor(gameAccount.classFileName)
                         if classColor then
                             r, g, b = classColor.r, classColor.g, classColor.b
                         end

@@ -7,6 +7,15 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Constants
 local SCAN_DELAY = 0.5
+local autoBuyConfirmText = ""
+StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"] = {
+    text = "%s",
+    button1 = "Buy",
+    button2 = "Skip",
+    timeout = 0,
+    whileDead = false,
+    hideOnEscape = true,
+}
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
 local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 5
 local MAX_ATTACHMENTS = ATTACHMENTS_MAX_SEND or 12
@@ -26,6 +35,7 @@ local eventsRegistered = false
 local atMailbox = false
 local atBank = false
 local atWarbandBank = false
+local atMerchant = false
 -- (drag-and-drop is set up via SetupDropTarget from WarehousingPanel.lua)
 
 -- Centralized Logging
@@ -990,7 +1000,7 @@ local function StartBankSync(continuationPass)
                         popupFrame.actionBtn:Enable()
                     end
                     if popupFrame and popupFrame.statusText then
-                        popupFrame.statusText:SetText("Sync complete!")
+                        popupFrame.statusText:SetText("Sync limit reached — overflow may remain.")
                     end
                     Warehousing.RefreshPopup()
                 end
@@ -1156,6 +1166,7 @@ function Warehousing.AddItem(itemLink)
         destination = warbandAllowed and "Warband Bank" or "Personal Bank",
         bindType = bindType or 0,
         warbandAllowed = warbandAllowed,
+        itemLink = itemLink,
     }
 
     Log("Added item: " .. tostring(name) .. " (ID: " .. tostring(itemID) .. ") warbandAllowed=" .. tostring(warbandAllowed), 1)
@@ -1199,6 +1210,174 @@ function Warehousing.SetupDropTarget(dropFrame)
             end
         end
     end)
+end
+
+--------------------------------------------------------------
+-- Auto-Buy (Vendor) Logic
+--------------------------------------------------------------
+
+--- Find a tracked item on the current merchant by name match.
+-- Returns merchantIndex, unitPrice, stackSize or nil.
+local function FindOnMerchant(itemID)
+    local trackedData = LunaUITweaks_WarehousingData.items[itemID]
+    if not trackedData or not trackedData.name then return nil end
+    local targetName = trackedData.name:lower()
+    local numItems = GetMerchantNumItems()
+    for i = 1, numItems do
+        local info = C_MerchantFrame.GetItemInfo(i)
+        if info and info.name and info.name:lower() == targetName then
+            return i, info.price, (info.stackCount or 1)
+        end
+    end
+    return nil
+end
+
+--- Register the vendor source for a tracked item.
+-- Scans the current merchant for an item matching itemID by name and stores the merchantIndex.
+-- Called when the player toggles autoBuy on while a merchant is open.
+function Warehousing.RegisterVendorItem(itemID)
+    if not atMerchant then
+        Log("RegisterVendorItem: no merchant open", 2)
+        return false
+    end
+    EnsureDB()
+    local item = LunaUITweaks_WarehousingData.items[itemID]
+    if not item then return false end
+
+    local mIndex, mPrice, mStackSize = FindOnMerchant(itemID)
+    if not mIndex then
+        Log("RegisterVendorItem: " .. (item.name or itemID) .. " not found on this vendor", 2)
+        return false
+    end
+
+    item.autoBuy = true
+    item.vendorPrice = mPrice
+    item.vendorStackSize = mStackSize
+    item.vendorName = UnitName("target") or "Unknown"
+    Log("Registered vendor for " .. (item.name or itemID) .. " price=" .. mPrice, 1)
+    return true
+end
+
+--- Execute auto-buy purchases for all autoBuy items with a deficit.
+local function RunAutoBuy()
+    if not UIThingsDB.warehousing.enabled then return end
+    if not UIThingsDB.warehousing.autoBuyEnabled then return end
+    if InCombatLockdown() then return end
+    EnsureDB()
+
+    local _, deficit = CalculateOverflowDeficit()
+    local goldReserve = (UIThingsDB.warehousing.goldReserve or 500) * 10000  -- convert to copper
+    local confirmAbove = (UIThingsDB.warehousing.confirmAbove or 100) * 10000
+    local currentMoney = GetMoney()
+    local spendable = math.max(0, currentMoney - goldReserve)
+
+    if spendable <= 0 then
+        Log("AutoBuy: not enough gold (reserve=" .. (UIThingsDB.warehousing.goldReserve or 500) .. "g)", 1)
+        return
+    end
+
+    -- Cache warband bank counts (by itemID) for deficit reduction
+    local warbandCounts = (LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.warband
+        and LunaUITweaks_ReagentData.warband.items) or {}
+
+    -- Build purchase list
+    local purchases = {}
+    local totalCost = 0
+    for itemID, data in pairs(deficit) do
+        local item = LunaUITweaks_WarehousingData.items[itemID]
+        if item and item.autoBuy then
+            local mIndex, mPrice, mStackSize = FindOnMerchant(itemID)
+            if mIndex and mPrice and mPrice > 0 then
+                -- Subtract warband bank stock: check by exact ID, then by name for quality variants
+                local warbandHas = warbandCounts[itemID] or 0
+                if warbandHas == 0 and item.name then
+                    local targetName = item.name:lower()
+                    for wbID, wbCount in pairs(warbandCounts) do
+                        local wbName = C_Item.GetItemNameByID(wbID)
+                        if wbName and wbName:lower() == targetName then
+                            warbandHas = warbandHas + wbCount
+                        end
+                    end
+                end
+                local needed = math.max(0, data.count - warbandHas)
+                if needed > 0 then
+                    -- Round up to full stacks
+                    local stacks = math.ceil(needed / mStackSize)
+                    local totalItems = stacks * mStackSize
+                    local cost = stacks * mPrice
+                    if cost <= spendable then
+                        table.insert(purchases, {
+                            itemID = itemID,
+                            name = item.name,
+                            mIndex = mIndex,
+                            stacks = stacks,
+                            totalItems = totalItems,
+                            cost = cost,
+                        })
+                        totalCost = totalCost + cost
+                        spendable = spendable - cost
+                    else
+                        -- Buy as many stacks as we can afford
+                        local affordableStacks = math.floor(spendable / mPrice)
+                        if affordableStacks > 0 then
+                            local cost2 = affordableStacks * mPrice
+                            table.insert(purchases, {
+                                itemID = itemID,
+                                name = item.name,
+                                mIndex = mIndex,
+                                stacks = affordableStacks,
+                                totalItems = affordableStacks * mStackSize,
+                                cost = cost2,
+                            })
+                            totalCost = totalCost + cost2
+                            spendable = spendable - cost2
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #purchases == 0 then return end
+
+    local function DoPurchases()
+        for _, p in ipairs(purchases) do
+            BuyMerchantItem(p.mIndex, p.stacks)
+            Log("AutoBuy: bought " .. p.stacks .. "x stack(s) of " .. (p.name or p.itemID)
+                .. " for " .. GetCoinTextureString(p.cost), 1)
+        end
+        -- Rescan bags after purchase
+        C_Timer.After(0.5, ScheduleBagScan)
+    end
+
+    -- Confirm if total cost exceeds threshold
+    if totalCost > confirmAbove then
+        local gold = math.floor(totalCost / 10000)
+        local silver = math.floor((totalCost % 10000) / 100)
+        local copper = totalCost % 100
+        local costStr = gold > 0 and (gold .. "g " .. silver .. "s") or (silver .. "s " .. copper .. "c")
+        local confirmMsg = "Auto-buy " .. #purchases .. " item type(s) from vendor for " .. costStr .. "?"
+        StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"].OnAccept = DoPurchases
+        StaticPopup_Show("LUNA_WAREHOUSING_AUTOBUY_CONFIRM", confirmMsg)
+    else
+        DoPurchases()
+    end
+end
+
+--- Check if current merchant sells any tracked autoBuy items (used for button state).
+function Warehousing.MerchantHasAutoBuyItems()
+    if not atMerchant then return false end
+    EnsureDB()
+    for itemID, item in pairs(LunaUITweaks_WarehousingData.items) do
+        if item.autoBuy and FindOnMerchant(itemID) then
+            return true
+        end
+    end
+    return false
+end
+
+function Warehousing.IsAtMerchant()
+    return atMerchant
 end
 
 --------------------------------------------------------------
@@ -1292,6 +1471,17 @@ local function OnInteractionHide(event, interactionType)
     end
 end
 
+local function OnMerchantShow()
+    if not UIThingsDB.warehousing.enabled then return end
+    atMerchant = true
+    -- Small delay to allow merchant inventory to fully load
+    C_Timer.After(0.3, RunAutoBuy)
+end
+
+local function OnMerchantClosed()
+    atMerchant = false
+end
+
 --------------------------------------------------------------
 -- Module Lifecycle
 --------------------------------------------------------------
@@ -1307,6 +1497,8 @@ local function RegisterEvents()
     EventBus.Register("BANKFRAME_CLOSED", OnBankClosed)
     EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShow)
     EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHide)
+    EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
+    EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
 end
 
 local function UnregisterEvents()
@@ -1320,6 +1512,8 @@ local function UnregisterEvents()
     EventBus.Unregister("BANKFRAME_CLOSED", OnBankClosed)
     EventBus.Unregister("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShow)
     EventBus.Unregister("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHide)
+    EventBus.Unregister("MERCHANT_SHOW", OnMerchantShow)
+    EventBus.Unregister("MERCHANT_CLOSED", OnMerchantClosed)
 end
 
 function Warehousing.UpdateSettings()

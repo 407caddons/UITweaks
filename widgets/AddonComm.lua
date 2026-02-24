@@ -7,10 +7,8 @@ table.insert(Widgets.moduleInits, function()
     commFrame:RegisterForClicks("AnyUp")
 
     local function GetGroupSize()
-        if IsInRaid() then
+        if IsInGroup() then
             return GetNumGroupMembers()
-        elseif IsInGroup() then
-            return GetNumGroupMembers() + 1 -- party members + self
         end
         return 0
     end

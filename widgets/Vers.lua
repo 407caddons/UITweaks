@@ -8,9 +8,10 @@ table.insert(Widgets.moduleInits, function()
     local cachedText = "Vers: -"
 
     local function Refresh()
-        local vers = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
-        if vers > 0 then
-            cachedText = string.format("Vers: %.1f%%", vers)
+        local versOffense = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
+        local versMitigation = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_TAKEN) or 0
+        if versOffense > 0 then
+            cachedText = string.format("Vers: %.1f%% / %.1f%%", versOffense, versMitigation)
         else
             cachedText = "Vers: -"
         end

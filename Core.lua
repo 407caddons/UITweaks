@@ -566,7 +566,8 @@ local function OnEvent(self, event, ...)
                 debugMode = false
             },
             reagents = {
-                enabled = false
+                enabled = false,
+                trackAllItems = false,
             },
             questAuto = {
                 enabled = false,
@@ -652,6 +653,9 @@ local function OnEvent(self, event, ...)
                 frameBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
                 frameBorderSize = 2,
                 frameBgColor = { r = 0, g = 0, b = 0, a = 0.8 },
+                autoBuyEnabled = true,
+                goldReserve = 500,      -- never spend below this many gold
+                confirmAbove = 100,     -- confirm popup if purchase total exceeds this many gold
             },
         }
 

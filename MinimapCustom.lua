@@ -958,6 +958,7 @@ local function UpdateToggleButton()
 end
 
 local function SetDrawerCollapsed(collapsed)
+    if InCombatLockdown() then return end
     drawerCollapsed = collapsed
 
     for _, entry in ipairs(collectedButtons) do

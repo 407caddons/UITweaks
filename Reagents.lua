@@ -44,22 +44,30 @@ local function EnsureDB()
 end
 
 --- Check if an item is a tradeskill reagent by its item class
--- Uses GetItemInfoInstant first (always available, no cache miss) then falls back to GetItemInfo
 -- @param itemID number The item ID to check
 -- @return boolean True if the item is a tradegoods item
 local function IsReagent(itemID)
     if not itemID then return false end
-    -- GetItemInfoInstant returns: itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subclassID
     local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(itemID)
     if classID then
         return classID == ITEM_CLASS_TRADEGOODS
     end
-    -- Fallback to full GetItemInfo (may return nil if item not cached)
     local _, _, _, _, _, _, _, _, _, _, _, classID2 = GetItemInfo(itemID)
     return classID2 == ITEM_CLASS_TRADEGOODS
 end
 
---- Scan bags (containerIDs 0 through NUM_BAG_SLOTS, plus reagent bag) for reagents
+--- Check if an item should be tracked given current settings.
+-- Always tracks reagents. When trackAllItems is enabled, also tracks any non-soulbound item.
+-- @param itemID number
+-- @param isBound boolean The isBound field from GetContainerItemInfo (nil treated as false)
+-- @return boolean
+local function ShouldTrackItem(itemID, isBound)
+    if IsReagent(itemID) then return true end
+    if UIThingsDB.reagents.trackAllItems and not isBound then return true end
+    return false
+end
+
+--- Scan bags (containerIDs 0 through NUM_BAG_SLOTS, plus reagent bag)
 -- @return table itemID -> count mapping
 local function ScanBags()
     local items = {}
@@ -72,8 +80,8 @@ local function ScanBags()
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID then
-                if IsReagent(info.itemID) then
+            if info and info.itemID and not info.isLocked then
+                if ShouldTrackItem(info.itemID, info.isBound) then
                     items[info.itemID] = (items[info.itemID] or 0) + info.stackCount
                 end
             end
@@ -82,9 +90,8 @@ local function ScanBags()
     return items
 end
 
---- Scan character bank slots for reagents
+--- Scan character bank slots
 -- Bank is only accessible when the bank frame is open
--- Character bank uses container IDs NUM_BAG_SLOTS+1 through NUM_BAG_SLOTS+NUM_BANKBAGSLOTS plus the main bank container (-1)
 -- @return table itemID -> count mapping
 local function ScanCharacterBank()
     local items = {}
@@ -92,8 +99,8 @@ local function ScanCharacterBank()
     local numSlots = C_Container.GetContainerNumSlots(-1)
     for slot = 1, numSlots do
         local info = C_Container.GetContainerItemInfo(-1, slot)
-        if info and info.itemID then
-            if IsReagent(info.itemID) then
+        if info and info.itemID and not info.isLocked then
+            if ShouldTrackItem(info.itemID, info.isBound) then
                 items[info.itemID] = (items[info.itemID] or 0) + info.stackCount
             end
         end
@@ -104,8 +111,8 @@ local function ScanCharacterBank()
         numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID then
-                if IsReagent(info.itemID) then
+            if info and info.itemID and not info.isLocked then
+                if ShouldTrackItem(info.itemID, info.isBound) then
                     items[info.itemID] = (items[info.itemID] or 0) + info.stackCount
                 end
             end
@@ -115,8 +122,8 @@ local function ScanCharacterBank()
     numSlots = C_Container.GetContainerNumSlots(-3)
     for slot = 1, numSlots do
         local info = C_Container.GetContainerItemInfo(-3, slot)
-        if info and info.itemID then
-            if IsReagent(info.itemID) then
+        if info and info.itemID and not info.isLocked then
+            if ShouldTrackItem(info.itemID, info.isBound) then
                 items[info.itemID] = (items[info.itemID] or 0) + info.stackCount
             end
         end
@@ -142,8 +149,8 @@ local function ScanWarbandBank()
         local numSlots = C_Container.GetContainerNumSlots(containerID)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(containerID, slot)
-            if info and info.itemID then
-                if IsReagent(info.itemID) then
+            if info and info.itemID and not info.isLocked then
+                if ShouldTrackItem(info.itemID, info.isBound) then
                     items[info.itemID] = (items[info.itemID] or 0) + info.stackCount
                 end
             end
@@ -240,11 +247,13 @@ local function GetClassRGB(classFile)
     return 1, 1, 1
 end
 
---- Get live bag count of an item for the current character
+--- Get live bag count of an item for the current character.
+-- Matches by itemID first, then falls back to name matching for quality-tier variants.
 -- @param itemID number The item ID to count
 -- @return number Total count across all bags (including reagent bag)
 local function GetLiveBagCount(itemID)
     local count = 0
+    local targetName = C_Item.GetItemNameByID(itemID)
     local bagList = {}
     for bag = 0, NUM_BAG_SLOTS do
         bagList[#bagList + 1] = bag
@@ -254,12 +263,64 @@ local function GetLiveBagCount(itemID)
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID == itemID then
-                count = count + info.stackCount
+            if info and info.itemID and not info.isLocked then
+                if info.itemID == itemID then
+                    count = count + info.stackCount
+                elseif targetName and info.hyperlink then
+                    local slotName = info.hyperlink:match("%[(.-)%]")
+                    if slotName and slotName == targetName then
+                        count = count + info.stackCount
+                    end
+                end
             end
         end
     end
     return count
+end
+
+--- Build a unified per-character count map for an itemID, merging reagent and warehousing data.
+-- Returns { [charKey] = count }, pulling live bag data for the current character.
+local function GetAllCharCounts(itemID)
+    local currentKey = GetCharacterKey()
+    local counts = {}
+    local registry = LunaUITweaks_CharacterData and LunaUITweaks_CharacterData.characters or {}
+
+    -- Reagent data: cached totals per character
+    if LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.characters then
+        for charKey, charData in pairs(LunaUITweaks_ReagentData.characters) do
+            local n = charData.items and charData.items[itemID] or 0
+            if n > 0 then counts[charKey] = n end
+        end
+    end
+
+    -- Warehousing bag counts: overwrite if higher (more recent scan)
+    local whChars = LunaUITweaks_WarehousingData and LunaUITweaks_WarehousingData.characters
+    if whChars then
+        for charKey, charData in pairs(whChars) do
+            local n = charData.bagCounts and charData.bagCounts[itemID] or 0
+            if n > 0 and n > (counts[charKey] or 0) then
+                counts[charKey] = n
+            end
+        end
+    end
+
+    -- Current character: always use live bag scan (most accurate)
+    local liveBagCount = GetLiveBagCount(itemID)
+    local cachedBankCount = 0
+    if LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.characters then
+        local cur = LunaUITweaks_ReagentData.characters[currentKey]
+        if cur and cur.bankItems then
+            cachedBankCount = cur.bankItems[itemID] or 0
+        end
+    end
+    local liveTotal = liveBagCount + cachedBankCount
+    if liveTotal > 0 then
+        counts[currentKey] = liveTotal
+    elseif counts[currentKey] and liveTotal == 0 then
+        counts[currentKey] = nil -- bags are empty right now
+    end
+
+    return counts
 end
 
 --- Add reagent count lines to a tooltip for a given itemID
@@ -270,61 +331,47 @@ local function AddReagentLinesToTooltip(tooltip, itemID)
     EnsureDB()
 
     local currentKey = GetCharacterKey()
+    local registry = LunaUITweaks_CharacterData and LunaUITweaks_CharacterData.characters or {}
+    local counts = GetAllCharCounts(itemID)
 
-    -- Live count for current character (bags + cached bank data)
-    local liveBagCount = GetLiveBagCount(itemID)
-    local cachedBankCount = 0
-    local currentCharData = LunaUITweaks_ReagentData.characters[currentKey]
-    if currentCharData and currentCharData.bankItems and currentCharData.bankItems[itemID] then
-        cachedBankCount = currentCharData.bankItems[itemID]
-    end
-    local liveCurrentTotal = liveBagCount + cachedBankCount
-
-    -- Collect other characters from the database
-    local sortedChars = {}
-    for charKey, charData in pairs(LunaUITweaks_ReagentData.characters) do
-        if charKey ~= currentKey then
-            if charData.items and charData.items[itemID] and charData.items[itemID] > 0 then
-                table.insert(sortedChars, {
-                    key = charKey,
-                    data = charData,
-                    count = charData.items[itemID],
-                })
-            end
-        end
-    end
-
-    -- Sort alphabetically
-    table.sort(sortedChars, function(a, b)
-        return a.key < b.key
-    end)
-
-    -- Check warband
+    -- Warband
     local warbandCount = 0
     if LunaUITweaks_ReagentData.warband and LunaUITweaks_ReagentData.warband.items then
         warbandCount = LunaUITweaks_ReagentData.warband.items[itemID] or 0
     end
 
-    if liveCurrentTotal == 0 and #sortedChars == 0 and warbandCount == 0 then return end
+    if not next(counts) and warbandCount == 0 then return end
 
-    -- Add blank line separator
     tooltip:AddLine(" ")
 
-    -- Current character first (live count)
-    if liveCurrentTotal > 0 then
+    -- Current character first
+    local currentCount = counts[currentKey]
+    if currentCount and currentCount > 0 then
         local r, g, b = GetClassRGB(GetCharacterClass())
         local charName = currentKey:match("^(.+) %- ") or currentKey
-        tooltip:AddDoubleLine(charName, tostring(liveCurrentTotal), r, g, b, 1, 1, 1)
+        tooltip:AddDoubleLine(charName, tostring(currentCount), r, g, b, 1, 1, 1)
     end
 
-    -- Other characters from database
-    for _, entry in ipairs(sortedChars) do
-        local r, g, b = GetClassRGB(entry.data.class)
+    -- Other characters sorted alphabetically
+    local others = {}
+    for charKey, count in pairs(counts) do
+        if charKey ~= currentKey then
+            table.insert(others, { key = charKey, count = count })
+        end
+    end
+    table.sort(others, function(a, b) return a.key < b.key end)
+    for _, entry in ipairs(others) do
+        local classFile = registry[entry.key] and registry[entry.key].class
+        -- Also check reagent data for class
+        if not classFile and LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.characters then
+            local rd = LunaUITweaks_ReagentData.characters[entry.key]
+            classFile = rd and rd.class
+        end
+        local r, g, b = GetClassRGB(classFile)
         local charName = entry.key:match("^(.+) %- ") or entry.key
         tooltip:AddDoubleLine(charName, tostring(entry.count), r, g, b, 1, 1, 1)
     end
 
-    -- Add warband line if > 0
     if warbandCount > 0 then
         tooltip:AddDoubleLine("Warband", tostring(warbandCount), 0.4, 0.78, 1, 1, 1, 1)
     end
@@ -339,7 +386,6 @@ local function HookTooltip()
     if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
             if tooltip ~= GameTooltip then return end
-            if not UIThingsDB.reagents.enabled then return end
             if not data then return end
 
             local itemID
@@ -351,12 +397,12 @@ local function HookTooltip()
                     itemID = tonumber(link:match("item:(%d+)"))
                 end
             end
-
             if not itemID then return end
 
-            -- Only show for reagents
-            if not IsReagent(itemID) then return end
-
+            -- Allow non-reagent items when hovering a warehousing icon
+            local isWHTooltip = addonTable.WarehousingTooltipItemID ~= nil
+            if not UIThingsDB.reagents.enabled then return end
+            if not IsReagent(itemID) and not UIThingsDB.reagents.trackAllItems and not isWHTooltip then return end
             AddReagentLinesToTooltip(tooltip, itemID)
         end)
         tooltipHooked = true

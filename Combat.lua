@@ -1112,7 +1112,7 @@ local function InitReminders()
     reminderTitleLine:SetPoint("RIGHT", reminderFrame, "RIGHT", -12, 0)
     reminderTitleLine:SetPoint("TOP", reminderTitle, "BOTTOM", 0, -2)
 
-    -- Create 4 text lines (one per possible reminder)
+    -- Create 5 text lines (one per possible reminder)
     for i = 1, 5 do
         local line = reminderFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         line:SetPoint("TOPLEFT", 12, -8 - (i * 20))
