@@ -708,6 +708,7 @@ local function OnEvent(self, event, ...)
                 snek = {
                     highScore = 0,
                 },
+                bombs = {},
             },
         }
 
