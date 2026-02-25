@@ -466,12 +466,51 @@ BuildUI = function()
         return btn
     end
 
-    local bindHint = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bindHint:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, BOTTOM_PAD + 2 * (BTN_H + BTN_GAP) + 6)
-    bindHint:SetTextColor(0.5, 0.5, 0.5)
-    bindHint:SetWidth(BTN_W)
-    bindHint:SetWordWrap(true)
-    bindHint:SetText("Bindable in\nKey Bindings")
+    -- Keybind display above buttons — one row per action, label left / key right
+    local BIND_W = BTN_W
+    local BIND_ROW_H = 13
+    local bindBaseY = BOTTOM_PAD + 2 * (BTN_H + BTN_GAP) + 6
+
+    local BINDS = {
+        { label = "Move Left",  binding = "LUNAUITWEAKS_GAME_LEFT" },
+        { label = "Move Right", binding = "LUNAUITWEAKS_GAME_RIGHT" },
+        { label = "Move Up",    binding = "LUNAUITWEAKS_GAME_ROTATECW" },
+        { label = "Move Down",  binding = "LUNAUITWEAKS_GAME_ROTATECCW" },
+        { label = "Pause",      binding = "LUNAUITWEAKS_GAME_PAUSE" },
+    }
+
+    local bindKeyLabels = {}
+    for i, entry in ipairs(BINDS) do
+        local rowY = bindBaseY + (#BINDS - i) * BIND_ROW_H
+
+        local lbl = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lbl:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, rowY)
+        lbl:SetWidth(BIND_W)
+        lbl:SetJustifyH("LEFT")
+        lbl:SetTextColor(0.6, 0.6, 0.6)
+        lbl:SetText(entry.label)
+
+        local key = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        key:SetPoint("BOTTOMRIGHT", gameFrame, "BOTTOMLEFT", sideX + BIND_W, rowY)
+        key:SetWidth(BIND_W)
+        key:SetJustifyH("RIGHT")
+        bindKeyLabels[i] = { fs = key, binding = entry.binding }
+    end
+
+    local function RefreshBindings()
+        for _, row in ipairs(bindKeyLabels) do
+            local k = GetBindingKey(row.binding)
+            if k then
+                row.fs:SetText(k)
+                row.fs:SetTextColor(1, 0.82, 0)
+            else
+                row.fs:SetText("unbound")
+                row.fs:SetTextColor(0.5, 0.5, 0.5)
+            end
+        end
+    end
+    RefreshBindings()
+    gameFrame:HookScript("OnShow", RefreshBindings)
 
     MakeBtn("Pause",    1, TogglePause)
     MakeBtn("New Game", 2, StartGame)

@@ -106,7 +106,7 @@ table.insert(Widgets.moduleInits, function()
     vaultFrame:SetScript("OnLeave", GameTooltip_Hide)
 
     vaultFrame:SetScript("OnClick", function(self, button)
-        if button == "LeftButton" then
+        if button == "LeftButton" and not InCombatLockdown() then
             if not C_AddOns.IsAddOnLoaded("Blizzard_WeeklyRewards") then
                 C_AddOns.LoadAddOn("Blizzard_WeeklyRewards")
             end

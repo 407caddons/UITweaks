@@ -121,7 +121,7 @@ local function ApplyRaidAssignments(assignments)
             sortTicker:Cancel()
             sortTicker = nil
         end
-        DEFAULT_CHAT_FRAME:AddMessage("Raid sorting complete.")
+        addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
     end
 
     sortTicker = C_Timer.NewTicker(0.2, DoNextMove)

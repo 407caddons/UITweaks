@@ -6,6 +6,12 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 -- Get helpers
 local Helpers = addonTable.ConfigHelpers
 
+local function LootUpdateSettings()
+    if addonTable.Loot and addonTable.Loot.UpdateSettings then
+        LootUpdateSettings()
+    end
+end
+
 -- Define the setup function for Loot panel
 function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "loot")
@@ -37,7 +43,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     enableCheckbox:SetScript("OnClick", function(self)
         UIThingsDB.loot.enabled = self:GetChecked()
         Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.loot.enabled)
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.loot.enabled)
 
@@ -135,7 +141,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         UIThingsDB.loot.font,
         function(fontPath, fontName)
             UIThingsDB.loot.font = fontPath
-            addonTable.Loot.UpdateSettings()
+            LootUpdateSettings()
         end,
         20,
         -225
@@ -156,7 +162,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         value = math.floor(value)
         UIThingsDB.loot.fontSize = value
         _G[self:GetName() .. 'Text']:SetText("Font Size: " .. value)
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     -- Who Looted Font Size Slider
@@ -176,7 +182,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         value = math.floor(value)
         UIThingsDB.loot.whoLootedFontSize = value
         _G[self:GetName() .. 'Text']:SetText("Who Looted Size: " .. value)
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     -- Icon Size Slider
@@ -194,7 +200,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         value = math.floor(value)
         UIThingsDB.loot.iconSize = value
         _G[self:GetName() .. 'Text']:SetText("Icon Size: " .. value)
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     -- Grow Up Checkbox
@@ -204,7 +210,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     growBtn:SetChecked(UIThingsDB.loot.growUp)
     growBtn:SetScript("OnClick", function(self)
         UIThingsDB.loot.growUp = self:GetChecked()
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     -- Faster Loot Checkbox
@@ -274,7 +280,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     currencyBtn:SetChecked(UIThingsDB.loot.showCurrency)
     currencyBtn:SetScript("OnClick", function(self)
         UIThingsDB.loot.showCurrency = self:GetChecked()
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     local currencyHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -290,7 +296,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     goldBtn:SetChecked(UIThingsDB.loot.showGold)
     goldBtn:SetScript("OnClick", function(self)
         UIThingsDB.loot.showGold = self:GetChecked()
-        addonTable.Loot.UpdateSettings()
+        LootUpdateSettings()
     end)
 
     -- Min Gold Slider

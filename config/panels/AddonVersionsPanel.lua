@@ -169,6 +169,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     local function DeserializeString(str)
         -- Safely deserialize a Lua table string
         if not str or str == "" then return nil, "Empty string" end
+        if #str > 65536 then return nil, "Input too large" end
         local func, err = loadstring("return " .. str)
         if not func then return nil, "Parse error: " .. (err or "unknown") end
         -- Sandbox: no access to globals

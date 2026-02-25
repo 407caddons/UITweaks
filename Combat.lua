@@ -1071,8 +1071,6 @@ UpdateReminderFrame = function()
     else
         StopWeaponBuffTicker()
     end
-
-    ApplyReminderLock()
 end
 
 local function InitReminders()

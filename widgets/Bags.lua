@@ -2,11 +2,7 @@ local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
 
-local function GetCharacterKey()
-    local name = UnitName("player")
-    local realm = GetRealmName()
-    return name .. " - " .. realm
-end
+local GetCharacterKey = function() return addonTable.Core.GetCharacterKey() end
 
 local function SaveCurrentGold()
     local key = GetCharacterKey()

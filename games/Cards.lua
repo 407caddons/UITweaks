@@ -476,7 +476,7 @@ MoveCards = function(destZone, destCol)
     end
 
     LayoutCards()
-    if won then print("|cFFFFD100Solitaire Cleared in " .. moves .. " moves!|r") end
+    if won then addonTable.Core.Log("Cards", "Solitaire Cleared in " .. moves .. " moves!", addonTable.Core.LogLevel.INFO) end
 end
 
 HandleClick = function(zoneClick)
@@ -720,7 +720,7 @@ BuildUI = function()
     local totalW = boardW + PADDING * 3 + sideW
     local totalH = boardH + PADDING * 2 + 30
 
-    gameFrame = CreateFrame("Frame", "LunaUITweaks_CardsGame", UIParent, "BackdropTemplate")
+    gameFrame = CreateFrame("Frame", "LunaUITweaks_CardsGame", UIParent)
     gameFrame:SetSize(totalW, totalH)
     gameFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     gameFrame:SetFrameStrata("DIALOG")
@@ -731,14 +731,16 @@ BuildUI = function()
     gameFrame:SetScript("OnDragStop",  function(self) self:StopMovingOrSizing() end)
     gameFrame:Hide()
 
-    gameFrame:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    gameFrame:SetBackdropColor(0.06, 0.06, 0.08, 0.97)
-    gameFrame:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
+    -- Background
+    local bg = gameFrame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.06, 0.06, 0.08, 0.97)
+
+    -- Border
+    local border = gameFrame:CreateTexture(nil, "BORDER")
+    border:SetPoint("TOPLEFT",     gameFrame, "TOPLEFT",     0, 0)
+    border:SetPoint("BOTTOMRIGHT", gameFrame, "BOTTOMRIGHT", 0, 0)
+    border:SetColorTexture(0.3, 0.3, 0.35, 1)
 
     -- Title bar
     local titleBar = CreateFrame("Frame", nil, gameFrame)
@@ -750,7 +752,7 @@ BuildUI = function()
     titleBar:SetScript("OnDragStart", function() gameFrame:StartMoving() end)
     titleBar:SetScript("OnDragStop",  function() gameFrame:StopMovingOrSizing() end)
 
-    local titleBarBg = titleBar:CreateTexture(nil, "ARTWORK")
+    local titleBarBg = titleBar:CreateTexture(nil, "BACKGROUND")
     titleBarBg:SetAllPoints()
     titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 

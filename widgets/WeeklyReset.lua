@@ -89,7 +89,7 @@ table.insert(Widgets.moduleInits, function()
     end)
 
     resetFrame:SetScript("OnClick", function(self, button)
-        if button == "LeftButton" then
+        if button == "LeftButton" and not InCombatLockdown() then
             -- Open calendar to show reset day
             if not CalendarFrame then
                 C_AddOns.LoadAddOn("Blizzard_Calendar")

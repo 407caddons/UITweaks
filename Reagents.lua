@@ -12,7 +12,6 @@ local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 
 -- State
 local scanTimer = nil
 local tooltipHooked = false
-local characterKey = nil
 local eventsEnabled = false
 
 -- Centralized Logging
@@ -22,14 +21,7 @@ local Log = function(msg, level)
     end
 end
 
-local function GetCharacterKey()
-    if not characterKey then
-        local name = UnitName("player")
-        local realm = GetRealmName()
-        characterKey = name .. " - " .. realm
-    end
-    return characterKey
-end
+local GetCharacterKey = function() return addonTable.Core.GetCharacterKey() end
 
 local function GetCharacterClass()
     local _, classFile = UnitClass("player")

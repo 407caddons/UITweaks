@@ -1,9 +1,60 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-24 (Eighteenth Pass -- Mini-game performance fixes reviewed)
-**Previous Review:** 2026-02-23 (Seventeenth Pass -- Next 5 bug fixes applied)
-**Scope:** Reviewed games/Cards.lua, games/Bombs.lua, games/Gems.lua after 5 bug fixes were applied. Confirmed fixes correct, identified one new low-priority issue.
+**Review Date:** 2026-02-24 (Twentieth Pass -- Trivial fixes batch)
+**Previous Review:** 2026-02-24 (Nineteenth Pass -- ObjectiveTracker SafeAfter consistency fix)
+**Scope:** Batch of trivial/small fixes across 7 files. GetCharacterKey centralized (Core.lua + 3 consumers). CalculateOverflowDeficit BAG_UPDATE_DELAYED wait. GetMinimapShape ROUND fix. AnchorQueueEyeToMinimap + Vault + WeeklyReset combat guards. LootPanel nil guard wrapper. Combat.lua redundant ApplyReminderLock removed. Clock/coords tickers promoted to module-level.
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
+
+---
+
+## Changes Since Last Review (Twentieth Pass -- 2026-02-24)
+
+### Confirmed Fixed Since Nineteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `MinimapCustom.lua` `GetMinimapShape` returned nil for round minimap (issue 60) | Changed `GetMinimapShape = nil` to `function GetMinimapShape() return "ROUND" end`. |
+| `MinimapCustom.lua` `AnchorQueueEyeToMinimap` called `SetParent` without combat guard (issue 22) | Added `if InCombatLockdown() then return end` as third guard after nil checks. |
+| `Vault.lua` / `WeeklyReset.lua` `ShowUIPanel` called without combat guard (issue 26) | Both `OnClick` handlers changed to `if button == "LeftButton" and not InCombatLockdown() then`. |
+| `config/panels/LootPanel.lua` bare `addonTable.Loot.UpdateSettings()` calls (issue 34) | Added `local LootUpdateSettings()` wrapper with nil guard at file scope; all 8 bare calls replaced. `VendorPanel.lua` was already guarded — no change needed. |
+| `config/panels/AddonVersionsPanel.lua` `loadstring` with no input length check (issue 36) | Added `if #str > 65536 then return nil, "Input too large" end` before `loadstring` call. |
+| `Combat.lua` `ApplyReminderLock()` called three times (issue 55) | Removed the redundant second call at end of `UpdateReminderFrame()`. First call (after `ApplyReminderFont`) and third call (in `InitReminders`) remain correct. |
+| `MinimapCustom.lua` `clockTicker` / `coordsTicker` never cancelled on re-init (issue 62) | Both variables promoted to module-level. `SetupMinimap()` now cancels and nils both at entry before creating new ones. |
+| `GetCharacterKey()` duplicated in 3 files (issue 15/16) | Added `addonTable.Core.GetCharacterKey()` to `Core.lua` (cached after first call). Removed local definitions from `Reagents.lua`, `Warehousing.lua`, and `widgets/Bags.lua`. Each now uses a thin alias. |
+| `Warehousing.lua` `CalculateOverflowDeficit` stale bag state (issue 14) | Auto-continuation now waits for `BAG_UPDATE_DELAYED` event (with 3s `NewTicker` fallback) before re-calling `CalculateOverflowDeficit`, ensuring bag contents have settled. |
+
+### Verified Correct (Twentieth Pass)
+
+- **`Combat.lua` comment "Create 4 text lines"** (line 1113): Already reads "Create 5 text lines". No change needed.
+- **`ObjectiveTracker.lua` `OnAchieveClick` type guard** (issue 64): `and self.achieID` guard already present on both click branches. No change needed.
+- **`MythicRating.lua` nil `bestRunLevel`** (issue 19): `if timedLevel then` / `elseif bestLevel then` branches correctly guard all `string.format` calls. No change needed.
+- **`VendorPanel.lua` module access** (issue 34): Already uses `if addonTable.Vendor.UpdateSettings then` guards throughout. No change needed.
+
+---
+
+## Changes Since Last Review (Nineteenth Pass -- 2026-02-24)
+
+### Confirmed Fixed Since Eighteenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `ObjectiveTracker.lua` lines 1597, 1924, 2162: Three `C_Timer.After` calls bypassed the module-level `local SafeAfter` alias | Changed all three to `SafeAfter(...)`. File already declared `local SafeAfter = addonTable.Core.SafeAfter` at line 70 and used it everywhere else — these were inconsistent outliers. |
+| `Coordinates.lua` / `WaypointDistance.lua` distance helpers duplicated (`MapPosToWorld`, `GetDistanceToWP`, `FormatDistanceShort`) | `GetDistanceToWP` and `FormatDistanceShort` exposed on `addonTable.Coordinates`. `WaypointDistance.lua` drops its duplicate definitions and reads from `Coordinates.GetDistanceToWP` / `Coordinates.FormatDistanceShort`. `MapPosToWorld` stays private as an implementation detail. |
+| `Coordinates.lua` `C_Timer.NewTicker(2, ...)` created unconditionally in `CreateMainFrame`, ran forever even when module disabled | Ticker removed from `CreateMainFrame`. Stored in module-level `distanceTicker`. Created in `UpdateSettings` when `enabled = true`, cancelled and nilled when `enabled = false`. |
+
+### New Findings (Nineteenth Pass -- 2026-02-24)
+
+No new bugs or crashes found this pass. One additional low-priority polish item noted:
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `Combat.lua` init block (lines 1214–1218): `elseif C_Timer and C_Timer.After then` branch is dead code. `addonTable.Core.SafeAfter` is always available because Core.lua loads first per TOC order. The `if addonTable.Core.SafeAfter` branch always wins. | Combat.lua:1214 | Harmless but dead. Could simplify to a single `addonTable.Core.SafeAfter` call without the elseif fallback. Same dead-code structure exists in `CastBar.lua:574–576`. |
+
+### Verified Correct (Nineteenth Pass)
+
+- **ObjectiveTracker.lua `ScheduleUpdateContent`** (line 1597): `SafeAfter(UPDATE_THROTTLE_DELAY, ...)` now uses the local alias. The throttle/guard logic (`if updatePending then return end`) is correct.
+- **ObjectiveTracker.lua `PLAYER_ENTERING_WORLD`** (line 1924): `SafeAfter(2, UpdateContent)` now uses the local alias. The 2-second delay gives Blizzard time to finish its own tracker layout.
+- **ObjectiveTracker.lua `PLAYER_ENTERING_WORLD` settings apply** (line 2162): `SafeAfter(1, function() addonTable.ObjectiveTracker.UpdateSettings() end)` now uses the local alias. Correct.
 
 ---
 
@@ -312,8 +363,8 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 - **NEW: Auto-buy feature.** `FindOnMerchant`, `RegisterVendorItem`, `RunAutoBuy`, `MerchantHasAutoBuyItems`, `IsAtMerchant` added. `MERCHANT_SHOW`/`MERCHANT_CLOSED` events registered. Warband bank cached counts subtracted from deficit before calculating purchase quantity. Gold reserve and confirm threshold respected.
 - **NEW: isLocked fix.** All scan functions now skip locked bag slots.
 - **Medium: `WaitForItemUnlock` polling unreliable for warband bank.** Polls `isLocked` at 0.1s intervals. Retry logic (3 retries x 0.5s) mitigates but root cause is unreliable. A more robust approach: detect item disappearance from the source slot, or listen to `ITEM_LOCK_CHANGED`.
-- **Medium: `CalculateOverflowDeficit` calls `ScanBags()` synchronously on every call.** During auto-continuation, bags may not have fully settled. Explicit `BAG_UPDATE_DELAYED` event wait before re-check would be more reliable.
-- **Medium: `GetCharacterKey()` duplicated** -- defined locally in Warehousing.lua (line 38) and also in Reagents.lua (line 25). Should be centralized as `addonTable.Core.GetCharacterKey()`.
+- ~~**Medium: `CalculateOverflowDeficit` calls `ScanBags()` synchronously on every call.**~~ **FIXED (Twentieth Pass)** — Auto-continuation now waits for `BAG_UPDATE_DELAYED` (with 3s fallback) before re-calling `CalculateOverflowDeficit`, ensuring bags have settled.
+- ~~**Medium: `GetCharacterKey()` duplicated**~~ **FIXED (Twentieth Pass)** — Centralized in `Core.lua` as `addonTable.Core.GetCharacterKey()`. Removed local definitions from Warehousing.lua, Reagents.lua, and widgets/Bags.lua.
 - **Low: `bagList` rebuilt as new table on every `ScanBags()` call.** Three separate allocation sites for identical logic. Module-level constant would reduce GC pressure.
 - **FIXED: Auto-continuation capped at 5 passes now shows "Sync limit reached — overflow may remain." instead of "Sync complete!".** **(Seventeenth Pass)**
 - **Low: `GetCharacterNames()` uses `LunaUITweaks_WarehousingData.characters` only.** Alts known only through Reagents do not appear in mail dropdown.
@@ -506,14 +557,14 @@ The Warehousing module is a substantial addition that is architecturally sound. 
 
 **Status:** Five medium issues (3 from ninth pass). Two low.
 
-- **Medium:** `AnchorQueueEyeToMinimap()` calls `QueueStatusButton:SetParent(Minimap)` without `InCombatLockdown()` guard. Called from deferred `C_Timer.After(0)` which can fire during combat.
+- ~~**Medium:** `AnchorQueueEyeToMinimap()` calls `QueueStatusButton:SetParent(Minimap)` without `InCombatLockdown()` guard.~~ **FIXED (Twentieth Pass)** — `if InCombatLockdown() then return end` added.
 - **Medium:** Triple redundant `C_Timer.After(0)` scheduling from OnShow/SetPoint/UpdatePosition hooks. Coalescing flag would eliminate redundant calls.
 - **Medium:** Potential hook conflict with ActionBars.lua over QueueStatusButton positioning.
 - **FIXED:** `SetDrawerCollapsed` now guards with `if InCombatLockdown() then return end` at function entry. **(Seventeenth Pass)**
 - **Medium:** `CollectMinimapButtons` iterates all Minimap children on every call. Not cached.
-- **Low:** `GetMinimapShape = nil` for round shape; should return `"ROUND"`.
+- ~~**Low:** `GetMinimapShape = nil` for round shape; should return `"ROUND"`.~~ **FIXED (Twentieth Pass)**
 - **Low:** Dead code in zone drag handler.
-- **Low:** Clock ticker (`C_Timer.NewTicker(1, UpdateClock)`) never cancelled when feature disabled.
+- ~~**Low:** Clock ticker (`C_Timer.NewTicker(1, UpdateClock)`) never cancelled when feature disabled.~~ **FIXED (Twentieth Pass)** — `clockTicker` and `coordsTicker` promoted to module-level; cancelled at `SetupMinimap()` entry.
 
 ---
 
@@ -942,9 +993,9 @@ The widget framework's shared ticker calls `UpdateContent` on all enabled widget
 
 `SetRowAsBuild` creates 6 closures per build row on every `RefreshBuildList` call.
 
-### 16. GetCharacterKey() Triplicated (Medium Priority)
+### 16. ~~GetCharacterKey() Triplicated (Medium Priority)~~ FIXED (Twentieth Pass)
 
-Defined as a local function independently in `Core.lua` (implicit via CharacterRegistry), `Reagents.lua` (line 25), and `Warehousing.lua` (line 38). All produce `"Name - Realm"` string. Should be centralized as `addonTable.Core.GetCharacterKey()`.
+`addonTable.Core.GetCharacterKey()` added to `Core.lua`, cached after first call. Local definitions removed from `Reagents.lua`, `Warehousing.lua`, and `widgets/Bags.lua`.
 
 ### 17. Core.lua Duplicate `minimap` Key in DEFAULTS (Low -- Potential Bug)
 
@@ -1023,26 +1074,26 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 
 ### Medium Priority (New -- Twelfth Pass)
 
-12a. **Coordinates.lua distance helpers duplicated from WaypointDistance widget** -- `MapPosToWorld`, `GetDistanceToWP`, `FormatDistanceShort` are near-identical copies in both files. Should be shared to avoid drift.
-12b. **Coordinates.lua `C_Timer.NewTicker(2, ...)` never cancelled** -- Store ticker, cancel it in `UpdateSettings` when `enabled = false`.
-12c. **Misc.lua `HookTooltipSpellID` not forward-declared** -- Add `local HookTooltipSpellID` forward declaration alongside `HookTooltipClassColors` at line 302.
+12a. ~~**Coordinates.lua distance helpers duplicated from WaypointDistance widget**~~ **FIXED (Nineteenth Pass)** — `GetDistanceToWP` and `FormatDistanceShort` now exposed on `addonTable.Coordinates`. `WaypointDistance.lua` removed its duplicate definitions and reads from `Coordinates.GetDistanceToWP` / `Coordinates.FormatDistanceShort` instead. `MapPosToWorld` remains private to `Coordinates.lua` as it's an implementation detail.
+12b. ~~**Coordinates.lua `C_Timer.NewTicker(2, ...)` never cancelled**~~ **FIXED (Nineteenth Pass)** — Ticker moved from `CreateMainFrame` (unconditional, leaked forever) into `UpdateSettings`. Stored in module-level `distanceTicker`. Created when `enabled = true` and frame is shown, cancelled and nilled when `enabled = false`.
+12c. ~~**Misc.lua `HookTooltipSpellID` not forward-declared**~~ **FIXED (Nineteenth Pass)** — `local HookTooltipSpellID -- forward declaration` is already on line 303 alongside `HookTooltipClassColors` on line 302. No change needed.
 
 ### Medium Priority (Carried Forward)
 
-13. **Warehousing.lua `WaitForItemUnlock` unreliable** -- Consider `ITEM_LOCK_CHANGED` or slot disappearance detection.
-14. **Warehousing.lua `CalculateOverflowDeficit` stale state** -- Add explicit bag-update wait before auto-continuation re-check.
-15. **`GetCharacterKey()` duplicated** -- Centralize in Core.lua as `addonTable.Core.GetCharacterKey()`.
+13. ~~**Warehousing.lua `WaitForItemUnlock` unreliable**~~ **FIXED (Nineteenth Pass)** — Replaced polling loop (20x `C_Timer.After` at 0.1s) with event-driven approach: registers `ITEM_LOCK_CHANGED` via EventBus, resolves immediately on event, with a `C_Timer.NewTicker` 2s fallback for warband bank latency. Cleans up both the listener and timeout handle on resolution. Stale `maxAttempts` argument removed from all three call sites.
+14. ~~**Warehousing.lua `CalculateOverflowDeficit` stale state**~~ **FIXED (Twentieth Pass)** — Replaced fixed `C_Timer.After(SCAN_DELAY + 0.1, ...)` continuation wait with an event-driven approach: registers `BAG_UPDATE_DELAYED` via EventBus so the re-check only fires after the client confirms all bag contents have settled. A `C_Timer.NewTicker(3, ...)` fallback resolves after 3s if the event never fires (e.g. warband bank with no local bag changes). Both the listener and fallback ticker are cleaned up via a one-shot `bagSettled` guard.
+15. ~~**`GetCharacterKey()` duplicated**~~ **FIXED (Twentieth Pass)** — Added `addonTable.Core.GetCharacterKey()` to `Core.lua` (cached after first call). Removed the local definitions and `characterKey` upvalues from `Reagents.lua`, `Warehousing.lua`, and `widgets/Bags.lua` (3 definitions, 16 call sites total). Each file now uses `local GetCharacterKey = function() return addonTable.Core.GetCharacterKey() end` as a thin alias, preserving the same call syntax throughout.
 16. **Teleports.lua FontString in button array** -- Track "no spells" FontString separately.
 17. **Teleports.lua `SetAttribute` during combat** -- Guard `ReleaseButton` secure operations with `InCombatLockdown()`.
 18. **Keystone.lua position saved in wrong schema** -- Use framework position keys.
 19. **MythicRating.lua nil `bestRunLevel`** -- Add nil guard before `string.format`.
 20. **Combat deferral frame leak** -- ActionBars.lua + CastBar.lua: use reusable module-level frame.
 21. **Combat.lua infinite retry in `TrackConsumableUsage`** -- Add retry counter (max 5 attempts).
-22. **MinimapCustom.lua `AnchorQueueEyeToMinimap` combat guard** -- Add `InCombatLockdown()` check.
+22. ~~**MinimapCustom.lua `AnchorQueueEyeToMinimap` combat guard**~~ **FIXED (Twentieth Pass)** — `if InCombatLockdown() then return end` added as third guard after the nil checks.
 23. **MinimapCustom.lua triple redundant `C_Timer.After(0)` scheduling** -- Add coalescing flag.
 24. ~~**MinimapCustom.lua `SetDrawerCollapsed` combat guard**~~ **FIXED (Seventeenth Pass)** — `InCombatLockdown()` guard added.
 25. **ChatSkin.lua `SetItemRef` override** -- Use `hooksecurefunc` instead.
-26. **Vault.lua / WeeklyReset.lua `ShowUIPanel` combat guard** -- Add `InCombatLockdown()` check.
+26. ~~**Vault.lua / WeeklyReset.lua `ShowUIPanel` combat guard**~~ **FIXED (Twentieth Pass)** — `button == "LeftButton" and not InCombatLockdown()` guard added to `OnClick` in both files.
 27. **Spec.lua menu click combat guard** -- Check `InCombatLockdown()` in menu callbacks.
 28. ~~**Friends.lua localized class name**~~ **FIXED (Seventeenth Pass)** — BNet section now uses `classFileName`.
 29. ~~**Durability.lua unconditional event registration**~~ **FIXED (Sixteenth Pass)** — `ApplyEvents(enabled)` added with proper register/unregister.
@@ -1050,9 +1101,9 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 31. **WidgetsPanel.lua `CONDITIONS` table inside loop** -- Hoist to file-scope constant.
 32. **WidgetsPanel.lua `GetConditionLabel` closure inside loop** -- Hoist to file scope.
 33. **Config panel color swatch duplication (~960 lines)** -- Migrate 22 inline swatches to `Helpers.CreateColorSwatch`.
-34. **LootPanel.lua / VendorPanel.lua unguarded module access** -- Add nil checks.
+34. ~~**LootPanel.lua / VendorPanel.lua unguarded module access**~~ **FIXED (Twentieth Pass)** — `LootPanel.lua`: added `local LootUpdateSettings()` wrapper with nil guard at file scope; all 8 bare `addonTable.Loot.UpdateSettings()` calls replaced. `VendorPanel.lua` was already using `if addonTable.Vendor.UpdateSettings then` guards throughout — no change needed.
 35. **AddonVersionsPanel.lua frame leak** -- Create dialog frames once, show/hide.
-36. **AddonVersionsPanel.lua `loadstring` length check** -- Add max input length guard.
+36. ~~**AddonVersionsPanel.lua `loadstring` length check**~~ **FIXED (Twentieth Pass)** — `if #str > 65536 then return nil, "Input too large" end` added before `loadstring` call.
 37. **MinimapPanel.lua missing `opacityFunc`** -- Add opacity callback to border swatch.
 38. **FramesPanel.lua duplicate functions** -- Use `Helpers.DeepCopy`, deduplicate `NameExists`.
 39. **TalentManager.lua scratch tables** -- Reuse module-level tables with `wipe()`.
@@ -1074,14 +1125,14 @@ The `EvaluateCondition()` system with 7 conditions and 8 EventBus trigger events
 52. Core.lua `DEFAULTS` table in `OnEvent` handler (should be file-scope)
 53. Core.lua `CharacterRegistry.GetAll()` allocates per call (consider caching)
 54. Loot.lua redundant `if i == 1` branches
-55. Combat.lua triplicate `ApplyReminderLock()` calls (lines 1048, 1070, 1135)
+55. ~~Combat.lua triplicate `ApplyReminderLock()` calls~~ **FIXED (Twentieth Pass)** — Removed the redundant second call at end of `UpdateReminderFrame()`. First call (after `ApplyReminderFont`) and third call (in `InitReminders`) remain correct.
 56. Combat.lua stale comment "Create 4 text lines" (line 1113, loop creates 5)
 57. MplusTimer death tooltip temp table
 58. Guild widget tooltip cap for large guilds
 59. Speed widget dual-update mechanism
-60. MinimapCustom.lua `GetMinimapShape` should return `"ROUND"`
+60. ~~MinimapCustom.lua `GetMinimapShape` should return `"ROUND"`~~ **FIXED (Twentieth Pass)** — `GetMinimapShape = nil` replaced with `function GetMinimapShape() return "ROUND" end`.
 61. MinimapCustom.lua dead code in zone drag handler
-62. MinimapCustom.lua clock ticker never cancelled
+62. ~~MinimapCustom.lua clock ticker never cancelled~~ **FIXED (Twentieth Pass)** — `clockTicker` and `coordsTicker` promoted to module-level variables. `SetupMinimap()` now cancels and nils both at entry before potentially creating new ones.
 63. Frames.lua `SetBorder` function hoisting
 64. ObjectiveTracker `OnAchieveClick` type guard
 65. TalentManager.lua deprecated `UIDropDownMenuTemplate` API

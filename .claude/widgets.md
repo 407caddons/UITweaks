@@ -1,12 +1,49 @@
 # Widget Ideas & Improvements - LunaUITweaks
 
-**Date:** 2026-02-24 (Updated: Session 8 — mini-game fixes only, 4 new widget ideas added)
-**Previous Review:** 2026-02-23 (Session 7)
+**Date:** 2026-02-24 (Updated: Session 9 — no new widgets, 4 new ideas added)
+**Previous Review:** 2026-02-24 (Session 8 — mini-game fixes, 4 new ideas)
 **Current Widgets (35):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats, Lockouts, XPRep, Haste, Crit, Mastery, Vers, WaypointDistance, AddonComm
 
 **New Standalone Modules (not widgets):** MplusTimer -- full M+ timer overlay. QuestAuto -- auto accept/turn-in quests. QuestReminder -- zone-based quest pickup reminders. TalentManager -- dedicated talent build management panel. Coordinates -- waypoint management with `/lway` command. SCT -- scrolling combat text (extracted from Misc.lua). **Warehousing** -- cross-character bag management with bank sync and mailbox routing (NEW 2026-02-22).
 
 Ease ratings: **Easy** (few hours), **Medium** (1-2 days), **Hard** (3+ days)
+
+---
+
+## Changes Since Last Review (2026-02-24, Session 9)
+
+No new widgets implemented this session. Code maintenance only:
+- **ObjectiveTracker.lua** — 3 `C_Timer.After` calls converted to the module-level `SafeAfter` alias (consistency fix, not widget-related).
+
+**Widget count unchanged: 35.** All previous ideas remain valid.
+
+---
+
+## New Widget Ideas (Session 9, 2026-02-24)
+
+### 57. Affix Rotation Predictor Widget
+Show next week's M+ affixes before the weekly reset. Widget face displays the primary upcoming affix name ("Next: Spymaster"). Tooltip lists all four next-week affixes with icons and descriptions. Uses a hardcoded seasonal rotation table indexed by current reset week offset.
+- **Ease:** Easy
+- **WoW API:** `C_MythicPlus.GetCurrentAffixes()` (for current week as reference), hardcoded `AFFIX_ROTATION` lookup table keyed by week offset, `MYTHIC_PLUS_CURRENT_AFFIX_UPDATE`
+- **Rationale:** Complements #3 (current-week M+ Affix Widget) as a forward-looking version. Players plan keys around upcoming affixes. The rotation table is static per season and updated once per patch — the same maintenance burden as MplusTimer's `FORCES_REQUIRED` table. Current week's affix ID determines the offset into the rotation table. `C_MythicPlus.GetCurrentAffixes()` returns the current week; adding 1 rotation slot gives next week. Under 70 lines.
+
+### 58. Applied Buffs / Consumables Widget
+Display active beneficial consumable auras on the player in a compact icon row: food buff, flask/phial, augment rune, and well-rested bonus. Widget face shows up to 4 icons (each with a thin duration indicator). Tooltip lists each active buff with name and remaining time.
+- **Ease:** Easy-Medium
+- **WoW API:** `C_UnitAuras.GetBuffDataByIndex("player", i)`, `UNIT_AURA`, `PLAYER_ENTERING_WORLD`
+- **Rationale:** Distinct from #6 (Buff/Flask Reminder, which is a binary red/green warning indicator). This widget shows what IS active rather than what is missing — a pre-pull visual confirmation. Filters self-buffs (Shield of Dawn, etc.) and focuses only on consumable and world buff categories via a known-spell-ID allowlist. Works alongside the Combat module's reminder system. The `combat` or `always` visibility condition suits pre-pull prep. Under 100 lines including the spell ID table.
+
+### 59. Group Leader Guard Widget
+Show a subtle indicator when the player is group leader. Widget face shows "Lead: 5" (player count). Tooltip warns "You are group leader — leaving or logging out will disband the group." Left-click calls `C_PartyInfo.LeaveParty()` cleanly after a confirmation dialog.
+- **Ease:** Easy
+- **WoW API:** `UnitIsGroupLeader("player")`, `GetNumGroupMembers()`, `GROUP_ROSTER_UPDATE`, `C_PartyInfo.LeaveParty()`
+- **Rationale:** Prevents accidental disbanding when the group leader zones or relogs. The widget is invisible when solo or when not the leader. Reuses `GROUP_ROSTER_UPDATE` already consumed by the Group widget — zero new events. The `group` visibility condition ensures it only shows when relevant. Under 60 lines. Complements the Group widget (#9) without duplicating it.
+
+### 60. Seasonal Reward Track Widget
+Display progress toward the current season's reward track (e.g., TWW Season 3 track, PvP seasonal milestones). Widget face shows "Season: 1840 pts". Tooltip breaks down claimed and unclaimed reward milestones with tier icons.
+- **Ease:** Medium
+- **WoW API:** `C_PerksProgram.GetPerksProgramInfo()` (if available), `C_PvP.GetSeasonRewardInfo()`, `PERKS_PROGRAM_UPDATED` or `HONOR_LEVEL_UPDATE`
+- **Rationale:** Seasonal point tracks are a significant progression system in modern WoW and currently have no widget representation. `C_PerksProgram` covers the Trading Post / seasonal activity track; `C_PvP` covers rated PvP milestones. The widget gracefully hides if neither API returns meaningful data. Medium complexity because the seasonal track API changes each expansion and may require per-patch maintenance. Under 110 lines including API existence checks and fallbacks.
 
 ---
 
@@ -537,7 +574,7 @@ Show the current target's health as a percentage on the widget face ("Target: 45
 
 ---
 
-## Prioritization Summary (Updated Session 8)
+## Prioritization Summary (Updated Session 9)
 
 **Quickest wins (Easy, confirmed not yet implemented):**
 - #38 SessionStats boss kills — under 15 lines
@@ -548,6 +585,8 @@ Show the current target's health as a percentage on the widget face ("Target: 45
 - **#52 Achievement Progress** — under 70 lines
 - **#53 Cast Failure Widget** — under 60 lines, easy event + display
 - **#56 Target Health Widget** — two API calls + two events, trivially simple
+- **#57 Affix Rotation Predictor** — static table + current week offset, under 70 lines
+- **#59 Group Leader Guard** — reuses GROUP_ROSTER_UPDATE, under 60 lines
 - #3 M+ Affix Widget — under 60 lines
 - #7 Warband Gold Tracker — reuses existing Bags data layer
 - #14/#36 Bags low-space warning + type breakdown — single conditional
@@ -556,6 +595,7 @@ Show the current target's health as a percentage on the widget face ("Target: 45
 - **#46 GCD Bar Widget** — unique ambient display not covered by any existing widget
 - **#48 Dungeon/Scenario Progress** — fills gap between MplusTimer and Group widget
 - **#55 Tracked Ability Cooldowns** — fills "am I ready" awareness gap for all classes
+- **#58 Applied Buffs Widget** — pre-pull visual confirmation, complements Combat reminder
 - #2 Talent Loadout — leverages TalentManager/TalentReminder investment
 - #13 Class Resource — fills combat information gap
 - #42 Volume per-channel sliders — tooltip already done, only interactive panel remains

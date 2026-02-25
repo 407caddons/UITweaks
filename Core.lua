@@ -44,6 +44,15 @@ function addonTable.Core.SpeakTTS(message, voiceType)
     end
 end
 
+--- Returns the current character's key string "Name - Realm", cached after first call.
+local characterKey
+function addonTable.Core.GetCharacterKey()
+    if not characterKey then
+        characterKey = UnitName("player") .. " - " .. GetRealmName()
+    end
+    return characterKey
+end
+
 --- Abbreviate large numbers for display (e.g. 1500000 -> "1.5M", 12500 -> "12.5K")
 -- @param value number
 -- @return string

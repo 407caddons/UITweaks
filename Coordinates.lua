@@ -15,6 +15,7 @@ local waypointRows = {}
 local activeWaypointIndex = nil
 local pasteDialog
 local zoneCache           -- lazily built: lowerName -> mapID
+local distanceTicker      -- 2s ticker for distance column refresh
 
 -- ============================================================
 -- Zone name -> mapID resolution
@@ -65,7 +66,7 @@ local function ResolveZoneName(name)
 end
 
 -- ============================================================
--- Distance helpers (shared with RefreshList row display)
+-- Distance helpers (shared with WaypointDistance widget)
 -- ============================================================
 local function MapPosToWorld(mapID, x, y)
     if not C_Map.GetWorldPosFromMapPos then return nil end
@@ -109,6 +110,10 @@ local function FormatDistanceShort(yards)
         return string.format("%.0fy", yards)
     end
 end
+
+-- Expose for use by WaypointDistance widget
+Coordinates.GetDistanceToWP     = GetDistanceToWP
+Coordinates.FormatDistanceShort = FormatDistanceShort
 
 -- ============================================================
 -- Slash command parsing
@@ -670,12 +675,6 @@ local function CreateMainFrame()
 
     mainFrame.scrollFrame = scrollFrame
 
-    -- Refresh distances every 2s while frame is visible
-    C_Timer.NewTicker(2, function()
-        if mainFrame:IsShown() then
-            Coordinates.RefreshList()
-        end
-    end)
 end
 
 -- ============================================================
@@ -717,15 +716,26 @@ function Coordinates.UpdateSettings()
         end)
     end
 
-    -- Show/hide
+    -- Show/hide and distance ticker
     if db.enabled then
         if #db.waypoints == 0 and db.locked then
             mainFrame:Hide()
         else
             mainFrame:Show()
         end
+        if not distanceTicker then
+            distanceTicker = C_Timer.NewTicker(2, function()
+                if mainFrame:IsShown() then
+                    Coordinates.RefreshList()
+                end
+            end)
+        end
     else
         mainFrame:Hide()
+        if distanceTicker then
+            distanceTicker:Cancel()
+            distanceTicker = nil
+        end
     end
 
     -- Refresh list (updates fonts etc.)

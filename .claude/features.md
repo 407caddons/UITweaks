@@ -1,10 +1,43 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-24 (Updated: Session 8 -- Mini-game performance fixes, 3 new mini-game feature ideas)
-**Previous Review:** 2026-02-23 (Session 7)
+**Date:** 2026-02-24 (Updated: Session 9 -- ObjectiveTracker SafeAfter consistency fix, 3 new feature ideas)
+**Previous Review:** 2026-02-24 (Session 8 -- Mini-game performance fixes)
 **Current Version:** v1.13.0+
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
+
+---
+
+## Changes Since Last Review (2026-02-24, Session 9)
+
+No new features added. Minor code consistency fix:
+
+1. **ObjectiveTracker.lua** — Three `C_Timer.After` calls at lines 1597, 1924, and 2162 changed to use the module-local `SafeAfter` alias already declared at line 70. The file already used `SafeAfter` throughout; these three were overlooked outliers.
+
+---
+
+## New Feature Ideas (Added 2026-02-24, Session 9)
+
+### 107. Global Keybind Manager
+Add a dedicated `/lkeys` command and config panel tab that centralizes all keybind registrations across the addon. Currently, hotkeys are scattered (Coordinates has `/way` interception, MplusTimer has timer keybinds, widgets use click handlers). A unified keybind manager would list every available action, show current bindings, allow reassignment, and detect conflicts.
+- **Ease:** Medium
+- **Impact:** Medium — significantly reduces friction for new users configuring the addon
+- **Rationale:** The current spread of keybind logic across modules makes it hard to audit or change bindings. A `KeybindManager.lua` module would expose a `Register(id, defaultKey, callback)` API that each module calls at startup. The config panel lists all registered bindings with an editbox per row. Conflict detection compares new keys against existing bindings before applying. The `SetBinding`/`GetBinding` WoW API handles the actual key-to-function mapping. This is distinct from suggestion #20 (which just asks for more keybind coverage) — this is the infrastructure to manage all keybinds in one place.
+- **Files:** New KeybindManager.lua, config/panels/KeybindPanel.lua, Core.lua (defaults), all modules that currently have keybinds
+
+### 108. Addon Health Check on Login
+Run a self-diagnostic on `PLAYER_LOGIN` that checks for known configuration issues and logs a single consolidated warning if any are found. Checks include: deprecated saved variable keys, missing required defaults (from `ApplyDefaults`), conflicting module states, and combat log event registrations (the banned `COMBAT_LOG_EVENT_UNFILTERED`). Output a color-coded summary to chat — green if clean, yellow if minor warnings, red if action required.
+- **Ease:** Easy
+- **Impact:** Low-Medium — catches misconfiguration silently introduced by addon updates
+- **Rationale:** As the addon grows, saved variable migrations and defaults changes can leave orphaned keys or wrong-type values. Currently there is no runtime check beyond `ApplyDefaults` (which only fills missing keys, never validates existing ones). A `HealthCheck()` function in Core.lua that runs once per session would catch type mismatches (e.g., a boolean where a number is expected), stale SavedVariable keys from removed modules, and modules that are enabled but missing their required dependencies. The check runs at most once per login (not per reload) to avoid spam. Under 80 lines. Zero performance cost after the one-time check.
+- **Files:** Core.lua
+
+### 109. M+ Timer Pull Planner (Lightweight)
+Add a simple in-run "planned pulls" log to MplusTimer: before each pull, the group leader can mark a pull start with `/lmpull start` and end with `/lmpull done`. The timer records splits per pull (elapsed time from dungeon start, forces gained, deaths in pull) and displays a compact pull-by-pull breakdown in the MplusTimer tooltip. No route import needed — purely tracking what actually happened during a run.
+- **Ease:** Medium
+- **Impact:** Medium for groups who review performance after runs
+- **Rationale:** The `runHistory` key is already reserved in Core.lua defaults for MplusTimer but only stores completed runs. This feature adds sub-run granularity: per-pull timing and forces breakdown. The slash command pattern is proven (`/lway`, `/ltimer`, etc.). The tooltip display follows the MplusTimer death breakdown tooltip pattern (expandable on hover). Pull data is transient (not saved between sessions) unless the user explicitly saves a run. Under 100 lines total including slash command and tooltip.
+- **Files:** MplusTimer.lua, config/panels/MplusTimerPanel.lua, Core.lua (defaults)
 
 ---
 

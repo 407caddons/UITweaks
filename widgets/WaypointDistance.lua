@@ -3,6 +3,10 @@ local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
+    local Coordinates     = addonTable.Coordinates
+    local GetDistanceToWP = Coordinates.GetDistanceToWP
+    local FormatDistance  = Coordinates.FormatDistanceShort
+
     local wpFrame = Widgets.CreateWidgetFrame("WaypointDistance", "waypointDistance")
 
     local function GetActiveWaypoint()
@@ -23,45 +27,6 @@ table.insert(Widgets.moduleInits, function()
         end
         -- Waypoint set externally (not in our list) — still show distance
         return { mapID = uiWP.uiMapID, x = uiWP.position.x, y = uiWP.position.y, name = "Waypoint" }, nil
-    end
-
-    -- Convert a map position to world coords using GetWorldPosFromMapPos.
-    -- Returns continentID, worldX, worldY or nil on failure.
-    local function MapPosToWorld(mapID, x, y)
-        if not C_Map.GetWorldPosFromMapPos then return nil end
-        local mapPos = CreateVector2D(x, y)
-        local continentID, worldPos = C_Map.GetWorldPosFromMapPos(mapID, mapPos)
-        if not continentID or not worldPos then return nil end
-        return continentID, worldPos:GetXY()
-    end
-
-    local function GetDistanceToWaypoint(wp)
-        if not wp then return nil end
-        local playerMapID = C_Map.GetBestMapForUnit("player")
-        if not playerMapID then return nil end
-        local playerPos = C_Map.GetPlayerMapPosition(playerMapID, "player")
-        if not playerPos then return nil end
-        local px, py = playerPos:GetXY()
-
-        -- Try world-coordinate distance (works cross-zone on same continent)
-        local pCont, pwx, pwy = MapPosToWorld(playerMapID, px, py)
-        local wCont, wwx, wwy = MapPosToWorld(wp.mapID, wp.x, wp.y)
-        if pCont and wCont and pCont == wCont then
-            local dx = pwx - wwx
-            local dy = pwy - wwy
-            return math.sqrt(dx * dx + dy * dy)
-        end
-
-        -- Same map fallback using map size (yards per unit varies by zone)
-        if wp.mapID == playerMapID then
-            local size = C_Map.GetMapWorldSize and C_Map.GetMapWorldSize(playerMapID)
-            local yardsPerUnit = (size and size > 0) and size or 4224 -- ~typical zone width
-            local dx = (wp.x - px) * yardsPerUnit
-            local dy = (wp.y - py) * yardsPerUnit
-            return math.sqrt(dx * dx + dy * dy)
-        end
-
-        return nil
     end
 
     local function GetDirectionArrow(wp)
@@ -98,14 +63,6 @@ table.insert(Widgets.moduleInits, function()
         return dirs[idx] or ""
     end
 
-    local function FormatDistance(yards)
-        if not yards then return "?" end
-        if yards >= 1000 then
-            return string.format("%.1fky", yards / 1000)
-        end
-        return string.format("%.0fy", yards)
-    end
-
     wpFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
         Widgets.SmartAnchorTooltip(self)
@@ -122,7 +79,7 @@ table.insert(Widgets.moduleInits, function()
 
         GameTooltip:SetText(wp.name or "Waypoint", 1, 0.82, 0)
 
-        local dist = GetDistanceToWaypoint(wp)
+        local dist = GetDistanceToWP(wp)
         if dist then
             GameTooltip:AddDoubleLine("Distance:", FormatDistance(dist), 1, 1, 1, 1, 1, 1)
             local arrow = GetDirectionArrow(wp)
@@ -161,7 +118,7 @@ table.insert(Widgets.moduleInits, function()
             self.text:SetText("WP: --")
             return
         end
-        local dist = GetDistanceToWaypoint(wp)
+        local dist = GetDistanceToWP(wp)
         if dist then
             local arrow = GetDirectionArrow(wp)
             self.text:SetText(arrow .. " " .. FormatDistance(dist))

@@ -23,7 +23,6 @@ local MAIL_STEP_DELAY = 0.3
 
 -- State
 local scanTimer = nil
-local characterKey = nil
 local popupFrame = nil
 local popupRows = {}
 local popupMode = nil -- "mail" or "bank"
@@ -45,14 +44,7 @@ local Log = function(msg, level)
     end
 end
 
-local function GetCharacterKey()
-    if not characterKey then
-        local name = UnitName("player")
-        local realm = GetRealmName()
-        characterKey = name .. " - " .. realm
-    end
-    return characterKey
-end
+local GetCharacterKey = function() return addonTable.Core.GetCharacterKey() end
 
 local function EnsureDB()
     LunaUITweaks_WarehousingData = LunaUITweaks_WarehousingData or {}
@@ -778,7 +770,7 @@ local function ProcessNextMail()
         if popupFrame and popupFrame.statusText then
             popupFrame.statusText:SetText("All mail sent!")
         end
-        Log("Mail queue complete.", 1)
+        Log("Mail queue complete.", 0)
         -- Refresh after a brief delay to let bag update
         C_Timer.After(0.5, function()
             ScheduleBagScan()
@@ -842,26 +834,51 @@ end
 --------------------------------------------------------------
 
 
---- Wait for an item to finish transferring (unlock), then call callback
---- Polls up to maxAttempts times with pollInterval delay
-local function WaitForItemUnlock(bag, slot, callback, maxAttempts, attempt)
-    attempt = attempt or 1
-    maxAttempts = maxAttempts or 10
+--- Wait for an item to finish transferring (unlock/disappear), then call callback.
+--- Uses ITEM_LOCK_CHANGED for immediate response with a 2s fallback timeout.
+local function WaitForItemUnlock(bag, slot, callback)
+    -- Check immediately — may already be done
     local info = C_Container.GetContainerItemInfo(bag, slot)
-    -- Item gone (moved successfully) or unlocked — proceed
     if not info or not info.isLocked then
-        callback(not info) -- true if item moved, false if still there but unlocked
+        callback(not info)
         return
     end
-    -- Still locked — wait and retry
-    if attempt >= maxAttempts then
-        Log("  unlock timeout after " .. attempt .. " attempts", 2)
-        callback(false)
-        return
+
+    local resolved = false
+    local timeoutHandle = nil
+    local listener = nil
+
+    local function Resolve(moved)
+        if resolved then return end
+        resolved = true
+        if timeoutHandle then
+            timeoutHandle:Cancel()
+            timeoutHandle = nil
+        end
+        if listener then
+            EventBus.Unregister("ITEM_LOCK_CHANGED", listener)
+            listener = nil
+        end
+        callback(moved)
     end
-    C_Timer.After(0.1, function()
-        WaitForItemUnlock(bag, slot, callback, maxAttempts, attempt + 1)
-    end)
+
+    listener = function()
+        local i = C_Container.GetContainerItemInfo(bag, slot)
+        if not i or not i.isLocked then
+            Resolve(not i)
+        end
+    end
+
+    EventBus.Register("ITEM_LOCK_CHANGED", listener)
+
+    -- Fallback: if the event never fires (warband bank latency), resolve after 2s
+    timeoutHandle = C_Timer.NewTicker(2, function()
+        timeoutHandle:Cancel()
+        timeoutHandle = nil
+        Log("  unlock timeout — slot " .. bag .. "/" .. slot, 2)
+        local i = C_Container.GetContainerItemInfo(bag, slot)
+        Resolve(not i)
+    end, 1)
 end
 
 local function StartBankSync(continuationPass)
@@ -872,7 +889,7 @@ local function StartBankSync(continuationPass)
     -- Use C_Bank.CanViewBank to check actual bank accessibility
     local canViewCharacter = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
     local canViewAccount = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
-    Log("=== SYNC START === canViewCharacter=" .. tostring(canViewCharacter) .. " canViewAccount=" .. tostring(canViewAccount), 1)
+    Log("=== SYNC START === canViewCharacter=" .. tostring(canViewCharacter) .. " canViewAccount=" .. tostring(canViewAccount), 0)
 
     local overflow, deficit = CalculateOverflowDeficit()
 
@@ -927,7 +944,7 @@ local function StartBankSync(continuationPass)
         end
     end
 
-    Log("Total work items: " .. #work, 1)
+    Log("Total work items: " .. #work, 0)
 
     if #work == 0 then
         bankSyncing = false
@@ -958,58 +975,79 @@ local function StartBankSync(continuationPass)
         end
         if workIndex > #work then
             bankSyncing = false
-            Log("Bank sync complete (pass " .. continuationPass .. ").", 1)
-            -- After a short delay, re-scan bags and check if splits left behind
-            -- additional overflow that needs a follow-up pass (max 5 passes total).
-            C_Timer.After(0.5, function()
-                ScheduleBagScan()
-                if continuationPass < 5 then
-                    C_Timer.After(SCAN_DELAY + 0.1, function()
-                        local followOverflow, followDeficit = CalculateOverflowDeficit()
-                        local hasMore = false
-                        local canViewCharacter = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
-                        local canViewAccount = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
-                        for _, data in pairs(followOverflow) do
-                            local dest = data.destination
-                            if (dest == "Warband Bank" and canViewAccount)
-                                or (dest == "Personal Bank" and canViewCharacter) then
-                                hasMore = true
-                                break
-                            end
-                        end
-                        if hasMore then
-                            Log("Overflow remains after pass " .. continuationPass .. ", running follow-up sync.", 1)
-                            if popupFrame and popupFrame.statusText then
-                                popupFrame.statusText:SetText("Following up...")
-                            end
-                            StartBankSync(continuationPass + 1)
-                        else
-                            if popupFrame and popupFrame.actionBtn then
-                                popupFrame.actionBtn:SetText("Sync")
-                                popupFrame.actionBtn:Enable()
-                            end
-                            if popupFrame and popupFrame.statusText then
-                                popupFrame.statusText:SetText("Sync complete!")
-                            end
-                            Warehousing.RefreshPopup()
-                        end
-                    end)
-                else
-                    if popupFrame and popupFrame.actionBtn then
-                        popupFrame.actionBtn:SetText("Sync")
-                        popupFrame.actionBtn:Enable()
+            Log("Bank sync complete (pass " .. continuationPass .. ").", 0)
+            -- Wait for BAG_UPDATE_DELAYED to confirm the client has settled all
+            -- bag changes from this pass before re-scanning for remaining overflow.
+            -- Falls back to a 3s timer in case the event never fires (warband bank
+            -- latency or no bag changes this pass).
+            if continuationPass < 5 then
+                local bagSettled = false
+                local bagListener = nil
+                local bagFallback = nil
+                local function OnBagsSettled()
+                    if bagSettled then return end
+                    bagSettled = true
+                    if bagListener then
+                        EventBus.Unregister("BAG_UPDATE_DELAYED", bagListener)
+                        bagListener = nil
                     end
-                    if popupFrame and popupFrame.statusText then
-                        popupFrame.statusText:SetText("Sync limit reached — overflow may remain.")
+                    if bagFallback then
+                        bagFallback:Cancel()
+                        bagFallback = nil
                     end
-                    Warehousing.RefreshPopup()
+                    ScheduleBagScan()
+                    local followOverflow = CalculateOverflowDeficit()
+                    local hasMore = false
+                    local cvChar = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
+                    local cvAcct = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
+                    for _, data in pairs(followOverflow) do
+                        local dest = data.destination
+                        if (dest == "Warband Bank" and cvAcct)
+                            or (dest == "Personal Bank" and cvChar) then
+                            hasMore = true
+                            break
+                        end
+                    end
+                    if hasMore then
+                        Log("Overflow remains after pass " .. continuationPass .. ", running follow-up sync.", 0)
+                        if popupFrame and popupFrame.statusText then
+                            popupFrame.statusText:SetText("Following up...")
+                        end
+                        StartBankSync(continuationPass + 1)
+                    else
+                        if popupFrame and popupFrame.actionBtn then
+                            popupFrame.actionBtn:SetText("Sync")
+                            popupFrame.actionBtn:Enable()
+                        end
+                        if popupFrame and popupFrame.statusText then
+                            popupFrame.statusText:SetText("Sync complete!")
+                        end
+                        Warehousing.RefreshPopup()
+                    end
                 end
-            end)
+                bagListener = OnBagsSettled
+                EventBus.Register("BAG_UPDATE_DELAYED", bagListener)
+                bagFallback = C_Timer.NewTicker(3, function()
+                    bagFallback:Cancel()
+                    bagFallback = nil
+                    OnBagsSettled()
+                end, 1)
+            else
+                ScheduleBagScan()
+                if popupFrame and popupFrame.actionBtn then
+                    popupFrame.actionBtn:SetText("Sync")
+                    popupFrame.actionBtn:Enable()
+                end
+                if popupFrame and popupFrame.statusText then
+                    popupFrame.statusText:SetText("Sync limit reached — overflow may remain.")
+                end
+                Warehousing.RefreshPopup()
+            end
             return
         end
 
         local item = work[workIndex]
-        Log("Processing " .. workIndex .. "/" .. #work .. ": " .. item.action .. " bag=" .. item.bag .. " slot=" .. item.slot .. " count=" .. item.count, 1)
+        Log("Processing " .. workIndex .. "/" .. #work .. ": " .. item.action .. " bag=" .. item.bag .. " slot=" .. item.slot .. " count=" .. item.count, 0)
 
         if popupFrame and popupFrame.statusText then
             popupFrame.statusText:SetText("Syncing " .. workIndex .. "/" .. #work .. "...")
@@ -1033,17 +1071,15 @@ local function StartBankSync(continuationPass)
                         C_Container.PickupContainerItem(emptyBag, emptySlot)
                         C_Timer.After(MAIL_STEP_DELAY, function()
                             C_Container.UseContainerItem(emptyBag, emptySlot, nil, item.bankType)
-                            -- Wait for the transfer to complete (item unlocks or disappears).
-                            -- Use 20 attempts (2s total) for slow warband bank responses.
                             WaitForItemUnlock(emptyBag, emptySlot, function(moved)
-                                Log("  split deposit " .. (moved and "OK" or "stayed"), moved and 1 or 2)
+                                Log("  split deposit " .. (moved and "OK" or "stayed"), moved and 0 or 2)
                                 ClearCursor()
                                 if not moved then
                                     C_Timer.After(0.5, function() ProcessNextWork(true) end)
                                 else
                                     C_Timer.After(0.05, ProcessNextWork)
                                 end
-                            end, 20)
+                            end)
                         end)
                     else
                         ClearCursor()
@@ -1054,10 +1090,8 @@ local function StartBankSync(continuationPass)
             else
                 -- Full stack: UseContainerItem with bankType
                 C_Container.UseContainerItem(item.bag, item.slot, nil, item.bankType)
-                -- Wait for the item to unlock/disappear before processing next.
-                -- Use 20 attempts (2s total) — warband bank API can be slow to respond.
                 WaitForItemUnlock(item.bag, item.slot, function(moved)
-                    Log("  deposit " .. (moved and "OK" or "stayed"), moved and 1 or 2)
+                    Log("  deposit " .. (moved and "OK" or "stayed"), moved and 0 or 2)
                     ClearCursor()
                     if not moved then
                         -- Item didn't move — the bank transfer may be delayed server-side.
@@ -1066,7 +1100,7 @@ local function StartBankSync(continuationPass)
                     else
                         C_Timer.After(0.05, ProcessNextWork)
                     end
-                end, 20)
+                end)
                 return
             end
 
@@ -1093,7 +1127,7 @@ local function StartBankSync(continuationPass)
                 -- Full stack withdraw
                 C_Container.UseContainerItem(item.bag, item.slot)
                 WaitForItemUnlock(item.bag, item.slot, function(moved)
-                    Log("  withdraw " .. (moved and "OK" or "stayed"), moved and 1 or 2)
+                    Log("  withdraw " .. (moved and "OK" or "stayed"), moved and 0 or 2)
                     ClearCursor()
                     C_Timer.After(0.05, ProcessNextWork)
                 end)
@@ -1169,7 +1203,7 @@ function Warehousing.AddItem(itemLink)
         itemLink = itemLink,
     }
 
-    Log("Added item: " .. tostring(name) .. " (ID: " .. tostring(itemID) .. ") warbandAllowed=" .. tostring(warbandAllowed), 1)
+    Log("Added item: " .. tostring(name) .. " (ID: " .. tostring(itemID) .. ") warbandAllowed=" .. tostring(warbandAllowed), 0)
     return true
 end
 

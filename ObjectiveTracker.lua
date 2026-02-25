@@ -1594,7 +1594,7 @@ local updatePending = false
 local function ScheduleUpdateContent()
     if updatePending then return end
     updatePending = true
-    C_Timer.After(UPDATE_THROTTLE_DELAY, function()
+    SafeAfter(UPDATE_THROTTLE_DELAY, function()
         updatePending = false
         if trackerFrame then
             UpdateContent()
@@ -1921,7 +1921,7 @@ local function SetupCustomTracker()
 
     trackerFrame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD" then
-            C_Timer.After(2, UpdateContent)
+            SafeAfter(2, UpdateContent)
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- Handled by StateDriver
         elseif event == "PLAYER_REGEN_ENABLED" then
@@ -2159,7 +2159,7 @@ f:SetScript("OnEvent", function(self, event)
         addonTable.ObjectiveTracker.UpdateSettings()
     else
         -- Force update shortly after entering world to override Blizzard's show logic
-        C_Timer.After(1, function() addonTable.ObjectiveTracker.UpdateSettings() end)
+        SafeAfter(1, function() addonTable.ObjectiveTracker.UpdateSettings() end)
     end
 end)
 

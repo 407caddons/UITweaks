@@ -13,6 +13,8 @@ local minimapLocked = true -- Runtime-only, always defaults to locked
 local zoneText = nil
 local clockText = nil
 local coordsText = nil
+local clockTicker = nil
+local coordsTicker = nil
 
 -- == QueueStatusButton (Dungeon Finder Eye) Persistent Anchor ==
 -- Blizzard repositions the eye via UpdatePosition when queuing for content.
@@ -23,6 +25,7 @@ local suppressQueueHook = false
 local function AnchorQueueEyeToMinimap()
     if not QueueStatusButton then return end
     if not minimapFrame then return end
+    if InCombatLockdown() then return end
 
     suppressQueueHook = true
     QueueStatusButton:ClearAllPoints()
@@ -159,7 +162,7 @@ local function ApplyMinimapShape(shape)
     if shape == "SQUARE" then
         function GetMinimapShape() return "SQUARE" end
     else
-        GetMinimapShape = nil -- Let it fall back to default (round)
+        function GetMinimapShape() return "ROUND" end
     end
 end
 
@@ -298,6 +301,10 @@ local function PositionMinimapIcons()
 end
 
 local function SetupMinimap()
+    -- Cancel any tickers from a prior setup run
+    if clockTicker then clockTicker:Cancel(); clockTicker = nil end
+    if coordsTicker then coordsTicker:Cancel(); coordsTicker = nil end
+
     local settings = UIThingsDB.minimap
     if not settings.minimapEnabled then return end
 
@@ -522,7 +529,7 @@ local function SetupMinimap()
             coordsText:SetText("\226\128\148, \226\128\148")
         end
         UpdateCoords()
-        local coordsTicker = C_Timer.NewTicker(1, UpdateCoords)
+        coordsTicker = C_Timer.NewTicker(1, UpdateCoords)
 
         -- Clock update timer
         local function UpdateClock()
@@ -546,7 +553,7 @@ local function SetupMinimap()
         UpdateClock()
 
         -- Update clock every second for responsiveness
-        local clockTicker = C_Timer.NewTicker(1, UpdateClock)
+        clockTicker = C_Timer.NewTicker(1, UpdateClock)
 
         -- Zone event handler
         -- Make it movable via a drag overlay
