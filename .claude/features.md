@@ -1,10 +1,20 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-24 (Updated: Session 9 -- ObjectiveTracker SafeAfter consistency fix, 3 new feature ideas)
-**Previous Review:** 2026-02-24 (Session 8 -- Mini-game performance fixes)
+**Date:** 2026-02-25 (Updated: Session 10 -- J/L rotation fixes, Damage Meter tab shown, games combat system finalized)
+**Previous Review:** 2026-02-24 (Session 9 -- ObjectiveTracker SafeAfter consistency fix, 3 new feature ideas)
 **Current Version:** v1.13.0+
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
+
+---
+
+## Changes Since Last Review (2026-02-25, Session 10)
+
+Bug fixes only, no new features:
+
+1. **games/Blocks.lua** — J piece (blue) rotation corners were all reflected on the wrong row axis. Fixed: R0 `{-1,1}`→`{-1,-1}`, R2 `{1,-1}`→`{1,1}`. L piece (orange) rotations 1 and 3 had corner on the wrong side. Fixed: R1 `{1,1}`→`{-1,1}`, R3 `{-1,-1}`→`{1,-1}`. Both L-shaped pieces now rotate correctly through all four standard Tetris orientations.
+
+2. **config/ConfigMain.lua** — Damage Meter config tab was hidden with `navButtons[24]:Hide()` (WIP guard). Line removed; tab is now visible and accessible.
 
 ---
 

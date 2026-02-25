@@ -346,6 +346,7 @@ end
 
 local function TogglePause()
     if not gameActive then return end
+    if InCombatLockdown() then return end
     gamePaused = not gamePaused
     if pauseText then
         pauseText:SetShown(gamePaused)
@@ -466,17 +467,17 @@ BuildUI = function()
         return btn
     end
 
-    -- Keybind display above buttons — one row per action, label left / key right
+    -- Keybind display
     local BIND_W = BTN_W
     local BIND_ROW_H = 13
     local bindBaseY = BOTTOM_PAD + 2 * (BTN_H + BTN_GAP) + 6
 
     local BINDS = {
-        { label = "Move Left",  binding = "LUNAUITWEAKS_GAME_LEFT" },
-        { label = "Move Right", binding = "LUNAUITWEAKS_GAME_RIGHT" },
-        { label = "Move Up",    binding = "LUNAUITWEAKS_GAME_ROTATECW" },
-        { label = "Move Down",  binding = "LUNAUITWEAKS_GAME_ROTATECCW" },
-        { label = "Pause",      binding = "LUNAUITWEAKS_GAME_PAUSE" },
+        { label = "Left",  binding = "LUNAUITWEAKS_GAME_LEFT" },
+        { label = "Right", binding = "LUNAUITWEAKS_GAME_RIGHT" },
+        { label = "Up",    binding = "LUNAUITWEAKS_GAME_ROTATECW" },
+        { label = "Down",  binding = "LUNAUITWEAKS_GAME_ROTATECCW" },
+        { label = "Pause", binding = "LUNAUITWEAKS_GAME_PAUSE" },
     }
 
     local bindKeyLabels = {}
@@ -512,13 +513,20 @@ BuildUI = function()
     RefreshBindings()
     gameFrame:HookScript("OnShow", RefreshBindings)
 
+
     MakeBtn("Pause",    1, TogglePause)
     MakeBtn("New Game", 2, StartGame)
 
     -- Pause overlay
-    pauseText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    pauseText:SetPoint("CENTER", boardFrame, "CENTER", 0, 0)
-    pauseText:SetText("|cFFFFD100PAUSED|r")
+    pauseText = CreateFrame("Frame", nil, boardFrame)
+    pauseText:SetAllPoints()
+    pauseText:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    local pauseBg = pauseText:CreateTexture(nil, "ARTWORK")
+    pauseBg:SetAllPoints()
+    pauseBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseLabel:SetPoint("CENTER", pauseText, "CENTER", 0, 0)
+    pauseLabel:SetText("|cFFFFD100PAUSED|r")
     pauseText:Hide()
 
     -- ── Game Over overlay ────────────────────────────────────
@@ -546,27 +554,46 @@ BuildUI = function()
     gameOverFrame:Hide()
 end
 
--- Close the game when combat starts
+-- Combat handling
 addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
-    if gameFrame and gameFrame:IsShown() then
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if UIThingsDB.games.closeInCombat then
         gameFrame:Hide()
         if tickTimer then tickTimer:Cancel(); tickTimer = nil end
         gameActive = false
+    else
+        if gameActive and not gamePaused then
+            gamePaused = true
+            if pauseText then pauseText:Show() end
+        end
     end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    -- Keyboard re-enabled automatically (no EnableKeyboard used); game stays paused until manual unpause
 end)
 
 -- ============================================================
 -- Public API
 -- ============================================================
+function addonTable.Snek.CloseGame()
+    if gameFrame and gameFrame:IsShown() then
+        gameFrame:Hide()
+        if tickTimer then tickTimer:Cancel(); tickTimer = nil end
+        gameActive = false
+    end
+end
+
 function addonTable.Snek.ShowGame()
     if not gameFrame then
         BuildUI()
     end
     if gameFrame:IsShown() then
-        gameFrame:Hide()
-        if tickTimer then tickTimer:Cancel(); tickTimer = nil end
-        gameActive = false
+        addonTable.Snek.CloseGame()
     else
+        -- Close other keybind-sharing games first
+        if addonTable.Blocks then addonTable.Blocks.CloseGame() end
+        if addonTable.Game2048 then addonTable.Game2048.CloseGame() end
         gameFrame:Show()
         if not gameActive then
             StartGame()
@@ -574,14 +601,11 @@ function addonTable.Snek.ShowGame()
     end
 end
 
--- Global keybinding handlers — shared with Block Game bindings
--- Only act when the Snek window is open (and Block Game is not, to avoid conflicts)
+-- Global keybinding handlers — extend existing globals so Snek and Blocks share binds
 local function SnekIsOpen()
     return gameFrame and gameFrame:IsShown()
 end
 
--- These wrap the existing LunaUITweaks_Game_* globals, extending them so that
--- the same key works for whichever game is open.
 local _origLeft     = LunaUITweaks_Game_Left
 local _origRight    = LunaUITweaks_Game_Right
 local _origRotateCW = LunaUITweaks_Game_RotateCW

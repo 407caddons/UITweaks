@@ -1,9 +1,39 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-24 (Twentieth Pass -- Trivial fixes batch)
-**Previous Review:** 2026-02-24 (Nineteenth Pass -- ObjectiveTracker SafeAfter consistency fix)
-**Scope:** Batch of trivial/small fixes across 7 files. GetCharacterKey centralized (Core.lua + 3 consumers). CalculateOverflowDeficit BAG_UPDATE_DELAYED wait. GetMinimapShape ROUND fix. AnchorQueueEyeToMinimap + Vault + WeeklyReset combat guards. LootPanel nil guard wrapper. Combat.lua redundant ApplyReminderLock removed. Clock/coords tickers promoted to module-level.
+**Review Date:** 2026-02-25 (Twenty-First Pass -- Games rotation fix + Damage Meter tab shown)
+**Previous Review:** 2026-02-24 (Twentieth Pass -- Trivial fixes batch)
+**Scope:** J/L tetromino rotation data corrected in Blocks.lua. Damage Meter tab unhidden in ConfigMain.lua. Games combat/pause system reviewed (CloseGame mutual exclusivity, pause overlays, InCombatLockdown guards).
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
+
+---
+
+## Changes Since Last Review (Twenty-First Pass -- 2026-02-25)
+
+### Confirmed Fixed Since Twentieth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `games/Blocks.lua` J piece (blue) rotation corners reflected on wrong row axis | R0 corner changed `{-1,1}` → `{-1,-1}` (top-left), R2 changed `{1,-1}` → `{1,1}` (bottom-right). All four rotations now cycle correctly: top-left → top-right → bottom-right → bottom-left. |
+| `games/Blocks.lua` L piece (orange) rotations 1 and 3 had corner on wrong side | R1 corner changed `{1,1}` → `{-1,1}` (bottom-left), R3 changed `{-1,-1}` → `{1,-1}` (top-right). L now mirrors J correctly through all four rotations. |
+| `config/ConfigMain.lua` Damage Meter tab hidden with `navButtons[24]:Hide()` | Line removed. Damage Meter tab now visible in the config sidebar. |
+
+### Verified Correct (Twenty-First Pass)
+
+- **`games/Blocks.lua` PIECES[6] J rotations** (lines 80-85): After fix, R0=top-left `{-1,-1}`, R1=top-right `{1,-1}`, R2=bottom-right `{1,1}`, R3=bottom-left `{-1,1}`. Correct standard Tetris J clockwise rotation sequence.
+- **`games/Blocks.lua` PIECES[7] L rotations** (lines 87-92): After fix, R0=bottom-right `{1,1}`, R1=bottom-left `{-1,1}`, R2=top-left `{-1,-1}`, R3=top-right `{1,-1}`. Correct standard Tetris L clockwise rotation sequence.
+- **`games/Blocks.lua` CloseGame / ShowGame mutual exclusivity**: `CloseGame()` at line 1522 correctly cancels gravity/flash tickers and handles MP cleanup. `ShowGame()` closes Snek and Game2048 before opening. Pattern correct.
+- **`games/Snek.lua` combat/pause handling**: `PLAYER_REGEN_DISABLED` pauses without keyboard disable (keybinds are global, not frame-captured). `TogglePause()` guarded with `InCombatLockdown()`. `PLAYER_REGEN_ENABLED` is a no-op (manual unpause). Pause overlay frame with dark bg is correct.
+- **`games/Tiles.lua` combat/pause handling**: `combatPaused` flag blocks `OnKey` handler. `PLAYER_REGEN_ENABLED` auto-resumes (Tiles uses keybinds but auto-unpause is intentional). Global keybind wrappers at end of file chain to Snek's wrappers. Correct.
+- **`games/Tiles.lua` CloseGame / ShowGame**: `CloseGame()` at line 575 hides frame. `ShowGame()` closes Blocks and Snek before opening. No timer to cancel (Tiles has no game tick). Correct.
+
+### New Findings (Twenty-First Pass)
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `games/Blocks.lua` S piece (green) and Z piece (red) each have only 2 unique rotation states (R0==R2, R1==R3) — standard for S/Z tetrominoes. No bug, just confirming intentional design. | Blocks.lua:65-78 | Correct per standard Tetris S/Z behavior. |
+| Low | `games/Snek.lua` `CloseGame()` sets `gameActive = false` but does not reset `gamePaused`. If the game was paused when closed and then re-opened via `ShowGame()`, `StartGame()` is called which resets `gamePaused = false` internally — so functionally fine, but the `CloseGame()` not resetting `gamePaused` is a minor inconsistency. | Snek.lua:579-585 | Harmless — `StartGame()` always resets game state including `gamePaused`. |
+| Low | `games/Tiles.lua` global keybind wrappers at the end of the file wrap Snek's wrappers (`LunaUITweaks_Game_Left` etc.) which already wrap Core's originals. This creates a 3-deep wrapper chain (Core → Snek → Tiles). Adding more keybind-sharing games would deepen the chain further. | Tiles.lua | Functionally correct. Consider a dispatcher table in Core if more games are added. |
+| Low | `games/Blocks.lua` keybind definitions (lines 1555-1561) define the globals from scratch without capturing any previous value. If a future game is added to the TOC before Blocks and also defines these globals, Blocks would silently overwrite them. Current TOC order `Blocks → Snek → Tiles` means Blocks always loads first and legitimately bootstraps the chain, but this fragility should be noted. | Blocks.lua:1555-1561 | Low risk with current game set. Blocks is the intended chain root. |
 
 ---
 

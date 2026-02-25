@@ -1,21 +1,21 @@
-local addonName, addonTable = ...
-_G[addonName] = addonTable
+local addonName, addonTable                             = ...
+_G[addonName]                                           = addonTable
 
-addonTable.Core = {}
+addonTable.Core                                         = {}
 
 -- ============================================================
 -- Key Binding display names (read by WoW's Key Bindings UI)
 -- ============================================================
-BINDING_HEADER_LUNAUITWEAKS                              = "Luna's UI Tweaks"
-_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"]  = "Use Quest Item (Super Tracked)"
-_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"]           = "Toggle Objective Tracker"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]                = "Game: Move Left / Snek Left"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]               = "Game: Move Right / Snek Right"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]            = "Game: Rotate CW / Snek Up"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECCW"]           = "Game: Rotate CCW / Snek Down"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_SOFTDROP"]            = "Block Game: Soft Drop"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_HARDDROP"]            = "Block Game: Hard Drop"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_PAUSE"]               = "Game: Pause / Snek Pause"
+BINDING_HEADER_LUNAUITWEAKS                             = "Luna's UI Tweaks"
+_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"] = "Use Quest Item (Super Tracked)"
+_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"]          = "Toggle Objective Tracker"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]               = "Game: Left"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]              = "Game: Right"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]           = "Game: Up"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECCW"]          = "Game: Down"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_SOFTDROP"]           = "Block Game: Soft Drop"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_HARDDROP"]           = "Block Game: Hard Drop"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_PAUSE"]              = "Game: Pause"
 
 -- Centralized Safe Timer Wrapper
 --- Safely executes a function after a delay using C_Timer
@@ -146,7 +146,9 @@ function CharacterRegistry.Delete(key)
             if itemData.minKeepChars then
                 itemData.minKeepChars[key] = nil
                 local hasAny = false
-                for _ in pairs(itemData.minKeepChars) do hasAny = true; break end
+                for _ in pairs(itemData.minKeepChars) do
+                    hasAny = true; break
+                end
                 if not hasAny then itemData.minKeepChars = nil end
             end
         end
@@ -689,8 +691,8 @@ local function OnEvent(self, event, ...)
                 frameBorderSize = 2,
                 frameBgColor = { r = 0, g = 0, b = 0, a = 0.8 },
                 autoBuyEnabled = true,
-                goldReserve = 500,      -- never spend below this many gold
-                confirmAbove = 100,     -- confirm popup if purchase total exceeds this many gold
+                goldReserve = 500,  -- never spend below this many gold
+                confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
             },
             xpBar = {
                 enabled = false,
@@ -711,6 +713,7 @@ local function OnEvent(self, event, ...)
                 hideBlizzardBar = false,
             },
             games = {
+                closeInCombat = true,
                 blocks = {
                     highScore = 0,
                 },

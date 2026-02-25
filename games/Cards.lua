@@ -824,6 +824,19 @@ BuildUI = function()
     newGameBtn:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, PADDING)
     newGameBtn:SetText("New Game")
     newGameBtn:SetScript("OnClick", StartGame)
+
+    -- Pause overlay (shown when paused due to combat)
+    local pauseOverlay = CreateFrame("Frame", nil, boardFrame)
+    pauseOverlay:SetAllPoints()
+    pauseOverlay:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
+    pauseOvBg:SetAllPoints()
+    pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
+    pauseOvText:SetText("|cFFFFD100PAUSED|r")
+    pauseOverlay:Hide()
+    gameFrame.pauseOverlay = pauseOverlay
 end
 
 -- ============================================================
@@ -839,8 +852,21 @@ StartGame = function()
     LayoutCards()
 end
 
+-- Combat handling
 addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
-    if gameFrame and gameFrame:IsShown() then gameFrame:Hide() end
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if UIThingsDB.games.closeInCombat then
+        gameFrame:Hide()
+    else
+        boardFrame:EnableMouse(false)
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Show() end
+    end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    boardFrame:EnableMouse(true)
+    if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
 function addonTable.Cards.ShowGame()
@@ -848,6 +874,8 @@ function addonTable.Cards.ShowGame()
     if gameFrame:IsShown() then
         gameFrame:Hide()
     else
+        boardFrame:EnableMouse(true)
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
         gameFrame:Show()
         if #deck == 0 and #waste == 0 then
             StartGame()

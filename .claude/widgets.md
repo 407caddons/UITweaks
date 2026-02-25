@@ -1,12 +1,22 @@
 # Widget Ideas & Improvements - LunaUITweaks
 
-**Date:** 2026-02-24 (Updated: Session 9 — no new widgets, 4 new ideas added)
-**Previous Review:** 2026-02-24 (Session 8 — mini-game fixes, 4 new ideas)
+**Date:** 2026-02-25 (Updated: Session 10 — no new widgets, J/L rotation fixes in Blocks game)
+**Previous Review:** 2026-02-24 (Session 9 — no new widgets, 4 new ideas added)
 **Current Widgets (35):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats, Lockouts, XPRep, Haste, Crit, Mastery, Vers, WaypointDistance, AddonComm
 
 **New Standalone Modules (not widgets):** MplusTimer -- full M+ timer overlay. QuestAuto -- auto accept/turn-in quests. QuestReminder -- zone-based quest pickup reminders. TalentManager -- dedicated talent build management panel. Coordinates -- waypoint management with `/lway` command. SCT -- scrolling combat text (extracted from Misc.lua). **Warehousing** -- cross-character bag management with bank sync and mailbox routing (NEW 2026-02-22).
 
 Ease ratings: **Easy** (few hours), **Medium** (1-2 days), **Hard** (3+ days)
+
+---
+
+## Changes Since Last Review (2026-02-25, Session 10)
+
+No new widgets implemented this session. Bug fixes only:
+- **games/Blocks.lua** — J and L tetromino rotation tables corrected. Both pieces now rotate through all four standard orientations correctly. No widget changes.
+- **config/ConfigMain.lua** — Damage Meter tab now visible (removed `navButtons[24]:Hide()`). No widget changes.
+
+**Widget count unchanged: 35.** All previous ideas remain valid.
 
 ---
 

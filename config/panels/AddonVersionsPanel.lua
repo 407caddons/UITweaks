@@ -462,6 +462,12 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     gamesBtn:SetText("Games")
     gamesBtn:SetScript("OnClick", function(self)
         MenuUtil.CreateContextMenu(self, function(ownerRegion, rootDescription)
+            rootDescription:CreateCheckbox("Close in Combat",
+                function() return UIThingsDB.games.closeInCombat end,
+                function()
+                    UIThingsDB.games.closeInCombat = not UIThingsDB.games.closeInCombat
+                end)
+            rootDescription:CreateDivider()
             rootDescription:CreateButton("Blocks", function()
                 if addonTable.Blocks and addonTable.Blocks.ShowGame then
                     addonTable.Blocks.ShowGame()

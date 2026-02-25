@@ -78,17 +78,17 @@ local PIECES = {
     }},
     -- J  (blue)
     { color = {0.2, 0.3, 1}, rotations = {
-        {{-1,0},{0,0},{1,0},{-1,1}},
+        {{-1,0},{0,0},{1,0},{-1,-1}},
         {{0,-1},{0,0},{0,1},{1,-1}},
-        {{-1,0},{0,0},{1,0},{1,-1}},
+        {{-1,0},{0,0},{1,0},{1,1}},
         {{0,-1},{0,0},{0,1},{-1,1}},
     }},
     -- L  (orange)
     { color = {1, 0.55, 0}, rotations = {
         {{-1,0},{0,0},{1,0},{1,1}},
-        {{0,-1},{0,0},{0,1},{1,1}},
+        {{0,-1},{0,0},{0,1},{-1,1}},
         {{-1,0},{0,0},{1,0},{-1,-1}},
-        {{0,-1},{0,0},{0,1},{-1,-1}},
+        {{0,-1},{0,0},{0,1},{1,-1}},
     }},
 }
 
@@ -1117,6 +1117,7 @@ end
 
 local function TogglePause()
     if not gameActive then return end
+    if InCombatLockdown() then return end
     gamePaused = not gamePaused
     if pauseText then
         pauseText:SetShown(gamePaused)
@@ -1437,10 +1438,16 @@ BuildUI = function()
     MakeBtn("< Left",    1, 4, MoveLeft)
     MakeBtn("Right >",   2, 4, MoveRight)
 
-    -- Pause overlay text
-    pauseText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    pauseText:SetPoint("CENTER", boardFrame, "CENTER", 0, 0)
-    pauseText:SetText("|cFFFFD100PAUSED|r")
+    -- Pause overlay
+    pauseText = CreateFrame("Frame", nil, boardFrame)
+    pauseText:SetAllPoints()
+    pauseText:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    local pauseBg = pauseText:CreateTexture(nil, "ARTWORK")
+    pauseBg:SetAllPoints()
+    pauseBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseLabel:SetPoint("CENTER", pauseText, "CENTER", 0, 0)
+    pauseLabel:SetText("|cFFFFD100PAUSED|r")
     pauseText:Hide()
 
     -- ── Game Over overlay ────────────────────────────────────
@@ -1484,8 +1491,35 @@ BuildUI = function()
     end
 end
 
--- Close the game when combat starts
+-- Combat handling
 addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if UIThingsDB.games.closeInCombat then
+        gameFrame:Hide()
+        if gravityTicker then gravityTicker:Cancel(); gravityTicker = nil end
+        if flashTicker   then flashTicker:Cancel();   flashTicker = nil end
+        gameActive = false
+        if MP.active then
+            addonTable.Comm.Send("GAME", "GAMEOVER", "")
+            EndMPGame(nil)
+        end
+    else
+        -- Pause without closing
+        if gameActive and not gamePaused then
+            gamePaused = true
+            if pauseText then pauseText:Show() end
+        end
+    end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    -- Do not auto-unpause; player must unpause manually after combat
+end)
+
+-- ============================================================
+-- Public API
+-- ============================================================
+function addonTable.Blocks.CloseGame()
     if gameFrame and gameFrame:IsShown() then
         gameFrame:Hide()
         if gravityTicker then gravityTicker:Cancel(); gravityTicker = nil end
@@ -1496,25 +1530,18 @@ addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
             EndMPGame(nil)
         end
     end
-end)
+end
 
--- ============================================================
--- Public API
--- ============================================================
 function addonTable.Blocks.ShowGame()
     if not gameFrame then
         BuildUI()  -- BuildUI is forward-declared so this is always valid
     end
     if gameFrame:IsShown() then
-        gameFrame:Hide()
-        if gravityTicker then gravityTicker:Cancel(); gravityTicker = nil end
-        if flashTicker   then flashTicker:Cancel();   flashTicker = nil end
-        gameActive = false
-        if MP.active then
-            addonTable.Comm.Send("GAME", "GAMEOVER", "")
-            EndMPGame(nil)
-        end
+        addonTable.Blocks.CloseGame()
     else
+        -- Close other keybind-sharing games first
+        if addonTable.Snek then addonTable.Snek.CloseGame() end
+        if addonTable.Game2048 then addonTable.Game2048.CloseGame() end
         gameFrame:Show()
         UpdateMultiBtn()
         if not gameActive then

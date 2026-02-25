@@ -38,6 +38,7 @@ local bestScore    = 0
 local gameOver     = false
 local gameWon      = false
 local wonContinue  = false  -- true if player chose to keep going past 2048
+local combatPaused = false  -- true when paused due to combat (not closeInCombat)
 local scoreText, bestText
 local gameOverFrame
 local newTileR, newTileC  -- position of the most recently spawned tile
@@ -291,6 +292,7 @@ end
 -- Input handling
 -- ============================================================
 local function OnKey(dir)
+    if combatPaused then return end
     if gameOver then return end
     if gameWon and not wonContinue then return end
 
@@ -310,7 +312,9 @@ StartGame = function()
     gameOver    = false
     gameWon     = false
     wonContinue = false
+    combatPaused = false
     bestScore   = GetHighScore()
+    if gameFrame and gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 
     newTileR, newTileC = nil, nil
     NewBoard()
@@ -496,15 +500,6 @@ local function BuildUI()
 
     BuildTiles(boardFrame)
 
-    -- Keyboard input: capture arrow keys while window is shown
-    gameFrame:SetScript("OnKeyDown", function(self, key)
-        if     key == "UP"    then OnKey("up")    ; self:SetPropagateKeyboardInput(false)
-        elseif key == "DOWN"  then OnKey("down")  ; self:SetPropagateKeyboardInput(false)
-        elseif key == "LEFT"  then OnKey("left")  ; self:SetPropagateKeyboardInput(false)
-        elseif key == "RIGHT" then OnKey("right") ; self:SetPropagateKeyboardInput(false)
-        else                                         self:SetPropagateKeyboardInput(true)
-        end
-    end)
 
     -- Game over / win overlay
     gameOverFrame = CreateFrame("Frame", nil, boardFrame)
@@ -540,32 +535,95 @@ local function BuildUI()
     gameOverFrame.newBtn:SetScript("OnClick", StartGame)
 
     gameOverFrame:Hide()
+
+    -- Pause overlay (shown when paused due to combat)
+    local pauseOverlay = CreateFrame("Frame", nil, boardFrame)
+    pauseOverlay:SetAllPoints()
+    pauseOverlay:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
+    pauseOvBg:SetAllPoints()
+    pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
+    pauseOvText:SetText("|cFFFFD100PAUSED|r")
+    pauseOverlay:Hide()
+
+    -- Store reference for combat handlers
+    gameFrame.pauseOverlay = pauseOverlay
 end
 
--- Close on combat start
+-- Combat handling
 addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
-    if gameFrame and gameFrame:IsShown() then
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if UIThingsDB.games.closeInCombat then
         gameFrame:Hide()
+    else
+        combatPaused = true
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Show() end
     end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    combatPaused = false
+    if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
 -- ============================================================
 -- Public API
 -- ============================================================
+function addonTable.Game2048.CloseGame()
+    if gameFrame and gameFrame:IsShown() then
+        gameFrame:Hide()
+    end
+end
+
 function addonTable.Game2048.ShowGame()
     if not gameFrame then
         BuildUI()
     end
     if gameFrame:IsShown() then
-        gameFrame:Hide()
+        addonTable.Game2048.CloseGame()
     else
+        -- Close other keybind-sharing games first
+        if addonTable.Blocks then addonTable.Blocks.CloseGame() end
+        if addonTable.Snek then addonTable.Snek.CloseGame() end
         bestScore = GetHighScore()
         gameFrame:Show()
-        gameFrame:EnableKeyboard(true)
         if not board then
             StartGame()
         else
             RenderBoard()
         end
     end
+end
+
+-- Global keybinding handlers — extend existing globals so Tiles shares game binds
+local function TilesIsOpen()
+    return gameFrame and gameFrame:IsShown()
+end
+
+local _origLeft     = LunaUITweaks_Game_Left
+local _origRight    = LunaUITweaks_Game_Right
+local _origRotateCW = LunaUITweaks_Game_RotateCW
+local _origRotateCCW= LunaUITweaks_Game_RotateCCW
+
+function LunaUITweaks_Game_Left()
+    if TilesIsOpen() then OnKey("left")
+    elseif _origLeft then _origLeft() end
+end
+
+function LunaUITweaks_Game_Right()
+    if TilesIsOpen() then OnKey("right")
+    elseif _origRight then _origRight() end
+end
+
+function LunaUITweaks_Game_RotateCW()
+    if TilesIsOpen() then OnKey("up")
+    elseif _origRotateCW then _origRotateCW() end
+end
+
+function LunaUITweaks_Game_RotateCCW()
+    if TilesIsOpen() then OnKey("down")
+    elseif _origRotateCCW then _origRotateCCW() end
 end

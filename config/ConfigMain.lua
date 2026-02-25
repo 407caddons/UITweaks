@@ -466,9 +466,6 @@ function addonTable.Config.Initialize()
         -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
         addonTable.ConfigTabs = navButtons
 
-        -- Hide the Damage Meter nav button (id=24) — feature is WIP
-        if navButtons[24] then navButtons[24]:Hide() end
-
         -- Select first module by default
         SelectModule(1)
 
