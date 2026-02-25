@@ -119,6 +119,8 @@ widgets\AddonComm.lua
 games\Blocks.lua
 games\Snek.lua
 games\Bombs.lua
+games\Gems.lua
+games\Cards.lua
 
 # Config entry point (now just a stub)
 Config.lua

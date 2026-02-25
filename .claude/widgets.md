@@ -1,12 +1,23 @@
 # Widget Ideas & Improvements - LunaUITweaks
 
-**Date:** 2026-02-23 (Updated: Session 7 — auto-buy feature complete, isLocked fix in Reagents, 7 new ideas added)
-**Previous Review:** 2026-02-22 (Session 4)
+**Date:** 2026-02-24 (Updated: Session 8 — mini-game fixes only, 4 new widget ideas added)
+**Previous Review:** 2026-02-23 (Session 7)
 **Current Widgets (35):** Time, FPS, Bags, Spec, Durability, Combat, Friends, Guild, Group, Teleports, Keystone, WeeklyReset, Coordinates, BattleRes, Speed, ItemLevel, Volume, Zone, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats, Lockouts, XPRep, Haste, Crit, Mastery, Vers, WaypointDistance, AddonComm
 
 **New Standalone Modules (not widgets):** MplusTimer -- full M+ timer overlay. QuestAuto -- auto accept/turn-in quests. QuestReminder -- zone-based quest pickup reminders. TalentManager -- dedicated talent build management panel. Coordinates -- waypoint management with `/lway` command. SCT -- scrolling combat text (extracted from Misc.lua). **Warehousing** -- cross-character bag management with bank sync and mailbox routing (NEW 2026-02-22).
 
 Ease ratings: **Easy** (few hours), **Medium** (1-2 days), **Hard** (3+ days)
+
+---
+
+## Changes Since Last Review (2026-02-24, Session 8)
+
+No new widgets implemented this session. Focus was on performance and correctness fixes in mini-game modules:
+- **games/Cards.lua** — `OnUpdate` now dynamically registered only during drag. `RefreshHighlights()` added for selection-only state changes without full board redraw. `HitTestZones` expanded to full column height with face-down fallback.
+- **games/Bombs.lua** — Flood-fill queue converted to flat interleaved array (no per-cell allocation). `local cells` declaration added to fix implicit global.
+- **games/Gems.lua** — Confirmed correct, no changes.
+
+**Widget count unchanged: 35.** All previous ideas remain valid.
 
 ---
 
@@ -498,7 +509,35 @@ Show progress on the most recently updated tracked achievement on the widget fac
 
 ---
 
-## Prioritization Summary (Updated Session 7)
+## New Widget Ideas (Session 8, 2026-02-24)
+
+### 53. Cast Failure Widget
+Show the last spell cast that failed with the failure reason on the widget face ("Cast failed: Interrupted"). Tooltip shows failure code, spell name, and timestamp of last attempt. Right-click clears the entry.
+- **Ease:** Easy
+- **WoW API:** `UNIT_SPELLCAST_FAILED`, `GetSpellInfo()`, `Enum.SpellFailureReason`
+- **Rationale:** `UNIT_SPELLCAST_FAILED` fires for the player with `(unitTarget, castGUID, spellID, failureType, castBarID)`. `failureType` maps to readable strings (Interrupted, OutOfPower, LOS, etc.). Storing the last failure in a widget-local table and displaying it on the face is a direct extension of the Death Recap idea (#47) but for spell casts. Useful debugging aid for class gameplay and recognizing LOS or range issues at a glance. Under 60 lines. The `combat` visibility condition is ideal.
+
+### 54. Crowd Control Status Widget
+Show the applied crowd control effect on the current target as a compact indicator: "Stunned (2.5s)" or "Rooted (6s)". Auto-hides when target has no CC. Tooltip lists all CC auras with remaining duration.
+- **Ease:** Medium
+- **WoW API:** `C_UnitAuras.GetDebuffDataByIndex()`, `UNIT_AURA`, CC spell ID lookup table
+- **Rationale:** Filter target auras for known CC spell IDs (stun, root, polymorph, hex, fear, etc.) via a hardcoded lookup table (~50 spell IDs for comprehensive coverage). Display the one with shortest remaining duration on the face; all in the tooltip. Requires building the CC spell ID table as a one-time setup. The `combat` visibility condition suits M+ and PvP. Distinct from the Kick module (which tracks interrupt availability) — this tracks what CC is currently applied. Under 100 lines including the lookup table.
+
+### 55. Tracked Ability Cooldowns Widget
+Show a compact list of the player's important ability cooldowns (user-configured by spell ID). Widget face shows a count of ready abilities ("Cooldowns: 3 ready"). Tooltip lists ability names, icons, and remaining time — color-coded red (on cooldown) or green (ready).
+- **Ease:** Medium
+- **WoW API:** `C_Spell.GetSpellCooldown()`, `GetSpellInfo()`, `SPELL_UPDATE_COOLDOWN`
+- **Rationale:** User defines a list of spell IDs in `UIThingsDB.widgets.cooldowns.trackedSpells`. `C_Spell.GetSpellCooldown()` is lightweight; batched update every 0.2s via a ticker avoids excessive recalc. Config panel has an editbox for adding spell IDs. Complements action bar button cooldown rings by providing a text/count summary visible without looking at the action bar. The `combat` visibility condition is natural. Under 110 lines including config. Fills the "am I ready to pop cooldowns" awareness gap that no current widget covers.
+
+### 56. Target Health Widget
+Show the current target's health as a percentage on the widget face ("Target: 45%"). Tooltip shows exact current/max health, target name and level. Auto-hides when no target is selected.
+- **Ease:** Easy
+- **WoW API:** `UnitHealth("target")`, `UnitHealthMax("target")`, `UNIT_HEALTH`, `PLAYER_TARGET_CHANGED`
+- **Rationale:** Zero-overhead API calls. Event-driven via `UNIT_HEALTH` (for target) and `PLAYER_TARGET_CHANGED`. Caches last value and only redraws on change to avoid unnecessary text updates during high-frequency health events. Genuinely useful for classes that execute abilities at specific health thresholds (Execute, Kill Shot, Chaos Bolt) without needing to read the Blizzard target frame. The `combat` visibility condition keeps it invisible while questing. Under 60 lines.
+
+---
+
+## Prioritization Summary (Updated Session 8)
 
 **Quickest wins (Easy, confirmed not yet implemented):**
 - #38 SessionStats boss kills — under 15 lines
@@ -507,6 +546,8 @@ Show progress on the most recently updated tracked achievement on the widget fac
 - **#50 Mount Speed improvement** — under 20 lines added to Speed widget
 - **#51 Quest Objective Tracker** — under 80 lines
 - **#52 Achievement Progress** — under 70 lines
+- **#53 Cast Failure Widget** — under 60 lines, easy event + display
+- **#56 Target Health Widget** — two API calls + two events, trivially simple
 - #3 M+ Affix Widget — under 60 lines
 - #7 Warband Gold Tracker — reuses existing Bags data layer
 - #14/#36 Bags low-space warning + type breakdown — single conditional
@@ -514,6 +555,7 @@ Show progress on the most recently updated tracked achievement on the widget fac
 **Highest strategic value:**
 - **#46 GCD Bar Widget** — unique ambient display not covered by any existing widget
 - **#48 Dungeon/Scenario Progress** — fills gap between MplusTimer and Group widget
+- **#55 Tracked Ability Cooldowns** — fills "am I ready" awareness gap for all classes
 - #2 Talent Loadout — leverages TalentManager/TalentReminder investment
 - #13 Class Resource — fills combat information gap
 - #42 Volume per-channel sliders — tooltip already done, only interactive panel remains

@@ -476,6 +476,16 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Bombs.ShowGame()
                 end
             end)
+            rootDescription:CreateButton("Gems", function()
+                if addonTable.Gems and addonTable.Gems.ShowGame then
+                    addonTable.Gems.ShowGame()
+                end
+            end)
+            rootDescription:CreateButton("Cards", function()
+                if addonTable.Cards and addonTable.Cards.ShowGame then
+                    addonTable.Cards.ShowGame()
+                end
+            end)
         end)
     end)
 

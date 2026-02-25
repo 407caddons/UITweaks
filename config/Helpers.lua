@@ -86,6 +86,7 @@ local function BuildFontList()
         { name = "bKAI 00M",                 path = "Fonts\\bKAI00M.ttf" },
         { name = "bLEI 00D",                 path = "Fonts\\bLEI00D.ttf" },
         { name = "NIM",                      path = "Fonts\\NIM_____.ttf" },
+        { name = "Noto Sans",                path = "Interface\\AddOns\\LunaUITweaks\\fonts\\NotoSans-Regular.ttf" },
     }
 
     -- Add all known fonts

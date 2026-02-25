@@ -30,6 +30,10 @@ local cellState     -- cellState[r][c] = HIDDEN | REVEALED | FLAGGED
 local cellMine      -- cellMine[r][c] = true/false
 local cellCount     -- cellCount[r][c] = adjacent mine count (0-8)
 
+-- Frame pooling to prevent memory leaks on difficulty change
+local cellPool = {}
+local poolCount = 0
+
 local COLS, ROWS, MINES
 local minesText, timerText, diffText
 local gameOverFrame
@@ -67,18 +71,7 @@ local StartGame, GameOver, GameWin, RevealCell, BuildUI, ResizeBoard
 -- ============================================================
 -- Board logic
 -- ============================================================
-local function ForEachNeighbor(r, c, func)
-    for dr = -1, 1 do
-        for dc = -1, 1 do
-            if dr ~= 0 or dc ~= 0 then
-                local nr, nc = r + dr, c + dc
-                if nr >= 1 and nr <= ROWS and nc >= 1 and nc <= COLS then
-                    func(nr, nc)
-                end
-            end
-        end
-    end
-end
+local revealQueue = {} -- Reusable table for flood fill
 
 local function PlaceMines(safeR, safeC)
     -- Clear
@@ -116,9 +109,16 @@ local function PlaceMines(safeR, safeC)
     for r = 1, ROWS do
         for c = 1, COLS do
             if cellMine[r][c] then
-                ForEachNeighbor(r, c, function(nr, nc)
-                    cellCount[nr][nc] = cellCount[nr][nc] + 1
-                end)
+                for dr = -1, 1 do
+                    for dc = -1, 1 do
+                        if dr ~= 0 or dc ~= 0 then
+                            local nr, nc = r + dr, c + dc
+                            if nr >= 1 and nr <= ROWS and nc >= 1 and nc <= COLS then
+                                cellCount[nr][nc] = cellCount[nr][nc] + 1
+                            end
+                        end
+                    end
+                end
             end
         end
     end
@@ -193,13 +193,41 @@ RevealCell = function(r, c)
         return
     end
 
-    -- Flood fill if count is 0
+    -- Flood fill if count is 0 (Iterative to prevent stack overflow)
+    -- Queue stores pairs: revealQueue[2k-1]=row, revealQueue[2k]=col (no per-cell tables)
     if cellCount[r][c] == 0 then
-        ForEachNeighbor(r, c, function(nr, nc)
-            if cellState[nr][nc] == HIDDEN then
-                RevealCell(nr, nc)
+        wipe(revealQueue)
+        revealQueue[1] = r
+        revealQueue[2] = c
+        local head = 1
+        local tail = 2
+
+        while head <= tail do
+            local cr = revealQueue[head]
+            local cc = revealQueue[head + 1]
+            head = head + 2
+
+            for dr = -1, 1 do
+                for dc = -1, 1 do
+                    if dr ~= 0 or dc ~= 0 then
+                        local nr, nc = cr + dr, cc + dc
+                        if nr >= 1 and nr <= ROWS and nc >= 1 and nc <= COLS then
+                            if cellState[nr][nc] == HIDDEN then
+                                cellState[nr][nc] = REVEALED
+                                revealedCount = revealedCount + 1
+                                UpdateCell(nr, nc)
+
+                                if cellCount[nr][nc] == 0 then
+                                    tail = tail + 2
+                                    revealQueue[tail - 1] = nr
+                                    revealQueue[tail]     = nc
+                                end
+                            end
+                        end
+                    end
+                end
             end
-        end)
+        end
     end
 
     -- Check win
@@ -216,16 +244,32 @@ local function ChordReveal(r, c)
 
     -- Count adjacent flags
     local adjFlags = 0
-    ForEachNeighbor(r, c, function(nr, nc)
-        if cellState[nr][nc] == FLAGGED then adjFlags = adjFlags + 1 end
-    end)
+    for dr = -1, 1 do
+        for dc = -1, 1 do
+            if dr ~= 0 or dc ~= 0 then
+                local nr, nc = r + dr, c + dc
+                if nr >= 1 and nr <= ROWS and nc >= 1 and nc <= COLS then
+                    if cellState[nr][nc] == FLAGGED then 
+                        adjFlags = adjFlags + 1 
+                    end
+                end
+            end
+        end
+    end
 
     if adjFlags == n then
-        ForEachNeighbor(r, c, function(nr, nc)
-            if cellState[nr][nc] == HIDDEN then
-                RevealCell(nr, nc)
+        for dr = -1, 1 do
+            for dc = -1, 1 do
+                if dr ~= 0 or dc ~= 0 then
+                    local nr, nc = r + dr, c + dc
+                    if nr >= 1 and nr <= ROWS and nc >= 1 and nc <= COLS then
+                        if cellState[nr][nc] == HIDDEN then
+                            RevealCell(nr, nc)
+                        end
+                    end
+                end
             end
-        end)
+        end
     end
 end
 
@@ -335,6 +379,7 @@ StartGame = function()
     startTime     = nil
     gameActive    = true
 
+    if timerText then timerText:SetText("Time\n0") end
     if gameOverFrame then gameOverFrame:Hide() end
     if timerTicker then timerTicker:Cancel(); timerTicker = nil end
 
@@ -343,40 +388,55 @@ StartGame = function()
 end
 
 -- ============================================================
--- Board cell builder
+-- Board cell builder / pooler
 -- ============================================================
-local function BuildCellButton(parent, r, c)
-    local size = CELL
-    local f = CreateFrame("Button", nil, parent)
-    f:SetSize(size - 1, size - 1)
-    f:SetPoint("TOPLEFT", parent, "TOPLEFT", (c - 1) * size, -(r - 1) * size)
+local function GetCellButton(parent, r, c)
+    local index = (r - 1) * COLS + c
+    local f
+    
+    if index <= poolCount then
+        f = cellPool[index]
+    else
+        local size = CELL
+        f = CreateFrame("Button", nil, parent)
+        
+        f.border = f:CreateTexture(nil, "BACKGROUND")
+        f.border:SetAllPoints()
+        f.border:SetColorTexture(0.18, 0.18, 0.22, 1)
 
-    f.border = f:CreateTexture(nil, "BACKGROUND")
-    f.border:SetAllPoints()
-    f.border:SetColorTexture(0.18, 0.18, 0.22, 1)
+        f.tex = f:CreateTexture(nil, "ARTWORK")
+        f.tex:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+        f.tex:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+        f.tex:SetColorTexture(0.25, 0.25, 0.30, 1)
 
-    f.tex = f:CreateTexture(nil, "ARTWORK")
-    f.tex:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
-    f.tex:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
-    f.tex:SetColorTexture(0.25, 0.25, 0.30, 1)
+        f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        f.label:SetPoint("CENTER")
+        f.label:SetText("")
 
-    f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    f.label:SetPoint("CENTER")
-    f.label:SetText("")
-
-    f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    f:SetScript("OnClick", function(self, button)
-        if button == "LeftButton" then
-            if cellState[r][c] == REVEALED then
-                ChordReveal(r, c)
-            else
-                RevealCell(r, c)
+        f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        f:SetScript("OnClick", function(self, button)
+            local myRow = self.row
+            local myCol = self.col
+            if button == "LeftButton" then
+                if cellState[myRow][myCol] == REVEALED then
+                    ChordReveal(myRow, myCol)
+                else
+                    RevealCell(myRow, myCol)
+                end
+            elseif button == "RightButton" then
+                ToggleFlag(myRow, myCol)
             end
-        elseif button == "RightButton" then
-            ToggleFlag(r, c)
-        end
-    end)
+        end)
+        
+        poolCount = poolCount + 1
+        cellPool[poolCount] = f
+    end
 
+    f:SetSize(CELL - 1, CELL - 1)
+    f:SetPoint("TOPLEFT", parent, "TOPLEFT", (c - 1) * CELL, -(r - 1) * CELL)
+    f.row = r
+    f.col = c
+    f:Show()
     return f
 end
 
@@ -386,14 +446,9 @@ end
 ResizeBoard = function()
     if not gameFrame then return end
 
-    -- Destroy old cells
-    if cells then
-        for r = 1, #cells do
-            for c = 1, #cells[r] do
-                cells[r][c]:Hide()
-                cells[r][c]:SetParent(nil)
-            end
-        end
+    -- Hide all pooled cells
+    for i = 1, poolCount do
+        cellPool[i]:Hide()
     end
 
     local SIDE_W = 100
@@ -410,12 +465,12 @@ ResizeBoard = function()
 
     boardFrame:SetSize(boardW, boardH)
 
-    -- Build cells
+    -- Build/Retrieve cells
     cells = {}
     for r = 1, ROWS do
         cells[r] = {}
         for c = 1, COLS do
-            cells[r][c] = BuildCellButton(boardFrame, r, c)
+            cells[r][c] = GetCellButton(boardFrame, r, c)
             UpdateCell(r, c)
         end
     end
@@ -476,16 +531,14 @@ BuildUI = function()
     gameFrame:SetScript("OnDragStop",  function(self) self:StopMovingOrSizing() end)
     gameFrame:Hide()
 
-    -- Border (full frame, sits behind the background)
-    local border = gameFrame:CreateTexture(nil, "BACKGROUND")
-    border:SetAllPoints()
-    border:SetColorTexture(0.3, 0.3, 0.35, 1)
-
-    -- Background (inset 1px to reveal border edge)
-    local bg = gameFrame:CreateTexture(nil, "BORDER")
-    bg:SetPoint("TOPLEFT", 1, -1)
-    bg:SetPoint("BOTTOMRIGHT", -1, 1)
-    bg:SetColorTexture(0.06, 0.06, 0.08, 0.97)
+    gameFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    gameFrame:SetBackdropColor(0.06, 0.06, 0.08, 0.97)
+    gameFrame:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
 
     -- Title bar
     local titleBar = CreateFrame("Frame", nil, gameFrame)
@@ -497,7 +550,7 @@ BuildUI = function()
     titleBar:SetScript("OnDragStart", function() gameFrame:StartMoving() end)
     titleBar:SetScript("OnDragStop",  function() gameFrame:StopMovingOrSizing() end)
 
-    local titleBarBg = titleBar:CreateTexture(nil, "BACKGROUND")
+    local titleBarBg = titleBar:CreateTexture(nil, "ARTWORK")
     titleBarBg:SetAllPoints()
     titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 

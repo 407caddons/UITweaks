@@ -709,6 +709,10 @@ local function OnEvent(self, event, ...)
                     highScore = 0,
                 },
                 bombs = {},
+                gems = {
+                    highScore = 0,
+                },
+                cards = {},
             },
         }
 

@@ -1,10 +1,53 @@
 # Feature Suggestions - LunaUITweaks
 
-**Date:** 2026-02-23 (Updated: Session 7 -- Auto-buy feature complete, isLocked fix in Reagents, C_MerchantFrame migration, 9 new features)
-**Previous Review:** 2026-02-22 (Session 5)
+**Date:** 2026-02-24 (Updated: Session 8 -- Mini-game performance fixes, 3 new mini-game feature ideas)
+**Previous Review:** 2026-02-23 (Session 7)
 **Current Version:** v1.13.0+
 
 Ease ratings: **Easy** (1-2 days), **Medium** (3-5 days), **Hard** (1-2 weeks), **Very Hard** (2+ weeks)
+
+---
+
+## Changes Since Last Review (2026-02-24, Session 8)
+
+No new addon features added. This session focused on performance and correctness fixes for the mini-game modules:
+
+1. **games/Cards.lua** -- 5 fixes applied:
+   - `OnUpdate` on dragFrame now dynamically registered only during drag (`StartDrag`), unregistered in `CommitDrag` and `CancelDrag`. Eliminates constant per-frame overhead when not dragging.
+   - `RefreshHighlights()` added — updates only card selection highlight textures without rebuilding the full board. `HandleClick` now calls `RefreshHighlights()` for selection-only changes and `LayoutCards()` only for structural changes (moves, draws, new game).
+   - `HitTestZones` now covers the full vertical extent of tableau columns. Drops over face-down card regions fall back to the last face-up card in the column rather than silently failing.
+   - Two additional low-priority issues noted: `movesText` update redundantly included in `RefreshHighlights`, and off-by-one in `GetFrame` frame level assignment.
+
+2. **games/Bombs.lua** -- 2 fixes applied:
+   - Flood-fill queue changed from per-cell `{r, c}` table allocation to flat interleaved pair format (`queue[2k-1]=row, queue[2k]=col`). Eliminates all GC pressure on large board reveals.
+   - `local cells` declaration added at module scope. Eliminates implicit global `_G.cells`.
+
+3. **games/Gems.lua** -- No changes. Code reviewed and confirmed correct from previous session.
+
+---
+
+## New Feature Ideas (Added 2026-02-24, Session 8)
+
+### 104. Mini-Game High Score Persistence and Cross-Character Leaderboard
+Save personal high scores per mini-game (Gems score, Bombs best times per difficulty, Solitaire move count) to a SavedVariable and display them in-game. Add a simple in-game leaderboard panel accessible from each game's UI showing the top 5 scores with character name and date. Cross-character comparison via CharacterRegistry shows how alts rank.
+- **Ease:** Easy
+- **Impact:** Low-Medium — adds replayability and a sense of progression
+- **Rationale:** `UIThingsDB.games.*` already has `highScore` fields reserved for Gems and Snek. Bombs has `bestTime_Easy/Medium/Hard` already implemented. Cards has no score tracking yet. Adding a leaderboard panel (re-using the row-pool pattern from Coordinates) and cross-character snapshot (same pattern as `bags.goldData`) requires no new infrastructure. The in-game display just reads from the saved table. Under 100 lines per game.
+- **Files:** games/Cards.lua, games/Gems.lua, games/Bombs.lua, Core.lua (defaults)
+
+### 105. Mini-Game Statistics Tracking
+Track cumulative session and lifetime stats for each mini-game: games played, games won (Solitaire/Gems), win rate, total time played. Surface via a `/lgames stats` slash command or a small stats overlay in each game's side panel. Reset via right-click or config button.
+- **Ease:** Easy
+- **Impact:** Low — quality of life for players who play frequently
+- **Rationale:** Each game already has a `StartGame` and `GameOver`/win path. Incrementing counters in `UIThingsDB.games.*` on each game completion is a 3-line addition per game. Displaying stats in the existing side panel (next to the score or new game button) follows the same `FontString` pattern already used for Score/Moves/Time. No new events needed.
+- **Files:** games/Cards.lua, games/Gems.lua, games/Bombs.lua, Core.lua (defaults)
+
+### 106. Gems Game: Hint System and Timer Mode
+Add two optional game modes to the Gems (Bejeweled-style) game: a Hint button that highlights a valid move, and a timed mode with a countdown that ends the game when it hits zero. Valid move detection scans all adjacent pairs and returns the first that would create a match. Timer mode stores a per-session best score with countdown.
+- **Ease:** Medium
+- **Impact:** Low-Medium — extends the most polished mini-game
+- **Rationale:** The Gems game already has `GetMatches()` and `SwapGems()`. A hint function iterates all `ROWS×COLS×4` adjacent pairs, calls `SwapGems` in a simulated way (swap, check `GetMatches()`, swap back), and returns the first valid pair found. Timer mode adds a `C_Timer.NewTicker(1, ...)` countdown stored on `gameFrame.timerValue` and displayed in the side panel. Both features are opt-in and gate behind a mode button.
+- **Files:** games/Gems.lua
 
 ---
 

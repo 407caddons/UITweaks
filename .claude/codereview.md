@@ -1,9 +1,38 @@
 # LunaUITweaks -- Comprehensive Code Review
 
-**Review Date:** 2026-02-23 (Seventeenth Pass -- Next 5 bug fixes applied)
-**Previous Review:** 2026-02-23 (Sixteenth Pass -- Trivial bug fixes applied)
-**Scope:** Applied 4 bug fixes: Warehousing sync limit message, Coordinates ResolveZoneName ordering, Friends.lua BNet classFileName, MinimapCustom SetDrawerCollapsed combat guard. MythicRating nil check confirmed already safe in code.
+**Review Date:** 2026-02-24 (Eighteenth Pass -- Mini-game performance fixes reviewed)
+**Previous Review:** 2026-02-23 (Seventeenth Pass -- Next 5 bug fixes applied)
+**Scope:** Reviewed games/Cards.lua, games/Bombs.lua, games/Gems.lua after 5 bug fixes were applied. Confirmed fixes correct, identified one new low-priority issue.
 **Focus:** Bugs/crash risks, performance issues, memory leaks, race conditions/timing issues, code correctness, saved variable corruption risks, combat lockdown safety
+
+---
+
+## Changes Since Last Review (Eighteenth Pass -- 2026-02-24)
+
+### Confirmed Fixed Since Seventeenth Pass
+
+| Issue | Fix |
+|-------|-----|
+| `Cards.lua` dragFrame `OnUpdate` always registered, firing every frame even when idle | `OnUpdate` now registered in `StartDrag` and unregistered (`nil`) in `CommitDrag` and `CancelDrag`. Zero per-frame cost when not dragging. |
+| `Cards.lua` full board rebuild (`LayoutCards`) called on every click including selection-only changes | `RefreshHighlights()` added — only updates highlight textures on visible face-up cards. All selection-only paths in `HandleClick` now call `RefreshHighlights()` instead of `LayoutCards()`. |
+| `Bombs.lua` flood-fill queue allocates a new `{r, c}` table per cell | Queue now uses flat interleaved pairs: `revealQueue[2k-1] = row`, `revealQueue[2k] = col`. `head`/`tail` advance by 2. Zero table allocation during flood-fill. |
+| `Cards.lua` `HitTestZones` returns nil over face-down card regions (silent drop failures) | Now checks full column vertical extent. When cursor is over a face-down card, falls back to the last face-up card in that column. All-face-down column correctly returns nil. |
+| `Bombs.lua` `cells` undeclared — implicit global `_G.cells` | `local cells` added to module-level state block alongside `cellState`, `cellMine`, `cellCount`. |
+
+### New Findings (Eighteenth Pass -- 2026-02-24)
+
+| Severity | Issue | File | Notes |
+|----------|-------|------|-------|
+| Low | `Gems.lua` `TickGravity` and `Cards.lua` `LayoutCards` / `HandleClick` / `MoveCards` / `IsValidMove` / `SwapGems` forward-declared as upvalues but lack `local` on their definition lines. In Lua 5.1 this is fine since the `local` was declared on the forward-declaration line, but the assignment lines have no `local` prefix, which is correct Lua — just slightly confusing to read. No functional issue. | Gems.lua:182, Cards.lua:53,263 | Correct Lua semantics. Style observation only. |
+| Low | `Cards.lua` `RefreshHighlights` updates `movesText` on every call (line 153). This means the moves counter is refreshed on selection changes even though `moves` hasn't changed. Harmless but redundant work — `movesText` does not need updating unless `moves` changes. | Cards.lua:153 | Move `movesText:SetText(...)` out of `RefreshHighlights` and only call it where `moves` increments (`DrawCard`, `MoveCards`). |
+| Low | `Cards.lua` `LayoutCards` inner function `GetFrame` (line 284) closes over and increments `fIdx` before reading it: `fIdx = fIdx + 1; f:SetFrameLevel(baseLevel + fIdx)`. This means the first frame gets level `baseLevel + 2`, not `baseLevel + 1`. Off-by-one in frame levels — functionally harmless since levels are only used for z-ordering within the card pool. | Cards.lua:284-287 | Minor. Move `fIdx = fIdx + 1` to after the `SetFrameLevel` call, or use `fIdx` before incrementing. |
+
+### Verified Correct (Eighteenth Pass)
+
+- **Flat flood-fill queue** (`Bombs.lua:199-229`): `head = 1, tail = 2` initialization is correct. First iteration reads `[1]` and `[2]`, increments head to 3. `tail` incremented by 2 before assignment so `[tail-1]` and `[tail]` are the new pair. Verified correct.
+- **`local cells` declaration** (`Bombs.lua:28`): Properly in scope for `UpdateCell`, `ResizeBoard`, and `StartGame`. `cells = {}` inside `ResizeBoard` correctly assigns to the module-local. Verified correct.
+- **`RefreshHighlights` loop** (`Cards.lua:142-154`): Correctly skips hidden frames and frames without `cardData.id` (placeholders). Selection comparison `selLoc.cardData == f.cardData` (identity check) is correct since card data tables are the same objects used in `waste`/`foundations`/`tableau`. Verified correct.
+- **`HitTestZones` column bounds** (`Cards.lua:239-270`): `topOfColumn = startY`, `bottomOfColumn = startY - ((lastRow-1)*STACK_Y) - CARD_H` correctly spans the full visual extent including the last card's full height. Face-down fallback iterates `lastRow → 1` and returns the deepest face-up card. Verified correct.
 
 ---
 
