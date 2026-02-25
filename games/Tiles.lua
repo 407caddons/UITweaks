@@ -586,7 +586,6 @@ function addonTable.Game2048.ShowGame()
         addonTable.Game2048.CloseGame()
     else
         -- Close other keybind-sharing games first
-        if addonTable.Blocks then addonTable.Blocks.CloseGame() end
         if addonTable.Snek then addonTable.Snek.CloseGame() end
         bestScore = GetHighScore()
         gameFrame:Show()

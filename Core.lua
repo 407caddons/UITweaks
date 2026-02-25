@@ -13,8 +13,6 @@ _G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]               = "Game: Left"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]              = "Game: Right"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]           = "Game: Up"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECCW"]          = "Game: Down"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_SOFTDROP"]           = "Block Game: Soft Drop"
-_G["BINDING_NAME_LUNAUITWEAKS_GAME_HARDDROP"]           = "Block Game: Hard Drop"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_PAUSE"]              = "Game: Pause"
 
 -- Centralized Safe Timer Wrapper
@@ -547,7 +545,7 @@ local function OnEvent(self, event, ...)
                 chatWidth = 430,
                 chatHeight = 200,
                 timestamps = "none",
-                pos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = 20, y = 40 },
+                pos = { point = "CENTER", x = 0, y = -200 },
                 highlightKeywords = {},
                 highlightColor = { r = 1, g = 1, b = 0 },
                 highlightSound = false,
@@ -714,9 +712,6 @@ local function OnEvent(self, event, ...)
             },
             games = {
                 closeInCombat = true,
-                blocks = {
-                    highScore = 0,
-                },
                 snek = {
                     highScore = 0,
                 },
@@ -736,10 +731,11 @@ local function OnEvent(self, event, ...)
                 bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.85 },
                 borderColor = { r = 0.2, g = 0.8, b = 0.2, a = 1 },
                 borderSize = 2,
-                titleBar = true,
-                titleBarHeight = 20,
-                titleBarColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.95 },
+                titleBarHeight = 24,
                 titleText = "Damage Meter",
+                width = 0,
+                height = 0,
+                pos = { point = "CENTER", x = 0, y = 0 },
             },
         }
 
@@ -748,6 +744,48 @@ local function OnEvent(self, event, ...)
 
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
+
+        -- One-time migration: BOTTOMLEFT → CENTER for damageMeter and chatSkin
+        local function MigrateBottomLeftToCenter(pos, defaultX, defaultY)
+            if pos and pos.point and pos.point ~= "CENTER" then
+                local sw = UIParent:GetWidth()
+                local sh = UIParent:GetHeight()
+                local oldPoint = pos.point
+                local ox, oy = pos.x or 0, pos.y or 0
+                -- Convert anchor-relative coords to BOTTOMLEFT-relative first
+                local blX, blY = ox, oy
+                if oldPoint == "TOPRIGHT" or oldPoint == "RIGHT" or oldPoint == "BOTTOMRIGHT" then
+                    blX = sw - ox
+                elseif oldPoint == "TOP" or oldPoint == "CENTER" or oldPoint == "BOTTOM" then
+                    blX = sw / 2 + ox
+                end
+                if oldPoint == "TOPLEFT" or oldPoint == "TOP" or oldPoint == "TOPRIGHT" then
+                    blY = sh - oy
+                elseif oldPoint == "LEFT" or oldPoint == "CENTER" or oldPoint == "RIGHT" then
+                    blY = sh / 2 + oy
+                end
+                -- Convert BOTTOMLEFT coords to CENTER-relative
+                pos.x = math.floor(blX - sw / 2 + 0.5)
+                pos.y = math.floor(blY - sh / 2 + 0.5)
+                pos.point = "CENTER"
+                pos.relPoint = nil
+            elseif not pos or not pos.point then
+                -- Legacy damageMeter had no point field — treat as BOTTOMLEFT
+                if pos then
+                    local sw = UIParent:GetWidth()
+                    local sh = UIParent:GetHeight()
+                    pos.x = math.floor((pos.x or 0) - sw / 2 + 0.5)
+                    pos.y = math.floor((pos.y or 0) - sh / 2 + 0.5)
+                    pos.point = "CENTER"
+                end
+            end
+        end
+        if UIThingsDB.chatSkin and UIThingsDB.chatSkin.pos then
+            MigrateBottomLeftToCenter(UIThingsDB.chatSkin.pos, 0, -200)
+        end
+        if UIThingsDB.damageMeter and UIThingsDB.damageMeter.pos then
+            MigrateBottomLeftToCenter(UIThingsDB.damageMeter.pos, 0, 0)
+        end
 
         -- Apply debug mode from saved settings
         if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then

@@ -30,7 +30,7 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 900)
+    child:SetSize(600, 1100)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -162,33 +162,220 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     moveInfo:SetText(
         "Unlock to drag the entire chat window as one unit. Drag the bottom-right corner to resize. Right-click the unlocked area to toggle individual tab dragging.")
 
+    -- Dimensions & Position Section
+    Helpers.CreateSectionHeader(child, "Dimensions & Position", -480)
+
+    local function ApplyChatDimPos()
+        if addonTable.ChatSkin and addonTable.ChatSkin.UpdateSettings then
+            addonTable.ChatSkin.UpdateSettings()
+        end
+    end
+
+    -- Helper: create a labeled slider + editbox pair
+    local dimControlIdx = 0
+    local function CreateDimControl(parent, label, yOff, minVal, maxVal, dbGet, dbSet, applyFn)
+        dimControlIdx = dimControlIdx + 1
+        local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lbl:SetPoint("TOPLEFT", 20, yOff)
+        lbl:SetText(label)
+
+        local sliderName = "UIThingsChatDimCtrl" .. dimControlIdx
+        local slider = CreateFrame("Slider", sliderName, parent, "OptionsSliderTemplate")
+        slider:SetPoint("TOPLEFT", 20, yOff - 22)
+        slider:SetWidth(180)
+        slider:SetMinMaxValues(minVal, maxVal)
+        slider:SetValueStep(1)
+        slider:SetObeyStepOnDrag(true)
+        slider:SetValue(dbGet())
+        _G[sliderName .. "Low"]:SetText(tostring(minVal))
+        _G[sliderName .. "High"]:SetText(tostring(maxVal))
+        _G[sliderName .. "Text"]:SetText("")
+
+        local editBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        editBox:SetSize(60, 20)
+        editBox:SetPoint("LEFT", slider, "RIGHT", 8, 0)
+        editBox:SetAutoFocus(false)
+        editBox:SetNumeric(false)
+        editBox:SetText(tostring(math.floor(dbGet() + 0.5)))
+
+        local suppressSync = false
+
+        slider:SetScript("OnValueChanged", function(self, value)
+            value = math.floor(value + 0.5)
+            dbSet(value)
+            if not suppressSync then
+                suppressSync = true
+                editBox:SetText(tostring(value))
+                suppressSync = false
+            end
+            applyFn()
+        end)
+
+        local function ApplyEditBox()
+            local v = tonumber(editBox:GetText())
+            if v then
+                v = math.max(minVal, math.min(maxVal, math.floor(v + 0.5)))
+                dbSet(v)
+                suppressSync = true
+                slider:SetValue(v)
+                editBox:SetText(tostring(v))
+                suppressSync = false
+                applyFn()
+            end
+            editBox:ClearFocus()
+        end
+
+        editBox:SetScript("OnEnterPressed", ApplyEditBox)
+        editBox:SetScript("OnEditFocusLost", ApplyEditBox)
+
+        -- Refresh on panel open
+        slider:SetScript("OnShow", function(self)
+            suppressSync = true
+            local v = math.floor(dbGet() + 0.5)
+            self:SetValue(v)
+            editBox:SetText(tostring(v))
+            suppressSync = false
+        end)
+    end
+
+    local function ApplyChatPos()
+        local s = UIThingsDB.chatSkin
+        if LunaChatSkinContainer and LunaChatSkinContainer:IsShown() then
+            LunaChatSkinContainer:ClearAllPoints()
+            LunaChatSkinContainer:SetPoint(s.pos.point or "BOTTOMLEFT", UIParent,
+                s.pos.relPoint or s.pos.point or "BOTTOMLEFT", s.pos.x, s.pos.y)
+        end
+        ApplyChatDimPos()
+    end
+
+    -- Constants matching ChatSkin.lua layout
+    local BTNFRAME_WIDTH = 29
+    local INNER_PAD      = 4
+    local EDITBOX_HEIGHT = 28
+
+    local function GetContainerWidth()
+        local container = LunaChatSkinContainer
+        if container and container:IsShown() then
+            return math.floor(container:GetWidth() + 0.5)
+        end
+        local s = UIThingsDB.chatSkin
+        local b = s.borderSize or 2
+        return (s.chatWidth or 430) + BTNFRAME_WIDTH + (b * 2) + (INNER_PAD * 2)
+    end
+
+    local function GetContainerHeight()
+        local container = LunaChatSkinContainer
+        if container and container:IsShown() then
+            return math.floor(container:GetHeight() + 0.5)
+        end
+        local s = UIThingsDB.chatSkin
+        local b = s.borderSize or 2
+        -- Use 24 as a reasonable tab height estimate
+        return (s.chatHeight or 200) + 24 + EDITBOX_HEIGHT + (b * 2) + INNER_PAD
+    end
+
+    local function SetContainerWidth(v)
+        local s = UIThingsDB.chatSkin
+        local b = s.borderSize or 2
+        local chatW = v - BTNFRAME_WIDTH - (b * 2) - (INNER_PAD * 2)
+        s.chatWidth = math.max(200, chatW)
+    end
+
+    local function SetContainerHeight(v)
+        local s = UIThingsDB.chatSkin
+        local b = s.borderSize or 2
+        local tabH = 24
+        local chatH = v - tabH - EDITBOX_HEIGHT - (b * 2) - INNER_PAD
+        s.chatHeight = math.max(100, chatH)
+    end
+
+    -- Width (container total, ~265–1300)
+    CreateDimControl(child, "Width:", -510,
+        265, 1300,
+        GetContainerWidth,
+        SetContainerWidth,
+        ApplyChatDimPos)
+
+    -- Height (container total, ~165–900)
+    CreateDimControl(child, "Height:", -565,
+        165, 900,
+        GetContainerHeight,
+        SetContainerHeight,
+        ApplyChatDimPos)
+
+    local function GetContainerX()
+        local container = LunaChatSkinContainer
+        if container and container:IsShown() then
+            local cx, _ = container:GetCenter()
+            local pcx, _ = UIParent:GetCenter()
+            if cx and pcx then return math.floor(cx - pcx + 0.5) end
+        end
+        return UIThingsDB.chatSkin.pos.x or 0
+    end
+
+    local function GetContainerY()
+        local container = LunaChatSkinContainer
+        if container and container:IsShown() then
+            local _, cy = container:GetCenter()
+            local _, pcy = UIParent:GetCenter()
+            if cy and pcy then return math.floor(cy - pcy + 0.5) end
+        end
+        return UIThingsDB.chatSkin.pos.y or 0
+    end
+
+    local function SetContainerX(v)
+        UIThingsDB.chatSkin.pos.x = v
+        UIThingsDB.chatSkin.pos.point = "CENTER"
+        UIThingsDB.chatSkin.pos.relPoint = nil
+    end
+
+    local function SetContainerY(v)
+        UIThingsDB.chatSkin.pos.y = v
+        UIThingsDB.chatSkin.pos.point = "CENTER"
+        UIThingsDB.chatSkin.pos.relPoint = nil
+    end
+
+    -- X Position (CENTER-relative: negative = left of centre, positive = right)
+    CreateDimControl(child, "X Position:", -620,
+        -2000, 2000,
+        GetContainerX,
+        SetContainerX,
+        ApplyChatPos)
+
+    -- Y Position (CENTER-relative: negative = below centre, positive = above)
+    CreateDimControl(child, "Y Position:", -675,
+        -1200, 1200,
+        GetContainerY,
+        SetContainerY,
+        ApplyChatPos)
+
     -- Button Info
-    Helpers.CreateSectionHeader(child, "Buttons", -480)
+    Helpers.CreateSectionHeader(child, "Buttons", -740)
 
     local buttonInfo = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    buttonInfo:SetPoint("TOPLEFT", 20, -510)
+    buttonInfo:SetPoint("TOPLEFT", 20, -770)
     buttonInfo:SetWidth(560)
     buttonInfo:SetJustifyH("LEFT")
     buttonInfo:SetText(
         "C: Copy chat content\nS: Open Social/Friends window\nH: Open Chat channels menu\nL: Open Language/Chat menu\n\nURLs in chat messages are automatically detected and highlighted. Click a URL to copy it.")
 
     -- Keyword Highlights Section
-    Helpers.CreateSectionHeader(child, "Keyword Highlights", -570)
+    Helpers.CreateSectionHeader(child, "Keyword Highlights", -830)
 
     local kwDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    kwDesc:SetPoint("TOPLEFT", 20, -600)
+    kwDesc:SetPoint("TOPLEFT", 20, -860)
     kwDesc:SetWidth(560)
     kwDesc:SetJustifyH("LEFT")
     kwDesc:SetText("Highlight messages containing specific keywords. Your character name is a good default.")
 
     -- Highlight color swatch
-    Helpers.CreateColorSwatch(child, "Highlight Color:", UIThingsDB.chatSkin.highlightColor, function() end, 20, -625,
+    Helpers.CreateColorSwatch(child, "Highlight Color:", UIThingsDB.chatSkin.highlightColor, function() end, 20, -885,
         false)
 
     -- Sound checkbox
     local soundBtn = CreateFrame("CheckButton", "UIThingsChatSkinHighlightSound", child,
         "ChatConfigCheckButtonTemplate")
-    soundBtn:SetPoint("TOPLEFT", 200, -622)
+    soundBtn:SetPoint("TOPLEFT", 200, -882)
     soundBtn:SetHitRectInsets(0, -100, 0, 0)
     _G[soundBtn:GetName() .. "Text"]:SetText("Play Sound on Match")
     soundBtn:SetChecked(UIThingsDB.chatSkin.highlightSound)
@@ -198,7 +385,7 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
 
     -- Keyword list container
     local kwListFrame = CreateFrame("Frame", nil, child)
-    kwListFrame:SetPoint("TOPLEFT", 20, -655)
+    kwListFrame:SetPoint("TOPLEFT", 20, -915)
     kwListFrame:SetSize(560, 200)
 
     local kwRows = {}
@@ -243,7 +430,7 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
 
     -- Add keyword input
     local addLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    addLabel:SetPoint("TOPLEFT", 20, -650)
+    addLabel:SetPoint("TOPLEFT", 20, -910)
     addLabel:SetText("Add Keyword:")
 
     local addEdit = CreateFrame("EditBox", nil, child, "InputBoxTemplate")
@@ -284,7 +471,7 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     end)
 
     -- Move keyword list below the add row
-    kwListFrame:SetPoint("TOPLEFT", 20, -680)
+    kwListFrame:SetPoint("TOPLEFT", 20, -940)
 
     RefreshKeywordList()
 end

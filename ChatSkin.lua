@@ -662,7 +662,7 @@ local function SetupChatSkin()
     -- Position
     local pos = settings.pos
     containerFrame:ClearAllPoints()
-    containerFrame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
+    containerFrame:SetPoint("CENTER", UIParent, "CENTER", pos.x, pos.y)
 
     -- Reparent ChatFrame1, edit box, and dock manager
     ChatFrame1:SetParent(containerFrame)
@@ -742,12 +742,14 @@ local function SetupChatSkin()
         if newChatW >= MIN_CHAT_W then s.chatWidth = newChatW end
         if newChatH >= MIN_CHAT_H then s.chatHeight = newChatH end
         LayoutContainer()
-        -- Save position too since anchor may shift
-        local point, _, relPoint, x, y = containerFrame:GetPoint()
-        s.pos.point = point
-        s.pos.relPoint = relPoint
-        s.pos.x = x
-        s.pos.y = y
+        -- Save position in CENTER-relative coords
+        local cx, cy = containerFrame:GetCenter()
+        local pcx, pcy = UIParent:GetCenter()
+        if cx and cy and pcx and pcy then
+            s.pos.x = math.floor(cx - pcx + 0.5)
+            s.pos.y = math.floor(cy - pcy + 0.5)
+            s.pos.point = "CENTER"
+        end
     end)
 
     -- Start hidden if locked
@@ -767,11 +769,13 @@ local function SetupChatSkin()
     end)
     dragOverlay:SetScript("OnDragStop", function()
         containerFrame:StopMovingOrSizing()
-        local point, _, relPoint, x, y = containerFrame:GetPoint()
-        settings.pos.point = point
-        settings.pos.relPoint = relPoint
-        settings.pos.x = x
-        settings.pos.y = y
+        local cx, cy = containerFrame:GetCenter()
+        local pcx, pcy = UIParent:GetCenter()
+        if cx and cy and pcx and pcy then
+            settings.pos.x = math.floor(cx - pcx + 0.5)
+            settings.pos.y = math.floor(cy - pcy + 0.5)
+            settings.pos.point = "CENTER"
+        end
     end)
 
     -- Right-click to toggle tab unlock

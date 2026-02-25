@@ -8,83 +8,117 @@ local SafeAfter = addonTable.Core.SafeAfter
 -- Module State
 -- ============================================================
 
-local skinFrame     -- BackdropTemplate frame sitting behind the meter
-local titleBar      -- title bar strip above the meter
-local titleText     -- FontString in the title bar
-local meterWindow   -- DamageMeter (parent of DamageMeterSessionWindow1)
-local btnD          -- replacement D button (damage type)
-local btnCO         -- replacement C/O button (current/overall session)
-local btnS          -- replacement S button (settings)
-local overlayFrame  -- parent for our replacement buttons (MEDIUM strata)
+local meterWindow   -- DamageMeter (the parent container frame)
+local skinFrame     -- BackdropTemplate frame wrapping all session windows
 
 local suppressSync   = false
 local hooksInstalled = false
 local dragInstalled  = false
+local savedHeaderHeight = nil
 
-local SyncOverlay  -- forward declaration (defined after CreateOverlayButtons)
+-- Per-session state: sessions[i] = { window, overlayFrame, btnD, btnCO, btnS }
+local sessions = {}
+
+local TITLE_ROW_H = 20
+local STRIP_W     = 24   -- width of the D/O/S button column per session
+
+local SyncOverlay              -- forward declaration
+local ApplyPositionAndSize     -- forward declaration
+local SyncAllBlizzardButtons   -- forward declaration
+local UpdateAllSessionLabels   -- forward declaration
+local IsShowingCurrentSession  -- forward declaration
 
 -- ============================================================
--- Core Logic
+-- Session Window Discovery
 -- ============================================================
 
 local function GetMeterWindow()
-    -- DamageMeterSessionWindow1 is the session child; its parent "DamageMeter"
-    -- is the actual visible container frame we want to skin.
-    local session = _G["DamageMeterSessionWindow1"]
-    if session then
-        local par = session:GetParent()
+    local s1 = _G["DamageMeterSessionWindow1"]
+    if s1 then
+        local par = s1:GetParent()
         if par and par:GetName() == "DamageMeter" then
             return par
         end
     end
-    return session
+    return s1
 end
 
--- Enable or disable dragging of meterWindow.
+local function GetSessionWindows()
+    local list = {}
+    local i = 1
+    while true do
+        local w = _G["DamageMeterSessionWindow" .. i]
+        if not w then break end
+        -- Only include windows that are visible (Blizzard hides rather than destroys them)
+        if w:IsShown() then
+            list[#list + 1] = w
+        end
+        i = i + 1
+    end
+    return list
+end
+
+-- ============================================================
+-- Drag / Lock
+-- ============================================================
+
 local function ApplyLock()
-    if not meterWindow then return end
+    if not skinFrame then return end
     if UIThingsDB.damageMeter.locked then
-        meterWindow:SetMovable(false)
-        meterWindow:EnableMouse(false)
+        skinFrame:EnableMouse(false)
+        skinFrame:SetMovable(false)
     else
-        meterWindow:SetMovable(true)
-        meterWindow:EnableMouse(true)
+        skinFrame:EnableMouse(true)
+        skinFrame:SetMovable(true)
+        skinFrame:RegisterForDrag("LeftButton")
         if not dragInstalled then
             dragInstalled = true
-            meterWindow:SetScript("OnMouseDown", function(self, btn)
-                if btn == "LeftButton" and not UIThingsDB.damageMeter.locked then
+            skinFrame:SetScript("OnDragStart", function(self)
+                if not UIThingsDB.damageMeter.locked then
                     self:StartMoving()
                 end
             end)
-            meterWindow:SetScript("OnMouseUp", function(self)
+            skinFrame:SetScript("OnDragStop", function(self)
                 self:StopMovingOrSizing()
-                SafeAfter(0, SyncSkin)
+                local cx, cy   = self:GetCenter()
+                local pcx, pcy = UIParent:GetCenter()
+                if cx and cy and pcx and pcy then
+                    UIThingsDB.damageMeter.pos.x     = math.floor(cx - pcx + 0.5)
+                    UIThingsDB.damageMeter.pos.y     = math.floor(cy - pcy + 0.5)
+                    UIThingsDB.damageMeter.pos.point = "CENTER"
+                end
+                ApplyPositionAndSize()
+                if addonTable.DamageMeter.RefreshPosSliders then
+                    addonTable.DamageMeter.RefreshPosSliders()
+                end
             end)
         end
     end
 end
 
--- Mirror the meter's position across the centre of UIParent (same Y, reflected X).
+-- ============================================================
+-- Reflect Chat
+-- ============================================================
+
 local function ReflectChat()
     if not meterWindow then return end
     if InCombatLockdown() then return end
     local chat = _G["LunaChatSkinContainer"]
     if not chat then return end
-
-    -- Get chat position in UIParent coordinates
-    local cx = chat:GetLeft()
-    local cy = chat:GetBottom()
-    if not cx then return end
-
-    local screenW = UIParent:GetWidth()
-    local mw = (_G["LunaChatSkinContainer"] and _G["LunaChatSkinContainer"]:GetWidth()) or meterWindow:GetWidth()
-
-    -- Reflect: place so the meter's right edge mirrors the chat's left edge
-    local reflectedX = screenW - cx - mw
-
+    local pcx, pcy = UIParent:GetCenter()
+    if not pcx then return end
+    local ccx, ccy = chat:GetCenter()
+    if not ccx then return end
+    local reflectedOffX = -(ccx - pcx)
     meterWindow:ClearAllPoints()
-    meterWindow:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", reflectedX, cy)
-    SafeAfter(0, SyncSkin)
+    meterWindow:SetPoint("CENTER", UIParent, "CENTER", reflectedOffX, ccy - pcy)
+    local cx2, cy2 = meterWindow:GetCenter()
+    if cx2 and cy2 then
+        UIThingsDB.damageMeter.pos.x     = math.floor(cx2 - pcx + 0.5)
+        UIThingsDB.damageMeter.pos.y     = math.floor(cy2 - pcy + 0.5)
+        UIThingsDB.damageMeter.pos.point = "CENTER"
+    end
+    SafeAfter(0, SyncOverlay)
 end
 
 function addonTable.DamageMeter.SetLocked(locked)
@@ -96,75 +130,42 @@ function addonTable.DamageMeter.ReflectChat()
     ReflectChat()
 end
 
--- Attempt to resize the DamageMeter frame to match LunaChatSkinContainer (the drawn chat frame).
--- Guarded by InCombatLockdown since SetSize is blocked on protected frames.
-local function ForceMeterSize()
-    if not meterWindow then return end
-    if InCombatLockdown() then return end
-    local cf = _G["LunaChatSkinContainer"]
-    if not cf then return end
-    local cw = cf:GetWidth()
-    local ch = cf:GetHeight()
-    if not cw or cw == 0 then return end
-    meterWindow:SetSize(cw, ch)
-end
+-- ============================================================
+-- Size / Position
+-- ============================================================
 
--- Snap skinFrame to sit behind the meter at LunaChatSkinContainer's size.
--- We use that frame's dimensions directly so the skin is correct even
--- if SetSize on the Blizzard frame is ignored.
-local function SyncSkin()
-    if suppressSync then return end
-    if not skinFrame or not meterWindow then return end
-    if not meterWindow:IsShown() then
-        skinFrame:Hide()
-        return
+-- Returns the width/height of a single session pane.
+local function GetSessionSize()
+    local s  = UIThingsDB.damageMeter
+    local sw = s.width  or 0
+    local sh = s.height or 0
+    if sw > 0 and sh > 0 then return sw, sh end
+    local cf = _G["LunaChatSkinContainer"]
+    if cf and cf:GetWidth() ~= 0 then
+        return cf:GetWidth(), cf:GetHeight()
     end
-
-    -- Try to resize the meter to match the chat skin container
-    ForceMeterSize()
-
-    local s      = UIThingsDB.damageMeter
-    local titleH = (s.titleBar and (s.titleBarHeight or 20)) or 0
-    local border = s.borderSize or 2
-
-    -- Use LunaChatSkinContainer as the authoritative size source
-    local cf = _G["LunaChatSkinContainer"]
-    local w  = (cf and cf:GetWidth()  ~= 0 and cf:GetWidth())  or meterWindow:GetWidth()
-    local h  = (cf and cf:GetHeight() ~= 0 and cf:GetHeight()) or meterWindow:GetHeight()
-    -- Position comes from where the meter actually is
-    local x  = meterWindow:GetLeft()
-    local y  = meterWindow:GetBottom()
-
-    if not x or w == 0 then return end
-
-    suppressSync = true
-    skinFrame:ClearAllPoints()
-    skinFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x - border, y - border)
-    skinFrame:SetSize(w + border * 2, h + titleH + border * 2)
-    skinFrame:Show()
-    suppressSync = false
-
-    SyncOverlay()
+    -- Use the raw session window size (not meterWindow, which we resize dynamically)
+    local sw1 = _G["DamageMeterSessionWindow1"]
+    if sw1 then
+        local ww, hh = sw1:GetWidth(), sw1:GetHeight()
+        if ww > 0 and hh > 0 then return ww, hh end
+    end
+    return 200, 120
 end
 
 -- ============================================================
--- Visual Helpers
+-- Skin Frame
 -- ============================================================
 
 local function ApplyBackdrop()
-    local s = UIThingsDB.damageMeter
+    if not skinFrame then return end
+    local s  = UIThingsDB.damageMeter
+    local bs = s.borderSize or 2
     skinFrame:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile     = false,
-        tileSize = 0,
-        edgeSize = s.borderSize or 2,
-        insets   = {
-            left   = s.borderSize or 2,
-            right  = s.borderSize or 2,
-            top    = s.borderSize or 2,
-            bottom = s.borderSize or 2,
-        },
+        tile = false, tileSize = 0, edgeSize = bs,
+        insets = { left = bs, right = bs, top = bs, bottom = bs },
     })
     local bg = s.bgColor
     skinFrame:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
@@ -172,173 +173,329 @@ local function ApplyBackdrop()
     skinFrame:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a)
 end
 
-local function ApplyTitleBar()
-    local s = UIThingsDB.damageMeter
-    if s.titleBar then
-        local h = s.titleBarHeight or 20
-        local b = s.borderSize or 2
-        titleBar:ClearAllPoints()
-        titleBar:SetPoint("TOPLEFT",  skinFrame, "TOPLEFT",   b, -b)
-        titleBar:SetPoint("TOPRIGHT", skinFrame, "TOPRIGHT", -b, -b)
-        titleBar:SetHeight(h)
-        local tc = s.titleBarColor
-        titleBar:SetBackdropColor(tc.r, tc.g, tc.b, tc.a)
-        titleText:SetText(s.titleText or "Damage Meter")
-        titleBar:Show()
-    else
-        titleBar:Hide()
+-- Returns a short display name for a session window's meter type + session type.
+local METER_TYPE_NAMES = {
+    [0] = "Dmg Out", [1] = "Dmg In", [2] = "Heal Out",
+    [3] = "Heal In", [4] = "Deaths", [5] = "Eff Heal",
+}
+local function GetSessionLabel(win)
+    if not win then return "" end
+    local typeName = ""
+    -- Try to read the TypeName fontstring Blizzard keeps on the dropdown
+    if win.DamageMeterTypeDropdown and win.DamageMeterTypeDropdown.TypeName then
+        typeName = win.DamageMeterTypeDropdown.TypeName:GetText() or ""
+    end
+    if typeName == "" then
+        typeName = METER_TYPE_NAMES[win.damageMeterType] or ("Type " .. tostring(win.damageMeterType or "?"))
+    end
+    local sessLabel = (win.sessionType == 0) and "Current" or "Overall"
+    return typeName .. " (" .. sessLabel .. ")"
+end
+
+local function ApplySessionTitleLabels()
+    if not skinFrame then return end
+    local s      = UIThingsDB.damageMeter
+    local border = s.borderSize or 2
+    local wins   = GetSessionWindows()
+    local nSess  = math.max(1, #wins)
+    local meterW = meterWindow and meterWindow:GetWidth() or 0
+    if meterW == 0 then return end
+    local slotW  = math.floor(meterW / nSess)
+
+    for i = 1, nSess do
+        local sess = sessions[i]
+        if not sess then break end
+        -- Create label fontstring on first use
+        if not sess.titleLabel then
+            sess.titleLabel = skinFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            sess.titleLabel:SetTextColor(1, 1, 1, 0.8)
+            sess.titleLabel:SetJustifyH("CENTER")
+            sess.titleLabel:SetHeight(TITLE_ROW_H)
+        end
+        local lbl = sess.titleLabel
+        lbl:ClearAllPoints()
+        local leftOff  = border + slotW * (i - 1)
+        local rightOff = -(border + meterW - slotW * i)
+        lbl:SetPoint("TOPLEFT",  skinFrame, "TOPLEFT",  leftOff,  -border)
+        lbl:SetPoint("TOPRIGHT", skinFrame, "TOPRIGHT", rightOff, -border)
+        lbl:SetText(GetSessionLabel(wins[i]))
+        lbl:Show()
+    end
+    -- Hide labels for sessions that no longer exist
+    for i = nSess + 1, #sessions do
+        if sessions[i] and sessions[i].titleLabel then
+            sessions[i].titleLabel:Hide()
+        end
     end
 end
 
 local function CreateSkinFrame()
     if skinFrame then return end
-
     skinFrame = CreateFrame("Frame", "LunaUITweaks_MeterSkin", UIParent, "BackdropTemplate")
     skinFrame:SetFrameStrata("LOW")
     skinFrame:SetFrameLevel(1)
     skinFrame:Hide()
-
-    titleBar = CreateFrame("Frame", nil, skinFrame, "BackdropTemplate")
-    titleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    titleBar:SetFrameLevel(2)
-    titleBar:Hide()
-
-    titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    titleText:SetPoint("CENTER", titleBar, "CENTER", 0, 0)
-    titleText:SetTextColor(1, 1, 1)
 end
 
 -- ============================================================
--- Overlay Buttons (D / C-O / S)
+-- Overlay Buttons (per session)
 -- ============================================================
 
-local function MakeOverlayBtn(label, parent, yOffset, onClick)
-    local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(18, 18)
-    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, yOffset)
-
-    local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0.6)
-
-    local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    fs:SetAllPoints()
-    fs:SetJustifyH("CENTER")
-    fs:SetText(label)
-    btn._label = fs
-
-    btn:SetScript("OnClick", onClick)
-    btn:SetScript("OnEnter", function(self)
-        bg:SetColorTexture(0.3, 0.3, 0.3, 0.8)
-    end)
-    btn:SetScript("OnLeave", function(self)
-        bg:SetColorTexture(0, 0, 0, 0.6)
-    end)
+local function MakeOverlayBtn(label, parent, yOffset)
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(20, 20)
+    btn:SetPoint("TOP", parent, "TOP", 0, yOffset)
+    btn:SetText(label)
+    btn:SetFrameStrata("MEDIUM")
+    btn:SetFrameLevel(10)
+    local fs = btn:GetFontString()
+    if fs then fs:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE") end
+    btn._label = btn:GetFontString()
     return btn
 end
 
-local function CreateOverlayButtons()
-    if overlayFrame then return end
+local function CreateSessionOverlay(idx)
+    if sessions[idx] and sessions[idx].overlayFrame then return end
+    if not sessions[idx] then sessions[idx] = {} end
 
-    overlayFrame = CreateFrame("Frame", "LunaUITweaks_MeterOverlay", UIParent)
-    overlayFrame:SetFrameStrata("MEDIUM")
-    overlayFrame:SetFrameLevel(10)
-    overlayFrame:SetSize(26, 62)
-    overlayFrame:Hide()
+    local over = CreateFrame("Frame", "LunaUITweaks_MeterOverlay" .. idx, UIParent)
+    over:SetFrameStrata("MEDIUM")
+    over:SetFrameLevel(10)
+    over:SetSize(20, 66)
+    over:Hide()
 
-    -- Helper: fire a frame's OnMouseDown/OnClick handler, trying Button:Click() first,
-    -- then OnMouseDown script, to handle both Button and plain Frame cases.
-    local function FireFrame(f)
-        if not f then return end
-        if f.Click then
-            f:Click()
-        else
-            local fn = f:GetScript("OnMouseDown")
-            if fn then fn(f, "LeftButton") end
-        end
-    end
-
-    -- D button: opens the damage type dropdown via its Arrow child button
-    btnD = MakeOverlayBtn("D", overlayFrame, -2, function()
-        local session = _G["DamageMeterSessionWindow1"]
-        if not session then return end
-        local dd = session.DamageMeterTypeDropdown
-        if dd then
-            -- Arrow is the actual Button child that opens the dropdown
-            local arrow = dd.Arrow
-            if arrow then
-                FireFrame(arrow)
-            else
-                FireFrame(dd)
-            end
-        end
-    end)
-
-    -- C/O button: fires the SessionDropdown's handler to open the session picker
-    btnCO = MakeOverlayBtn("C", overlayFrame, -22, function(self)
-        local session = _G["DamageMeterSessionWindow1"]
-        if session then
-            FireFrame(session.SessionDropdown)
-        end
-        -- Toggle label optimistically; actual state determined by which session is shown
-        local cur = self._label:GetText()
-        self._label:SetText(cur == "C" and "O" or "C")
-    end)
-
-    -- S button: fires the SettingsDropdown's handler to open settings
-    btnS = MakeOverlayBtn("S", overlayFrame, -42, function()
-        local session = _G["DamageMeterSessionWindow1"]
-        if session then
-            FireFrame(session.SettingsDropdown)
-        end
-    end)
+    sessions[idx].overlayFrame = over
+    sessions[idx].btnD  = MakeOverlayBtn("D", over, -2)
+    sessions[idx].btnCO = MakeOverlayBtn("O", over, -24)
+    sessions[idx].btnS  = MakeOverlayBtn("S", over, -46)
 end
 
--- Position the overlay frame flush with the left edge of the meter's header area.
+-- ============================================================
+-- Sync: position skinFrame to wrap all session windows
+-- ============================================================
+
 SyncOverlay = function()
-    if not overlayFrame or not meterWindow then return end
-    if not meterWindow:IsShown() then
-        overlayFrame:Hide()
+    if not skinFrame or not meterWindow then return end
+
+    local wins = GetSessionWindows()
+    if #wins == 0 or not wins[1]:IsShown() then
+        skinFrame:Hide()
+        for _, sess in ipairs(sessions) do
+            if sess.overlayFrame then sess.overlayFrame:Hide() end
+        end
         return
     end
 
-    local session = _G["DamageMeterSessionWindow1"]
-    local header  = session and session.Header
-    if not header then return end
+    local s      = UIThingsDB.damageMeter
+    local border = s.borderSize or 2
+    local nSess  = #wins
 
-    local hLeft   = header:GetLeft()
-    local hTop    = header:GetTop()
-    if not hLeft then return end
+    -- Ensure we have an overlay per session
+    for i = 1, nSess do
+        CreateSessionOverlay(i)
+    end
 
-    overlayFrame:ClearAllPoints()
-    overlayFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", hLeft, hTop)
-    overlayFrame:Show()
+    -- meterWindow keeps its natural width; divide its content area equally among sessions.
+    local meterW = meterWindow:GetWidth()
+    local meterH = meterWindow:GetHeight()
+    local _, h   = GetSessionSize()   -- h from saved/chat fallback
+    if meterW == 0 then return end
+    if h == 0 then h = meterH end
+
+    -- Width per session slot (content + strip), dividing the full meter width equally
+    local slotW = math.floor(meterW / nSess)
+    local sessW = slotW - STRIP_W     -- pure content width per session
+
+    -- skinFrame wraps the meter at its actual position, plus border and title row
+    local totalW = meterW + border * 2
+    local totalH = meterH + border * 2 + TITLE_ROW_H
+
+    local mx = meterWindow:GetLeft()
+    local my = meterWindow:GetBottom()
+    if not mx then return end
+
+    local skinCX = mx - border + totalW / 2
+    local skinCY = my - border + totalH / 2
+
+    suppressSync = true
+    skinFrame:ClearAllPoints()
+    skinFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", skinCX, skinCY)
+    skinFrame:SetSize(totalW, totalH)
+    skinFrame:Show()
+    suppressSync = false
+
+    ApplySessionTitleLabels()
+
+    -- Position each session window and its overlay strip inside meterWindow
+    if not InCombatLockdown() then
+        for i = 1, nSess do
+            local win = wins[i]
+            win:ClearAllPoints()
+            win:SetPoint("TOPLEFT", meterWindow, "TOPLEFT", slotW * (i - 1), 0)
+            win:SetSize(sessW, meterH)
+        end
+    end
+
+    -- Position each overlay strip over the button area of its session slot
+    for i = 1, nSess do
+        local sess = sessions[i]
+        local over = sess and sess.overlayFrame
+        if over then
+            over:ClearAllPoints()
+            over:SetWidth(STRIP_W)
+            local slotLeft = border + slotW * (i - 1) + sessW
+            over:SetPoint("TOPLEFT",    skinFrame, "TOPLEFT",    slotLeft, -(border + TITLE_ROW_H))
+            over:SetPoint("BOTTOMLEFT", skinFrame, "BOTTOMLEFT", slotLeft,   border)
+            over:Show()
+        end
+    end
+    -- Hide overlays for sessions that no longer exist
+    for i = nSess + 1, #sessions do
+        local sess = sessions[i]
+        if sess and sess.overlayFrame then sess.overlayFrame:Hide() end
+    end
+
+    SyncAllBlizzardButtons()
+    UpdateAllSessionLabels()
 end
 
--- Hide the three original Blizzard buttons we are replacing.
-local function HideOriginalButtons()
-    local session = _G["DamageMeterSessionWindow1"]
-    if not session then return end
+-- ============================================================
+-- Blizzard button repositioning (per session)
+-- ============================================================
 
-    -- DamageMeterTypeDropdown (D)
-    local dd = session.DamageMeterTypeDropdown
-    if dd then
-        dd:SetAlpha(0)
-        dd:EnableMouse(false)
+SyncAllBlizzardButtons = function()
+    local wins = GetSessionWindows()
+    for i, win in ipairs(wins) do
+        local sess = sessions[i]
+        if sess and sess.overlayFrame and sess.overlayFrame:IsShown() then
+            local function PlaceOver(blizzBtn, ourBtn)
+                if not blizzBtn or not ourBtn then return end
+                if blizzBtn:GetParent() ~= ourBtn:GetParent() then
+                    blizzBtn:SetParent(ourBtn:GetParent())
+                end
+                blizzBtn:ClearAllPoints()
+                blizzBtn:SetAllPoints(ourBtn)
+                blizzBtn:SetFrameStrata("HIGH")
+            end
+            PlaceOver(win.DamageMeterTypeDropdown, sess.btnD)
+            PlaceOver(win.SessionDropdown,         sess.btnCO)
+            PlaceOver(win.SettingsDropdown,        sess.btnS)
+
+            -- Hook session window to refresh button label and title after changes
+            if not win._lunaSessionTypeLabelHooked then
+                win._lunaSessionTypeLabelHooked = true
+                local capturedWin = win
+                local capturedIdx = i
+                local function RefreshAll()
+                    -- Look up sess dynamically so we always get the current titleLabel
+                    local s = sessions[capturedIdx]
+                    if not s then return end
+                    if s.btnCO then
+                        s.btnCO:SetText(IsShowingCurrentSession(capturedWin) and "C" or "O")
+                    end
+                    if s.titleLabel then
+                        s.titleLabel:SetText(GetSessionLabel(capturedWin))
+                    end
+                end
+                -- Hook SetSessionType if Blizzard exposes it
+                if win.SetSessionType then
+                    hooksecurefunc(win, "SetSessionType", function()
+                        SafeAfter(0, RefreshAll)
+                    end)
+                end
+                -- Hook DamageMeterTypeDropdown — poll after click since SetText isn't called
+                if win.DamageMeterTypeDropdown then
+                    win.DamageMeterTypeDropdown:HookScript("OnMouseDown", function()
+                        local deadline = GetTime() + 2.0
+                        local prev = capturedWin.damageMeterType
+                        local watcher = CreateFrame("Frame")
+                        watcher:SetScript("OnUpdate", function(self)
+                            if GetTime() > deadline then
+                                self:SetScript("OnUpdate", nil)
+                                return
+                            end
+                            if capturedWin.damageMeterType ~= prev then
+                                self:SetScript("OnUpdate", nil)
+                                RefreshAll()
+                            end
+                        end)
+                    end)
+                end
+                -- Hook SessionDropdown — watch for sessionType change after click
+                if win.SessionDropdown then
+                    win.SessionDropdown:HookScript("OnMouseDown", function()
+                        local deadline = GetTime() + 2.0
+                        local prev = capturedWin.sessionType
+                        local watcher = CreateFrame("Frame")
+                        watcher:SetScript("OnUpdate", function(self)
+                            if GetTime() > deadline then
+                                self:SetScript("OnUpdate", nil)
+                                return
+                            end
+                            if capturedWin.sessionType ~= prev then
+                                self:SetScript("OnUpdate", nil)
+                                RefreshAll()
+                            end
+                        end)
+                    end)
+                end
+            end
+        end
     end
+end
 
-    -- SessionDropdown (C/O)
-    local sd2 = session.SessionDropdown
-    if sd2 then
-        sd2:SetAlpha(0)
-        sd2:EnableMouse(false)
+-- ============================================================
+-- Hide original Blizzard chrome
+-- ============================================================
+
+local function HideSessionChrome(win)
+    if not win then return end
+    if win.Background then
+        win.Background:SetAlpha(0)
+        win.Background:EnableMouse(false)
     end
+    if win.Header then
+        if not savedHeaderHeight then
+            savedHeaderHeight = win.Header:GetHeight()
+        end
+        win.Header:SetAlpha(0)
+        win.Header:EnableMouse(false)
+        win.Header:SetHeight(0.001)
+    end
+    if win.DamageMeterTypeDropdown then win.DamageMeterTypeDropdown:SetAlpha(0) end
+    if win.SessionDropdown         then win.SessionDropdown:SetAlpha(0)         end
+    if win.SettingsDropdown        then win.SettingsDropdown:SetAlpha(0)        end
+end
 
-    -- SettingsDropdown icon button (top-right of header, becomes S)
-    local sd = session.SettingsDropdown
-    if sd then
-        sd:SetAlpha(0)
-        sd:EnableMouse(false)
+local function RestoreSessionChrome(win)
+    if not win then return end
+    if win.Background then
+        win.Background:SetAlpha(1)
+        win.Background:EnableMouse(true)
+    end
+    if win.Header then
+        win.Header:SetAlpha(1)
+        win.Header:EnableMouse(true)
+        if savedHeaderHeight then win.Header:SetHeight(savedHeaderHeight) end
+    end
+    if win.DamageMeterTypeDropdown then
+        win.DamageMeterTypeDropdown:SetAlpha(1)
+        win.DamageMeterTypeDropdown:EnableMouse(true)
+    end
+    if win.SessionDropdown then
+        win.SessionDropdown:SetAlpha(1)
+        win.SessionDropdown:EnableMouse(true)
+    end
+    if win.SettingsDropdown then
+        win.SettingsDropdown:SetAlpha(1)
+        win.SettingsDropdown:EnableMouse(true)
+    end
+end
+
+local function HideAllChrome()
+    local wins = GetSessionWindows()
+    for _, win in ipairs(wins) do
+        HideSessionChrome(win)
     end
 end
 
@@ -351,53 +508,118 @@ local function SetupHooks()
     if not meterWindow then return end
     hooksInstalled = true
 
-    -- Parent frame moves → re-sync skin
     hooksecurefunc(meterWindow, "SetPoint", function()
         if not suppressSync and UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
-            SafeAfter(0, SyncSkin)
+            SafeAfter(0, SyncOverlay)
         end
     end)
 
-    -- Parent frame shows → re-sync skin
     hooksecurefunc(meterWindow, "Show", function()
         if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
-            SafeAfter(0, SyncSkin)
+            SafeAfter(0, SyncOverlay)
         end
     end)
 
-    -- Parent frame hides → hide skin
     meterWindow:HookScript("OnHide", function()
         if skinFrame then skinFrame:Hide() end
     end)
 
-    -- Parent frame resized → re-sync skin
     meterWindow:HookScript("OnSizeChanged", function()
         if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
-            SafeAfter(0, SyncSkin)
+            SafeAfter(0, SyncOverlay)
         end
     end)
 
-    -- Session window show/hide also controls visibility
-    local session = _G["DamageMeterSessionWindow1"]
-    if session and session ~= meterWindow then
-        hooksecurefunc(session, "Show", function()
+    -- Hook each session window for show/hide/resize/move
+    local function HookSession(win)
+        if not win or win._lunaHooked then return end
+        win._lunaHooked = true
+        hooksecurefunc(win, "Show", function()
             if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
-                SafeAfter(0, SyncSkin)
+                SafeAfter(0, SyncOverlay)
             end
         end)
-        session:HookScript("OnHide", function()
-            if skinFrame then skinFrame:Hide() end
+        win:HookScript("OnHide", function()
+            SafeAfter(0, SyncOverlay)
+        end)
+        win:HookScript("OnSizeChanged", function()
+            if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
+                SafeAfter(0, SyncOverlay)
+            end
         end)
     end
 
-    -- LunaChatSkinContainer resized → re-sync so skin stays at correct size
+    local wins = GetSessionWindows()
+    for _, win in ipairs(wins) do HookSession(win) end
+
+    -- Scan for created/removed session windows and hook/skin/restore them
+    local lastKnownCount = #wins
+    local function ScanForNewSessions()
+        if not (UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled) then return end
+        local newWins = GetSessionWindows()
+        local newCount = #newWins
+        if newCount ~= lastKnownCount then
+            -- Restore chrome on any numbered windows that are now hidden
+            local i = 1
+            while true do
+                local w = _G["DamageMeterSessionWindow" .. i]
+                if not w then break end
+                if not w:IsShown() then RestoreSessionChrome(w) end
+                i = i + 1
+            end
+            lastKnownCount = newCount
+            for _, win in ipairs(newWins) do
+                HookSession(win)
+                HideSessionChrome(win)
+            end
+            SafeAfter(0,   SyncOverlay)
+            -- Re-sync after Blizzard has fully initialised the new window's fields
+            SafeAfter(0.3, SyncOverlay)
+            SafeAfter(0.8, SyncOverlay)
+        end
+    end
+
+    -- Also hook meterWindow:Show for the original polling path
+    hooksecurefunc(meterWindow, "Show", function()
+        ScanForNewSessions()
+    end)
+
+    -- Poll on OnSizeChanged too — meterWindow resizes when sessions are added/removed
+    meterWindow:HookScript("OnSizeChanged", function()
+        ScanForNewSessions()
+    end)
+
+    -- OnUpdate ticker: cheaply watch for new/removed session windows every 0.5s
+    local ticker = 0
+    meterWindow:HookScript("OnUpdate", function(_, elapsed)
+        ticker = ticker + elapsed
+        if ticker < 0.5 then return end
+        ticker = 0
+        ScanForNewSessions()
+    end)
+
     local chatSkinFrame = _G["LunaChatSkinContainer"]
     if chatSkinFrame then
         chatSkinFrame:HookScript("OnSizeChanged", function()
             if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
-                SafeAfter(0, SyncSkin)
+                SafeAfter(0, SyncOverlay)
             end
         end)
+    end
+
+    -- Re-skin when a floating chat frame is created or destroyed
+    local function OnChatFrameChange()
+        if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then
+            SafeAfter(0.2, function()
+                addonTable.DamageMeter.Initialize()
+            end)
+        end
+    end
+    if FCF_OpenNewWindow then
+        hooksecurefunc("FCF_OpenNewWindow", OnChatFrameChange)
+    end
+    if FCF_Close then
+        hooksecurefunc("FCF_Close", OnChatFrameChange)
     end
 end
 
@@ -405,29 +627,51 @@ end
 -- Apply / Initialize / Update
 -- ============================================================
 
+ApplyPositionAndSize = function()
+    if not meterWindow then return end
+    if InCombatLockdown() then return end
+    local s = UIThingsDB.damageMeter
+    local w = s.width  or 0
+    local h = s.height or 0
+    local x = s.pos and s.pos.x or 0
+    local y = s.pos and s.pos.y or 0
+    if w > 0 and h > 0 then meterWindow:SetSize(w, h) end
+    meterWindow:ClearAllPoints()
+    meterWindow:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    SafeAfter(0, SyncOverlay)
+end
+
+function addonTable.DamageMeter.ApplyPositionAndSize()
+    ApplyPositionAndSize()
+end
+
 local function ApplySettings()
     if not skinFrame then return end
     skinFrame:SetFrameStrata(UIThingsDB.damageMeter.frameStrata or "LOW")
     ApplyBackdrop()
-    ApplyTitleBar()
     ApplyLock()
-    SyncSkin()
+    SafeAfter(0, SyncOverlay)
 end
 
 function addonTable.DamageMeter.Initialize()
     CreateSkinFrame()
-    CreateOverlayButtons()
     meterWindow = GetMeterWindow()
+
+    -- Pre-create overlay for session 1
+    CreateSessionOverlay(1)
 
     if not UIThingsDB.damageMeter.enabled then
         if skinFrame then skinFrame:Hide() end
-        if overlayFrame then overlayFrame:Hide() end
+        for _, sess in ipairs(sessions) do
+            if sess.overlayFrame then sess.overlayFrame:Hide() end
+        end
         return
     end
 
     if meterWindow then
         SetupHooks()
-        HideOriginalButtons()
+        HideAllChrome()
+        ApplyPositionAndSize()
         ApplySettings()
     end
 end
@@ -440,29 +684,17 @@ function addonTable.DamageMeter.UpdateSettings()
             meterWindow = GetMeterWindow()
             if meterWindow then
                 SetupHooks()
-                HideOriginalButtons()
+                HideAllChrome()
             end
         end
         ApplySettings()
     else
         skinFrame:Hide()
-        if overlayFrame then overlayFrame:Hide() end
-        -- Restore original buttons
-        local session = _G["DamageMeterSessionWindow1"]
-        if session then
-            if session.DamageMeterTypeDropdown then
-                session.DamageMeterTypeDropdown:SetAlpha(1)
-                session.DamageMeterTypeDropdown:EnableMouse(true)
-            end
-            if session.SessionDropdown then
-                session.SessionDropdown:SetAlpha(1)
-                session.SessionDropdown:EnableMouse(true)
-            end
-            if session.SettingsDropdown then
-                session.SettingsDropdown:SetAlpha(1)
-                session.SettingsDropdown:EnableMouse(true)
-            end
+        for _, sess in ipairs(sessions) do
+            if sess.overlayFrame then sess.overlayFrame:Hide() end
         end
+        local wins = GetSessionWindows()
+        for _, win in ipairs(wins) do RestoreSessionChrome(win) end
     end
 end
 
@@ -474,9 +706,14 @@ function addonTable.DamageMeter.GetDetectedAddon()
     return nil
 end
 
+function addonTable.DamageMeter.GetMeterFrame()
+    return meterWindow
+end
+
 -- ============================================================
 -- Events
 -- ============================================================
+
 
 EventBus.Register("PLAYER_ENTERING_WORLD", function()
     if not UIThingsDB or not UIThingsDB.damageMeter then return end
@@ -485,15 +722,55 @@ EventBus.Register("PLAYER_ENTERING_WORLD", function()
     end)
 end)
 
+-- sessionType=0 means current live session, sessionType=1 means a past/named session.
+IsShowingCurrentSession = function(win)
+    if not win then return true end
+    return (win.sessionType or 0) ~= 0
+end
+
+UpdateAllSessionLabels = function()
+    -- Ensure title label fontstrings exist and are positioned correctly
+    ApplySessionTitleLabels()
+    local wins = GetSessionWindows()
+    for i, win in ipairs(wins) do
+        local sess = sessions[i]
+        if sess then
+            if sess.btnCO then
+                sess.btnCO:SetText(IsShowingCurrentSession(win) and "C" or "O")
+            end
+            if sess.titleLabel then
+                sess.titleLabel:SetText(GetSessionLabel(win))
+            end
+        end
+    end
+end
+
 EventBus.Register("DAMAGE_METER_CURRENT_SESSION_UPDATED", function()
     if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled and skinFrame then
-        SafeAfter(0, SyncSkin)
+        -- New session windows may have been created; hook and skin any we haven't seen yet
+        if meterWindow then
+            local newWins = GetSessionWindows()
+            for _, win in ipairs(newWins) do
+                if not win._lunaHooked then
+                    win._lunaHooked = true
+                    win:HookScript("OnHide", function() SafeAfter(0, SyncOverlay) end)
+                end
+                HideSessionChrome(win)
+            end
+        end
+        SafeAfter(0, SyncOverlay)
+        SafeAfter(0.3, UpdateAllSessionLabels)
     end
 end)
 
--- After combat: re-apply size that was blocked by InCombatLockdown
+EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", function()
+    if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled and skinFrame then
+        SafeAfter(0.3, UpdateAllSessionLabels)
+    end
+end)
+
 EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled and meterWindow then
-        SafeAfter(0, SyncSkin)
+        SafeAfter(0, SyncOverlay)
     end
 end)

@@ -17,12 +17,6 @@
   <Binding name="LUNAUITWEAKS_GAME_ROTATECCW" category="LUNAUITWEAKS">
     LunaUITweaks_Game_RotateCCW()
   </Binding>
-  <Binding name="LUNAUITWEAKS_GAME_SOFTDROP" category="LUNAUITWEAKS">
-    LunaUITweaks_Game_SoftDrop()
-  </Binding>
-  <Binding name="LUNAUITWEAKS_GAME_HARDDROP" category="LUNAUITWEAKS">
-    LunaUITweaks_Game_HardDrop()
-  </Binding>
   <Binding name="LUNAUITWEAKS_GAME_PAUSE" category="LUNAUITWEAKS">
     LunaUITweaks_Game_Pause()
   </Binding>

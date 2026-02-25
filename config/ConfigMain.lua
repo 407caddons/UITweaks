@@ -206,16 +206,16 @@ function addonTable.Config.Initialize()
             { id = 12, name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
             { id = 13, name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
             { id = 14, name = "Chat",             key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
-            { id = 15, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
-            { id = 16, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 17, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
-            { id = 18, name = "Reagents",         key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
-            { id = 19, name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 20, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 21, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 22, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 23, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
-            { id = 24, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_Savageblow" },
+            { id = 15, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_Savageblow" },
+            { id = 16, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 17, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 18, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
+            { id = 19, name = "Reagents",         key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
+            { id = 20, name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 21, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 22, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 23, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 24, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
             { id = 25, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
@@ -372,16 +372,16 @@ function addonTable.Config.Initialize()
             [12] = coordinatesPanel,
             [13] = framesPanel,
             [14] = chatSkinPanel,
-            [15] = vendorPanel,
-            [16] = lootPanel,
-            [17] = notificationsPanel,
-            [18] = reagentsPanel,
-            [19] = talentManagerPanel,
-            [20] = talentPanel,
-            [21] = miscPanel,
-            [22] = widgetsPanel,
-            [23] = warehousingPanel,
-            [24] = damageMeterPanel,
+            [15] = damageMeterPanel,
+            [16] = vendorPanel,
+            [17] = lootPanel,
+            [18] = notificationsPanel,
+            [19] = reagentsPanel,
+            [20] = talentManagerPanel,
+            [21] = talentPanel,
+            [22] = miscPanel,
+            [23] = widgetsPanel,
+            [24] = warehousingPanel,
             [25] = addonVersionsPanel,
         }
 
@@ -420,13 +420,13 @@ function addonTable.Config.Initialize()
             if id == 2 and addonTable.Config.RefreshQuestReminderList then
                 addonTable.Config.RefreshQuestReminderList()
             end
-            if id == 20 and addonTable.Config.RefreshTalentReminderList then
+            if id == 21 and addonTable.Config.RefreshTalentReminderList then
                 addonTable.Config.RefreshTalentReminderList()
             end
-            if id == 18 and addonTable.Config.RefreshReagentsList then
+            if id == 19 and addonTable.Config.RefreshReagentsList then
                 addonTable.Config.RefreshReagentsList()
             end
-            if id == 23 and addonTable.Config.RefreshWarehousingList then
+            if id == 24 and addonTable.Config.RefreshWarehousingList then
                 addonTable.Config.RefreshWarehousingList()
             end
         end
@@ -517,35 +517,35 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.ChatSkin then
                 addonTable.ConfigSetup.ChatSkin(chatSkinPanel, navButtons[14], configWindow)
             end
+            if addonTable.ConfigSetup.DamageMeter then
+                addonTable.ConfigSetup.DamageMeter(damageMeterPanel, navButtons[15], configWindow)
+            end
             if addonTable.ConfigSetup.Vendor then
-                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[15], configWindow)
+                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[16], configWindow)
             end
             if addonTable.ConfigSetup.Loot then
-                addonTable.ConfigSetup.Loot(lootPanel, navButtons[16], configWindow)
+                addonTable.ConfigSetup.Loot(lootPanel, navButtons[17], configWindow)
             end
             if addonTable.ConfigSetup.Notifications then
-                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[17], configWindow)
+                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[18], configWindow)
             end
             if addonTable.ConfigSetup.Reagents then
-                addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[18], configWindow)
+                addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[19], configWindow)
             end
             if addonTable.ConfigSetup.TalentManager then
-                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[19], configWindow)
+                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[20], configWindow)
             end
             if addonTable.ConfigSetup.Talent then
-                addonTable.ConfigSetup.Talent(talentPanel, navButtons[20], configWindow)
+                addonTable.ConfigSetup.Talent(talentPanel, navButtons[21], configWindow)
             end
             if addonTable.ConfigSetup.Misc then
-                addonTable.ConfigSetup.Misc(miscPanel, navButtons[21], configWindow)
+                addonTable.ConfigSetup.Misc(miscPanel, navButtons[22], configWindow)
             end
             if addonTable.ConfigSetup.Widgets then
-                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[22], configWindow)
+                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[23], configWindow)
             end
             if addonTable.ConfigSetup.Warehousing then
-                addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[23], configWindow)
-            end
-            if addonTable.ConfigSetup.DamageMeter then
-                addonTable.ConfigSetup.DamageMeter(damageMeterPanel, navButtons[24], configWindow)
+                addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[24], configWindow)
             end
             if addonTable.ConfigSetup.AddonVersions then
                 addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[25], configWindow)

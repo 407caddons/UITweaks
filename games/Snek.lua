@@ -592,7 +592,6 @@ function addonTable.Snek.ShowGame()
         addonTable.Snek.CloseGame()
     else
         -- Close other keybind-sharing games first
-        if addonTable.Blocks then addonTable.Blocks.CloseGame() end
         if addonTable.Game2048 then addonTable.Game2048.CloseGame() end
         gameFrame:Show()
         if not gameActive then
@@ -601,7 +600,7 @@ function addonTable.Snek.ShowGame()
     end
 end
 
--- Global keybinding handlers — extend existing globals so Snek and Blocks share binds
+-- Global keybinding handlers — wrap stubs from Games.lua so Snek intercepts when open
 local function SnekIsOpen()
     return gameFrame and gameFrame:IsShown()
 end

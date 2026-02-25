@@ -224,6 +224,30 @@ Run `ApplySkin()` immediately on `PLAYER_ENTERING_WORLD` (not delayed) to beat c
 
 The config window tabs in `ConfigMain.lua` are ordered by module ID. **Addon Versions must always remain the last tab** in the navigation list. When adding new modules, insert them before Addon Versions and increment its ID accordingly.
 
+## Frame Positioning Convention
+
+All repositionable addon frames **must anchor from CENTER of UIParent**. Position is stored as `x, y` offsets from the screen centre — negative X = left of centre, positive X = right, negative Y = below centre, positive Y = above.
+
+- **Saving position (drag stop):** Use `GetCenter()` minus `UIParent:GetCenter()` to obtain centre-relative x/y. Store as `{ point = "CENTER", x = x, y = y }`.
+- **Applying position:** `frame:SetPoint("CENTER", UIParent, "CENTER", pos.x, pos.y)`
+- **Config panel sliders:** X range `−screenHalfW` to `+screenHalfW` (use −2000 to 2000 as safe bounds); Y range `−screenHalfH` to `+screenHalfH` (use −1200 to 1200 as safe bounds).
+- **Live read for config panel:** `math.floor((frame:GetCenter()) - (UIParent:GetCenter()) + 0.5)` — read both axes separately.
+- Frames.lua and Widgets.lua already follow this convention. All other draggable frames should be migrated to match.
+
+**Modules not yet migrated (still using dynamic GetPoint anchor):**
+- `XpBar.lua` / `XpBarPanel.lua` — dynamic GetPoint
+- `CastBar.lua` — dynamic GetPoint
+- `Combat.lua` (timer) — dynamic GetPoint
+- `Kick.lua` — dynamic GetPoint
+- `ObjectiveTracker.lua` — dynamic GetPoint (separate point/x/y fields)
+- `MinimapCustom.lua` — dynamic GetPoint
+
+**Migrated to CENTER:**
+- `DamageMeter.lua` / `DamageMeterPanel.lua` ✓
+- `ChatSkin.lua` / `ChatSkinPanel.lua` ✓
+- `Frames.lua` ✓ (was already CENTER)
+- `Widgets.lua` ✓ (was already CENTER)
+
 ## Key Conventions
 
 - Color values are stored as tables with `r`, `g`, `b` (and optional `a`) fields — `ApplyDefaults` treats these as leaf values, not subtables to recurse into.

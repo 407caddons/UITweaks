@@ -468,11 +468,6 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     UIThingsDB.games.closeInCombat = not UIThingsDB.games.closeInCombat
                 end)
             rootDescription:CreateDivider()
-            rootDescription:CreateButton("Blocks", function()
-                if addonTable.Blocks and addonTable.Blocks.ShowGame then
-                    addonTable.Blocks.ShowGame()
-                end
-            end)
             rootDescription:CreateButton("Snek", function()
                 if addonTable.Snek and addonTable.Snek.ShowGame then
                     addonTable.Snek.ShowGame()
