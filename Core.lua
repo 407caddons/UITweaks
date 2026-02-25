@@ -711,7 +711,7 @@ local function OnEvent(self, event, ...)
                 hideBlizzardBar = false,
             },
             games = {
-                tetris = {
+                blocks = {
                     highScore = 0,
                 },
                 snek = {

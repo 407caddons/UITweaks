@@ -50,92 +50,95 @@ local StartGame, RenderBoard, SpawnTile, CheckGameOver
 -- ============================================================
 -- Board logic
 -- ============================================================
-local function NewBoard()
-    board = {}
-    for r = 1, GRID do
-        board[r] = {}
-        for c = 1, GRID do
-            board[r][c] = 0
-        end
-    end
+local function GetHighScore()
+    UIThingsDB = UIThingsDB or {}
+    UIThingsDB.games = UIThingsDB.games or {}
+    UIThingsDB.games.game2048 = UIThingsDB.games.game2048 or {}
+    return UIThingsDB.games.game2048.highScore or 0
 end
 
-SpawnTile = function()
-    local empty = {}
-    for r = 1, GRID do
-        for c = 1, GRID do
-            if board[r][c] == 0 then
-                empty[#empty + 1] = { r = r, c = c }
+local function SaveHighScore(score)
+    UIThingsDB = UIThingsDB or {}
+    UIThingsDB.games = UIThingsDB.games or {}
+    UIThingsDB.games.game2048 = UIThingsDB.games.game2048 or {}
+    UIThingsDB.games.game2048.highScore = score
+end
+
+local function NewBoard()
+    if not board then
+        board = {}
+        for r = 1, GRID do
+            board[r] = {}
+            for c = 1, GRID do
+                board[r][c] = 0
+            end
+        end
+    else
+        for r = 1, GRID do
+            for c = 1, GRID do
+                board[r][c] = 0
             end
         end
     end
-    if #empty == 0 then return end
-    local pick = empty[math.random(#empty)]
-    -- 90% chance of 2, 10% chance of 4
-    board[pick.r][pick.c] = (math.random() < 0.9) and 2 or 4
-    newTileR, newTileC = pick.r, pick.c
 end
 
--- Slide a single row/column (given as array) left; returns new array + points scored
-local function SlideLeft(line)
-    local out   = {}
-    local pts   = 0
-    local merged = {}
+local emptyBuffer = {}
+SpawnTile = function()
+    local emptyCount = 0
+    for r = 1, GRID do
+        for c = 1, GRID do
+            if board[r][c] == 0 then
+                emptyCount = emptyCount + 1
+                emptyBuffer[emptyCount] = (r - 1) * GRID + c
+            end
+        end
+    end
+    if emptyCount == 0 then return end
+    local pick = emptyBuffer[math.random(emptyCount)]
+    local pr = math.floor((pick - 1) / GRID) + 1
+    local pc = (pick - 1) % GRID + 1
+    -- 90% chance of 2, 10% chance of 4
+    board[pr][pc] = (math.random() < 0.9) and 2 or 4
+    newTileR, newTileC = pr, pc
+end
+
+local lineBuffer = {0, 0, 0, 0}
+local outBuffer = {0, 0, 0, 0}
+local mergedBuffer = {false, false, false, false}
+
+local function SlideLeft()
+    local pts = 0
+    for i = 1, GRID do 
+        outBuffer[i] = 0
+        mergedBuffer[i] = false 
+    end
 
     -- Remove zeros
-    for _, v in ipairs(line) do
-        if v ~= 0 then out[#out + 1] = v end
+    local idx = 1
+    for i = 1, GRID do
+        if lineBuffer[i] ~= 0 then 
+            outBuffer[idx] = lineBuffer[i]
+            idx = idx + 1
+        end
     end
 
     -- Merge adjacent equal tiles
     local i = 1
-    while i <= #out do
-        if i < #out and out[i] == out[i + 1] and not merged[i] then
-            local val = out[i] * 2
+    while i < GRID do
+        if outBuffer[i] ~= 0 and outBuffer[i] == outBuffer[i + 1] and not mergedBuffer[i] then
+            local val = outBuffer[i] * 2
             pts = pts + val
-            out[i] = val
-            table.remove(out, i + 1)
-            merged[i] = true
+            outBuffer[i] = val
+            for j = i + 1, GRID - 1 do
+                outBuffer[j] = outBuffer[j + 1]
+            end
+            outBuffer[GRID] = 0
+            mergedBuffer[i] = true
         end
         i = i + 1
     end
 
-    -- Pad to GRID length
-    while #out < GRID do out[#out + 1] = 0 end
-    return out, pts
-end
-
--- Extract row r as array
-local function GetRow(r)
-    local line = {}
-    for c = 1, GRID do line[c] = board[r][c] end
-    return line
-end
-
--- Extract column c as array
-local function GetCol(c)
-    local line = {}
-    for r = 1, GRID do line[r] = board[r][c] end
-    return line
-end
-
--- Write array back as row r
-local function SetRow(r, line)
-    for c = 1, GRID do board[r][c] = line[c] end
-end
-
--- Write array back as column c
-local function SetCol(c, line)
-    for r = 1, GRID do board[r][c] = line[r] end
-end
-
--- Reverse an array in-place
-local function Reverse(line)
-    local n = #line
-    for i = 1, math.floor(n / 2) do
-        line[i], line[n - i + 1] = line[n - i + 1], line[i]
-    end
-    return line
+    return pts
 end
 
 -- Move in direction: "left","right","up","down"
@@ -146,50 +149,46 @@ local function Move(dir)
 
     if dir == "left" then
         for r = 1, GRID do
-            local orig = GetRow(r)
-            local new, p = SlideLeft(orig)
+            for c = 1, GRID do lineBuffer[c] = board[r][c] end
+            local p = SlideLeft()
             pts = pts + p
             for c = 1, GRID do
-                if new[c] ~= orig[c] then moved = true end
+                if board[r][c] ~= outBuffer[c] then moved = true end
+                board[r][c] = outBuffer[c]
             end
-            SetRow(r, new)
         end
 
     elseif dir == "right" then
         for r = 1, GRID do
-            local orig = GetRow(r)
-            local rev  = Reverse({unpack(orig)})
-            local new, p = SlideLeft(rev)
+            for c = 1, GRID do lineBuffer[c] = board[r][GRID - c + 1] end
+            local p = SlideLeft()
             pts = pts + p
-            Reverse(new)
             for c = 1, GRID do
-                if new[c] ~= orig[c] then moved = true end
+                if board[r][GRID - c + 1] ~= outBuffer[c] then moved = true end
+                board[r][GRID - c + 1] = outBuffer[c]
             end
-            SetRow(r, new)
         end
 
     elseif dir == "up" then
         for c = 1, GRID do
-            local orig = GetCol(c)
-            local new, p = SlideLeft(orig)
+            for r = 1, GRID do lineBuffer[r] = board[r][c] end
+            local p = SlideLeft()
             pts = pts + p
             for r = 1, GRID do
-                if new[r] ~= orig[r] then moved = true end
+                if board[r][c] ~= outBuffer[r] then moved = true end
+                board[r][c] = outBuffer[r]
             end
-            SetCol(c, new)
         end
 
     elseif dir == "down" then
         for c = 1, GRID do
-            local orig = GetCol(c)
-            local rev  = Reverse({unpack(orig)})
-            local new, p = SlideLeft(rev)
+            for r = 1, GRID do lineBuffer[r] = board[GRID - r + 1][c] end
+            local p = SlideLeft()
             pts = pts + p
-            Reverse(new)
             for r = 1, GRID do
-                if new[r] ~= orig[r] then moved = true end
+                if board[GRID - r + 1][c] ~= outBuffer[r] then moved = true end
+                board[GRID - r + 1][c] = outBuffer[r]
             end
-            SetCol(c, new)
         end
     end
 
@@ -197,7 +196,7 @@ local function Move(dir)
         score = score + pts
         if score > bestScore then
             bestScore = score
-            UIThingsDB.games.game2048.highScore = bestScore
+            SaveHighScore(bestScore)
         end
     end
 
@@ -311,7 +310,7 @@ StartGame = function()
     gameOver    = false
     gameWon     = false
     wonContinue = false
-    bestScore   = UIThingsDB.games.game2048.highScore or 0
+    bestScore   = GetHighScore()
 
     newTileR, newTileC = nil, nil
     NewBoard()
@@ -368,7 +367,7 @@ local function BuildTiles(parent)
             rgt:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
             rgt:SetWidth(B)
 
-            -- New-tile highlight: 4 white edge strips (shown for one move only)
+            -- New-tile highlight: 4 black edge strips (shown for one move only)
             local function MakeEdge(layer)
                 local t = f:CreateTexture(nil, layer)
                 t:SetColorTexture(0, 0, 0, 1)
@@ -560,7 +559,7 @@ function addonTable.Game2048.ShowGame()
     if gameFrame:IsShown() then
         gameFrame:Hide()
     else
-        bestScore = UIThingsDB.games.game2048.highScore or 0
+        bestScore = GetHighScore()
         gameFrame:Show()
         gameFrame:EnableKeyboard(true)
         if not board then

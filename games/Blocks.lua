@@ -1,5 +1,5 @@
 local addonName, addonTable = ...
-addonTable.Tetris = {}  -- keep old name for panel compatibility
+addonTable.Blocks = {}
 
 -- ============================================================
 -- Constants
@@ -34,7 +34,7 @@ end
 -- Lines needed per level
 local LINES_PER_LEVEL = 10
 
--- Score table (single / double / triple / tetris)
+-- Score table (single / double / triple / quad)
 local LINE_SCORE = { 40, 100, 300, 1200 }
 
 -- ============================================================
@@ -978,7 +978,7 @@ AddScore = function(numLines)
     linesCleared = linesCleared + numLines
     if score > highScore then
         highScore = score
-        UIThingsDB.games.tetris.highScore = highScore
+        UIThingsDB.games.blocks.highScore = highScore
     end
     -- Level up
     local newLevel = math_floor(linesCleared / LINES_PER_LEVEL)
@@ -1028,7 +1028,7 @@ end
 
 GameOver = function()
     if gravityTicker then gravityTicker:Cancel(); gravityTicker = nil end
-    UIThingsDB.games.tetris.highScore = highScore
+    UIThingsDB.games.blocks.highScore = highScore
 
     if MP.active then
         -- Broadcast before setting gameActive=false so CheckMPWinner counts correctly
@@ -1132,7 +1132,7 @@ StartGame = function()
     score         = 0
     level         = 0
     linesCleared  = 0
-    highScore     = UIThingsDB.games and UIThingsDB.games.tetris and UIThingsDB.games.tetris.highScore or 0
+    highScore     = UIThingsDB.games and (UIThingsDB.games.blocks and UIThingsDB.games.blocks.highScore or UIThingsDB.games.tetris and UIThingsDB.games.tetris.highScore) or 0
     flashRows     = nil
     gamePaused    = false
     gameActive    = true
@@ -1501,7 +1501,7 @@ end)
 -- ============================================================
 -- Public API
 -- ============================================================
-function addonTable.Tetris.ShowGame()
+function addonTable.Blocks.ShowGame()
     if not gameFrame then
         BuildUI()  -- BuildUI is forward-declared so this is always valid
     end

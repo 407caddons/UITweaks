@@ -463,8 +463,8 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     gamesBtn:SetScript("OnClick", function(self)
         MenuUtil.CreateContextMenu(self, function(ownerRegion, rootDescription)
             rootDescription:CreateButton("Blocks", function()
-                if addonTable.Tetris and addonTable.Tetris.ShowGame then
-                    addonTable.Tetris.ShowGame()
+                if addonTable.Blocks and addonTable.Blocks.ShowGame then
+                    addonTable.Blocks.ShowGame()
                 end
             end)
             rootDescription:CreateButton("Snek", function()
