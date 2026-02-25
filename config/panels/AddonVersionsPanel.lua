@@ -487,6 +487,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Cards.ShowGame()
                 end
             end)
+            rootDescription:CreateButton("Tiles", function()
+                if addonTable.Game2048 and addonTable.Game2048.ShowGame then
+                    addonTable.Game2048.ShowGame()
+                end
+            end)
         end)
     end)
 

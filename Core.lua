@@ -722,6 +722,9 @@ local function OnEvent(self, event, ...)
                     highScore = 0,
                 },
                 cards = {},
+                game2048 = {
+                    highScore = 0,
+                },
             },
             damageMeter = {
                 enabled = false,
