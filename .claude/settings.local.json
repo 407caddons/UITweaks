@@ -9,7 +9,10 @@
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" log --oneline -20)",
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" log v1.13.0..HEAD --pretty=format:\"%s\")",
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" log --oneline -30)",
-      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" diff a094160..HEAD --name-only)"
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" diff a094160..HEAD --name-only)",
+      "Bash(test:*)",
+      "Bash(powershell -Command:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

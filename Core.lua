@@ -723,6 +723,18 @@ local function OnEvent(self, event, ...)
                 },
                 cards = {},
             },
+            damageMeter = {
+                enabled = false,
+                locked = true,
+                frameStrata = "LOW",
+                bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.85 },
+                borderColor = { r = 0.2, g = 0.8, b = 0.2, a = 1 },
+                borderSize = 2,
+                titleBar = true,
+                titleBarHeight = 20,
+                titleBarColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.95 },
+                titleText = "Damage Meter",
+            },
         }
 
         -- Expose defaults for config panels (used by reset buttons)

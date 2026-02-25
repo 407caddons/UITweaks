@@ -215,7 +215,8 @@ function addonTable.Config.Initialize()
             { id = 21, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
             { id = 22, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 23, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
-            { id = 24, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 24, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_Savageblow" },
+            { id = 25, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -320,6 +321,10 @@ function addonTable.Config.Initialize()
         warehousingPanel:SetAllPoints()
         warehousingPanel:Hide()
 
+        local damageMeterPanel = CreateFrame("Frame", nil, contentContainer)
+        damageMeterPanel:SetAllPoints()
+        damageMeterPanel:Hide()
+
         local xpBarPanel = CreateFrame("Frame", nil, contentContainer)
         xpBarPanel:SetAllPoints()
         xpBarPanel:Hide()
@@ -348,6 +353,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.talentManager = talentManagerPanel
         addonTable.ConfigPanels.coordinates = coordinatesPanel
         addonTable.ConfigPanels.warehousing = warehousingPanel
+        addonTable.ConfigPanels.damageMeter = damageMeterPanel
         addonTable.ConfigPanels.xpBar = xpBarPanel
 
         -- Map IDs to Panels
@@ -375,7 +381,8 @@ function addonTable.Config.Initialize()
             [21] = miscPanel,
             [22] = widgetsPanel,
             [23] = warehousingPanel,
-            [24] = addonVersionsPanel,
+            [24] = damageMeterPanel,
+            [25] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -459,6 +466,9 @@ function addonTable.Config.Initialize()
         -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
         addonTable.ConfigTabs = navButtons
 
+        -- Hide the Damage Meter nav button (id=24) — feature is WIP
+        if navButtons[24] then navButtons[24]:Hide() end
+
         -- Select first module by default
         SelectModule(1)
 
@@ -537,8 +547,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Warehousing then
                 addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[23], configWindow)
             end
+            if addonTable.ConfigSetup.DamageMeter then
+                addonTable.ConfigSetup.DamageMeter(damageMeterPanel, navButtons[24], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[24], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[25], configWindow)
             end
         end
         ----------------------------------------------------
