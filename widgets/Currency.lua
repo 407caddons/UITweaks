@@ -320,9 +320,9 @@ table.insert(Widgets.moduleInits, function()
 
     currencyFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyUpdate)
-            EventBus.Register("PLAYER_MONEY", OnCurrencyUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnCurrencyUpdate)
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyUpdate, "W:Currency")
+            EventBus.Register("PLAYER_MONEY", OnCurrencyUpdate, "W:Currency")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnCurrencyUpdate, "W:Currency")
         else
             EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyUpdate)
             EventBus.Unregister("PLAYER_MONEY", OnCurrencyUpdate)

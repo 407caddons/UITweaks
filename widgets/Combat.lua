@@ -23,9 +23,9 @@ table.insert(Widgets.moduleInits, function()
 
     combatFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_REGEN_DISABLED", OnCombatUpdate)
-            EventBus.Register("PLAYER_REGEN_ENABLED", OnCombatUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnCombatUpdate)
+            EventBus.Register("PLAYER_REGEN_DISABLED", OnCombatUpdate, "W:Combat")
+            EventBus.Register("PLAYER_REGEN_ENABLED", OnCombatUpdate, "W:Combat")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnCombatUpdate, "W:Combat")
         else
             EventBus.Unregister("PLAYER_REGEN_DISABLED", OnCombatUpdate)
             EventBus.Unregister("PLAYER_REGEN_ENABLED", OnCombatUpdate)

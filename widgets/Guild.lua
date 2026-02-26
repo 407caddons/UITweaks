@@ -53,9 +53,9 @@ table.insert(Widgets.moduleInits, function()
 
     guildFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("GUILD_ROSTER_UPDATE", OnGuildUpdate)
-            EventBus.Register("PLAYER_GUILD_UPDATE", OnGuildUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnGuildUpdate)
+            EventBus.Register("GUILD_ROSTER_UPDATE", OnGuildUpdate, "W:Guild")
+            EventBus.Register("PLAYER_GUILD_UPDATE", OnGuildUpdate, "W:Guild")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGuildUpdate, "W:Guild")
         else
             EventBus.Unregister("GUILD_ROSTER_UPDATE", OnGuildUpdate)
             EventBus.Unregister("PLAYER_GUILD_UPDATE", OnGuildUpdate)

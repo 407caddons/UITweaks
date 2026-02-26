@@ -1116,8 +1116,8 @@ local function SetupChatSkin()
                 for tab in pairs(skinnedTabs) do UpdateTabColors(tab) end
             end)
         end
-        addonTable.EventBus.Register("UPDATE_CHAT_WINDOWS", OnChatWindowsUpdate)
-        addonTable.EventBus.Register("UPDATE_FLOATING_CHAT_WINDOWS", OnChatWindowsUpdate)
+        addonTable.EventBus.Register("UPDATE_CHAT_WINDOWS", OnChatWindowsUpdate, "ChatSkin")
+        addonTable.EventBus.Register("UPDATE_FLOATING_CHAT_WINDOWS", OnChatWindowsUpdate, "ChatSkin")
 
         hooksInstalled = true
     end -- hooksInstalled guard
@@ -1170,7 +1170,7 @@ function ChatSkin.Initialize()
         C_Timer.After(0.5, function()
             if not isSetup then SetupChatSkin() end
         end)
-    end)
+    end, "ChatSkin")
 end
 
 function ChatSkin.UpdateSettings()

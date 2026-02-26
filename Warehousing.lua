@@ -869,7 +869,7 @@ local function WaitForItemUnlock(bag, slot, callback)
         end
     end
 
-    EventBus.Register("ITEM_LOCK_CHANGED", listener)
+    EventBus.Register("ITEM_LOCK_CHANGED", listener, "Warehousing")
 
     -- Fallback: if the event never fires (warband bank latency), resolve after 2s
     timeoutHandle = C_Timer.NewTicker(2, function()
@@ -1026,7 +1026,7 @@ local function StartBankSync(continuationPass)
                     end
                 end
                 bagListener = OnBagsSettled
-                EventBus.Register("BAG_UPDATE_DELAYED", bagListener)
+                EventBus.Register("BAG_UPDATE_DELAYED", bagListener, "Warehousing")
                 bagFallback = C_Timer.NewTicker(3, function()
                     bagFallback:Cancel()
                     bagFallback = nil
@@ -1467,6 +1467,21 @@ local function OnMailSendSuccess()
     end
 end
 
+local function OnMailFailed()
+    if not mailSending then return end
+    Log("Mail failed to send! Aborting queue.", 3)
+    mailSending = false
+    mailQueueIndex = 0
+    mailQueue = {}
+    if popupFrame and popupFrame.actionBtn then
+        popupFrame.actionBtn:SetText("Mail")
+        popupFrame.actionBtn:Enable()
+    end
+    if popupFrame and popupFrame.statusText then
+        popupFrame.statusText:SetText("|cFFFF4444Mail send failed.|r")
+    end
+end
+
 local function OnBankShow()
     if not UIThingsDB.warehousing.enabled then return end
     atBank = true
@@ -1523,16 +1538,17 @@ end
 local function RegisterEvents()
     if eventsRegistered then return end
     eventsRegistered = true
-    EventBus.Register("BAG_UPDATE", OnBagUpdate)
-    EventBus.Register("MAIL_SHOW", OnMailShow)
-    EventBus.Register("MAIL_CLOSED", OnMailClosed)
-    EventBus.Register("MAIL_SEND_SUCCESS", OnMailSendSuccess)
-    EventBus.Register("BANKFRAME_OPENED", OnBankShow)
-    EventBus.Register("BANKFRAME_CLOSED", OnBankClosed)
-    EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShow)
-    EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHide)
-    EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
-    EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
+    EventBus.Register("BAG_UPDATE", OnBagUpdate, "Warehousing")
+    EventBus.Register("MAIL_SHOW", OnMailShow, "Warehousing")
+    EventBus.Register("MAIL_CLOSED", OnMailClosed, "Warehousing")
+    EventBus.Register("MAIL_SEND_SUCCESS", OnMailSendSuccess, "Warehousing")
+    EventBus.Register("MAIL_FAILED", OnMailFailed, "Warehousing")
+    EventBus.Register("BANKFRAME_OPENED", OnBankShow, "Warehousing")
+    EventBus.Register("BANKFRAME_CLOSED", OnBankClosed, "Warehousing")
+    EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShow, "Warehousing")
+    EventBus.Register("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnInteractionHide, "Warehousing")
+    EventBus.Register("MERCHANT_SHOW", OnMerchantShow, "Warehousing")
+    EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed, "Warehousing")
 end
 
 local function UnregisterEvents()
@@ -1542,6 +1558,7 @@ local function UnregisterEvents()
     EventBus.Unregister("MAIL_SHOW", OnMailShow)
     EventBus.Unregister("MAIL_CLOSED", OnMailClosed)
     EventBus.Unregister("MAIL_SEND_SUCCESS", OnMailSendSuccess)
+    EventBus.Unregister("MAIL_FAILED", OnMailFailed)
     EventBus.Unregister("BANKFRAME_OPENED", OnBankShow)
     EventBus.Unregister("BANKFRAME_CLOSED", OnBankClosed)
     EventBus.Unregister("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnInteractionShow)

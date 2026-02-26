@@ -172,8 +172,8 @@ local function ApplyEvents()
     end
 
     if UIThingsDB.questAuto.autoGossip or UIThingsDB.questAuto.autoAcceptQuests or UIThingsDB.questAuto.autoTurnIn then
-        EventBus.Register("GOSSIP_SHOW", OnGossipShow)
-        EventBus.Register("GOSSIP_CLOSED", OnGossipClosed)
+        EventBus.Register("GOSSIP_SHOW", OnGossipShow, "QuestAuto")
+        EventBus.Register("GOSSIP_CLOSED", OnGossipClosed, "QuestAuto")
     else
         EventBus.Unregister("GOSSIP_SHOW", OnGossipShow)
         EventBus.Unregister("GOSSIP_CLOSED", OnGossipClosed)
@@ -181,20 +181,20 @@ local function ApplyEvents()
     end
 
     if UIThingsDB.questAuto.autoAcceptQuests or UIThingsDB.questAuto.autoTurnIn then
-        EventBus.Register("QUEST_GREETING", OnQuestGreeting)
+        EventBus.Register("QUEST_GREETING", OnQuestGreeting, "QuestAuto")
     else
         EventBus.Unregister("QUEST_GREETING", OnQuestGreeting)
     end
 
     if UIThingsDB.questAuto.autoAcceptQuests then
-        EventBus.Register("QUEST_DETAIL", OnQuestDetail)
+        EventBus.Register("QUEST_DETAIL", OnQuestDetail, "QuestAuto")
     else
         EventBus.Unregister("QUEST_DETAIL", OnQuestDetail)
     end
 
     if UIThingsDB.questAuto.autoTurnIn then
-        EventBus.Register("QUEST_PROGRESS", OnQuestProgress)
-        EventBus.Register("QUEST_COMPLETE", OnQuestComplete)
+        EventBus.Register("QUEST_PROGRESS", OnQuestProgress, "QuestAuto")
+        EventBus.Register("QUEST_COMPLETE", OnQuestComplete, "QuestAuto")
     else
         EventBus.Unregister("QUEST_PROGRESS", OnQuestProgress)
         EventBus.Unregister("QUEST_COMPLETE", OnQuestComplete)
@@ -210,4 +210,4 @@ local function OnInitEnteringWorld()
     EventBus.Unregister("PLAYER_ENTERING_WORLD", OnInitEnteringWorld)
     ApplyEvents()
 end
-EventBus.Register("PLAYER_ENTERING_WORLD", OnInitEnteringWorld)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnInitEnteringWorld, "QuestAuto")

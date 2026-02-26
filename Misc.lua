@@ -89,6 +89,71 @@ function Misc.TestMailTTS()
     PlayMailTTS()
 end
 
+-- == BoE ITEM ALERT ==
+
+local boeAlertFrame = CreateFrame("Frame", "UIThingsBoeAlert", UIParent, "BackdropTemplate")
+boeAlertFrame:SetSize(400, 50)
+boeAlertFrame:SetPoint("TOP", 0, -320)
+boeAlertFrame:SetFrameStrata("DIALOG")
+boeAlertFrame:Hide()
+
+boeAlertFrame.text = boeAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+boeAlertFrame.text:SetPoint("CENTER")
+boeAlertFrame.text:SetText("BoE Item Looted!")
+
+local function ShowBoeAlert(itemName, quality)
+    if not UIThingsDB.misc.boeAlert then return end
+
+    local color = UIThingsDB.misc.boeAlertColor
+    boeAlertFrame.text:SetTextColor(color.r, color.g, color.b, color.a or 1)
+
+    if itemName then
+        local qualityColor = C_Item.GetItemQualityColor and C_Item.GetItemQualityColor(quality)
+        if qualityColor then
+            boeAlertFrame.text:SetText(string.format("|c%sBoE: %s|r", qualityColor.colorStr, itemName))
+        else
+            boeAlertFrame.text:SetText("BoE: " .. itemName)
+        end
+    else
+        boeAlertFrame.text:SetText("BoE Item Looted!")
+    end
+
+    boeAlertFrame:Show()
+
+    local duration = UIThingsDB.misc.boeAlertDuration or 5
+    addonTable.Core.SafeAfter(duration, function()
+        boeAlertFrame:Hide()
+    end)
+end
+
+function Misc.ShowBoeAlert()
+    ShowBoeAlert()
+end
+
+-- Blizzard bind type constant for Bind on Equip
+local BOE_BIND_ON_EQUIP = 2
+
+local function OnChatMsgLootBoE(event, msg)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    if not UIThingsDB.misc.boeAlert then return end
+    if issecretvalue(msg) then return end
+
+    local itemLink = string.match(msg, "|H(item:[^|]+)|h")
+    if not itemLink then return end
+
+    local itemID = tonumber(string.match(itemLink, "item:(%d+)"))
+    if not itemID then return end
+
+    local itemName, _, quality, _, _, _, _, _, _, _, _, _, _, bindType = GetItemInfo(itemID)
+    if not itemName then return end
+
+    local minQuality = UIThingsDB.misc.boeMinQuality or 4
+    if quality < minQuality then return end
+    if bindType ~= BOE_BIND_ON_EQUIP then return end
+
+    ShowBoeAlert(itemName, quality)
+end
+
 -- Check if player has pending personal orders
 local function CheckForPersonalOrders()
     if not UIThingsDB.misc.personalOrders then return end
@@ -473,40 +538,47 @@ ApplyMiscEvents = function()
         EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+        EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLootBoE)
         return
     end
 
     if UIThingsDB.misc.ahFilter then
-        EventBus.Register("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+        EventBus.Register("AUCTION_HOUSE_SHOW", OnAuctionHouseShow, "Misc")
     else
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
     end
 
     if UIThingsDB.misc.personalOrders then
-        EventBus.Register("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+        EventBus.Register("CHAT_MSG_SYSTEM", OnChatMsgSystem, "Misc")
     else
         EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
     end
 
     if UIThingsDB.misc.mailNotification then
-        EventBus.Register("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+        EventBus.Register("UPDATE_PENDING_MAIL", OnUpdatePendingMail, "Misc")
     else
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
     end
 
     if UIThingsDB.misc.autoAcceptFriends or UIThingsDB.misc.autoAcceptGuild or UIThingsDB.misc.autoAcceptEveryone then
-        EventBus.Register("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
+        EventBus.Register("PARTY_INVITE_REQUEST", OnPartyInviteRequest, "Misc")
     else
         EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
     end
 
     if UIThingsDB.misc.autoInviteEnabled then
-        EventBus.Register("CHAT_MSG_WHISPER", OnChatMsgWhisper)
+        EventBus.Register("CHAT_MSG_WHISPER", OnChatMsgWhisper, "Misc")
         -- BN whispers not supported for auto-invite; keep unregistered
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
     else
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+    end
+
+    if UIThingsDB.misc.boeAlert then
+        EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLootBoE, "Misc")
+    else
+        EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLootBoE)
     end
 
     if UIThingsDB.misc.classColorTooltips then
@@ -522,9 +594,9 @@ EventBus.Register("ADDON_LOADED", function(event, name)
     if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.enabled then
         ApplyUIScale()
     end
-end)
+end, "Misc")
 
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Misc")
 
 function Misc.ApplyEvents()
     ApplyMiscEvents()

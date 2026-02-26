@@ -720,7 +720,7 @@ EventBus.Register("PLAYER_ENTERING_WORLD", function()
     SafeAfter(1, function()
         addonTable.DamageMeter.Initialize()
     end)
-end)
+end, "DamageMeter")
 
 -- sessionType=0 means current live session, sessionType=1 means a past/named session.
 IsShowingCurrentSession = function(win)
@@ -761,16 +761,16 @@ EventBus.Register("DAMAGE_METER_CURRENT_SESSION_UPDATED", function()
         SafeAfter(0, SyncOverlay)
         SafeAfter(0.3, UpdateAllSessionLabels)
     end
-end)
+end, "DamageMeter")
 
 EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", function()
     if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled and skinFrame then
         SafeAfter(0.3, UpdateAllSessionLabels)
     end
-end)
+end, "DamageMeter")
 
 EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled and meterWindow then
         SafeAfter(0, SyncOverlay)
     end
-end)
+end, "DamageMeter")

@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(630, 500)
+    scrollChild:SetSize(630, 1800)
     scrollFrame:SetScrollChild(scrollChild)
     panel = scrollChild
 
@@ -170,7 +170,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
 
     -- Anchor Helper
     local function GetAnchors()
-        local anchors = { { text = "None", value = nil } }
+        local anchors = { { text = "None", value = false } }
         if UIThingsDB.frames and UIThingsDB.frames.list then
             for _, f in ipairs(UIThingsDB.frames.list) do
                 if f.isAnchor then
@@ -209,6 +209,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "hearthstone",   label = "Hearthstone" },
         { key = "currency",      label = "Currency Tracker" },
         { key = "sessionStats",  label = "Session Stats" },
+        { key = "readyCheck",    label = "Ready Check History" },
         { key = "lockouts",         label = "Instance Lockouts" },
         { key = "xpRep",            label = "XP / Reputation" },
         { key = "haste",            label = "Haste" },
@@ -374,16 +375,15 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         -- Re-Initialize Dropdown with new handler
         local function AnchorInit(self, level)
             local anchors = GetAnchors()
+            local currentVal = UIThingsDB.widgets[widget.key].anchor
             for _, anchor in ipairs(anchors) do
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = anchor.text
                 info.value = anchor.value
                 info.func = AnchorOnClick
-                if anchor.value == UIThingsDB.widgets[widget.key].anchor then
-                    info.checked = true
-                else
-                    info.checked = false
-                end
+                -- Both false and nil mean "None"
+                local isNone = not anchor.value and not currentVal
+                info.checked = isNone or (anchor.value == currentVal)
                 UIDropDownMenu_AddButton(info, level)
             end
         end

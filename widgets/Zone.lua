@@ -26,10 +26,10 @@ table.insert(Widgets.moduleInits, function()
 
     zoneFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("ZONE_CHANGED", OnZoneUpdate)
-            EventBus.Register("ZONE_CHANGED_INDOORS", OnZoneUpdate)
-            EventBus.Register("ZONE_CHANGED_NEW_AREA", OnZoneUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnZoneUpdate)
+            EventBus.Register("ZONE_CHANGED", OnZoneUpdate, "W:Zone")
+            EventBus.Register("ZONE_CHANGED_INDOORS", OnZoneUpdate, "W:Zone")
+            EventBus.Register("ZONE_CHANGED_NEW_AREA", OnZoneUpdate, "W:Zone")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnZoneUpdate, "W:Zone")
         else
             EventBus.Unregister("ZONE_CHANGED", OnZoneUpdate)
             EventBus.Unregister("ZONE_CHANGED_INDOORS", OnZoneUpdate)

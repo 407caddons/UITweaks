@@ -453,13 +453,13 @@ end
 
 local function EnableEvents()
     if eventsEnabled then return end
-    EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
-    EventBus.Register("BANKFRAME_OPENED", OnBankframeOpened)
-    EventBus.Register("BANKFRAME_CLOSED", OnBankframeClosed)
-    EventBus.Register("PLAYERBANKSLOTS_CHANGED", OnPlayerBankslotsChanged)
-    EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+    EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed, "Reagents")
+    EventBus.Register("BANKFRAME_OPENED", OnBankframeOpened, "Reagents")
+    EventBus.Register("BANKFRAME_CLOSED", OnBankframeClosed, "Reagents")
+    EventBus.Register("PLAYERBANKSLOTS_CHANGED", OnPlayerBankslotsChanged, "Reagents")
+    EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Reagents")
     -- PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED may not exist on all clients
-    pcall(EventBus.Register, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", OnAccountBankSlotsChanged)
+    pcall(EventBus.Register, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", OnAccountBankSlotsChanged, "Reagents")
     eventsEnabled = true
     initialScanDone = false
     Log("Events enabled", addonTable.Core.LogLevel.DEBUG)
@@ -495,7 +495,7 @@ local function OnPlayerLogin()
     end
 end
 
-EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Reagents")
 
 --- Called by config panel when settings change
 function Reagents.UpdateSettings()

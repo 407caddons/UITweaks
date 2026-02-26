@@ -52,8 +52,8 @@ table.insert(Widgets.moduleInits, function()
 
     lockoutFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("UPDATE_INSTANCE_INFO", OnLockoutUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnLockoutEnteringWorld)
+            EventBus.Register("UPDATE_INSTANCE_INFO", OnLockoutUpdate, "W:Lockouts")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnLockoutEnteringWorld, "W:Lockouts")
             RequestRaidInfo()
             RefreshLockoutCache()
         else

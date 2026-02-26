@@ -228,7 +228,7 @@ local function ApplySCTEvents()
 
     SetCVar("enableFloatingCombatText", UIThingsDB.sct.enabled and 1 or 0)
     if UIThingsDB.sct.captureToFrames then
-        EventBus.Register("UNIT_COMBAT", OnUnitCombat)
+        EventBus.Register("UNIT_COMBAT", OnUnitCombat, "SCT")
     else
         EventBus.Unregister("UNIT_COMBAT", OnUnitCombat)
     end
@@ -242,7 +242,7 @@ local function OnPlayerEnteringWorld()
     ApplySCTEvents()
 end
 
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "SCT")
 
 function SCT.ApplyEvents()
     ApplySCTEvents()

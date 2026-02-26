@@ -668,7 +668,7 @@ function ActionBars.SetupDrawer()
             if drawerFrame and not inEditMode and not inFullscreenPanel and UIThingsDB.actionBars and UIThingsDB.actionBars.enabled then
                 C_Timer.After(0, function() SuppressMicroLayout(ReclaimButtons) end)
             end
-        end)
+        end, "ActionBars")
 
         -- Release buttons when a fullscreen panel (Trading Post, Collections, etc.) opens.
         -- Blizzard reparents MicroMenuContainer into these panels, which triggers Layout()
@@ -819,6 +819,9 @@ local ACTION_BARS = {
     { bar = "MultiBar6",           prefix = "MultiBar6Button",           count = 12 },
     { bar = "MultiBar7",           prefix = "MultiBar7Button",           count = 12 },
 }
+
+-- Override/vehicle bar — skin only, never repositioned or spaced
+local OVERRIDE_BAR = { bar = "OverrideActionBar", prefix = "OverrideActionBarButton", count = 6 }
 
 local skinHooked = false
 local skinnedButtons = {}
@@ -1306,6 +1309,18 @@ function ActionBars.ApplySkin()
     -- Migrate old barOffsets to barPositions on first run
     MigrateBarOffsets()
 
+    -- If the override/vehicle bar is active, skin it and skip the main bar pass
+    -- to avoid capturing bad positions while MainActionBar is hidden
+    local overrideBarActive = _G[OVERRIDE_BAR.bar] and _G[OVERRIDE_BAR.bar]:IsShown()
+    if overrideBarActive then
+        SkinBar(_G[OVERRIDE_BAR.bar])
+        for i = 1, OVERRIDE_BAR.count do
+            local btn = _G[OVERRIDE_BAR.prefix .. i]
+            if btn then SkinButton(btn) end
+        end
+        return
+    end
+
     -- Capture Blizzard's default positions BEFORE we apply our overrides
     -- (only for bars we haven't captured yet or after edit mode wipe)
     suppressHook = true
@@ -1340,6 +1355,16 @@ function ActionBars.ApplySkin()
             end
             ApplyButtonSpacing(barInfo)
             ApplyBarPosition(barInfo.bar, barFrame)
+        end
+    end
+
+    -- Skin override/vehicle bar (no repositioning or spacing — Blizzard manages its position)
+    local overrideBar = _G[OVERRIDE_BAR.bar]
+    if overrideBar and overrideBar:IsShown() then
+        SkinBar(overrideBar)
+        for i = 1, OVERRIDE_BAR.count do
+            local btn = _G[OVERRIDE_BAR.prefix .. i]
+            if btn then SkinButton(btn) end
         end
     end
 
@@ -1657,4 +1682,38 @@ local function OnPlayerEnteringWorld()
         end
     end
 end
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "ActionBars")
+
+-- Re-skin when the override/vehicle bar becomes active, or re-apply main bars when it dismisses
+local function OnOverrideBarUpdate()
+    local settings = UIThingsDB.actionBars
+    if not settings or not settings.skinEnabled then return end
+    local overrideBar = _G[OVERRIDE_BAR.bar]
+    if overrideBar and overrideBar:IsShown() then
+        -- Vehicle bar just appeared — skin it
+        SkinBar(overrideBar)
+        for i = 1, OVERRIDE_BAR.count do
+            local btn = _G[OVERRIDE_BAR.prefix .. i]
+            if btn then SkinButton(btn) end
+        end
+    else
+        -- Vehicle bar dismissed — explicitly hide our overlays on it
+        if overrideBar and overrideBar.lunaSkinOverlay then
+            overrideBar.lunaSkinOverlay:Hide()
+        end
+        for i = 1, OVERRIDE_BAR.count do
+            local btn = _G[OVERRIDE_BAR.prefix .. i]
+            if btn and btn.lunaSkinOverlay then
+                btn.lunaSkinOverlay:Hide()
+            end
+        end
+        -- Re-skin main bars after Blizzard finishes layout
+        addonTable.Core.SafeAfter(0.1, function()
+            if not (_G[OVERRIDE_BAR.bar] and _G[OVERRIDE_BAR.bar]:IsShown()) then
+                ActionBars.ApplySkin()
+            end
+        end)
+    end
+end
+EventBus.Register("UPDATE_OVERRIDE_ACTIONBAR", OnOverrideBarUpdate, "ActionBars")
+EventBus.Register("UPDATE_VEHICLE_ACTIONBAR", OnOverrideBarUpdate, "ActionBars")

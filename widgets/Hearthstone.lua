@@ -80,9 +80,9 @@ local function FormatCooldown(seconds)
 end
 
 local function GetCooldownRemaining()
-    local itemID = GetAnyHearthstoneID()
-
-    local startTime, duration, enable = GetItemCooldown(itemID)
+    -- All hearthstone toys share cooldown with item 6948.
+    -- Always check 6948 regardless of which hearthstone was used.
+    local startTime, duration, enable = C_Container.GetItemCooldown(6948)
     if startTime and duration and duration > 0 and enable == 1 then
         local remaining = (startTime + duration) - GetTime()
         if remaining > 0 then
@@ -167,20 +167,56 @@ table.insert(Widgets.moduleInits, function()
         hearthFrame:UpdateContent(hearthFrame)
     end
 
+    local cooldownTicker = nil
+
+    local function RefreshCooldownText()
+        local remaining = GetCooldownRemaining()
+        if remaining > 0 then
+            hearthFrame.text:SetText("Hearth: " .. FormatCooldown(remaining))
+        else
+            hearthFrame.text:SetText("Hearth")
+            -- Cooldown finished, stop ticking
+            if cooldownTicker then
+                cooldownTicker:Cancel()
+                cooldownTicker = nil
+            end
+        end
+    end
+
+    local function StartCooldownTicker()
+        if cooldownTicker then return end
+        cooldownTicker = C_Timer.NewTicker(1, RefreshCooldownText)
+    end
+
+    local function StopCooldownTicker()
+        if cooldownTicker then
+            cooldownTicker:Cancel()
+            cooldownTicker = nil
+        end
+    end
+
     local function OnHearthUpdate()
         if not UIThingsDB.widgets.hearthstone.enabled then return end
-        hearthFrame:UpdateContent(hearthFrame)
+        local remaining = GetCooldownRemaining()
+        if remaining > 0 then
+            hearthFrame.text:SetText("Hearth: " .. FormatCooldown(remaining))
+            StartCooldownTicker()
+        else
+            hearthFrame.text:SetText("Hearth")
+            StopCooldownTicker()
+        end
     end
 
     hearthFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnHearthEnteringWorld)
-            EventBus.Register("HEARTHSTONE_BOUND", OnHearthUpdate)
-            EventBus.Register("SPELL_UPDATE_COOLDOWN", OnHearthUpdate)
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnHearthEnteringWorld, "W:Hearthstone")
+            EventBus.Register("HEARTHSTONE_BOUND", OnHearthUpdate, "W:Hearthstone")
+            EventBus.Register("SPELL_UPDATE_COOLDOWN", OnHearthUpdate, "W:Hearthstone")
         else
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnHearthEnteringWorld)
             EventBus.Unregister("HEARTHSTONE_BOUND", OnHearthUpdate)
             EventBus.Unregister("SPELL_UPDATE_COOLDOWN", OnHearthUpdate)
+            StopCooldownTicker()
         end
     end
 
@@ -188,8 +224,10 @@ table.insert(Widgets.moduleInits, function()
         local remaining = GetCooldownRemaining()
         if remaining > 0 then
             self.text:SetText("Hearth: " .. FormatCooldown(remaining))
+            StartCooldownTicker()
         else
             self.text:SetText("Hearth")
+            StopCooldownTicker()
         end
     end
 end)

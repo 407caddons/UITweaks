@@ -27,6 +27,8 @@ table.insert(Widgets.moduleInits, function()
 
     -- Cached display text updated on events
     local cachedText   = "Session: 0:00"
+    local tickCount    = 0
+    local CYCLE_TICKS  = 5  -- seconds per display mode
 
     local function SaveSessionData()
         db.sessionStart = sessionStart
@@ -34,8 +36,12 @@ table.insert(Widgets.moduleInits, function()
         db.deathCount   = deathCount
         db.itemsLooted  = itemsLooted
         db.xpAtLogin    = xpAtLogin
-        db.lastSeen     = time()
         db.charKey      = charKey
+        -- lastSeen is only written on PLAYER_LOGOUT to avoid dirtying SavedVars every second
+    end
+
+    local function OnPlayerLogout()
+        db.lastSeen = time()
     end
 
     -- Persist baseline immediately so a /reload right after login retains correct values
@@ -82,7 +88,33 @@ table.insert(Widgets.moduleInits, function()
 
     local function UpdateCachedText()
         local elapsed = GetTime() - sessionStart
-        cachedText = "Session: " .. FormatDuration(elapsed)
+
+        -- Determine how many display modes are available
+        local maxXP = UnitXPMax("player") or 0
+        local isLeveling = maxXP > 0 and elapsed > 60
+        local hasGoldRate = elapsed > 60
+        local numModes = 1 + (hasGoldRate and 1 or 0) + (isLeveling and 1 or 0)
+
+        local mode = math.floor(tickCount / CYCLE_TICKS) % numModes
+
+        if mode == 0 then
+            cachedText = "Session: " .. FormatDuration(elapsed)
+        elseif mode == 1 then
+            -- gold/hr
+            local goldDelta = GetMoney() - goldAtLogin
+            local goldPerHour = math.floor((goldDelta / elapsed) * 3600)
+            cachedText = "Gold/hr: " .. FormatGoldPerHour(goldPerHour)
+        else
+            -- xp/hr (mode == 2, only reached when isLeveling)
+            local currentXP = UnitXP("player") or 0
+            local xpDelta = currentXP - xpAtLogin
+            if xpDelta > 0 then
+                local xpPerHour = math.floor((xpDelta / elapsed) * 3600)
+                cachedText = "XP/hr: " .. BreakUpLargeNumbers(xpPerHour)
+            else
+                cachedText = "Session: " .. FormatDuration(elapsed)
+            end
+        end
     end
 
     local function OnPlayerDead()
@@ -116,14 +148,16 @@ table.insert(Widgets.moduleInits, function()
 
     sessionFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_DEAD", OnPlayerDead)
-            EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld)
+            EventBus.Register("PLAYER_DEAD", OnPlayerDead, "W:SessionStats")
+            EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot, "W:SessionStats")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld, "W:SessionStats")
+            EventBus.Register("PLAYER_LOGOUT", OnPlayerLogout, "W:SessionStats")
             UpdateCachedText()
         else
             EventBus.Unregister("PLAYER_DEAD", OnPlayerDead)
             EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLoot)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld)
+            EventBus.Unregister("PLAYER_LOGOUT", OnPlayerLogout)
         end
     end
 
@@ -137,6 +171,7 @@ table.insert(Widgets.moduleInits, function()
             itemsLooted     = 0
             xpAtLogin       = UnitXP("player") or 0
             xpNeedsSnap     = false
+            tickCount       = 0
             SaveSessionData()
             UpdateCachedText()
             self.text:SetText(cachedText)
@@ -196,10 +231,10 @@ table.insert(Widgets.moduleInits, function()
 
     sessionFrame:SetScript("OnLeave", GameTooltip_Hide)
 
-    -- UpdateContent is called by the widget ticker every second — update the clock
+    -- UpdateContent is called by the widget ticker every second — update the clock and cycle display
     sessionFrame.UpdateContent = function(self)
+        tickCount = tickCount + 1
         UpdateCachedText()
         self.text:SetText(cachedText)
-        db.lastSeen = time()
     end
 end)

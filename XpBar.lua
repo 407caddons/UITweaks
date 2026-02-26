@@ -310,12 +310,12 @@ local function Init()
     barFrame:SetScript("OnLeave", GameTooltip_Hide)
 
     -- Register events
-    EventBus.Register("PLAYER_XP_UPDATE", OnXPUpdate)
-    EventBus.Register("PLAYER_LEVEL_UP", OnLevelUp)
-    EventBus.Register("UPDATE_EXHAUSTION", OnXPUpdate)
-    EventBus.Register("ENABLE_XP_GAIN", OnXPUpdate)
-    EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate)
-    EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld)
+    EventBus.Register("PLAYER_XP_UPDATE", OnXPUpdate, "XpBar")
+    EventBus.Register("PLAYER_LEVEL_UP", OnLevelUp, "XpBar")
+    EventBus.Register("UPDATE_EXHAUSTION", OnXPUpdate, "XpBar")
+    EventBus.Register("ENABLE_XP_GAIN", OnXPUpdate, "XpBar")
+    EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate, "XpBar")
+    EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld, "XpBar")
 
     addonTable.XpBar.UpdateSettings()
 end

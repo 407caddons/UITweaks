@@ -185,8 +185,8 @@ table.insert(Widgets.moduleInits, function()
 
     teleportFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("SPELLS_CHANGED", InvalidateTeleportCache)
-            EventBus.Register("PLAYER_TALENT_UPDATE", InvalidateTeleportCache)
+            EventBus.Register("SPELLS_CHANGED", InvalidateTeleportCache, "W:Teleports")
+            EventBus.Register("PLAYER_TALENT_UPDATE", InvalidateTeleportCache, "W:Teleports")
         else
             EventBus.Unregister("SPELLS_CHANGED", InvalidateTeleportCache)
             EventBus.Unregister("PLAYER_TALENT_UPDATE", InvalidateTeleportCache)

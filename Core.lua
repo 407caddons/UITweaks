@@ -384,6 +384,10 @@ local function OnEvent(self, event, ...)
                 quickDestroy = false,
                 classColorTooltips = false,
                 showSpellID = false,
+                boeAlert = false,
+                boeMinQuality = 4, -- 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary
+                boeAlertDuration = 5,
+                boeAlertColor = { r = 0.63, g = 0.21, b = 0.93, a = 1 }, -- epic purple
             },
             minimap = {
                 angle = 45,
@@ -510,7 +514,8 @@ local function OnEvent(self, event, ...)
                 hearthstone = { enabled = false, point = "CENTER", x = 0, y = -480, condition = "always" },
                 currency = { enabled = false, point = "CENTER", x = 0, y = -500, condition = "always", customIDs = {} },
                 sessionStats = { enabled = false, point = "CENTER", x = 0, y = -520, condition = "always" },
-                lockouts = { enabled = false, point = "CENTER", x = 0, y = -540, condition = "always" },
+                readyCheck = { enabled = false, point = "CENTER", x = 0, y = -540, condition = "group" },
+                lockouts = { enabled = false, point = "CENTER", x = 0, y = -560, condition = "always" },
                 xpRep = { enabled = false, point = "CENTER", x = 0, y = -560, condition = "always" },
                 haste = { enabled = false, point = "CENTER", x = 0, y = -580, condition = "always" },
                 crit = { enabled = false, point = "CENTER", x = 0, y = -600, condition = "always" },
@@ -815,9 +820,15 @@ local function OnEvent(self, event, ...)
 
         -- LunaUITweaks_OpenConfig is defined in ConfigMain.lua (used by Addon Compartment)
         SlashCmdList["UITHINGS"] = function(msg)
-            if msg and msg:lower():match("^paste") then
+            local cmd = msg and msg:lower():match("^(%S+)") or ""
+            if cmd == "paste" then
                 if addonTable.Coordinates and addonTable.Coordinates.ShowPasteDialog then
                     addonTable.Coordinates.ShowPasteDialog()
+                end
+                return
+            elseif cmd == "perf" then
+                if addonTable.Profiler and addonTable.Profiler.Toggle then
+                    addonTable.Profiler.Toggle()
                 end
                 return
             end

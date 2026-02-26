@@ -1216,4 +1216,4 @@ EventBus.Register("PLAYER_LOGIN", function()
         C_Timer.After(1, InitReminders)
         C_Timer.After(1, ApplyLogFrameEvents)
     end
-end)
+end, "Combat")

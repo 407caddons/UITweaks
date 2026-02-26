@@ -31,8 +31,8 @@ table.insert(Widgets.moduleInits, function()
 
     versFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("COMBAT_RATING_UPDATE", OnStatUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnStatUpdate)
+            EventBus.Register("COMBAT_RATING_UPDATE", OnStatUpdate, "W:Vers")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnStatUpdate, "W:Vers")
         else
             EventBus.Unregister("COMBAT_RATING_UPDATE", OnStatUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnStatUpdate)

@@ -48,10 +48,10 @@ table.insert(Widgets.moduleInits, function()
 
     vaultFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("WEEKLY_REWARDS_UPDATE", OnVaultUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnVaultEnteringWorld)
-            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnVaultUpdate)
-            EventBus.Register("ENCOUNTER_END", OnVaultUpdate)
+            EventBus.Register("WEEKLY_REWARDS_UPDATE", OnVaultUpdate, "W:Vault")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnVaultEnteringWorld, "W:Vault")
+            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnVaultUpdate, "W:Vault")
+            EventBus.Register("ENCOUNTER_END", OnVaultUpdate, "W:Vault")
             RefreshVaultCache()
         else
             EventBus.Unregister("WEEKLY_REWARDS_UPDATE", OnVaultUpdate)

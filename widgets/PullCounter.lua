@@ -79,9 +79,9 @@ table.insert(Widgets.moduleInits, function()
 
     pullFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("ENCOUNTER_START", OnEncounterStart)
-            EventBus.Register("ENCOUNTER_END", OnEncounterEnd)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnPullCounterEnteringWorld)
+            EventBus.Register("ENCOUNTER_START", OnEncounterStart, "W:PullCounter")
+            EventBus.Register("ENCOUNTER_END", OnEncounterEnd, "W:PullCounter")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnPullCounterEnteringWorld, "W:PullCounter")
         else
             EventBus.Unregister("ENCOUNTER_START", OnEncounterStart)
             EventBus.Unregister("ENCOUNTER_END", OnEncounterEnd)

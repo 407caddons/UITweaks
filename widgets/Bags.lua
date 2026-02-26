@@ -26,8 +26,8 @@ table.insert(Widgets.moduleInits, function()
 
     bagFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_MONEY", OnGoldUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnGoldUpdate)
+            EventBus.Register("PLAYER_MONEY", OnGoldUpdate, "W:Bags")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGoldUpdate, "W:Bags")
         else
             EventBus.Unregister("PLAYER_MONEY", OnGoldUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGoldUpdate)

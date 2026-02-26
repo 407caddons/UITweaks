@@ -1788,7 +1788,7 @@ local function OnTalentConfigUpdated()
     end
 end
 
-addonTable.EventBus.Register("ADDON_LOADED", OnTalentManagerAddonLoaded)
-addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnTalentManagerEnteringWorld)
-addonTable.EventBus.Register("TRAIT_CONFIG_UPDATED", OnTalentConfigUpdated)
-addonTable.EventBus.Register("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", OnTalentConfigUpdated)
+addonTable.EventBus.Register("ADDON_LOADED", OnTalentManagerAddonLoaded, "TalentManager")
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnTalentManagerEnteringWorld, "TalentManager")
+addonTable.EventBus.Register("TRAIT_CONFIG_UPDATED", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", OnTalentConfigUpdated, "TalentManager")

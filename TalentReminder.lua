@@ -35,12 +35,12 @@ end
 function TalentReminder.ApplyEvents()
     local EventBus = addonTable.EventBus
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
-        EventBus.Register("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent)
-        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent)
-        EventBus.Register("TRAIT_CONFIG_UPDATED", TalentReminder.OnTalentChangeEvent)
-        EventBus.Register("ZONE_CHANGED", TalentReminder.OnZoneChangedEvent)
-        EventBus.Register("ZONE_CHANGED_INDOORS", TalentReminder.OnZoneChangedEvent)
-        EventBus.Register("ZONE_CHANGED_NEW_AREA", TalentReminder.OnZoneChangedEvent)
+        EventBus.Register("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent, "TalentReminder")
+        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent, "TalentReminder")
+        EventBus.Register("TRAIT_CONFIG_UPDATED", TalentReminder.OnTalentChangeEvent, "TalentReminder")
+        EventBus.Register("ZONE_CHANGED", TalentReminder.OnZoneChangedEvent, "TalentReminder")
+        EventBus.Register("ZONE_CHANGED_INDOORS", TalentReminder.OnZoneChangedEvent, "TalentReminder")
+        EventBus.Register("ZONE_CHANGED_NEW_AREA", TalentReminder.OnZoneChangedEvent, "TalentReminder")
     else
         EventBus.Unregister("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent)
         EventBus.Unregister("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent)

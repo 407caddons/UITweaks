@@ -223,7 +223,7 @@ end
 
 addonTable.EventBus.Register("CHAT_MSG_ADDON", function(event, ...)
     OnAddonMessage(...)
-end)
+end, "AddonComm")
 
 -- Register all prefixes
 C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)

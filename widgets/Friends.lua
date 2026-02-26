@@ -112,11 +112,11 @@ table.insert(Widgets.moduleInits, function()
 
     friendsFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("BN_FRIEND_INFO_CHANGED", OnFriendsUpdate)
-            EventBus.Register("FRIENDLIST_UPDATE", OnFriendsUpdate)
-            EventBus.Register("BN_FRIEND_ACCOUNT_ONLINE", OnFriendsUpdate)
-            EventBus.Register("BN_FRIEND_ACCOUNT_OFFLINE", OnFriendsUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnFriendsUpdate)
+            EventBus.Register("BN_FRIEND_INFO_CHANGED", OnFriendsUpdate, "W:Friends")
+            EventBus.Register("FRIENDLIST_UPDATE", OnFriendsUpdate, "W:Friends")
+            EventBus.Register("BN_FRIEND_ACCOUNT_ONLINE", OnFriendsUpdate, "W:Friends")
+            EventBus.Register("BN_FRIEND_ACCOUNT_OFFLINE", OnFriendsUpdate, "W:Friends")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnFriendsUpdate, "W:Friends")
         else
             EventBus.Unregister("BN_FRIEND_INFO_CHANGED", OnFriendsUpdate)
             EventBus.Unregister("FRIENDLIST_UPDATE", OnFriendsUpdate)

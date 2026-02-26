@@ -23,6 +23,7 @@
 # Core initialization
 Core.lua
 EventBus.lua
+Profiler.lua
 
 # Modular Configuration System
 # Load order: Helpers -> All Panels -> Main Window
@@ -104,6 +105,7 @@ widgets\MythicRating.lua
 widgets\Vault.lua
 widgets\DarkmoonFaire.lua
 widgets\Mail.lua
+widgets\ReadyCheck.lua
 widgets\PullCounter.lua
 widgets\Hearthstone.lua
 widgets\Currency.lua

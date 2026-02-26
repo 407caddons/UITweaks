@@ -86,8 +86,8 @@ table.insert(Widgets.moduleInits, function()
 
     dmfFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("QUEST_TURNED_IN", OnDMFEvent)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnDMFEvent)
+            EventBus.Register("QUEST_TURNED_IN", OnDMFEvent, "W:DarkmoonFaire")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnDMFEvent, "W:DarkmoonFaire")
             RefreshDMFCache()
         else
             EventBus.Unregister("QUEST_TURNED_IN", OnDMFEvent)

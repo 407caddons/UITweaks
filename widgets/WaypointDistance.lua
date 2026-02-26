@@ -137,8 +137,8 @@ table.insert(Widgets.moduleInits, function()
 
     wpFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("WAYPOINT_UPDATE", OnWaypointChanged)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnWaypointChanged)
+            EventBus.Register("WAYPOINT_UPDATE", OnWaypointChanged, "W:WaypointDistance")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnWaypointChanged, "W:WaypointDistance")
             if not moveTicker then
                 moveTicker = C_Timer.NewTicker(0.5, function()
                     if UIThingsDB.widgets.waypointDistance.enabled and wpFrame:IsShown() then

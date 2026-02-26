@@ -31,7 +31,7 @@ local function SaveAllFramePositions()
     end
 end
 
-addonTable.EventBus.Register("PLAYER_LOGOUT", SaveAllFramePositions)
+addonTable.EventBus.Register("PLAYER_LOGOUT", SaveAllFramePositions, "Frames")
 
 function addonTable.Frames.UpdateFrames()
     -- Invalidate widget anchor cache since frames may have changed

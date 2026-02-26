@@ -96,11 +96,11 @@ table.insert(Widgets.moduleInits, function()
 
     xpRepFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_XP_UPDATE", OnXPRepUpdate)
-            EventBus.Register("PLAYER_LEVEL_UP", OnXPRepUpdate)
-            EventBus.Register("UPDATE_FACTION", OnXPRepUpdate)
-            EventBus.Register("UPDATE_EXPANSION_LEVEL", OnXPRepUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnXPRepEnteringWorld)
+            EventBus.Register("PLAYER_XP_UPDATE", OnXPRepUpdate, "W:XPRep")
+            EventBus.Register("PLAYER_LEVEL_UP", OnXPRepUpdate, "W:XPRep")
+            EventBus.Register("UPDATE_FACTION", OnXPRepUpdate, "W:XPRep")
+            EventBus.Register("UPDATE_EXPANSION_LEVEL", OnXPRepUpdate, "W:XPRep")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnXPRepEnteringWorld, "W:XPRep")
             RefreshCache()
         else
             EventBus.Unregister("PLAYER_XP_UPDATE", OnXPRepUpdate)

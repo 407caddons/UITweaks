@@ -27,7 +27,10 @@ end)
 --- Subscribe to a WoW event.
 -- @param event string   WoW event name e.g. "PLAYER_ENTERING_WORLD"
 -- @param callback function  Called as callback(event, ...) when event fires
-function EventBus.Register(event, callback)
+function EventBus.Register(event, callback, moduleName)
+    if moduleName and addonTable.Profiler then
+        callback = addonTable.Profiler.WrapCallback(moduleName, callback)
+    end
     if not listeners[event] then
         listeners[event] = {}
         busFrame:RegisterEvent(event)
@@ -64,12 +67,12 @@ end
 -- @param unit string  e.g. "player", "party1"
 -- @param callback function  Called as callback(event, unit, ...)
 -- @return function  The wrapper function — store this reference to Unregister later
-function EventBus.RegisterUnit(event, unit, callback)
+function EventBus.RegisterUnit(event, unit, callback, moduleName)
     local function wrapper(ev, unitTarget, ...)
         if unitTarget == unit then
             callback(ev, unitTarget, ...)
         end
     end
-    EventBus.Register(event, wrapper)
+    EventBus.Register(event, wrapper, moduleName)
     return wrapper
 end

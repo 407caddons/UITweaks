@@ -763,12 +763,12 @@ end
 local function OnChallengeEventBus(event, ...) OnChallengeEvent(nil, event, ...) end
 
 local function RegisterChallengeEvents()
-    addonTable.EventBus.Register("CHALLENGE_MODE_COMPLETED", OnChallengeEventBus)
-    addonTable.EventBus.Register("CHALLENGE_MODE_DEATH_COUNT_UPDATED", OnChallengeEventBus)
-    addonTable.EventBus.Register("WORLD_STATE_TIMER_START", OnChallengeEventBus)
-    addonTable.EventBus.Register("SCENARIO_POI_UPDATE", OnChallengeEventBus)
-    addonTable.EventBus.Register("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus)
-    addonTable.EventBus.Register("ENCOUNTER_END", OnChallengeEventBus)
+    addonTable.EventBus.Register("CHALLENGE_MODE_COMPLETED", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("CHALLENGE_MODE_DEATH_COUNT_UPDATED", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("WORLD_STATE_TIMER_START", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("SCENARIO_POI_UPDATE", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("ENCOUNTER_END", OnChallengeEventBus, "MplusTimer")
 end
 
 local function UnregisterChallengeEvents()
@@ -1029,9 +1029,9 @@ local globalEventsRegistered = false
 local function RegisterGlobalEvents()
     if globalEventsRegistered then return end
     globalEventsRegistered = true
-    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnGlobalEvent)
-    addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnGlobalEvent)
-    addonTable.EventBus.Register("CHALLENGE_MODE_START", OnGlobalEvent)
+    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnGlobalEvent, "MplusTimer")
+    addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnGlobalEvent, "MplusTimer")
+    addonTable.EventBus.Register("CHALLENGE_MODE_START", OnGlobalEvent, "MplusTimer")
 end
 
 local function OnPlayerLogin()
@@ -1044,7 +1044,7 @@ local function OnPlayerLogin()
         CheckForChallengeMode()
     end)
 end
-addonTable.EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+addonTable.EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "MplusTimer")
 
 -- Ensure frames are created even if enabled later via config
 function MplusTimer.EnsureInit()

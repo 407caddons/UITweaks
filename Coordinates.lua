@@ -764,8 +764,8 @@ end
 -- ============================================================
 -- Initialization
 -- ============================================================
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
-EventBus.Register("USER_WAYPOINT_UPDATED", OnUserWaypointUpdated)
+EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Coordinates")
+EventBus.Register("USER_WAYPOINT_UPDATED", OnUserWaypointUpdated, "Coordinates")
 
 -- Slash commands: /lway always registered
 SLASH_LUNAWAY1 = "/lway"
@@ -810,4 +810,4 @@ local function OnPlayerLogin()
     EventBus.Unregister("PLAYER_LOGIN", OnPlayerLogin)
     Coordinates.ApplyWayCommand()
 end
-EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Coordinates")

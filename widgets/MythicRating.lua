@@ -36,10 +36,10 @@ table.insert(Widgets.moduleInits, function()
 
     ratingFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("CHALLENGE_MODE_MAPS_UPDATE", OnRatingUpdate)
-            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnRatingUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnRatingEnteringWorld)
-            EventBus.Register("MYTHIC_PLUS_NEW_WEEKLY_RECORD", OnRatingUpdate)
+            EventBus.Register("CHALLENGE_MODE_MAPS_UPDATE", OnRatingUpdate, "W:MythicRating")
+            EventBus.Register("CHALLENGE_MODE_COMPLETED", OnRatingUpdate, "W:MythicRating")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnRatingEnteringWorld, "W:MythicRating")
+            EventBus.Register("MYTHIC_PLUS_NEW_WEEKLY_RECORD", OnRatingUpdate, "W:MythicRating")
         else
             EventBus.Unregister("CHALLENGE_MODE_MAPS_UPDATE", OnRatingUpdate)
             EventBus.Unregister("CHALLENGE_MODE_COMPLETED", OnRatingUpdate)

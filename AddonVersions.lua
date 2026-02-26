@@ -211,4 +211,4 @@ local function OnGroupRosterUpdate()
     end
 end
 
-addonTable.EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+addonTable.EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "AddonVersions")

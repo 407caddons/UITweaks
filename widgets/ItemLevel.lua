@@ -29,9 +29,9 @@ table.insert(Widgets.moduleInits, function()
 
     ilvlFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("PLAYER_AVG_ITEM_LEVEL_UPDATE", OnItemLevelUpdate)
-            EventBus.Register("PLAYER_EQUIPMENT_CHANGED", OnItemLevelUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnItemLevelUpdate)
+            EventBus.Register("PLAYER_AVG_ITEM_LEVEL_UPDATE", OnItemLevelUpdate, "W:ItemLevel")
+            EventBus.Register("PLAYER_EQUIPMENT_CHANGED", OnItemLevelUpdate, "W:ItemLevel")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnItemLevelUpdate, "W:ItemLevel")
         else
             EventBus.Unregister("PLAYER_AVG_ITEM_LEVEL_UPDATE", OnItemLevelUpdate)
             EventBus.Unregister("PLAYER_EQUIPMENT_CHANGED", OnItemLevelUpdate)

@@ -164,8 +164,8 @@ table.insert(Widgets.moduleInits, function()
     local function OnTeleportCacheInvalidate()
         cachedTeleportSpells = nil
     end
-    EventBus.Register("SPELLS_CHANGED", OnTeleportCacheInvalidate)
-    EventBus.Register("PLAYER_REGEN_ENABLED", OnTeleportCacheInvalidate)
+    EventBus.Register("SPELLS_CHANGED", OnTeleportCacheInvalidate, "W:Keystone")
+    EventBus.Register("PLAYER_REGEN_ENABLED", OnTeleportCacheInvalidate, "W:Keystone")
 
     -- Helper function to get keystone info from item link
     local function GetKeystoneInfo(itemLink)
@@ -397,10 +397,10 @@ table.insert(Widgets.moduleInits, function()
 
     keystoneFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("BAG_UPDATE", OnBagUpdate)
-            EventBus.Register("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnKeystoneWorldUpdate)
-            EventBus.Register("GET_ITEM_INFO_RECEIVED", OnGetItemInfoReceived)
+            EventBus.Register("BAG_UPDATE", OnBagUpdate, "W:Keystone")
+            EventBus.Register("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate, "W:Keystone")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnKeystoneWorldUpdate, "W:Keystone")
+            EventBus.Register("GET_ITEM_INFO_RECEIVED", OnGetItemInfoReceived, "W:Keystone")
         else
             EventBus.Unregister("BAG_UPDATE", OnBagUpdate)
             EventBus.Unregister("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate)

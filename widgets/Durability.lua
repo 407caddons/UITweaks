@@ -34,9 +34,9 @@ table.insert(Widgets.moduleInits, function()
 
     durabilityFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
-            EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed)
-            EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability)
+            EventBus.Register("MERCHANT_SHOW", OnMerchantShow, "W:Durability")
+            EventBus.Register("MERCHANT_CLOSED", OnMerchantClosed, "W:Durability")
+            EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnInventoryDurability, "W:Durability")
         else
             EventBus.Unregister("MERCHANT_SHOW", OnMerchantShow)
             EventBus.Unregister("MERCHANT_CLOSED", OnMerchantClosed)

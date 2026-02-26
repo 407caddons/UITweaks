@@ -7,7 +7,7 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     Helpers.CreateResetButton(panel, "misc")
     local function UpdateNavColor()
-        local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification
+        local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification or UIThingsDB.misc.boeAlert
         Helpers.UpdateModuleVisuals(panel, navButton, anyEnabled)
     end
     UpdateNavColor()
@@ -22,7 +22,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 650)
+    scrollChild:SetSize(panel:GetWidth() - 30, 950)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -327,4 +327,122 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
         end
     end)
     UIDropDownMenu_SetSelectedValue(mailVoiceDropdown, UIThingsDB.misc.mailTtsVoice or 0)
+
+    -- == BoE Item Alert Section ==
+    Helpers.CreateSectionHeader(panel, "BoE Item Alert", -580)
+
+    local boeBtn = CreateFrame("CheckButton", "UIThingsNotifBoeCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    boeBtn:SetPoint("TOPLEFT", 20, -610)
+    _G[boeBtn:GetName() .. "Text"]:SetText("Alert when a Bind on Equip item is looted")
+    boeBtn:SetChecked(UIThingsDB.misc.boeAlert)
+    boeBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.boeAlert = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+        UpdateNavColor()
+    end)
+
+    -- Minimum Quality Dropdown
+    local boeQualLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    boeQualLabel:SetPoint("TOPLEFT", 40, -650)
+    boeQualLabel:SetText("Minimum Quality:")
+
+    local boeQualDropdown = CreateFrame("Frame", "UIThingsNotifBoeQualDropdown", panel, "UIDropDownMenuTemplate")
+    boeQualDropdown:SetPoint("LEFT", boeQualLabel, "RIGHT", -15, -3)
+
+    local qualityOptions = {
+        { text = "|cff1eff00Uncommon|r",  value = 2 },
+        { text = "|cff0070ddRare|r",      value = 3 },
+        { text = "|cffa335eeEpic|r",      value = 4 },
+        { text = "|cffff8000Legendary|r", value = 5 },
+    }
+
+    UIDropDownMenu_SetWidth(boeQualDropdown, 120)
+    UIDropDownMenu_Initialize(boeQualDropdown, function(self, level)
+        for _, option in ipairs(qualityOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.func = function(btn)
+                UIThingsDB.misc.boeMinQuality = btn.value
+                UIDropDownMenu_SetSelectedValue(boeQualDropdown, btn.value)
+            end
+            info.checked = (UIThingsDB.misc.boeMinQuality == option.value)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(boeQualDropdown, UIThingsDB.misc.boeMinQuality or 4)
+
+    -- BoE Alert Duration Slider
+    local boeDurSlider = CreateFrame("Slider", "UIThingsNotifBoeAlertDur", panel, "OptionsSliderTemplate")
+    boeDurSlider:SetPoint("TOPLEFT", 40, -700)
+    boeDurSlider:SetMinMaxValues(1, 10)
+    boeDurSlider:SetValueStep(1)
+    boeDurSlider:SetObeyStepOnDrag(true)
+    boeDurSlider:SetWidth(200)
+    _G[boeDurSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.boeAlertDuration .. "s")
+    _G[boeDurSlider:GetName() .. 'Low']:SetText("1s")
+    _G[boeDurSlider:GetName() .. 'High']:SetText("10s")
+    boeDurSlider:SetValue(UIThingsDB.misc.boeAlertDuration)
+    boeDurSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.misc.boeAlertDuration = value
+        _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
+    end)
+
+    -- BoE Alert Color Picker
+    local boeColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    boeColorLabel:SetPoint("TOPLEFT", 40, -740)
+    boeColorLabel:SetText("Alert Color:")
+
+    local boeColorSwatch = CreateFrame("Button", nil, panel)
+    boeColorSwatch:SetSize(20, 20)
+    boeColorSwatch:SetPoint("LEFT", boeColorLabel, "RIGHT", 10, 0)
+
+    boeColorSwatch.tex = boeColorSwatch:CreateTexture(nil, "OVERLAY")
+    boeColorSwatch.tex:SetAllPoints()
+    local bc = UIThingsDB.misc.boeAlertColor
+    boeColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
+
+    Mixin(boeColorSwatch, BackdropTemplateMixin)
+    boeColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    boeColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+    boeColorSwatch:SetScript("OnClick", function()
+        local prevR, prevG, prevB, prevA = bc.r, bc.g, bc.b, bc.a
+        if ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = bc.r,
+                g = bc.g,
+                b = bc.b,
+                opacity = bc.a,
+                hasOpacity = true,
+                swatchFunc = function()
+                    local r, g, b = ColorPickerFrame:GetColorRGB()
+                    local a = ColorPickerFrame:GetColorAlpha()
+                    bc.r, bc.g, bc.b, bc.a = r, g, b, a
+                    boeColorSwatch.tex:SetColorTexture(r, g, b, a)
+                    UIThingsDB.misc.boeAlertColor = bc
+                end,
+                cancelFunc = function()
+                    bc.r, bc.g, bc.b, bc.a = prevR, prevG, prevB, prevA
+                    boeColorSwatch.tex:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
+                    UIThingsDB.misc.boeAlertColor = bc
+                end
+            })
+        end
+    end)
+
+    -- Test Button
+    local testBoeBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    testBoeBtn:SetSize(60, 22)
+    testBoeBtn:SetPoint("LEFT", boeColorSwatch, "RIGHT", 15, 0)
+    testBoeBtn:SetText("Test")
+    testBoeBtn:SetScript("OnClick", function()
+        if addonTable.Misc and addonTable.Misc.ShowBoeAlert then
+            addonTable.Misc.ShowBoeAlert()
+        end
+    end)
 end

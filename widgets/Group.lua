@@ -527,12 +527,12 @@ table.insert(Widgets.moduleInits, function()
 
     groupFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)
-            EventBus.Register("ROLE_CHANGED_INFORM", OnGroupRosterUpdate)
-            EventBus.Register("READY_CHECK", OnReadyCheck)
-            EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckConfirm)
-            EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished)
+            EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "W:Group")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate, "W:Group")
+            EventBus.Register("ROLE_CHANGED_INFORM", OnGroupRosterUpdate, "W:Group")
+            EventBus.Register("READY_CHECK", OnReadyCheck, "W:Group")
+            EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckConfirm, "W:Group")
+            EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:Group")
         else
             EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)

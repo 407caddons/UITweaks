@@ -1568,11 +1568,11 @@ local function OnEventBus(event, ...) OnEvent(nil, event, ...) end
 function Kick.ApplyEvents()
     local EventBus = addonTable.EventBus
     if UIThingsDB.kick and UIThingsDB.kick.enabled then
-        EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus)
-        EventBus.Register("GROUP_ROSTER_UPDATE", OnEventBus)
-        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", OnEventBus)
-        EventBus.Register("SPELLS_CHANGED", OnEventBus)
-        EventBus.Register("PLAYER_REGEN_ENABLED", OnEventBus)
+        EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus, "Kick")
+        EventBus.Register("GROUP_ROSTER_UPDATE", OnEventBus, "Kick")
+        EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", OnEventBus, "Kick")
+        EventBus.Register("SPELLS_CHANGED", OnEventBus, "Kick")
+        EventBus.Register("PLAYER_REGEN_ENABLED", OnEventBus, "Kick")
         -- Unit events for player must stay on their own frame
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
@@ -1604,4 +1604,4 @@ function Kick.ApplyEvents()
 end
 
 -- Register PLAYER_ENTERING_WORLD immediately for initialization
-addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus)
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnEventBus, "Kick")

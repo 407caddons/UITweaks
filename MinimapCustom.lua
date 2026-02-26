@@ -409,10 +409,10 @@ local function SetupMinimap()
         local function OnCraftingOrdersUpdate()
             PositionMinimapIcons()
         end
-        addonTable.EventBus.Register("ZONE_CHANGED", OnMinimapZoneChanged)
-        addonTable.EventBus.Register("ZONE_CHANGED_INDOORS", OnMinimapZoneChanged)
-        addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnMinimapZoneChanged)
-        addonTable.EventBus.Register("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", OnCraftingOrdersUpdate)
+        addonTable.EventBus.Register("ZONE_CHANGED", OnMinimapZoneChanged, "MinimapCustom")
+        addonTable.EventBus.Register("ZONE_CHANGED_INDOORS", OnMinimapZoneChanged, "MinimapCustom")
+        addonTable.EventBus.Register("ZONE_CHANGED_NEW_AREA", OnMinimapZoneChanged, "MinimapCustom")
+        addonTable.EventBus.Register("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", OnCraftingOrdersUpdate, "MinimapCustom")
 
         -- == Clock Text (movable, anchored to minimap) ==
         local clockOffset = settings.minimapClockOffset or { x = 0, y = -4 }
@@ -1231,5 +1231,5 @@ local function OnPlayerEnteringWorld()
     end
 end
 
-addonTable.EventBus.Register("ADDON_LOADED", OnAddonLoaded)
-addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+addonTable.EventBus.Register("ADDON_LOADED", OnAddonLoaded, "MinimapCustom")
+addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "MinimapCustom")

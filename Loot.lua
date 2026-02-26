@@ -531,19 +531,19 @@ end
 
 function Loot.ApplyEvents()
     if UIThingsDB.loot.enabled then
-        EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot)
-        EventBus.Register("LOOT_READY", OnLootReady)
-        EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+        EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot, "Loot")
+        EventBus.Register("LOOT_READY", OnLootReady, "Loot")
+        EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "Loot")
 
         if UIThingsDB.loot.showCurrency then
-            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate, "Loot")
         else
             EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
         end
 
         if UIThingsDB.loot.showGold then
             lastMoney = GetMoney()
-            EventBus.Register("PLAYER_MONEY", OnPlayerMoney)
+            EventBus.Register("PLAYER_MONEY", OnPlayerMoney, "Loot")
         else
             EventBus.Unregister("PLAYER_MONEY", OnPlayerMoney)
         end
@@ -556,4 +556,4 @@ function Loot.ApplyEvents()
     end
 end
 
-EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Loot")

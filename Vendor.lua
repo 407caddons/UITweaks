@@ -235,13 +235,13 @@ end
 
 local function ApplyVendorEvents()
     if UIThingsDB.vendor.enabled then
-        EventBus.Register("MERCHANT_SHOW", OnMerchantShow)
-        EventBus.Register("MERCHANT_CLOSED", OnVendorRegenOrMove)
-        EventBus.Register("PLAYER_REGEN_ENABLED", OnVendorRegenOrMove)
-        EventBus.Register("PLAYER_REGEN_DISABLED", OnRegenDisabled)
-        EventBus.Register("PLAYER_UNGHOST", OnVendorRegenOrMove)
-        EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnVendorRegenOrMove)
-        EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
+        EventBus.Register("MERCHANT_SHOW", OnMerchantShow, "Vendor")
+        EventBus.Register("MERCHANT_CLOSED", OnVendorRegenOrMove, "Vendor")
+        EventBus.Register("PLAYER_REGEN_ENABLED", OnVendorRegenOrMove, "Vendor")
+        EventBus.Register("PLAYER_REGEN_DISABLED", OnRegenDisabled, "Vendor")
+        EventBus.Register("PLAYER_UNGHOST", OnVendorRegenOrMove, "Vendor")
+        EventBus.Register("UPDATE_INVENTORY_DURABILITY", OnVendorRegenOrMove, "Vendor")
+        EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed, "Vendor")
     else
         EventBus.Unregister("MERCHANT_SHOW", OnMerchantShow)
         EventBus.Unregister("MERCHANT_CLOSED", OnVendorRegenOrMove)
@@ -339,4 +339,4 @@ local function OnPlayerLogin()
     CheckBagSpace()
 end
 
-EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Vendor")

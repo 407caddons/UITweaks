@@ -30,8 +30,8 @@ table.insert(Widgets.moduleInits, function()
 
     hasteFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("COMBAT_RATING_UPDATE", OnStatUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnStatUpdate)
+            EventBus.Register("COMBAT_RATING_UPDATE", OnStatUpdate, "W:Haste")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnStatUpdate, "W:Haste")
         else
             EventBus.Unregister("COMBAT_RATING_UPDATE", OnStatUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnStatUpdate)

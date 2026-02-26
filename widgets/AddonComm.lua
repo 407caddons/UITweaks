@@ -107,8 +107,8 @@ table.insert(Widgets.moduleInits, function()
 
     commFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupUpdate)
+            EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupUpdate, "W:AddonComm")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupUpdate, "W:AddonComm")
         else
             EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGroupUpdate)

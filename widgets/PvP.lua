@@ -34,11 +34,11 @@ table.insert(Widgets.moduleInits, function()
 
     pvpFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("HONOR_LEVEL_UPDATE", OnPvPUpdate)
-            EventBus.Register("HONOR_XP_UPDATE", OnPvPUpdate)
-            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnPvPUpdate)
-            EventBus.Register("PLAYER_ENTERING_WORLD", OnPvPUpdate)
-            EventBus.Register("PVP_RATED_STATS_UPDATE", OnPvPUpdate)
+            EventBus.Register("HONOR_LEVEL_UPDATE", OnPvPUpdate, "W:PvP")
+            EventBus.Register("HONOR_XP_UPDATE", OnPvPUpdate, "W:PvP")
+            EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnPvPUpdate, "W:PvP")
+            EventBus.Register("PLAYER_ENTERING_WORLD", OnPvPUpdate, "W:PvP")
+            EventBus.Register("PVP_RATED_STATS_UPDATE", OnPvPUpdate, "W:PvP")
         else
             EventBus.Unregister("HONOR_LEVEL_UPDATE", OnPvPUpdate)
             EventBus.Unregister("HONOR_XP_UPDATE", OnPvPUpdate)

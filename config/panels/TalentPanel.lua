@@ -1134,7 +1134,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     }
 
     -- Update button states when entering world
-    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", UpdateButtonStates)
+    addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", UpdateButtonStates, "TalentPanel")
 
     -- Initial button state update
     UpdateButtonStates()

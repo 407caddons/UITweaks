@@ -21,8 +21,8 @@ end
 function QuestReminder.ApplyEvents()
     local EventBus = addonTable.EventBus
     if UIThingsDB.questReminder and UIThingsDB.questReminder.enabled then
-        EventBus.Register("PLAYER_ENTERING_WORLD", QuestReminder.OnEnteringWorldEvent)
-        EventBus.Register("QUEST_ACCEPTED", QuestReminder.OnQuestAcceptedEvent)
+        EventBus.Register("PLAYER_ENTERING_WORLD", QuestReminder.OnEnteringWorldEvent, "QuestReminder")
+        EventBus.Register("QUEST_ACCEPTED", QuestReminder.OnQuestAcceptedEvent, "QuestReminder")
     else
         EventBus.Unregister("PLAYER_ENTERING_WORLD", QuestReminder.OnEnteringWorldEvent)
         EventBus.Unregister("QUEST_ACCEPTED", QuestReminder.OnQuestAcceptedEvent)
