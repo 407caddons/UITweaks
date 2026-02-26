@@ -503,7 +503,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Slide.ShowGame()
                 end
             end)
-            rootDescription:CreateButton("Lights", function()
+            rootDescription:CreateButton("Toggle", function()
                 if addonTable.Lights and addonTable.Lights.ShowGame then
                     addonTable.Lights.ShowGame()
                 end

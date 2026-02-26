@@ -418,7 +418,7 @@ local function BuildUI()
     local totalW = BOARD_PX + PADDING * 2
     local totalH = BOARD_PX + PADDING * 2 + 30 + HUD_H
 
-    gameFrame = CreateFrame("Frame", "LunaUITweaks_2048Game", UIParent)
+    gameFrame = CreateFrame("Frame", "LunaUITweaks_TilesGame", UIParent)
     gameFrame:SetSize(totalW, totalH)
     gameFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     gameFrame:SetFrameStrata("DIALOG")

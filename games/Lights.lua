@@ -275,7 +275,7 @@ BuildUI = function()
 
     local titleLabel = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleLabel:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
-    titleLabel:SetText("|cFFFFCC00Lights|r  |cFF888888click to toggle · turn all lights off|r")
+    titleLabel:SetText("|cFFFFCC00Toggle|r  |cFF888888click to toggle · turn all lights off|r")
 
     local closeBtn = CreateFrame("Button", nil, gameFrame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", gameFrame, "TOPRIGHT", 2, 2)
@@ -300,12 +300,12 @@ BuildUI = function()
 
     local gameTitle = sideAnchor:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     gameTitle:SetPoint("TOPLEFT", sideAnchor, "TOPLEFT", 0, -4)
-    gameTitle:SetText("|cFFFFCC00Lights Out|r")
+    gameTitle:SetText("|cFFFFCC00Toggle|r")
 
     local desc = sideAnchor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     desc:SetPoint("TOPLEFT", gameTitle, "BOTTOMLEFT", 0, -4)
     desc:SetWidth(SIDE_W)
-    desc:SetText("|cFF888888Turn all lights off.\nClicking toggles a cell\nand its 4 neighbors.|r")
+    desc:SetText("|cFF888888Turn all cells off.\nClicking toggles a cell\nand its 4 neighbors.|r")
 
     levelText = sideAnchor:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     levelText:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -12)
@@ -355,7 +355,7 @@ BuildUI = function()
 
     local winTitle = winFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     winTitle:SetPoint("CENTER", winFrame, "CENTER", 0, 50)
-    winTitle:SetText("|cFFFFD100Lights Out!|r")
+    winTitle:SetText("|cFFFFD100Toggled!|r")
 
     winFrame.movesText = winFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     winFrame.movesText:SetPoint("CENTER", winFrame, "CENTER", 0, 15)
