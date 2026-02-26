@@ -1906,6 +1906,20 @@ BuildUI = function()
             string.format("Moves: %d   Pushes: %d%s", moves, pushes,
                 best and ("\nBest: " .. best) or ""))
     end)
+
+    -- Pause overlay (shown when game is paused due to combat)
+    local pauseOverlay = CreateFrame("Frame", nil, boardFrame)
+    pauseOverlay:SetAllPoints()
+    pauseOverlay:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    pauseOverlay:EnableMouse(true) -- blocks clicks to cells underneath while paused
+    local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
+    pauseOvBg:SetAllPoints()
+    pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
+    pauseOvText:SetText("|cFFFFD100PAUSED|r")
+    pauseOverlay:Hide()
+    gameFrame.pauseOverlay = pauseOverlay
 end
 
 -- ============================================================
@@ -1915,7 +1929,14 @@ addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
     if not (gameFrame and gameFrame:IsShown()) then return end
     if UIThingsDB.games and UIThingsDB.games.closeInCombat then
         gameFrame:Hide()
+    else
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Show() end
     end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
 -- ============================================================
@@ -1941,9 +1962,15 @@ function addonTable.Boxes.ShowGame()
     if gameFrame:IsShown() then
         addonTable.Boxes.CloseGame()
     else
-        -- Close other games that share keybindings
-        if addonTable.Snek     then addonTable.Snek.CloseGame() end
-        if addonTable.Game2048 then addonTable.Game2048.CloseGame() end
+        -- Close all other games (shared keybindings)
+        if addonTable.Snek     and addonTable.Snek.CloseGame     then addonTable.Snek.CloseGame() end
+        if addonTable.Game2048 and addonTable.Game2048.CloseGame then addonTable.Game2048.CloseGame() end
+        if addonTable.Lights   and addonTable.Lights.CloseGame   then addonTable.Lights.CloseGame() end
+        if addonTable.Slide    and addonTable.Slide.CloseGame    then addonTable.Slide.CloseGame() end
+        if addonTable.Bombs    and addonTable.Bombs.CloseGame    then addonTable.Bombs.CloseGame() end
+        if addonTable.Gems     and addonTable.Gems.CloseGame     then addonTable.Gems.CloseGame() end
+        if addonTable.Cards    and addonTable.Cards.CloseGame    then addonTable.Cards.CloseGame() end
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
         gameFrame:Show()
     end
 end
@@ -1955,6 +1982,10 @@ local function BoxesIsOpen()
     return gameFrame and gameFrame:IsShown()
 end
 
+local function BoxesIsPaused()
+    return gameFrame and gameFrame.pauseOverlay and gameFrame.pauseOverlay:IsShown()
+end
+
 local _origLeft     = LunaUITweaks_Game_Left
 local _origRight    = LunaUITweaks_Game_Right
 local _origRotateCW = LunaUITweaks_Game_RotateCW
@@ -1962,26 +1993,26 @@ local _origRotateCCW= LunaUITweaks_Game_RotateCCW
 local _origPause    = LunaUITweaks_Game_Pause
 
 function LunaUITweaks_Game_Left()
-    if BoxesIsOpen() then TryMove(0, -1)
+    if BoxesIsOpen() and not BoxesIsPaused() then TryMove(0, -1)
     elseif _origLeft then _origLeft() end
 end
 
 function LunaUITweaks_Game_Right()
-    if BoxesIsOpen() then TryMove(0, 1)
+    if BoxesIsOpen() and not BoxesIsPaused() then TryMove(0, 1)
     elseif _origRight then _origRight() end
 end
 
 function LunaUITweaks_Game_RotateCW()
-    if BoxesIsOpen() then TryMove(-1, 0)
+    if BoxesIsOpen() and not BoxesIsPaused() then TryMove(-1, 0)
     elseif _origRotateCW then _origRotateCW() end
 end
 
 function LunaUITweaks_Game_RotateCCW()
-    if BoxesIsOpen() then TryMove(1, 0)
+    if BoxesIsOpen() and not BoxesIsPaused() then TryMove(1, 0)
     elseif _origRotateCCW then _origRotateCCW() end
 end
 
 function LunaUITweaks_Game_Pause()
-    if BoxesIsOpen() then UndoMove()
+    if BoxesIsOpen() and not BoxesIsPaused() then UndoMove()
     elseif _origPause then _origPause() end
 end

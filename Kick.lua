@@ -1219,9 +1219,9 @@ local function OnEvent(self, event, ...)
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
         if UIThingsDB.kick.enabled then
-            Kick.RebuildPartyFrames()
             -- Delayed rebuild so unit frames are available for attached mode
-            addonTable.Core.SafeAfter(0.5, function()
+            -- (immediate rebuild is redundant since unit frames aren't ready yet anyway)
+            addonTable.Comm.ScheduleThrottled("KICK_REBUILD", 0.5, function()
                 if UIThingsDB.kick.enabled then
                     Kick.RebuildPartyFrames()
                 end

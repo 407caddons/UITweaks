@@ -371,6 +371,20 @@ BuildUI = function()
     end)
 
     winFrame:Hide()
+
+    -- Pause overlay (shown when game is paused due to combat)
+    local pauseOverlay = CreateFrame("Frame", nil, boardFrame)
+    pauseOverlay:SetAllPoints()
+    pauseOverlay:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
+    pauseOvBg:SetAllPoints()
+    pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
+    pauseOvText:SetText("|cFFFFD100PAUSED|r")
+    pauseOverlay:EnableMouse(true) -- blocks clicks to cells underneath while paused
+    pauseOverlay:Hide()
+    gameFrame.pauseOverlay = pauseOverlay
 end
 
 -- ============================================================
@@ -380,7 +394,14 @@ addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
     if not (gameFrame and gameFrame:IsShown()) then return end
     if UIThingsDB.games and UIThingsDB.games.closeInCombat then
         gameFrame:Hide()
+    else
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Show() end
     end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
 -- ============================================================
@@ -411,6 +432,7 @@ function addonTable.Lights.ShowGame()
         if addonTable.Gems     and addonTable.Gems.CloseGame     then addonTable.Gems.CloseGame() end
         if addonTable.Cards    and addonTable.Cards.CloseGame    then addonTable.Cards.CloseGame() end
         if winFrame then winFrame:Hide() end
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
         gameFrame:Show()
     end
 end

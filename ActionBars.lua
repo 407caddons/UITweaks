@@ -1279,6 +1279,14 @@ RestoreButtonSpacing = function(andWipe)
     end
 end
 
+local skinDeferFrame = CreateFrame("Frame")
+local skinDeferPending = false
+skinDeferFrame:SetScript("OnEvent", function(self)
+    self:UnregisterAllEvents()
+    skinDeferPending = false
+    ActionBars.ApplySkin()
+end)
+
 function ActionBars.ApplySkin()
     if HasConflictAddon() then return end
     local settings = UIThingsDB.actionBars
@@ -1286,18 +1294,14 @@ function ActionBars.ApplySkin()
 
     local inCombat = InCombatLockdown()
 
-    -- If in combat, defer protected operations but still do what we can
+    -- If in combat, defer to after combat — register only once
     if inCombat then
-        local f = CreateFrame("Frame")
-        f:RegisterEvent("PLAYER_REGEN_ENABLED")
-        f:SetScript("OnEvent", function(self)
-            self:UnregisterAllEvents()
-            ActionBars.ApplySkin()
-        end)
+        if not skinDeferPending then
+            skinDeferPending = true
+            skinDeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        end
+        return
     end
-
-    -- If in combat, skip everything — the deferred call will handle it all
-    if inCombat then return end
 
     -- Migrate old barOffsets to barPositions on first run
     MigrateBarOffsets()

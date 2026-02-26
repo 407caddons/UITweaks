@@ -403,6 +403,20 @@ BuildUI = function()
     winNewBtn:SetScript("OnClick", NewGame)
 
     winFrame:Hide()
+
+    -- Pause overlay (shown when game is paused due to combat)
+    local pauseOverlay = CreateFrame("Frame", nil, boardFrame)
+    pauseOverlay:SetAllPoints()
+    pauseOverlay:SetFrameLevel(boardFrame:GetFrameLevel() + 20)
+    pauseOverlay:EnableMouse(true) -- blocks clicks to tiles underneath while paused
+    local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
+    pauseOvBg:SetAllPoints()
+    pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
+    pauseOvText:SetText("|cFFFFD100PAUSED|r")
+    pauseOverlay:Hide()
+    gameFrame.pauseOverlay = pauseOverlay
 end
 
 -- ============================================================
@@ -412,7 +426,14 @@ addonTable.EventBus.Register("PLAYER_REGEN_DISABLED", function()
     if not (gameFrame and gameFrame:IsShown()) then return end
     if UIThingsDB.games and UIThingsDB.games.closeInCombat then
         gameFrame:Hide()
+    else
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Show() end
     end
+end)
+
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if not (gameFrame and gameFrame:IsShown()) then return end
+    if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
 -- ============================================================
@@ -435,9 +456,14 @@ function addonTable.Slide.ShowGame()
     if gameFrame:IsShown() then
         addonTable.Slide.CloseGame()
     else
-        if addonTable.Snek     then addonTable.Snek.CloseGame() end
-        if addonTable.Game2048 then addonTable.Game2048.CloseGame() end
-        if addonTable.Boxes    then addonTable.Boxes.CloseGame() end
+        if addonTable.Snek     and addonTable.Snek.CloseGame     then addonTable.Snek.CloseGame() end
+        if addonTable.Game2048 and addonTable.Game2048.CloseGame then addonTable.Game2048.CloseGame() end
+        if addonTable.Boxes    and addonTable.Boxes.CloseGame    then addonTable.Boxes.CloseGame() end
+        if addonTable.Lights   and addonTable.Lights.CloseGame   then addonTable.Lights.CloseGame() end
+        if addonTable.Bombs    and addonTable.Bombs.CloseGame    then addonTable.Bombs.CloseGame() end
+        if addonTable.Gems     and addonTable.Gems.CloseGame     then addonTable.Gems.CloseGame() end
+        if addonTable.Cards    and addonTable.Cards.CloseGame    then addonTable.Cards.CloseGame() end
+        if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
         gameFrame:Show()
     end
 end

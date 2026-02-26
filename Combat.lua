@@ -573,7 +573,7 @@ local consumableIgnoreSet = {
     ["moll-e"] = true,
 }
 
-local function TrackConsumableUsage(itemID)
+local function TrackConsumableUsage(itemID, retries)
     if not itemID then return end
 
     -- Exclude toys
@@ -581,8 +581,10 @@ local function TrackConsumableUsage(itemID)
 
     local itemName = GetItemInfo(itemID)
     if not itemName then
+        retries = (retries or 0) + 1
+        if retries > 10 then return end
         C_Item.RequestLoadItemDataByID(itemID)
-        C_Timer.After(0.5, function() TrackConsumableUsage(itemID) end)
+        C_Timer.After(0.5, function() TrackConsumableUsage(itemID, retries) end)
         return
     end
 

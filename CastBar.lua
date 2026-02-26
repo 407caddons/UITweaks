@@ -360,7 +360,6 @@ end
 eventFrame:SetScript("OnEvent", function(self, event, unit, ...)
     if not UIThingsDB.castBar.enabled then return end
     if not castBarFrame then return end
-    if not UIThingsDB.castBar.locked then return end
 
     if event == "UNIT_SPELLCAST_START" then
         OnCastStart()
