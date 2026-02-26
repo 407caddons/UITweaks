@@ -479,6 +479,15 @@ addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
 
+function addonTable.Gems.CloseGame()
+    if gameFrame and gameFrame:IsShown() then
+        gameFrame:Hide()
+        gameActive = false
+        isAnimating = false
+        if animTicker then animTicker:Cancel(); animTicker = nil end
+    end
+end
+
 function addonTable.Gems.ShowGame()
     if not gameFrame then BuildUI() end
     if gameFrame:IsShown() then

@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.18.0
+## Version: 1.19.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
@@ -40,6 +40,7 @@ config\panels\TalentManagerPanel.lua
 config\panels\WidgetsPanel.lua
 config\panels\KickPanel.lua
 config\panels\ChatSkinPanel.lua
+config\panels\DamageMeterPanel.lua
 config\panels\AddonVersionsPanel.lua
 config\panels\ActionBarsPanel.lua
 config\panels\NotificationsPanel.lua
@@ -51,7 +52,6 @@ config\panels\XpBarPanel.lua
 config\panels\MplusTimerPanel.lua
 config\panels\CoordinatesPanel.lua
 config\panels\WarehousingPanel.lua
-config\panels\DamageMeterPanel.lua
 config\ConfigMain.lua
 
 # Feature modules
@@ -69,6 +69,7 @@ TalentManager.lua
 AddonComm.lua
 Kick.lua
 ChatSkin.lua
+DamageMeter.lua
 ActionBars.lua
 CastBar.lua
 AddonVersions.lua
@@ -79,7 +80,6 @@ XpBar.lua
 MplusTimer.lua
 Coordinates.lua
 Warehousing.lua
-DamageMeter.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua
@@ -124,6 +124,9 @@ games\Bombs.lua
 games\Gems.lua
 games\Cards.lua
 games\Tiles.lua
+games\Boxes.lua
+games\Slide.lua
+games\Lights.lua
 
 # Config entry point (now just a stub)
 Config.lua

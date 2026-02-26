@@ -8,7 +8,7 @@ local Helpers = addonTable.ConfigHelpers
 
 local function LootUpdateSettings()
     if addonTable.Loot and addonTable.Loot.UpdateSettings then
-        LootUpdateSettings()
+        addonTable.Loot.UpdateSettings()
     end
 end
 

@@ -723,19 +723,9 @@ local function OnEvent(self, event, ...)
                 game2048 = {
                     highScore = 0,
                 },
-            },
-            damageMeter = {
-                enabled = false,
-                locked = true,
-                frameStrata = "LOW",
-                bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.85 },
-                borderColor = { r = 0.2, g = 0.8, b = 0.2, a = 1 },
-                borderSize = 2,
-                titleBarHeight = 24,
-                titleText = "Damage Meter",
-                width = 0,
-                height = 0,
-                pos = { point = "CENTER", x = 0, y = 0 },
+                lights = {
+                    best = 0,
+                },
             },
         }
 
@@ -783,10 +773,6 @@ local function OnEvent(self, event, ...)
         if UIThingsDB.chatSkin and UIThingsDB.chatSkin.pos then
             MigrateBottomLeftToCenter(UIThingsDB.chatSkin.pos, 0, -200)
         end
-        if UIThingsDB.damageMeter and UIThingsDB.damageMeter.pos then
-            MigrateBottomLeftToCenter(UIThingsDB.damageMeter.pos, 0, 0)
-        end
-
         -- Apply debug mode from saved settings
         if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then
             addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.DEBUG

@@ -759,7 +759,7 @@ BuildUI = function()
     local title = titleBar:CreateFontString(nil, "OVERLAY")
     title:SetFont(CARD_FONT, 13)
     title:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
-    title:SetText("|cFF00FF00Solitaire|r  |cFF888888drag title to move|r")
+    title:SetText("|cFF00FF00Cards|r  |cFF888888drag title to move|r")
 
     local closeBtn = CreateFrame("Button", nil, gameFrame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", gameFrame, "TOPRIGHT", 2, 2)
@@ -868,6 +868,12 @@ addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
     boardFrame:EnableMouse(true)
     if gameFrame.pauseOverlay then gameFrame.pauseOverlay:Hide() end
 end)
+
+function addonTable.Cards.CloseGame()
+    if gameFrame and gameFrame:IsShown() then
+        gameFrame:Hide()
+    end
+end
 
 function addonTable.Cards.ShowGame()
     if not gameFrame then BuildUI() end

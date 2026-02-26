@@ -100,6 +100,14 @@ function addonTable.Config.Initialize()
                 end
             end
 
+            -- Damage Meter
+            if UIThingsDB.damageMeter then
+                UIThingsDB.damageMeter.locked = true
+                if addonTable.DamageMeter and addonTable.DamageMeter.SetLocked then
+                    addonTable.DamageMeter.SetLocked(true)
+                end
+            end
+
             -- Action Bars
             if UIThingsDB.actionBars then
                 UIThingsDB.actionBars.locked = true
@@ -206,7 +214,7 @@ function addonTable.Config.Initialize()
             { id = 12, name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
             { id = 13, name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
             { id = 14, name = "Chat",             key = "chatSkin",      icon = "Interface\\Icons\\INV_Misc_Note_06" },
-            { id = 15, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_Savageblow" },
+            { id = 15, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
             { id = 16, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
             { id = 17, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
             { id = 18, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
@@ -277,6 +285,10 @@ function addonTable.Config.Initialize()
         chatSkinPanel:SetAllPoints()
         chatSkinPanel:Hide()
 
+        local damageMeterPanel = CreateFrame("Frame", nil, contentContainer)
+        damageMeterPanel:SetAllPoints()
+        damageMeterPanel:Hide()
+
         local addonVersionsPanel = CreateFrame("Frame", nil, contentContainer)
         addonVersionsPanel:SetAllPoints()
         addonVersionsPanel:Hide()
@@ -321,10 +333,6 @@ function addonTable.Config.Initialize()
         warehousingPanel:SetAllPoints()
         warehousingPanel:Hide()
 
-        local damageMeterPanel = CreateFrame("Frame", nil, contentContainer)
-        damageMeterPanel:SetAllPoints()
-        damageMeterPanel:Hide()
-
         local xpBarPanel = CreateFrame("Frame", nil, contentContainer)
         xpBarPanel:SetAllPoints()
         xpBarPanel:Hide()
@@ -342,6 +350,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.widgets = widgetsPanel
         addonTable.ConfigPanels.kick = kickPanel
         addonTable.ConfigPanels.chatSkin = chatSkinPanel
+        addonTable.ConfigPanels.damageMeter = damageMeterPanel
         addonTable.ConfigPanels.addonVersions = addonVersionsPanel
         addonTable.ConfigPanels.actionBars = actionBarsPanel
         addonTable.ConfigPanels.notifications = notificationsPanel
@@ -353,7 +362,6 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.talentManager = talentManagerPanel
         addonTable.ConfigPanels.coordinates = coordinatesPanel
         addonTable.ConfigPanels.warehousing = warehousingPanel
-        addonTable.ConfigPanels.damageMeter = damageMeterPanel
         addonTable.ConfigPanels.xpBar = xpBarPanel
 
         -- Map IDs to Panels

@@ -493,6 +493,21 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Game2048.ShowGame()
                 end
             end)
+            rootDescription:CreateButton("Boxes", function()
+                if addonTable.Boxes and addonTable.Boxes.ShowGame then
+                    addonTable.Boxes.ShowGame()
+                end
+            end)
+            rootDescription:CreateButton("Slide", function()
+                if addonTable.Slide and addonTable.Slide.ShowGame then
+                    addonTable.Slide.ShowGame()
+                end
+            end)
+            rootDescription:CreateButton("Lights", function()
+                if addonTable.Lights and addonTable.Lights.ShowGame then
+                    addonTable.Lights.ShowGame()
+                end
+            end)
         end)
     end)
 

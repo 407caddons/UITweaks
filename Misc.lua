@@ -158,14 +158,12 @@ local function ApplyAHFilter()
     -- Apply immediately (with slight delay for ensuring frame is ready)
     addonTable.Core.SafeAfter(0, SetFilter)
 
-    -- Hook for persistence (Tab switching or re-showing)
+    -- Re-apply on tab switches via global hook (safe — no frame-object tainting)
     if not hookSet then
-        if AuctionHouseFrame.SearchBar then
-            AuctionHouseFrame.SearchBar:HookScript("OnShow", function()
-                addonTable.Core.SafeAfter(0, SetFilter)
-            end)
-            hookSet = true
-        end
+        hooksecurefunc("AuctionHouseFrame_SetDisplayMode", function()
+            addonTable.Core.SafeAfter(0, SetFilter)
+        end)
+        hookSet = true
     end
 end
 
@@ -182,7 +180,9 @@ local function ApplyUIScale()
     SetCVar("uiScale", tostring(scale))
 
     -- Force UIParent scale to bypass internal 0.64 floor in TWW
-    UIParent:SetScale(scale)
+    if not InCombatLockdown() then
+        UIParent:SetScale(scale)
+    end
 end
 
 -- Expose ApplyUIScale
@@ -268,11 +268,8 @@ function Misc.ToggleQuickDestroy(enabled)
                     deleteButton:SetScript("OnClick", function()
                         pcall(function()
                             if editBox:IsForbidden() then return end
+                            -- SetText fires OnTextChanged internally, enabling button1
                             editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
-                            local onTextChanged = editBox:GetScript("OnTextChanged")
-                            if onTextChanged then
-                                onTextChanged(editBox)
-                            end
                             if not button1:IsForbidden() then
                                 button1:Enable()
                                 button1:Click()
@@ -307,7 +304,6 @@ local function OnPlayerEnteringWorld()
     if not UIThingsDB.misc then return end
     ApplyMiscEvents()
     if UIThingsDB.misc.enabled then
-        ApplyUIScale()
         Misc.UpdateAutoInviteKeywords()
         if UIThingsDB.misc.quickDestroy then
             Misc.ToggleQuickDestroy(true)
@@ -520,6 +516,13 @@ ApplyMiscEvents = function()
         HookTooltipSpellID()
     end
 end
+
+EventBus.Register("ADDON_LOADED", function(event, name)
+    if name ~= "LunaUITweaks" then return end
+    if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.enabled then
+        ApplyUIScale()
+    end
+end)
 
 EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
 

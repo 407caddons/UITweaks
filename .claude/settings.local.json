@@ -12,7 +12,12 @@
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" diff a094160..HEAD --name-only)",
       "Bash(test:*)",
       "Bash(powershell -Command:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(grep:*)",
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" log --oneline -- DamageMeter.lua)",
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:DamageMeter.lua)",
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:config/panels/DamageMeterPanel.lua)",
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:Core.lua)"
     ]
   }
 }

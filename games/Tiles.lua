@@ -10,21 +10,21 @@ local GAP       = 6        -- px between cells
 local PADDING   = 12
 local BOARD_PX  = GRID * CELL + (GRID + 1) * GAP  -- total board pixel size
 
--- Tile colors by value (power-of-two index)
+-- Tile colors by value — dark theme matching other Luna games
 local TILE_COLORS = {
-    [2]    = { bg = {0.93, 0.89, 0.85}, fg = {0.47, 0.43, 0.40} },
-    [4]    = { bg = {0.93, 0.88, 0.78}, fg = {0.47, 0.43, 0.40} },
-    [8]    = { bg = {0.95, 0.69, 0.47}, fg = {1.00, 1.00, 1.00} },
-    [16]   = { bg = {0.96, 0.58, 0.39}, fg = {1.00, 1.00, 1.00} },
-    [32]   = { bg = {0.96, 0.49, 0.37}, fg = {1.00, 1.00, 1.00} },
-    [64]   = { bg = {0.96, 0.37, 0.23}, fg = {1.00, 1.00, 1.00} },
-    [128]  = { bg = {0.93, 0.81, 0.45}, fg = {1.00, 1.00, 1.00} },
-    [256]  = { bg = {0.93, 0.80, 0.38}, fg = {1.00, 1.00, 1.00} },
-    [512]  = { bg = {0.93, 0.78, 0.31}, fg = {1.00, 1.00, 1.00} },
-    [1024] = { bg = {0.93, 0.77, 0.25}, fg = {1.00, 1.00, 1.00} },
-    [2048] = { bg = {0.93, 0.76, 0.18}, fg = {1.00, 1.00, 1.00} },
+    [2]    = { bg = {0.15, 0.28, 0.38}, fg = {0.80, 0.90, 1.00} },
+    [4]    = { bg = {0.10, 0.38, 0.45}, fg = {0.85, 1.00, 1.00} },
+    [8]    = { bg = {0.10, 0.50, 0.35}, fg = {1.00, 1.00, 1.00} },
+    [16]   = { bg = {0.15, 0.60, 0.25}, fg = {1.00, 1.00, 1.00} },
+    [32]   = { bg = {0.50, 0.60, 0.10}, fg = {1.00, 1.00, 1.00} },
+    [64]   = { bg = {0.70, 0.50, 0.08}, fg = {1.00, 1.00, 1.00} },
+    [128]  = { bg = {0.75, 0.35, 0.08}, fg = {1.00, 1.00, 1.00} },
+    [256]  = { bg = {0.75, 0.20, 0.10}, fg = {1.00, 1.00, 1.00} },
+    [512]  = { bg = {0.70, 0.10, 0.30}, fg = {1.00, 1.00, 1.00} },
+    [1024] = { bg = {0.55, 0.10, 0.55}, fg = {1.00, 1.00, 1.00} },
+    [2048] = { bg = {0.85, 0.75, 0.10}, fg = {0.10, 0.08, 0.05} },
 }
-local DEFAULT_TILE = { bg = {0.80, 0.75, 0.70}, fg = {1, 1, 1} }
+local DEFAULT_TILE = { bg = {0.18, 0.18, 0.22}, fg = {1, 1, 1} }
 
 -- ============================================================
 -- State
@@ -342,11 +342,11 @@ local function BuildTiles(parent)
 
             f.bg = f:CreateTexture(nil, "BACKGROUND")
             f.bg:SetAllPoints()
-            f.bg:SetColorTexture(0.80, 0.75, 0.70, 1)
+            f.bg:SetColorTexture(0.18, 0.18, 0.22, 1)
 
-            -- Permanent dark-brown border (1 px, all tiles)
+            -- Border
             local B = 2  -- border thickness
-            local br, bg2, bb = 0.25, 0.25, 0.25
+            local br, bg2, bb = 0.08, 0.08, 0.10
             local top = f:CreateTexture(nil, "BORDER")
             top:SetColorTexture(br, bg2, bb, 1)
             top:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
@@ -432,7 +432,11 @@ local function BuildUI()
     -- Background
     local bg = gameFrame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.73, 0.68, 0.63, 1)
+    bg:SetColorTexture(0.06, 0.06, 0.08, 0.97)
+
+    local borderTex = gameFrame:CreateTexture(nil, "BORDER")
+    borderTex:SetAllPoints()
+    borderTex:SetColorTexture(0.25, 0.25, 0.30, 1)
 
     -- Title bar
     local titleBar = CreateFrame("Frame", nil, gameFrame)
@@ -446,11 +450,11 @@ local function BuildUI()
 
     local titleBarBg = titleBar:CreateTexture(nil, "BACKGROUND")
     titleBarBg:SetAllPoints()
-    titleBarBg:SetColorTexture(0.47, 0.43, 0.39, 1)
+    titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 
     local titleLabel = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleLabel:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
-    titleLabel:SetText("|cFFFFD100Tiles|r  |cFFBBAA99drag title to move · arrow keys to play|r")
+    titleLabel:SetText("|cFFFFD100Tiles|r  |cFF888888drag title to move · arrow keys to play|r")
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, gameFrame, "UIPanelCloseButton")
@@ -470,7 +474,11 @@ local function BuildUI()
 
         local boxBg = box:CreateTexture(nil, "BACKGROUND")
         boxBg:SetAllPoints()
-        boxBg:SetColorTexture(0.47, 0.43, 0.39, 1)
+        boxBg:SetColorTexture(0.12, 0.12, 0.18, 1)
+
+        local boxBorder = box:CreateTexture(nil, "BORDER")
+        boxBorder:SetAllPoints()
+        boxBorder:SetColorTexture(0.25, 0.25, 0.32, 1)
 
         local fs = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         fs:SetAllPoints()
@@ -496,7 +504,7 @@ local function BuildUI()
 
     local boardBg = boardFrame:CreateTexture(nil, "BACKGROUND")
     boardBg:SetAllPoints()
-    boardBg:SetColorTexture(0.47, 0.43, 0.39, 1)
+    boardBg:SetColorTexture(0.10, 0.10, 0.13, 1)
 
     BuildTiles(boardFrame)
 

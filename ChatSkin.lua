@@ -63,22 +63,21 @@ local URL_PATTERNS = {
 local placeholders = {}
 
 -- Wrap detected URLs in custom hyperlink format
+-- Returns: modified string (or nil if no change), boolean didModify
 local function FormatURLs(msg)
-    if not msg then return msg end
+    if not msg then return nil, false end
 
     -- Fast check: if no "http" or "www", skip heavy processing
-    -- This covers the two patterns in URL_PATTERNS
     if not (string.find(msg, "http") or string.find(msg, "www")) then
-        return msg
+        return nil, false
     end
 
     -- Don't process messages that already contain our custom links
-    if string.find(msg, "|Hlunaurl:") then return msg end
+    if string.find(msg, "|Hlunaurl:") then return nil, false end
 
     -- Reuse table
     wipe(placeholders)
 
-    -- Extract existing hyperlinks and replace with placeholders to avoid matching URLs inside them
     local placeholderIdx = 0
     local safeMsg = msg:gsub("(|H.-|h.-|h)", function(link)
         placeholderIdx = placeholderIdx + 1
@@ -87,7 +86,6 @@ local function FormatURLs(msg)
         return key
     end)
 
-    -- Also protect color codes that might interfere
     safeMsg = safeMsg:gsub("(|c%x%x%x%x%x%x%x%x)", function(code)
         placeholderIdx = placeholderIdx + 1
         local key = "\001LINK" .. placeholderIdx .. "\001"
@@ -95,10 +93,11 @@ local function FormatURLs(msg)
         return key
     end)
 
+    local didModify = false
     for _, pattern in ipairs(URL_PATTERNS) do
         safeMsg = safeMsg:gsub(pattern, function(url)
+            didModify = true
             local displayURL = url
-            -- Truncate display if very long
             if #displayURL > 50 then
                 displayURL = displayURL:sub(1, 47) .. "..."
             end
@@ -106,7 +105,9 @@ local function FormatURLs(msg)
         end)
     end
 
-    -- Restore placeholders (use plain string find/replace to avoid pattern interpretation)
+    if not didModify then return nil, false end
+
+    -- Restore placeholders
     for key, original in pairs(placeholders) do
         local start, stop = safeMsg:find(key, 1, true)
         if start then
@@ -114,60 +115,65 @@ local function FormatURLs(msg)
         end
     end
 
-    return safeMsg
+    return safeMsg, true
 end
 
 -- Chat message filter to detect and linkify URLs
 local function URLMessageFilter(self, event, msg, ...)
     if not UIThingsDB.chatSkin.enabled then return false end
-    local newMsg = FormatURLs(msg)
-    if newMsg ~= msg then
+    local newMsg, didModify = FormatURLs(msg)
+    if didModify then
         return false, newMsg, ...
     end
     return false
 end
 
 -- Keyword highlight filter
+-- Returns: modified string (or nil if no change), boolean didModify
 local function HighlightKeywords(msg)
     local keywords = UIThingsDB.chatSkin.highlightKeywords
-    if not keywords or #keywords == 0 then return msg end
+    if not keywords or #keywords == 0 then return nil, false end
 
     local color = UIThingsDB.chatSkin.highlightColor or { r = 1, g = 1, b = 0 }
     local colorCode = string.format("|cFF%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
 
     -- Protect existing hyperlinks and color codes from modification
-    local placeholders = {}
+    local kwPlaceholders = {}
     local placeholderIdx = 0
     local safeMsg = msg:gsub("(|H.-|h.-|h)", function(link)
         placeholderIdx = placeholderIdx + 1
         local key = "\001KW" .. placeholderIdx .. "\001"
-        placeholders[key] = link
+        kwPlaceholders[key] = link
         return key
     end)
     safeMsg = safeMsg:gsub("(|c%x%x%x%x%x%x%x%x)", function(code)
         placeholderIdx = placeholderIdx + 1
         local key = "\001KW" .. placeholderIdx .. "\001"
-        placeholders[key] = code
+        kwPlaceholders[key] = code
         return key
     end)
     safeMsg = safeMsg:gsub("(|r)", function(code)
         placeholderIdx = placeholderIdx + 1
         local key = "\001KW" .. placeholderIdx .. "\001"
-        placeholders[key] = code
+        kwPlaceholders[key] = code
         return key
     end)
 
-    -- Apply keyword highlights (case-insensitive)
+    local didModify = false
     for _, keyword in ipairs(keywords) do
         if keyword ~= "" then
-            -- Escape Lua pattern special characters in keyword
             local escaped = keyword:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
-            safeMsg = safeMsg:gsub("(" .. escaped .. ")", colorCode .. "%1|r")
+            safeMsg = safeMsg:gsub("(" .. escaped .. ")", function(match)
+                didModify = true
+                return colorCode .. match .. "|r"
+            end)
         end
     end
 
+    if not didModify then return nil, false end
+
     -- Restore placeholders
-    for key, original in pairs(placeholders) do
+    for key, original in pairs(kwPlaceholders) do
         local start, stop = safeMsg:find(key, 1, true)
         while start do
             safeMsg = safeMsg:sub(1, start - 1) .. original .. safeMsg:sub(stop + 1)
@@ -175,7 +181,7 @@ local function HighlightKeywords(msg)
         end
     end
 
-    return safeMsg
+    return safeMsg, true
 end
 
 local function KeywordMessageFilter(self, event, msg, ...)
@@ -183,8 +189,8 @@ local function KeywordMessageFilter(self, event, msg, ...)
     local keywords = UIThingsDB.chatSkin.highlightKeywords
     if not keywords or #keywords == 0 then return false end
 
-    local newMsg = HighlightKeywords(msg)
-    if newMsg ~= msg then
+    local newMsg, didModify = HighlightKeywords(msg)
+    if didModify then
         if UIThingsDB.chatSkin.highlightSound then
             PlaySound(3081) -- RAID_WARNING sound
         end

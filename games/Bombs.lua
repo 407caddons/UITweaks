@@ -691,6 +691,14 @@ end)
 -- ============================================================
 -- Public API
 -- ============================================================
+function addonTable.Bombs.CloseGame()
+    if gameFrame and gameFrame:IsShown() then
+        gameFrame:Hide()
+        gameActive = false
+        if timerTicker then timerTicker:Cancel(); timerTicker = nil end
+    end
+end
+
 function addonTable.Bombs.ShowGame()
     if not gameFrame then
         BuildUI()
