@@ -35,7 +35,7 @@ function addonTable.Config.Initialize()
                     f.locked = true
                 end
                 if addonTable.Frames and addonTable.Frames.UpdateFrames then
-                    addonTable.Frames.UpdateFrames()
+                    C_Timer.After(0, addonTable.Frames.UpdateFrames)
                 end
             end
 

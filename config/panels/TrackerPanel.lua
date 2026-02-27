@@ -114,6 +114,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         tempObjectives = "Temporary Objectives",
         travelersLog = "Traveler's Log",
         worldQuests = "World Quests",
+        campaignQuests = "Campaign Quests",
         quests = "Quests",
         achievements = "Achievements"
     }
@@ -132,7 +133,7 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end
 
-    for i = 1, 6 do
+    for i = 1, 7 do
         local item = CreateFrame("Frame", nil, panel)
         item:SetPoint("TOPLEFT", 20, yPos)
         item:SetSize(250, 24)

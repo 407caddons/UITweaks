@@ -264,6 +264,10 @@ local function ReleaseItems()
     end
 end
 
+-- Set to true by UpdateContent when campaignQuests section is in the active order list,
+-- so RenderQuests knows to exclude campaign quests from the regular Quests section.
+local campaignQuestsSectionActive = false
+
 -- Shared state for UpdateContent and its helper functions (avoids per-call closure/table allocation)
 local ucState = {
     yOffset = 0,
@@ -1007,10 +1011,11 @@ local function RenderQuests()
         for i = 1, numQuests do
             local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
             if qID then
-                local isTaskQuest = C_QuestLog.IsQuestTask(qID)
-                local isWorldQuest = C_QuestLog.IsWorldQuest(qID)
-
-                if not displayedIDs[qID] then
+                -- If campaignQuests section is active, exclude campaign quests from this section
+                if campaignQuestsSectionActive and
+                    C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(qID) then
+                    -- skip — will be rendered in campaignQuests section
+                elseif not displayedIDs[qID] then
                     if qID == superTrackedQuestID then
                         superTrackedIndex = i
                     else
@@ -1579,12 +1584,168 @@ local function RenderTravelersLog()
     ucState.yOffset = ucState.yOffset - SECTION_SPACING
 end
 
+--- Renders Campaign Quests as a dedicated top-level section.
+-- When groupQuestsByCampaign is on, quests are sub-grouped by campaign name.
+-- When off, a flat list is shown.
+local function RenderCampaignQuests()
+    local numQuests = C_QuestLog.GetNumQuestWatches()
+    if numQuests == 0 then return end
+
+    local superTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+
+    -- Collect all tracked campaign quest IDs (not yet rendered elsewhere)
+    wipe(campaignOrder)
+    wipe(questsByCampaign)
+    local flatCampaignQuests = {}
+
+    for i = 1, numQuests do
+        local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+        if questID and not displayedIDs[questID] then
+            if C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(questID) then
+                local campaignID = C_CampaignInfo.GetCampaignID(questID)
+                local campaignName = "Campaign"
+                if campaignID and campaignID > 0 then
+                    local info = C_CampaignInfo.GetCampaignInfo(campaignID)
+                    campaignName = (info and info.name) or ("Campaign " .. campaignID)
+                end
+
+                table.insert(flatCampaignQuests, questID)
+
+                if not questsByCampaign[campaignName] then
+                    questsByCampaign[campaignName] = {}
+                    table.insert(campaignOrder, campaignName)
+                end
+                table.insert(questsByCampaign[campaignName], questID)
+            end
+        end
+    end
+
+    if #flatCampaignQuests == 0 then return end
+
+    -- Sort by distance if enabled
+    if UIThingsDB.tracker.sortQuestsByDistance then
+        table.sort(flatCampaignQuests, sortByDistanceSq)
+        for _, name in ipairs(campaignOrder) do
+            table.sort(questsByCampaign[name], sortByDistanceSq)
+        end
+    end
+
+    -- Section header
+    AddLine("Campaign Quests (" .. #flatCampaignQuests .. ")", true, "campaignQuests")
+
+    if UIThingsDB.tracker.collapsed["campaignQuests"] then
+        ucState.yOffset = ucState.yOffset - ITEM_SPACING
+        return
+    end
+
+    -- Helper: render one campaign quest with title + objectives
+    local function RenderOneCampaignQuest(questID, extraIndent)
+        if displayedIDs[questID] then return end
+        if extraIndent then ucState.indent = extraIndent end
+        local title = C_QuestLog.GetTitleForQuestID(questID)
+        if title then
+            title = GetQuestTypePrefix(questID) .. title .. GetQuestLineString(questID) .. GetDistanceString(questID)
+            local color
+            if questID == superTrackedQuestID then
+                color = UIThingsDB.tracker.activeQuestColor
+            else
+                color = UIThingsDB.tracker.campaignQuestColor
+            end
+            AddLine(title, false, questID, nil, false, color)
+            displayedIDs[questID] = true
+
+            local objectives = C_QuestLog.GetQuestObjectives(questID)
+            if objectives then
+                for _, obj in pairs(objectives) do
+                    if not (obj.finished and UIThingsDB.tracker.hideCompletedSubtasks) then
+                        local objText = obj.text
+                        if objText and objText ~= "" then
+                            if obj.finished then objText = FormatCompletedObjective(objText) end
+                            AddLine(objText, false, questID, nil, true)
+                        end
+                    end
+                end
+            end
+            ucState.yOffset = ucState.yOffset - ITEM_SPACING
+        end
+        if extraIndent then ucState.indent = 0 end
+    end
+
+    -- Render super-tracked campaign quest first
+    if superTrackedQuestID and not displayedIDs[superTrackedQuestID] then
+        if C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(superTrackedQuestID) then
+            RenderOneCampaignQuest(superTrackedQuestID)
+        end
+    end
+
+    if UIThingsDB.tracker.groupQuestsByCampaign then
+        -- Sub-group by campaign name
+        for _, campaignName in ipairs(campaignOrder) do
+            local quests = questsByCampaign[campaignName]
+            -- Filter out already-displayed (super-tracked) quest
+            local remaining = {}
+            for _, qID in ipairs(quests) do
+                if not displayedIDs[qID] then
+                    table.insert(remaining, qID)
+                end
+            end
+            if #remaining > 0 then
+                -- Sub-header
+                local isCollapsed = UIThingsDB.tracker.collapsed["campaignGroup_" .. campaignName]
+                local btn = AcquireItem()
+                btn:Show()
+                btn.questID = nil
+                btn.achieID = nil
+                btn:SetScript("OnClick", nil)
+                btn:SetWidth(ucState.width)
+                btn:SetPoint("TOPLEFT", 0, ucState.yOffset)
+                btn.Text:SetFont(ucState.questNameFont, ucState.questNameSize, "OUTLINE")
+                btn.Text:SetText(campaignName .. " (" .. #remaining .. ")")
+                local cqc = UIThingsDB.tracker.campaignQuestColor or { r = 0.9, g = 0.7, b = 0.2 }
+                btn.Text:SetTextColor(cqc.r, cqc.g, cqc.b)
+                btn.Icon:Hide()
+                btn.Text:SetPoint("LEFT", 10, 0)
+                btn:EnableMouse(false)
+                btn:SetScript("OnEnter", nil)
+                btn:SetScript("OnLeave", nil)
+                if btn.ItemBtn and not InCombatLockdown() then btn.ItemBtn:Hide() end
+
+                btn.ToggleBtn:Show()
+                btn.ToggleBtn:SetScript("OnClick", function(self, button)
+                    if InCombatLockdown() and button == "LeftButton" then return end
+                    UIThingsDB.tracker.collapsed["campaignGroup_" .. campaignName] = not isCollapsed
+                    UpdateContent()
+                end)
+                btn.ToggleBtn.Text:SetText(isCollapsed and "+" or "-")
+                local textWidth = btn.Text:GetStringWidth()
+                btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
+                ucState.yOffset = ucState.yOffset - (ucState.questNameSize + 4)
+
+                if not isCollapsed then
+                    for _, qID in ipairs(remaining) do
+                        RenderOneCampaignQuest(qID, 10)
+                    end
+                end
+                ucState.yOffset = ucState.yOffset - ITEM_SPACING
+            end
+        end
+    else
+        -- Flat list
+        for _, questID in ipairs(flatCampaignQuests) do
+            RenderOneCampaignQuest(questID)
+        end
+    end
+
+    ucState.yOffset = ucState.yOffset - SECTION_SPACING
+end
+
 -- Section renderer lookup (hoisted, reuses the static functions above)
 local sectionRenderers = {
     scenarios = RenderScenarios,
     tempObjectives = function() end, -- handled within RenderQuests
     travelersLog = RenderTravelersLog,
     worldQuests = RenderWorldQuests,
+    campaignQuests = RenderCampaignQuests,
     quests = RenderQuests,
     achievements = RenderAchievements,
 }
@@ -1685,22 +1846,36 @@ UpdateContent = function()
         -- Migration: Add travelersLog if it doesn't exist in user's list
         local hasTravelersLog = false
         for _, key in ipairs(orderList) do
-            if key == "travelersLog" then
-                hasTravelersLog = true
-                break
-            end
+            if key == "travelersLog" then hasTravelersLog = true break end
         end
         if not hasTravelersLog then
-            -- Insert after tempObjectives if it exists, otherwise after scenarios
             local insertPos = 3
             for i, key in ipairs(orderList) do
-                if key == "tempObjectives" then
-                    insertPos = i + 1
-                    break
-                end
+                if key == "tempObjectives" then insertPos = i + 1 break end
             end
             table.insert(orderList, insertPos, "travelersLog")
         end
+
+        -- Migration: Add campaignQuests if it doesn't exist in user's list
+        local hasCampaignQuests = false
+        for _, key in ipairs(orderList) do
+            if key == "campaignQuests" then hasCampaignQuests = true break end
+        end
+        if not hasCampaignQuests then
+            -- Insert before "quests" if found, otherwise at end
+            local insertPos = #orderList + 1
+            for i, key in ipairs(orderList) do
+                if key == "quests" then insertPos = i break end
+            end
+            table.insert(orderList, insertPos, "campaignQuests")
+        end
+    end
+
+    -- Determine if campaignQuests section is active in the order list so RenderQuests
+    -- can exclude campaign quests from the regular Quests section.
+    campaignQuestsSectionActive = false
+    for _, key in ipairs(orderList) do
+        if key == "campaignQuests" then campaignQuestsSectionActive = true break end
     end
 
     for _, sectionKey in ipairs(orderList) do
@@ -1982,6 +2157,7 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     if autoTrackFrame then
         if enabled and UIThingsDB.tracker.autoTrackQuests then
             autoTrackFrame:RegisterEvent("QUEST_ACCEPTED")
+            autoTrackFrame:RegisterEvent("QUEST_REMOVED")
         else
             autoTrackFrame:UnregisterAllEvents()
         end
@@ -2179,6 +2355,25 @@ hookFrame:SetScript("OnEvent", function(self, event)
     end
 end)
 
+-- Returns the nearest tracked, unfinished campaign quest ID, or nil.
+local function FindNearestTrackedCampaignQuest()
+    local best, bestDistSq = nil, math.huge
+    local numWatches = C_QuestLog.GetNumQuestWatches()
+    for i = 1, numWatches do
+        local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+        if qID and C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(qID) then
+            if not C_QuestLog.IsComplete(qID) then
+                local distSq = C_QuestLog.GetDistanceSqToQuest(qID) or math.huge
+                if distSq < bestDistSq then
+                    bestDistSq = distSq
+                    best = qID
+                end
+            end
+        end
+    end
+    return best
+end
+
 -- Auto Track Quests Feature
 autoTrackFrame = CreateFrame("Frame")
 autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
@@ -2189,6 +2384,18 @@ autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
                 C_QuestLog.AddQuestWatch(questID, Enum.QuestWatchType.Automatic)
                 C_SuperTrack.SetSuperTrackedQuestID(questID)
                 SafeAfter(0.2, UpdateContent)
+            end
+        end
+    elseif event == "QUEST_REMOVED" and questID then
+        if UIThingsDB.tracker and UIThingsDB.tracker.enabled and UIThingsDB.tracker.autoTrackQuests then
+            -- If a campaign quest was just finished/removed, supertrack the nearest remaining one
+            if C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(questID) then
+                SafeAfter(0.2, function()
+                    local nearest = FindNearestTrackedCampaignQuest()
+                    if nearest then
+                        C_SuperTrack.SetSuperTrackedQuestID(nearest)
+                    end
+                end)
             end
         end
     end
