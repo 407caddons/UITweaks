@@ -374,6 +374,7 @@ function Loot.UpdateSettings()
     end
     Loot.UpdateLayout()
     Loot.ToggleBlizzardToasts(not settings.enabled)
+    Loot.ApplyBagHighlightEvents(settings.enabled and settings.highlightBagUpgrades)
 end
 
 function Loot.ToggleBlizzardToasts(enable)
@@ -553,6 +554,86 @@ function Loot.ApplyEvents()
         EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
         EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
         EventBus.Unregister("PLAYER_MONEY", OnPlayerMoney)
+    end
+end
+
+-- Bag Upgrade Highlight
+-- Scans all open bag frames on BAG_UPDATE_DELAYED using GetBagName/GetContainerItemInfo.
+-- Overlays are addon-created frames parented to each item button, looked up by button ref.
+local bagHighlightOverlays = {} -- keyed by button reference
+
+local function IsIlvlUpgrade(itemLink)
+    if not itemLink then return false end
+    local itemLevel = GetDetailedItemLevelInfo(itemLink)
+    if not itemLevel then return false end
+    local _, _, _, _, _, _, _, _, itemEquipLoc = GetItemInfo(itemLink)
+    if not itemEquipLoc or itemEquipLoc == "" or itemEquipLoc == "INVTYPE_NON_EQUIP"
+        or itemEquipLoc == "INVTYPE_NON_EQUIP_IGNORE" then return false end
+    local slots = EQUIP_LOC_TO_SLOT[itemEquipLoc]
+    if not slots then return false end
+    -- For rings/trinkets checks both slots; item is an upgrade if it beats the lowest equipped
+    local equippedIlvl = GetEquippedIlvlForSlots(slots)
+    if equippedIlvl == nil then return false end
+    return itemLevel > equippedIlvl
+end
+
+local function GetOrCreateOverlay(button)
+    local f = bagHighlightOverlays[button]
+    if not f then
+        f = CreateFrame("Frame", nil, button)
+        f:SetAllPoints(button)
+        f:SetFrameLevel(button:GetFrameLevel() + 5)
+        local tex = f:CreateTexture(nil, "OVERLAY")
+        tex:SetAllPoints()
+        tex:SetColorTexture(0, 1, 0, 0.3)
+        f.tex = tex
+        bagHighlightOverlays[button] = f
+    end
+    return f
+end
+
+local function UpdateButtonOverlay(button, bag, slot)
+    local info = C_Container.GetContainerItemInfo(bag, slot)
+    if info and info.hyperlink and IsIlvlUpgrade(info.hyperlink) then
+        GetOrCreateOverlay(button):Show()
+    else
+        local f = bagHighlightOverlays[button]
+        if f then f:Hide() end
+    end
+end
+
+local function ScanBagButtons()
+    if not UIThingsDB.loot or not UIThingsDB.loot.highlightBagUpgrades then
+        for _, f in pairs(bagHighlightOverlays) do f:Hide() end
+        return
+    end
+    -- ContainerFrame1..NUM_BAG_SLOTS+1, each has item buttons named ContainerFrame<n>Item<m>
+    -- Button index m=1 is the LAST slot in the bag; m=numSlots is slot 1.
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local buttonIndex = numSlots - slot + 1
+            local button = _G[string.format("ContainerFrame%dItem%d", bag + 1, buttonIndex)]
+            if button then
+                UpdateButtonOverlay(button, bag, slot)
+            end
+        end
+    end
+end
+
+local function OnBagUpdateDelayed()
+    if UIThingsDB.loot and UIThingsDB.loot.highlightBagUpgrades then
+        ScanBagButtons()
+    end
+end
+
+function Loot.ApplyBagHighlightEvents(enabled)
+    if enabled then
+        EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdateDelayed, "Loot:BagHL")
+        ScanBagButtons()
+    else
+        EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagUpdateDelayed)
+        for _, f in pairs(bagHighlightOverlays) do f:Hide() end
     end
 end
 

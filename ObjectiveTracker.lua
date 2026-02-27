@@ -327,6 +327,27 @@ local tooltipMembers = {}     -- Reusable table for tooltip party member list
 local savedSuperTrackedQuestID = nil
 local lastKnownSuperTrackedQuestID = nil
 
+-- Returns the nearest tracked, unfinished campaign quest ID, or nil.
+local function FindNearestTrackedCampaignQuest()
+    local best, bestDistSq = nil, math.huge
+    local numWatches = C_QuestLog.GetNumQuestWatches()
+    for i = 1, numWatches do
+        local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+        if qID then
+            local isCampaign = C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(qID)
+            local isComplete = C_QuestLog.IsComplete(qID)
+            if isCampaign and not isComplete then
+                local d = C_QuestLog.GetDistanceSqToQuest(qID) or math.huge
+                if d < bestDistSq then
+                    bestDistSq = d
+                    best = qID
+                end
+            end
+        end
+    end
+    return best
+end
+
 local function CheckQuestSounds(questID, playQuestSound, playObjSound)
     local isComplete = C_QuestLog.IsComplete(questID)
     local wasComplete = prevQuestComplete[questID]
@@ -336,6 +357,28 @@ local function CheckQuestSounds(questID, playQuestSound, playObjSound)
     if playQuestSound and isComplete and wasComplete == false then
         PlaySound(UIThingsDB.tracker.questCompletionSoundID or 6199, channel)
     end
+
+    -- Auto-supertrack nearest campaign quest when a campaign quest just completed in the field
+    if isComplete and wasComplete == false
+        and UIThingsDB.tracker.autoTrackQuests
+        and C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(questID) then
+        SafeAfter(1.5, function()
+            if InCombatLockdown() then return end
+            local stNow = C_SuperTrack.GetSuperTrackedQuestID()
+            -- Leave it if already super-tracking a different active campaign quest
+            if stNow and stNow ~= 0
+                and stNow ~= questID
+                and C_CampaignInfo.IsCampaignQuest(stNow)
+                and C_QuestLog.IsOnQuest(stNow) then
+                return
+            end
+            local nearest = FindNearestTrackedCampaignQuest()
+            if nearest then
+                C_SuperTrack.SetSuperTrackedQuestID(nearest)
+            end
+        end)
+    end
+
     prevQuestComplete[questID] = isComplete
 
     -- Objective completion sound
@@ -360,7 +403,8 @@ local function CheckCompletionSounds()
     if not UIThingsDB.tracker.enabled then return end
     local playQuestSound = UIThingsDB.tracker.questCompletionSound
     local playObjSound = UIThingsDB.tracker.objectiveCompletionSound
-    if not playQuestSound and not playObjSound then return end
+    local doAutoTrack = UIThingsDB.tracker.autoTrackQuests
+    if not playQuestSound and not playObjSound and not doAutoTrack then return end
 
     local checked = {}
 
@@ -1871,6 +1915,19 @@ UpdateContent = function()
         end
     end
 
+    -- Deduplicate orderList (guard against any migration inserting a key twice)
+    local seen = {}
+    local deduped = {}
+    for _, key in ipairs(orderList) do
+        if not seen[key] then
+            seen[key] = true
+            table.insert(deduped, key)
+        end
+    end
+    -- Replace in-place so the saved var stays clean
+    for i = #orderList, 1, -1 do orderList[i] = nil end
+    for i, key in ipairs(deduped) do orderList[i] = key end
+
     -- Determine if campaignQuests section is active in the order list so RenderQuests
     -- can exclude campaign quests from the regular Quests section.
     campaignQuestsSectionActive = false
@@ -2157,7 +2214,6 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     if autoTrackFrame then
         if enabled and UIThingsDB.tracker.autoTrackQuests then
             autoTrackFrame:RegisterEvent("QUEST_ACCEPTED")
-            autoTrackFrame:RegisterEvent("QUEST_REMOVED")
         else
             autoTrackFrame:UnregisterAllEvents()
         end
@@ -2332,6 +2388,14 @@ f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         lastKnownSuperTrackedQuestID = C_SuperTrack.GetSuperTrackedQuestID()
+        -- Seed prevQuestComplete so quests already complete at login don't trigger sounds/supertrack
+        local numWatches = C_QuestLog.GetNumQuestWatches()
+        for i = 1, numWatches do
+            local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+            if qID then
+                prevQuestComplete[qID] = C_QuestLog.IsComplete(qID)
+            end
+        end
         addonTable.ObjectiveTracker.UpdateSettings()
     else
         -- Force update shortly after entering world to override Blizzard's show logic
@@ -2355,25 +2419,6 @@ hookFrame:SetScript("OnEvent", function(self, event)
     end
 end)
 
--- Returns the nearest tracked, unfinished campaign quest ID, or nil.
-local function FindNearestTrackedCampaignQuest()
-    local best, bestDistSq = nil, math.huge
-    local numWatches = C_QuestLog.GetNumQuestWatches()
-    for i = 1, numWatches do
-        local qID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-        if qID and C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(qID) then
-            if not C_QuestLog.IsComplete(qID) then
-                local distSq = C_QuestLog.GetDistanceSqToQuest(qID) or math.huge
-                if distSq < bestDistSq then
-                    bestDistSq = distSq
-                    best = qID
-                end
-            end
-        end
-    end
-    return best
-end
-
 -- Auto Track Quests Feature
 autoTrackFrame = CreateFrame("Frame")
 autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
@@ -2382,20 +2427,10 @@ autoTrackFrame:SetScript("OnEvent", function(self, event, questID)
             -- Check if quest is not already tracked
             if not C_QuestLog.GetQuestWatchType(questID) then
                 C_QuestLog.AddQuestWatch(questID, Enum.QuestWatchType.Automatic)
-                C_SuperTrack.SetSuperTrackedQuestID(questID)
+                if (C_SuperTrack.GetSuperTrackedQuestID() or 0) == 0 then
+                    C_SuperTrack.SetSuperTrackedQuestID(questID)
+                end
                 SafeAfter(0.2, UpdateContent)
-            end
-        end
-    elseif event == "QUEST_REMOVED" and questID then
-        if UIThingsDB.tracker and UIThingsDB.tracker.enabled and UIThingsDB.tracker.autoTrackQuests then
-            -- If a campaign quest was just finished/removed, supertrack the nearest remaining one
-            if C_CampaignInfo and C_CampaignInfo.IsCampaignQuest and C_CampaignInfo.IsCampaignQuest(questID) then
-                SafeAfter(0.2, function()
-                    local nearest = FindNearestTrackedCampaignQuest()
-                    if nearest then
-                        C_SuperTrack.SetSuperTrackedQuestID(nearest)
-                    end
-                end)
             end
         end
     end

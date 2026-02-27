@@ -310,6 +310,7 @@ local function OnEvent(self, event, ...)
                 showGold = false,
                 minGoldAmount = 10000, -- copper (1 gold = 10000 copper)
                 showItemLevel = true,
+                highlightBagUpgrades = false,
             },
             combat = {
                 enabled = false,

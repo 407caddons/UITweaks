@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 720)
+    child:SetSize(650, 760)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -362,4 +362,20 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     ilvlHelp:SetPoint("TOPLEFT", 45, -683)
     ilvlHelp:SetTextColor(0.5, 0.5, 0.5)
     ilvlHelp:SetText("Shows item level on gear toasts with green +X for upgrades")
+
+    -- Highlight Bag Upgrades Checkbox
+    local bagUpgradeBtn = CreateFrame("CheckButton", "UIThingsLootBagUpgradeCheck", child,
+        "ChatConfigCheckButtonTemplate")
+    bagUpgradeBtn:SetPoint("TOPLEFT", 20, -700)
+    _G[bagUpgradeBtn:GetName() .. "Text"]:SetText("Highlight ilvl Upgrades in Bags")
+    bagUpgradeBtn:SetChecked(UIThingsDB.loot.highlightBagUpgrades)
+    bagUpgradeBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.highlightBagUpgrades = self:GetChecked()
+        LootUpdateSettings()
+    end)
+
+    local bagUpgradeHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bagUpgradeHelp:SetPoint("TOPLEFT", 45, -723)
+    bagUpgradeHelp:SetTextColor(0.5, 0.5, 0.5)
+    bagUpgradeHelp:SetText("Highlights bag items with a green overlay when they beat your equipped ilvl (checks both ring/trinket slots)")
 end
