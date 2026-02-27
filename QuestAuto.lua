@@ -19,38 +19,67 @@ end
 
 -- GOSSIP_SHOW: NPC gossip window
 local function HandleGossipShow()
-    local settings     = UIThingsDB.questAuto
-    local numActive    = C_GossipInfo.GetNumActiveQuests()
-    local numAvailable = C_GossipInfo.GetNumAvailableQuests()
-    local options      = C_GossipInfo.GetOptions()
+    local settings  = UIThingsDB.questAuto
+    local options   = C_GossipInfo.GetOptions()
 
-    -- Turn in completed quests first (highest priority)
+
+    -- Turn in ALL completed quests
     if settings.autoTurnIn then
         for _, questInfo in pairs(C_GossipInfo.GetActiveQuests()) do
             if questInfo.isComplete then
                 C_GossipInfo.SelectActiveQuest(questInfo.questID)
-                return
+                return  -- GOSSIP_SHOW re-fires after each turn-in; loop continues next fire
             end
         end
     end
 
-    -- Accept available quests next
+    -- Accept ALL available quests
     if settings.autoAcceptQuests then
         for _, questInfo in pairs(C_GossipInfo.GetAvailableQuests()) do
             if ShouldAcceptQuest(questInfo.questID) then
                 C_GossipInfo.SelectAvailableQuest(questInfo.questID)
-                return
+                return  -- GOSSIP_SHOW re-fires after each accept; loop continues next fire
             end
         end
     end
 
-    -- Only auto-select a gossip option if there are no quests on this NPC
+    -- Auto-select gossip option.
+    -- Rules:
+    --   • Exactly 1 (Quest) option among any number of non-quest options → select the quest option
+    --   • Multiple (Quest) options → do nothing, let the user choose
+    --   • No (Quest) options + exactly 1 total option → select it
+    --   • No (Quest) options + multiple options → do nothing
+    -- All quests via GetAvailableQuests/GetActiveQuests are handled above first.
     if settings.autoGossip then
-        if numActive + numAvailable > 0 then return end
-        if #options == 1 and options[1].gossipOptionID then
-            if options[1].gossipOptionID == lastGossipOptionID then return end
-            lastGossipOptionID = options[1].gossipOptionID
-            C_GossipInfo.SelectOption(options[1].gossipOptionID)
+        -- All quests must be resolved before auto-selecting gossip
+        if C_GossipInfo.GetNumActiveQuests() + C_GossipInfo.GetNumAvailableQuests() > 0 then return end
+
+        -- Separate quest-flagged options (flags ~= 0) from plain gossip options
+        local questOption = nil
+        local questOptionCount = 0
+        local plainCount = 0
+        for _, opt in ipairs(options) do
+            if opt.flags and opt.flags ~= 0 then
+                questOptionCount = questOptionCount + 1
+                questOption = opt
+            else
+                plainCount = plainCount + 1
+            end
+        end
+
+        local selected = nil
+        if questOptionCount == 1 then
+            -- Exactly one (Quest) option — select it regardless of plain options
+            selected = questOption
+        elseif questOptionCount == 0 and plainCount == 1 then
+            -- No quest options, exactly one plain option — select it
+            selected = options[1]
+        end
+
+        if selected and selected.gossipOptionID then
+            if selected.gossipOptionID == lastGossipOptionID then return end
+            lastGossipOptionID = selected.gossipOptionID
+            C_GossipInfo.SelectOption(selected.gossipOptionID)
         end
     end
 end
@@ -59,7 +88,7 @@ end
 local function HandleQuestGreeting()
     local settings = UIThingsDB.questAuto
 
-    -- Turn in completed quests first
+    -- Turn in ALL completed quests (one per event fire; QUEST_GREETING re-fires after each)
     if settings.autoTurnIn then
         for index = 1, GetNumActiveQuests() do
             local _, isComplete = GetActiveTitle(index)
@@ -70,7 +99,7 @@ local function HandleQuestGreeting()
         end
     end
 
-    -- Accept available quests
+    -- Accept ALL available quests (one per event fire; QUEST_GREETING re-fires after each)
     if settings.autoAcceptQuests then
         for index = 1, GetNumAvailableQuests() do
             local _, _, _, _, questID = GetAvailableQuestInfo(index)

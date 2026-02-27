@@ -17,7 +17,15 @@
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" log --oneline -- DamageMeter.lua)",
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:DamageMeter.lua)",
       "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:config/panels/DamageMeterPanel.lua)",
-      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:Core.lua)"
+      "Bash(git -C \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\" show 095133f:Core.lua)",
+      "Bash(cmd.exe /c \"dir \"\"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\"\" /b\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface'' -Directory | Select-Object -First 10 Name\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface'' -Directory | Select-Object Name\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\Interface'' -Directory | Select-Object Name\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -File -Filter ''*.lua'' | Select-Object Name\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -Recurse -Filter ''Gossip*'' | Select-Object FullName\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -Recurse | Select-Object -First 20 Name\")",
+      "Bash(powershell.exe -Command:*)"
     ]
   }
 }
