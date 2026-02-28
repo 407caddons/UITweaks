@@ -25,6 +25,48 @@ local currentNotInterruptible = false
 local fadeOutDuration = 0
 local fadeOutElapsed = 0
 
+-- == Debug ==
+
+local CASTBAR_DEBUG = true  -- set to false to disable
+
+local function DBG(msg)
+    if not CASTBAR_DEBUG then return end
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff99[CastBar]|r " .. tostring(msg))
+end
+
+-- Periodic state ticker: prints once per second while casting
+local debugTickElapsed = 0
+local function OnUpdateDebugTick(self, elapsed)
+    debugTickElapsed = debugTickElapsed + elapsed
+    if debugTickElapsed >= 1 then
+        debugTickElapsed = 0
+        local now = GetTime()
+        DBG(string.format("TICK isCasting=%s isChanneling=%s now=%.3f endTime=%.3f remaining=%.3fs alpha=%.2f shown=%s",
+            tostring(isCasting), tostring(isChanneling),
+            now, castEndTime, castEndTime - now,
+            castBarFrame and castBarFrame:GetAlpha() or -1,
+            tostring(castBarFrame and castBarFrame:IsShown() or false)
+        ))
+    end
+end
+
+local debugTickFrame = nil
+
+local function StartDebugTick()
+    if not CASTBAR_DEBUG then return end
+    if not debugTickFrame then
+        debugTickFrame = CreateFrame("Frame")
+    end
+    debugTickElapsed = 0
+    debugTickFrame:SetScript("OnUpdate", OnUpdateDebugTick)
+end
+
+local function StopDebugTick()
+    if debugTickFrame then
+        debugTickFrame:SetScript("OnUpdate", nil)
+    end
+end
+
 -- == Border Helper ==
 
 local function ApplyBorders(size, color)
@@ -91,6 +133,9 @@ end
 -- == Fade Out ==
 
 local function FadeOut(duration)
+    DBG(string.format("FadeOut called — duration=%.2fs isCasting=%s isChanneling=%s remaining=%.3fs",
+        duration, tostring(isCasting), tostring(isChanneling), castEndTime - GetTime()))
+    StopDebugTick()
     fadeOutDuration = duration
     fadeOutElapsed = 0
     castBarFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -110,6 +155,7 @@ end
 local function OnUpdateCasting(self, elapsed)
     local now = GetTime()
     if now >= castEndTime then
+        DBG(string.format("OnUpdate: castEndTime reached — now=%.3f endTime=%.3f", now, castEndTime))
         isCasting = false
         self:SetScript("OnUpdate", nil)
         statusBar:SetValue(1)
@@ -171,6 +217,9 @@ local function OnCastStart()
     castStartTime = startTimeMs / 1000
     castEndTime = endTimeMs / 1000
     castDuration = castEndTime - castStartTime
+    DBG(string.format("CAST START '%s' startTime=%.3f endTime=%.3f duration=%.3fs GetTime=%.3f",
+        currentSpellName, castStartTime, castEndTime, castDuration, GetTime()))
+    StartDebugTick()
 
     if UIThingsDB.castBar.showIcon and texture then
         iconTexture:SetTexture(texture)
@@ -199,6 +248,9 @@ local function OnChannelStart()
     castStartTime = startTimeMs / 1000
     castEndTime = endTimeMs / 1000
     castDuration = castEndTime - castStartTime
+    DBG(string.format("CHANNEL START '%s' startTime=%.3f endTime=%.3f duration=%.3fs GetTime=%.3f",
+        currentSpellName, castStartTime, castEndTime, castDuration, GetTime()))
+    StartDebugTick()
 
     if UIThingsDB.castBar.showIcon and texture then
         iconTexture:SetTexture(texture)
@@ -216,6 +268,7 @@ local function OnChannelStart()
 end
 
 local function OnCastComplete()
+    DBG(string.format("OnCastComplete — remaining=%.3fs", castEndTime - GetTime()))
     isCasting = false
     castBarFrame:SetScript("OnUpdate", nil)
     statusBar:SetValue(1)
@@ -223,6 +276,7 @@ local function OnCastComplete()
 end
 
 local function OnChannelStop()
+    DBG(string.format("OnChannelStop — remaining=%.3fs", castEndTime - GetTime()))
     isChanneling = false
     castBarFrame:SetScript("OnUpdate", nil)
     statusBar:SetValue(0)
@@ -260,19 +314,41 @@ end
 
 -- == Blizzard Cast Bar ==
 
--- Hide Blizzard's cast bar using RegisterStateDriver for combat-safe visibility
--- and a SetPoint hook to keep it off-screen when Blizzard re-layouts.
+-- Hook-based suppression: intercept Show, SetShown, and SetAlpha on the frame so
+-- Blizzard's cast animation can never make it visible while we're active.
+-- Side-table tracks hook/lock state to avoid writing onto Blizzard's frame table.
 local blizzBarHidden = false
-local blizzBarHooked = false
+local blizzBarState = {
+    hooked = false,      -- hooks installed
+    suppressing = false, -- re-entry guard for our own SetAlpha(0) call
+}
 
-local function ForceBlizzBarOffScreen()
-    if not PlayerCastingBarFrame then return end
-    if InCombatLockdown() then return end
-    PlayerCastingBarFrame:SetAlpha(0)
-    local clearPoints = PlayerCastingBarFrame.ClearAllPointsBase or PlayerCastingBarFrame.ClearAllPoints
-    local setPoint = PlayerCastingBarFrame.SetPointBase or PlayerCastingBarFrame.SetPoint
-    clearPoints(PlayerCastingBarFrame)
-    setPoint(PlayerCastingBarFrame, "TOP", UIParent, "BOTTOM", 0, -500)
+local function ForceBlizzBarHide(frame)
+    if not frame then return end
+    if blizzBarState.suppressing then return end
+    if not blizzBarHidden then return end
+    blizzBarState.suppressing = true
+    pcall(frame.SetAlpha, frame, 0)
+    blizzBarState.suppressing = false
+end
+
+local function InstallBlizzBarHooks(frame)
+    if blizzBarState.hooked then return end
+
+    -- Show hook: fires in caller's security context, so Hide/SetAlpha are safe
+    -- even when called from Blizzard's protected code during combat.
+    hooksecurefunc(frame, "Show", function(self)
+        ForceBlizzBarHide(self)
+    end)
+    hooksecurefunc(frame, "SetShown", function(self, shown)
+        if shown then ForceBlizzBarHide(self) end
+    end)
+    -- SetAlpha hook: catches the fade-in animation stepping alpha up each frame.
+    hooksecurefunc(frame, "SetAlpha", function(self, alpha)
+        if alpha ~= 0 then ForceBlizzBarHide(self) end
+    end)
+
+    blizzBarState.hooked = true
 end
 
 function CastBar.HideBlizzardCastBar()
@@ -282,53 +358,28 @@ function CastBar.HideBlizzardCastBar()
     end
     if not PlayerCastingBarFrame then return end
     if blizzBarHidden then return end
-    if InCombatLockdown() then
-        -- Defer to out-of-combat
-        local waitFrame = CreateFrame("Frame")
-        waitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        waitFrame:SetScript("OnEvent", function(self)
-            self:UnregisterAllEvents()
-            CastBar.HideBlizzardCastBar()
-        end)
-        return
-    end
-
-    -- Use RegisterStateDriver for combat-safe hiding
-    RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")
-    PlayerCastingBarFrame:SetAlpha(0)
-    ForceBlizzBarOffScreen()
-
-    -- Hook SetPointBase so Blizzard re-layouts don't undo our positioning
-    if not blizzBarHooked then
-        local hookTarget = PlayerCastingBarFrame.SetPointBase and "SetPointBase" or "SetPoint"
-        hooksecurefunc(PlayerCastingBarFrame, hookTarget, function()
-            if blizzBarHidden and not InCombatLockdown() then
-                PlayerCastingBarFrame:SetAlpha(0)
-            end
-        end)
-        blizzBarHooked = true
-    end
 
     blizzBarHidden = true
+    InstallBlizzBarHooks(PlayerCastingBarFrame)
+
+    -- Direct hide outside combat; hooks will handle all future Show/SetAlpha calls.
+    if not InCombatLockdown() then
+        ForceBlizzBarHide(PlayerCastingBarFrame)
+    end
 end
 
 function CastBar.RestoreBlizzardCastBar()
     if not PlayerCastingBarFrame then return end
     if not blizzBarHidden then return end
-    if InCombatLockdown() then
-        local waitFrame = CreateFrame("Frame")
-        waitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        waitFrame:SetScript("OnEvent", function(self)
-            self:UnregisterAllEvents()
-            CastBar.RestoreBlizzardCastBar()
-        end)
-        return
-    end
 
-    UnregisterStateDriver(PlayerCastingBarFrame, "visibility")
-    PlayerCastingBarFrame:SetAlpha(1)
-    PlayerCastingBarFrame:Show()
     blizzBarHidden = false
+    -- Only restore if actively casting so we don't flash a stale bar.
+    -- Blizzard's own cast start logic will set alpha=1 and Show() on the next cast.
+    local isActive = UnitCastingInfo("player") or UnitChannelInfo("player")
+    if isActive and not InCombatLockdown() then
+        PlayerCastingBarFrame:SetAlpha(1)
+        PlayerCastingBarFrame:Show()
+    end
 end
 
 -- == Event Registration ==
@@ -361,11 +412,30 @@ eventFrame:SetScript("OnEvent", function(self, event, unit, ...)
     if not UIThingsDB.castBar.enabled then return end
     if not castBarFrame then return end
 
+    -- Log every cast-related event so we can see what fires mid-cast
+    if CASTBAR_DEBUG and (isCasting or isChanneling or event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_EMPOWER_START") then
+        DBG(string.format("EVENT %s isCasting=%s isChanneling=%s remaining=%.3fs",
+            event, tostring(isCasting), tostring(isChanneling), castEndTime - GetTime()))
+    end
+
     if event == "UNIT_SPELLCAST_START" then
         OnCastStart()
-    elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_SUCCEEDED" then
+    elseif event == "UNIT_SPELLCAST_STOP" then
         if isCasting then
+            DBG(string.format("STOP triggered complete — remaining=%.3fs", castEndTime - GetTime()))
             OnCastComplete()
+        end
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if isCasting then
+            -- Some placement spells fire SUCCEEDED early (server confirms before cast finishes).
+            -- Only complete if we're actually near the end; otherwise let OnUpdate finish it.
+            local remaining = castEndTime - GetTime()
+            if remaining <= 0.5 then
+                DBG(string.format("SUCCEEDED triggered complete — remaining=%.3fs", remaining))
+                OnCastComplete()
+            else
+                DBG(string.format("SUCCEEDED ignored (early) — remaining=%.3fs, letting OnUpdate finish", remaining))
+            end
         end
     elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
         if isCasting or isChanneling then
