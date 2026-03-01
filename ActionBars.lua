@@ -715,15 +715,15 @@ function ActionBars.SetupDrawer()
                     -- Hide skin overlays
                     if skinnedBars then
                         for barFrame in pairs(skinnedBars) do
-                            if barFrame.lunaSkinOverlay then
-                                barFrame.lunaSkinOverlay:Hide()
+                            if barOverlays[barFrame] then
+                                barOverlays[barFrame]:Hide()
                             end
                         end
                     end
                     if skinnedButtons then
                         for button in pairs(skinnedButtons) do
-                            if button.lunaSkinOverlay then
-                                button.lunaSkinOverlay:Hide()
+                            if buttonOverlays[button] then
+                                buttonOverlays[button]:Hide()
                             end
                         end
                     end
@@ -826,6 +826,8 @@ local OVERRIDE_BAR = { bar = "OverrideActionBar", prefix = "OverrideActionBarBut
 local skinHooked = false
 local skinnedButtons = {}
 local skinnedBars = {}
+local buttonOverlays = {} -- side table: overlay frames keyed by button, avoids writing onto Blizzard frames
+local barOverlays = {}    -- side table: overlay frames keyed by bar frame
 
 local function SkinButton(button)
     if not button then return end
@@ -841,14 +843,15 @@ local function SkinButton(button)
         button:SetSize(btnSize, btnSize)
     end
 
-    -- Create or reuse overlay
-    if not button.lunaSkinOverlay then
-        button.lunaSkinOverlay = CreateFrame("Frame", nil, button, "BackdropTemplate")
-        button.lunaSkinOverlay:SetAllPoints()
+    -- Create or reuse overlay (stored in side table, not written onto the Blizzard button frame)
+    if not buttonOverlays[button] then
+        local ov = CreateFrame("Frame", nil, button, "BackdropTemplate")
+        ov:SetAllPoints()
+        buttonOverlays[button] = ov
         skinnedButtons[button] = true
     end
 
-    local overlay = button.lunaSkinOverlay
+    local overlay = buttonOverlays[button]
     overlay:SetFrameLevel(button:GetFrameLevel() + 2)
 
     -- Hide border on empty slots
@@ -947,12 +950,12 @@ local function SkinBar(barFrame)
     local bc = settings.skinBarBorderColor or { r = 0.2, g = 0.2, b = 0.2, a = 1 }
     local bg = settings.skinBarBgColor or { r = 0, g = 0, b = 0, a = 0.5 }
 
-    if not barFrame.lunaSkinOverlay then
-        barFrame.lunaSkinOverlay = CreateFrame("Frame", nil, barFrame, "BackdropTemplate")
+    if not barOverlays[barFrame] then
+        barOverlays[barFrame] = CreateFrame("Frame", nil, barFrame, "BackdropTemplate")
         skinnedBars[barFrame] = true
     end
 
-    local overlay = barFrame.lunaSkinOverlay
+    local overlay = barOverlays[barFrame]
     local pad = borderSize + 2
     overlay:ClearAllPoints()
     overlay:SetPoint("TOPLEFT", barFrame, "TOPLEFT", -pad, pad)
@@ -1451,8 +1454,8 @@ function ActionBars.RemoveSkin()
 
     -- Restore buttons
     for button in pairs(skinnedButtons) do
-        if button.lunaSkinOverlay then
-            button.lunaSkinOverlay:Hide()
+        if buttonOverlays[button] then
+            buttonOverlays[button]:Hide()
         end
         if button.NormalTexture then
             button.NormalTexture:SetAlpha(1)
@@ -1474,8 +1477,8 @@ function ActionBars.RemoveSkin()
 
     -- Restore bars
     for barFrame in pairs(skinnedBars) do
-        if barFrame.lunaSkinOverlay then
-            barFrame.lunaSkinOverlay:Hide()
+        if barOverlays[barFrame] then
+            barOverlays[barFrame]:Hide()
         end
     end
 
@@ -1698,13 +1701,13 @@ local function OnOverrideBarUpdate()
         end
     else
         -- Vehicle bar dismissed — explicitly hide our overlays on it
-        if overrideBar and overrideBar.lunaSkinOverlay then
-            overrideBar.lunaSkinOverlay:Hide()
+        if overrideBar and barOverlays[overrideBar] then
+            barOverlays[overrideBar]:Hide()
         end
         for i = 1, OVERRIDE_BAR.count do
             local btn = _G[OVERRIDE_BAR.prefix .. i]
-            if btn and btn.lunaSkinOverlay then
-                btn.lunaSkinOverlay:Hide()
+            if btn and buttonOverlays[btn] then
+                buttonOverlays[btn]:Hide()
             end
         end
         -- Re-skin main bars after Blizzard finishes layout

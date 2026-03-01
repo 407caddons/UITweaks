@@ -524,6 +524,7 @@ local function OnEvent(self, event, ...)
                 vers = { enabled = false, point = "CENTER", x = 0, y = -640, condition = "always" },
                 waypointDistance = { enabled = false, point = "CENTER", x = 0, y = -660, condition = "always" },
                 addonComm = { enabled = false, point = "CENTER", x = 0, y = -680, condition = "group" },
+                wheeCheck = { enabled = false, point = "CENTER", x = 0, y = -700, condition = "nocombat" },
             },
             kick = {
                 enabled = false,

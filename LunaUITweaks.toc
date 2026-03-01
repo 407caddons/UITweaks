@@ -120,6 +120,7 @@ widgets\Mastery.lua
 widgets\Vers.lua
 widgets\WaypointDistance.lua
 widgets\AddonComm.lua
+widgets\WheeCheck.lua
 
 # Games
 games\Games.lua

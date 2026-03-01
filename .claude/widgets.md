@@ -1,11 +1,32 @@
 # Widget Ideas — LunaUITweaks
-Date: 2026-02-26
+Date: 2026-02-26 (updated 2026-03-01)
+
+## Update 2026-03-01
+
+Since the original document, the following widget suggestions have been **implemented**:
+
+| # | Suggestion | Status |
+|---|-----------|--------|
+| 1 | Spec Display | ✅ Implemented — `widgets/Spec.lua` (left-click spec swap, right-click loot spec) |
+| 2 | Clock / Server Time | ✅ Implemented — `widgets/Time.lua` (12h/24h toggle, reset times in tooltip, calendar on click) |
+| 3 | Weekly Reset Countdown | ✅ Implemented — `widgets/WeeklyReset.lua` (color-coded, daily reset in tooltip) |
+| 4 | FPS / Latency | ✅ Implemented — `widgets/FPS.lua` (jitter tracking, per-addon memory breakdown in tooltip) |
+
+Three additional widgets shipped that were not in the original suggestions:
+- **Speed** (`widgets/Speed.lua`) — Movement speed as % of base (100% = 7 yds/s), skyriding-aware, 0.5s refresh.
+- **Volume** (`widgets/Volume.lua`) — Sound toggle (left-click) and volume cycle 100→75→50→25% (right-click).
+- **BattleRes** (`widgets/BattleRes.lua`) — Battle resurrection charge tracker using Rebirth spell ID for the shared pool.
+- **Coordinates** (`widgets/Coordinates.lua`) — Simple coordinate widget complementing the full Coordinates.lua module.
+
+Issues found in the new widgets are noted in the code review. Remaining suggestions below retain their original numbering.
+
+---
 
 ## Introduction
 
-This document reviews all 27 existing widgets in LunaUITweaks and proposes 20 ideas: 12 new widgets and 8 improvements to existing ones. Each idea is assessed for difficulty against the WoW 12.0 retail API constraints (no COMBAT_LOG_EVENT_UNFILTERED, no external libraries, combat lockdown rules apply).
+This document reviews all existing widgets in LunaUITweaks (~35 as of 2026-03-01) and proposes ideas for new widgets and improvements to existing ones. Each idea is assessed for difficulty against the WoW 12.0 retail API constraints (no COMBAT_LOG_EVENT_UNFILTERED, no external libraries, combat lockdown rules apply).
 
-The existing widget suite covers: secondary stats (Haste, Crit, Mastery, Versatility), social (Friends, Guild, Group), progression (MythicRating, Keystone, Vault, Lockouts, XPRep), utility (Bags, Currency, Hearthstone, Teleports, Durability, Mail, WaypointDistance, Zone, DarkmoonFaire, PullCounter, SessionStats, Combat, AddonComm), and PvP.
+The existing widget suite covers: secondary stats (Haste, Crit, Mastery, Versatility), social (Friends, Guild, Group), progression (MythicRating, Keystone, Vault, Lockouts, XPRep), utility (Bags, Currency, Hearthstone, Teleports, Durability, Mail, WaypointDistance, Zone, DarkmoonFaire, PullCounter, SessionStats, Combat, AddonComm, Speed, Volume, BattleRes, Coordinates), performance (FPS), time (Time, WeeklyReset), and PvP. Spec display widget added for spec/loot spec management.
 
 ---
 
@@ -13,35 +34,35 @@ The existing widget suite covers: secondary stats (Haste, Crit, Mastery, Versati
 
 ---
 
-### 1. Spec Display
+### 1. Spec Display ✅ IMPLEMENTED (`widgets/Spec.lua`)
 **Type:** New Widget
 **Difficulty:** Easy
-**Description:** Displays the player's current specialization name and role icon (tank/heal/dps). Clicking opens the Specialization tab of the character window (`ToggleCharacter("PaperDollFrame")` with spec tab). Tooltip shows the active spec name, role, and whether a second spec exists. This fills a visible gap — there is a Group widget showing group role composition but nothing showing your own current spec at a glance.
-**Notes:** Use `GetSpecializationInfo(GetSpecialization())` which returns id, name, description, icon, role. Events: `ACTIVE_TALENT_GROUP_CHANGED`, `PLAYER_ENTERING_WORLD`. Straightforward — no combat lockdown concerns for display only.
+**Description:** Shows current spec and loot spec icons side by side. Left-click opens a context menu to switch specialization; right-click opens a loot spec switcher. The actual implementation went beyond the original suggestion by including both spec swap and loot spec menus.
+**Notes:** Two issues identified in code review (#34, #35 in codereview.md): no `InCombatLockdown()` guard on spec change, and no `ACTIVE_TALENT_GROUP_CHANGED` event subscription (relies on 1s ticker instead).
 
 ---
 
-### 2. Clock / Server Time
+### 2. Clock / Server Time ✅ IMPLEMENTED (`widgets/Time.lua`)
 **Type:** New Widget
 **Difficulty:** Easy
-**Description:** Shows either local time or server (realm) time, with a toggle between the two on click. Useful for knowing when resets happen, when the Darkmoon Faire starts (currently shown separately in the DMF widget), and when daily/weekly events tick over. The ticker already runs every second via the global widget ticker, so updating the text each tick is free.
-**Notes:** `GetGameTime()` returns server hour and minute. For local time use `date("%H:%M")`. A config option for 12h/24h format is a natural addition. The widget ticker updates every second so precision is adequate. No API concerns.
+**Description:** Shows local time (12h or 24h, reusing the minimap clock format setting). Tooltip shows local time, server time, and daily/weekly reset countdowns with color coding. Left-click opens the calendar. Bonus: reset time info in tooltip goes beyond the original suggestion.
+**Notes:** Three issues identified (#38, #39, #40 in codereview.md): `ToggleCalendar()` called without checking if Blizzard_Calendar is loaded (should mirror WeeklyReset's `C_AddOns.LoadAddOn` guard), a dead `calendarTime` variable assignment in `OnEnter`, and a leading space in the `date(" %I:%M %p")` format string.
 
 ---
 
-### 3. Weekly Reset Countdown
+### 3. Weekly Reset Countdown ✅ IMPLEMENTED (`widgets/WeeklyReset.lua`)
 **Type:** New Widget
 **Difficulty:** Easy
-**Description:** Shows time until the weekly reset (Wednesday 15:00 UTC for EU, Tuesday 15:00 UTC for US). Displays in the format "Reset: 2d 14h" and turns green on reset day. Tooltip shows exact reset time in local time zone. Complements the Vault and Lockouts widgets.
-**Notes:** Weekly reset is a known fixed cadence. Use `time()` and `date()` to compute. No special API needed. Similar to the existing DMF countdown logic in DarkmoonFaire.lua — reuse the `FormatCountdown` pattern. Easy adaptation.
+**Description:** Uses `C_DateAndTime.GetSecondsUntilWeeklyReset()` (exact API, no hardcoded timezone math). Color-coded: green > 12h, yellow < 12h, red < 3h. Tooltip also shows daily reset. Left-click opens calendar (with proper addon-load guard). Clean implementation.
+**Notes:** `FormatResetTime` and `FormatDailyTime` are separate but nearly identical functions — minor duplication that could be merged into one shared formatter. No functional issues.
 
 ---
 
-### 4. FPS / Latency
+### 4. FPS / Latency ✅ IMPLEMENTED (`widgets/FPS.lua`)
 **Type:** New Widget
-**Difficulty:** Easy
-**Description:** Displays current FPS and home/world latency in a compact form (e.g. "FPS: 120 | 42ms"). Colors FPS red below 30, yellow below 60. Colors latency red above 200ms, yellow above 100ms. Tooltip breaks out home latency, world latency separately. A classic addon widget that provides at-a-glance performance info.
-**Notes:** `GetFramerate()` for FPS, `GetNetStats()` for latency (returns bandwidthIn, bandwidthOut, latencyHome, latencyWorld). Both are available at any time including combat. Updates well from the 1-second ticker. No combat concerns.
+**Difficulty:** Easy *(actual implementation was Medium — went well beyond the original scope)*
+**Description:** Shows home latency and FPS in main text. Tooltip includes home/world latency, jitter (standard deviation over 30 samples), bandwidth in/out, and optionally a full per-addon memory breakdown (throttled to once per 15s). The jitter calculation and per-addon memory panel are particularly well done.
+**Notes:** One issue (#36 in codereview.md): `table.sort` is called twice on `addonMemList` in `OnEnter` — once inside `RefreshMemoryData()` and again immediately after. The second sort is redundant. Also note the jitter circular buffer is correct but slightly non-obvious (issue #37).
 
 ---
 
@@ -174,5 +195,23 @@ The existing widget suite covers: secondary stats (Haste, Crit, Mastery, Versati
 **Difficulty:** Medium
 **Description:** The Zone widget shows the current subzone or zone name. Improve it to also show a small PvP status indicator inline — appending "(PvP)" in red for contested/hostile zones or "(Sanc)" in green for sanctuary zones. Additionally, when inside an instance, show the difficulty abbreviation (e.g. "Ara | M" for Mythic) rather than the raw subzone name. This turns the zone widget into a true context display.
 **Notes:** `C_PvP.GetZonePVPInfo()` returns pvpType ("contested", "hostile", "sanctuary", "friendly", "combat"). `GetInstanceInfo()` provides instanceType and difficultyName. Both are already used in the tooltip — lift them into `RefreshZoneCache`. The instance difficulty abbreviation table (M, H, N, LFR, etc.) needs a small static lookup or substring of the difficultyName. The risk is text overflow on narrow widget frames — test with a width cap or truncation. Medium due to text formatting edge cases.
+
+---
+
+## Review Notes — Unplanned New Widgets (2026-03-01)
+
+These widgets shipped without being in the original suggestions list. Notes for completeness.
+
+### Speed (`widgets/Speed.lua`) — ✅ Implemented, Clean
+Uses `C_PlayerInfo.GetGlidingInfo()` for skyriding speed and `GetUnitSpeed("player")` for ground/swim/flight. Refreshes at 0.5s via an `elapsed` accumulator in `HookScript("OnUpdate")`. Uses `HookScript` on an addon-created frame where `SetScript` would be more appropriate (minor style issue, #42 in codereview.md). `BASE_SPEED = 7` yards/sec is correct. The skyriding speed is shown as a percentage of base run speed which may produce values >100% — intentional and accurate for skyriding.
+
+### Volume (`widgets/Volume.lua`) — ✅ Implemented, Clean
+Left-click toggles `Sound_EnableAllSound`. Right-click cycles master volume at 100→75→50→25→100%. Tooltip shows all channel volumes. `UpdateContent` reads CVars every second — CVars are cheap to read. Reads CVars with `GetCVar()` which is safe. No issues identified.
+
+### BattleRes (`widgets/BattleRes.lua`) — ✅ Implemented, Minor Notes
+Tracks the shared battle res pool via `C_Spell.GetSpellCharges(20484)` (Druid Rebirth spell ID). This correctly reflects the shared pool for all classes since WoW routes all combat res charges through this spell's charge data. The `difficultyID ~= 17` (LFR) check is correct. See issue #41 in codereview.md for context on non-druid players and tooltip clarity.
+
+### Coordinates widget (`widgets/Coordinates.lua`) — ✅ Implemented, Clean
+Simple widget complement to the full `Coordinates.lua` module. Calls `C_Map.GetBestMapForUnit("player")` and `C_Map.GetPlayerMapPosition()` every 1s — both are lightweight. Uses correct UTF-8 em dash decimal escapes for the "no data" fallback. No issues identified.
 
 ---

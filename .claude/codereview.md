@@ -1,8 +1,10 @@
 # LunaUITweaks — Code Review
 
-**Date:** 2026-02-26
-**Scope:** Full addon review — all Lua modules and widget files (~55 files, ~18,000+ lines)
+**Date:** 2026-02-26 (updated 2026-03-01)
+**Scope:** Full addon review — all Lua modules and widget files (~65 files, ~20,000+ lines)
 **Reviewer:** Claude Sonnet 4.6
+
+**Update 2026-03-01:** New pass covering all changes since 2026-02-26. New module added: `QueueTimer.lua`. Eight new widgets added: `Spec`, `FPS`, `WeeklyReset`, `Time`, `Speed`, `Volume`, `BattleRes`, `Coordinates` (widget). `ObjectiveTracker.lua` received a timing fix on `PLAYER_ENTERING_WORLD`. Issues found in new code are numbered 31+ below. Status of previously-identified issues is unchanged unless noted.
 
 **Update 2026-02-26:** Comprehensive second pass covering all remaining files: XpBar, SCT, MplusTimer, Coordinates, QuestAuto, QuestReminder, Warehousing, the Widgets framework, and all widget files (Bags, Keystone, SessionStats, etc.). New findings merged with previous review. DamageMeter is confirmed as correctly implemented as a no-op stub per CLAUDE.md/MEMORY.md — the DamageMeter taint issues noted in earlier draft sessions are resolved/moot.
 
@@ -16,7 +18,9 @@ LunaUITweaks is a large, feature-rich WoW retail addon with generally good archi
 
 ## Critical Issues
 
-### 1. ChatSkin.lua — Unsafe Hook Forms (Taint Risk)
+> **2026-03-01: All 4 critical issues below have been fixed.**
+
+### 1. ChatSkin.lua — Unsafe Hook Forms (Taint Risk) ✅ FIXED 2026-03-01
 
 Per CLAUDE.md: *"Unsafe hooks: `hooksecurefunc(frame, 'Method', cb)` — frame-object form taints the frame"* and *"Never write fields onto Blizzard frames"*.
 
@@ -48,7 +52,7 @@ This should be `hooksecurefunc("SetItemRef", cb)` (global form, not frame-object
 
 ---
 
-### 2. MinimapCustom.lua — Repeated Global Function Redefinition
+### 2. MinimapCustom.lua — Repeated Global Function Redefinition ✅ FIXED 2026-03-01
 
 ```lua
 -- Inside ApplyMinimapShape(), called multiple times:
@@ -59,7 +63,7 @@ This redefines a global WoW API function inside a function body. Each call to `A
 
 ---
 
-### 3. ActionBars.lua — Writing Fields onto Blizzard Action Buttons
+### 3. ActionBars.lua — Writing Fields onto Blizzard Action Buttons ✅ FIXED 2026-03-01
 
 ```lua
 -- In SkinButton:
@@ -75,7 +79,7 @@ skinOverlays[button] = CreateFrame(...)
 
 ---
 
-### 4. Coordinates.lua — `HookScript` on Chat Edit Boxes
+### 4. Coordinates.lua — `HookScript` on Chat Edit Boxes ✅ FIXED 2026-03-01
 
 ```lua
 box:HookScript("OnKeyDown", function(self, key) ... end)
@@ -460,11 +464,138 @@ for _, questInfo in pairs(C_GossipInfo.GetActiveQuests()) do
 
 ---
 
+## New Issues (2026-03-01) — New Modules and Widgets
+
+### 31. QueueTimer.lua — Permanent `OnUpdate` Even When Disabled
+
+```lua
+timerBar:SetScript("OnUpdate", OnUpdate)
+-- OnUpdate always: if not isRunning then return end
+```
+
+The `OnUpdate` is registered permanently on `timerBar`. When `isRunning = false` (which is the overwhelming majority of the time) it returns immediately, but the function call overhead from a permanent `OnUpdate` adds up. Prefer registering `OnUpdate` only while the timer is running (`StartTimer` sets it; `StopTimer` clears it with `timerBar:SetScript("OnUpdate", nil)`). This is the same pattern recommended for issue #12.
+
+### 32. QueueTimer.lua — Uses `C_Timer.After` Instead of `SafeAfter`
+
+```lua
+C_Timer.After(0.05, StartTimer)
+```
+
+All other modules use `addonTable.Core.SafeAfter()` which wraps the callback in a `pcall` for error isolation. `C_Timer.After` here is bare and will surface errors unprotected. Trivial fix: replace with `addonTable.Core.SafeAfter(0.05, StartTimer)`.
+
+### 33. QueueTimer.lua — Anonymous `PLAYER_ENTERING_WORLD` Listener Cannot Be Unregistered
+
+```lua
+EventBus.Register("PLAYER_ENTERING_WORLD", function()
+    local inInstance = select(1, IsInInstance())
+    if inInstance then StopTimer() end
+end)
+```
+
+Anonymous function reference; cannot be unregistered. The same pattern noted in issue #289 for Warehousing and AddonComm. If QueueTimer is ever disabled/reloaded this listener persists. Low risk since it's a no-op when `isRunning = false`, but the pattern is inconsistent.
+
+### 34. widgets/Spec.lua — No Combat Guard on Spec Change
+
+```lua
+specFrame:SetScript("OnClick", function(self, button)
+    if button == "LeftButton" then
+        MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
+            -- ...
+            local btn = rootDescription:CreateButton(name,
+                function() C_SpecializationInfo.SetSpecialization(i) end)
+```
+
+`C_SpecializationInfo.SetSpecialization()` and `SetLootSpecialization()` silently fail in combat but there is no `InCombatLockdown()` guard. At minimum, suppress the context menu in combat to avoid a confusing no-op. `MenuUtil.CreateContextMenu` may already prevent this, but an explicit guard is clearer and more robust.
+
+### 35. widgets/Spec.lua — No `ACTIVE_TALENT_GROUP_CHANGED` Event Subscription
+
+The spec widget's `UpdateContent` is driven only by the 1-second widget ticker. When the player changes spec, the widget takes up to 1 second to reflect the change. Other reactive widgets (Keystone, Vault, etc.) subscribe to relevant events for immediate updates. Subscribe to `ACTIVE_TALENT_GROUP_CHANGED` to trigger an immediate content refresh on spec swap.
+
+### 36. widgets/FPS.lua — Double Sort in `OnEnter`
+
+```lua
+-- In RefreshMemoryData():
+table.sort(addonMemList, function(a, b) return a.mem > b.mem end)
+
+-- Then immediately in OnEnter:
+table.sort(addonMemList, function(a, b) return a.mem > b.mem end)
+```
+
+The list is sorted in `RefreshMemoryData()` and then sorted again on the very next line in `OnEnter`. The second sort is entirely redundant since `RefreshMemoryData()` was just called. Remove the second sort call.
+
+### 37. widgets/FPS.lua — `latencyHistory` Uses 1-Based Circular Index with Gap
+
+```lua
+local latencyIndex = 0
+-- In UpdateContent:
+latencyIndex = (latencyIndex % JITTER_SAMPLES) + 1
+latencyHistory[latencyIndex] = latencyHome
+```
+
+On the first iteration `latencyIndex` goes 0→1 and the table has one entry. The `#latencyHistory >= 2` check in `OnEnter` correctly skips jitter calculation on the first sample. However, for the first `JITTER_SAMPLES` iterations the table is sparse (indices 1..n, growing) and `#latencyHistory` relies on the sequence being contiguous. Since Lua tables fill contiguously here this works correctly, but the pattern is fragile — if `JITTER_SAMPLES` were ever changed to require sparse storage it would break. Minor, no functional issue currently.
+
+### 38. widgets/Time.lua — `ToggleCalendar()` Called Without Checking Existence
+
+```lua
+specFrame:SetScript("OnClick", function() ToggleCalendar() end)
+```
+
+`ToggleCalendar` is a global in `Blizzard_Calendar` which may not be loaded. Unlike `WeeklyReset.lua` which correctly guards with `C_AddOns.LoadAddOn("Blizzard_Calendar")` before calling `ShowUIPanel(CalendarFrame)`, Time.lua calls `ToggleCalendar()` directly. If Blizzard_Calendar is not yet loaded, this will error. Mirror the WeeklyReset approach: load the addon first, then check for `CalendarFrame`.
+
+### 39. widgets/Time.lua — Dead Variable Assignment in `OnEnter`
+
+```lua
+local calendarTime = C_DateAndTime.GetCurrentCalendarTime()
+```
+
+`calendarTime` is assigned but never referenced anywhere in the `OnEnter` body. The value is read but immediately discarded. Remove the dead assignment.
+
+### 40. widgets/Time.lua — Leading Space in `date()` Format String
+
+```lua
+GameTooltip:AddDoubleLine("Local Time:", date(" %I:%M %p"), ...)
+```
+
+The format string `" %I:%M %p"` has a leading space that will display as `" 02:30 PM"` in the tooltip. Remove the leading space: `date("%I:%M %p")`.
+
+### 41. widgets/BattleRes.lua — Only Tracks Druid Rebirth Spell ID
+
+```lua
+local REBIRTH_SPELL_ID = 20484  -- Druid Rebirth only
+```
+
+The widget is presented as a "Battle Res Pool" tracker but uses only the Druid Rebirth spell ID. The WoW shared combat res pool system ties all battle res charges to a single pool, and querying `C_Spell.GetSpellCharges(20484)` returns the shared charge state regardless of class — so functionally this works correctly for charge count/timing. However, for non-druid players the charge readout may return `nil` if Rebirth isn't in their spellbook, which correctly falls through to the "BR" fallback. The tooltip comment "Activates in M+ and raid encounters" is slightly misleading since the pool only activates during active encounters (not just being inside M+). Low-risk but worth a tooltip clarification.
+
+### 42. widgets/Speed.lua — `HookScript("OnUpdate")` vs `SetScript("OnUpdate")`
+
+```lua
+speedFrame:HookScript("OnUpdate", function(self, delta) ... end)
+```
+
+Using `HookScript` on an addon-created frame with no existing `OnUpdate` is functionally equivalent to `SetScript` but semantically implies the intent is to layer on top of an existing script. Since `CreateWidgetFrame` does not set an `OnUpdate`, this should use `SetScript("OnUpdate", ...)` for clarity. No functional issue, just a readability concern.
+
+### 43. ObjectiveTracker.lua — 5-Second Startup Delay May Cause Visual Pop-in
+
+The recent change defers `UpdateSettings()` by 5 seconds when the tracker is enabled on `PLAYER_ENTERING_WORLD`:
+
+```lua
+if UIThingsDB.tracker and UIThingsDB.tracker.enabled then
+    SafeAfter(5, function() addonTable.ObjectiveTracker.UpdateSettings() end)
+else
+    addonTable.ObjectiveTracker.UpdateSettings()
+end
+```
+
+The intent is to let Blizzard's show logic fully settle before the addon applies its tracker settings. However, for 5 seconds after entering world the custom tracker will not be properly configured, which may show the Blizzard tracker or a wrongly-positioned custom tracker. Consider whether a shorter delay (1–2s) would suffice, or whether the MEMORY.md-documented taint issue this is trying to address could be handled differently.
+
+---
+
 ## Summary Table
 
 | Severity | Count | Key Examples |
 |----------|-------|-------------|
-| Critical (taint/correctness) | 4 | ChatSkin hook forms, MinimapCustom global, ActionBars field write, Coordinates HookScript |
-| Performance | 10 | EventBus allocation, Combat UNIT_AURA, SkinButton OnUpdate, Widgets anchor recalc, Warehousing double scan, Keystone bag scan, Coordinates distance ticker, SCT SetCVar, AddonVersions bag scan, per-widget OnUpdate |
+| Critical (taint/correctness) | 4 ✅ ALL FIXED | ChatSkin hook forms ✅, MinimapCustom global ✅, ActionBars field write ✅, Coordinates HookScript ✅ |
+| Performance | 11 | EventBus allocation, Combat UNIT_AURA, SkinButton OnUpdate, Widgets anchor recalc, Warehousing double scan, Keystone bag scan, Coordinates distance ticker, SCT SetCVar, AddonVersions bag scan, per-widget OnUpdate, QueueTimer permanent OnUpdate (#31) |
 | Memory | 6 | ChatSkin closures, kwPlaceholders per message, Kick frames, TalentReminder allocation, SessionStats lastSeen write, Warehousing closure chain |
-| Code Quality | 10 | TalentReminder duplication, Misc dead code, Loot dead branch, SCT O(n) recycle, CENTER convention (10 modules), Widgets hard-coded keys, MplusTimer death logic, Warehousing duplicate logic, QuestReminder stale data, Warehousing debug log |
+| Code Quality | 14 | TalentReminder duplication, Misc dead code, Loot dead branch, SCT O(n) recycle, CENTER convention (10 modules), Widgets hard-coded keys, MplusTimer death logic, Warehousing duplicate logic, QuestReminder stale data, Warehousing debug log, Time.lua dead variable (#39), Time.lua leading space (#40), FPS.lua double sort (#36), Spec.lua no event sub (#35) |
+| New (2026-03-01) | 13 | QueueTimer OnUpdate/SafeAfter/anon listener, Spec combat guard/event sub, FPS double sort, Time ToggleCalendar/dead var/space, BattleRes spell ID note, Speed HookScript style, ObjTracker 5s delay |

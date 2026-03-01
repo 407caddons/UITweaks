@@ -35,10 +35,33 @@ local function FormatTime(seconds)
     end
 end
 
--- Sum XP from all quests currently ready to turn in.
--- GetQuestLogRewardXP(questID) returns the actual XP the player will receive (includes level scaling).
--- An optional xpBonusPct setting lets users add a manual percentage for Warband Mentor /
--- Midnight achievement bonuses that the client may not reflect in the quest log value.
+-- Known XP boost buffs, auto-detected from active player auras.
+-- GetQuestLogRewardXP returns base XP before these multipliers, so we apply them manually.
+-- To find an unknown buff's spell ID while it's active, run:
+--   /run local a=C_UnitAuras.GetPlayerAuraBySpellID(ID); if a then print(a.name,a.spellId) end
+-- or scan all buffs: /run for i=1,40 do local a=C_UnitAuras.GetAuraDataByIndex("player",i,"HELPFUL") if a then print(a.spellId,a.name) end end
+local XP_BOOST_BUFFS = {
+    { id = 46668, pct = 10, label = "DMF WHEE!" },         -- Darkmoon Faire Carousel (+10% XP, 1hr)
+    { id = 71968, pct = 10, label = "DMF Top Hat" },        -- Darkmoon Top Hat (+10% XP, 1hr)
+    -- Warband Mentor / Midnight achievement bonus: uncomment and fill in spell ID when known
+    -- { id = 0, pct = 0, label = "Mentor: Midnight" },
+}
+
+-- Returns the total auto-detected XP bonus percentage from active buffs, plus any manual override.
+local function GetXPBonusPct()
+    local total = 0
+    for _, buff in ipairs(XP_BOOST_BUFFS) do
+        if buff.id > 0 and C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+            total = total + buff.pct
+        end
+    end
+    -- Manual override stacks on top of auto-detected (use for buffs not yet in the table)
+    local manual = UIThingsDB.xpBar and UIThingsDB.xpBar.xpBonusPct or 0
+    return total + manual
+end
+
+-- Sum XP from all quests currently ready to turn in, with XP boost buffs applied.
+-- GetQuestLogRewardXP returns base XP (before active buff multipliers).
 local function GetPendingQuestXP()
     local total = 0
     local numEntries = C_QuestLog.GetNumQuestLogEntries()
@@ -49,7 +72,7 @@ local function GetPendingQuestXP()
             total = total + xp
         end
     end
-    local bonusPct = UIThingsDB.xpBar and UIThingsDB.xpBar.xpBonusPct or 0
+    local bonusPct = GetXPBonusPct()
     if bonusPct ~= 0 then
         total = math.floor(total * (1 + bonusPct / 100))
     end
@@ -357,10 +380,20 @@ local function Init()
         local pendingXP = GetPendingQuestXP()
         if pendingXP > 0 then
             local pendingPct = maxXP and maxXP > 0 and (pendingXP / maxXP * 100) or 0
-            local bonusPct = UIThingsDB.xpBar.xpBonusPct or 0
-            local bonusStr = bonusPct > 0 and string.format(" +%d%% bonus", bonusPct) or ""
+            local totalBonus = GetXPBonusPct()
+            local bonusStr = totalBonus > 0 and string.format(" +%d%% bonus", totalBonus) or ""
             GameTooltip:AddDoubleLine("Pending quests:", string.format("%s (%.1f%%)%s",
                 AbbreviateNumber(pendingXP), pendingPct, bonusStr), 1, 1, 1, 1, 0.85, 0)
+            -- List active XP boost buffs
+            for _, buff in ipairs(XP_BOOST_BUFFS) do
+                if buff.id > 0 and C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+                    GameTooltip:AddDoubleLine("  " .. buff.label, string.format("+%d%%", buff.pct), 0.8, 0.8, 0.8, 0.4, 1, 0.4)
+                end
+            end
+            local manual = UIThingsDB.xpBar.xpBonusPct or 0
+            if manual > 0 then
+                GameTooltip:AddDoubleLine("  Manual bonus", string.format("+%d%%", manual), 0.8, 0.8, 0.8, 0.4, 1, 0.4)
+            end
         end
 
         -- Session stats
@@ -392,6 +425,8 @@ local function Init()
     EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate, "XpBar")
     EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld, "XpBar")
     EventBus.Register("QUEST_LOG_UPDATE", OnXPUpdate, "XpBar")
+    -- Refresh pending XP when XP boost buffs are gained or dropped
+    EventBus.RegisterUnit("UNIT_AURA", "player", OnXPUpdate)
 
     addonTable.XpBar.UpdateSettings()
 end

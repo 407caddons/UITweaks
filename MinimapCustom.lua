@@ -22,6 +22,11 @@ local coordsTicker = nil
 local queueHooked = false
 local suppressQueueHook = false
 
+-- Expose shape for other addons that call GetMinimapShape().
+-- Defined once at file scope so it is never recreated on repeated calls to ApplyMinimapShape().
+local currentMinimapShape = "ROUND"
+function GetMinimapShape() return currentMinimapShape end
+
 local function AnchorQueueEyeToMinimap()
     if not QueueStatusButton then return end
     if not minimapFrame then return end
@@ -158,12 +163,8 @@ local function ApplyMinimapShape(shape)
     end
 
 
-    -- Expose shape for other addons that call GetMinimapShape()
-    if shape == "SQUARE" then
-        function GetMinimapShape() return "SQUARE" end
-    else
-        function GetMinimapShape() return "ROUND" end
-    end
+    -- Update the file-scope variable so GetMinimapShape() returns the correct shape
+    currentMinimapShape = (shape == "SQUARE") and "SQUARE" or "ROUND"
 end
 
 local function HideDefaultDecorations()

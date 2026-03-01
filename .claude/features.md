@@ -1,5 +1,7 @@
 # Feature Suggestions — LunaUITweaks
-Date: 2026-02-26
+Date: 2026-02-26 (updated 2026-03-01)
+
+**Update 2026-03-01:** Several widget suggestions from the companion widgets.md have been implemented: Clock/Server Time (→ `widgets/Time.lua` ✓), FPS/Latency (→ `widgets/FPS.lua` ✓), Weekly Reset Countdown (→ `widgets/WeeklyReset.lua` ✓), Spec Display (→ `widgets/Spec.lua` ✓). A new module not previously suggested has also shipped: `QueueTimer.lua` — a progress bar that counts down the LFG proposal acceptance window. Three more widgets also shipped that were not in the original suggestions: `Speed` (movement speed %), `Volume` (sound toggle/cycle), `BattleRes` (battle resurrection charge tracker). Feature suggestions below are updated with implemented/pending status.
 
 ## Introduction
 
@@ -132,28 +134,40 @@ LunaUITweaks is already a mature, self-contained addon covering a wide range of 
 
 ---
 
+---
+
+## Features Added Since Last Review (2026-03-01)
+
+### 22. LFG Queue Pop Timer ✅ Implemented (`QueueTimer.lua`)
+**Difficulty:** Easy *(was not previously suggested — shipped)*
+**Description:** A progress bar that counts down the LFG dungeon-finder proposal window. Anchors below the Blizzard `LFGDungeonReadyDialog` when visible; falls back to a configurable CENTER position. Reads the actual expiration timestamp from `GetLFGProposal()` and supports dynamic green→yellow→red color, optional text countdown, and configurable size. Starts on `LFG_PROPOSAL_SHOW`, stops on `LFG_PROPOSAL_FAILED`/`LFG_PROPOSAL_SUCCEEDED` or when entering an instance.
+**Notes:** Minor code issues (#31, #32, #33 in codereview.md). Overall a clean, well-scoped module.
+
+---
+
 ## Difficulty Summary
 
-| # | Feature | Difficulty |
-|---|---------|-----------|
-| 1 | Boss Ability Timers | Medium |
-| 2 | Interrupt Assignment / Rotation | Medium |
-| 3 | Wipe Recovery Checklist | Easy |
-| 4 | Encounter Pull Log | Easy |
-| 5 | Defensive Cooldown Tracker | Hard |
-| 6 | Nameplate Aura Tracker | Hard |
-| 7 | GCD Bar | Medium |
-| 8 | Screen Edge Alerts | Medium |
-| 9 | Personal Cooldown Tracking Bar | Medium |
-| 10 | Font Profile System | Easy |
-| 11 | Minimap Drawer Auto-Hide in Combat | Easy |
-| 12 | Group Role Composition Widget | Easy |
-| 13 | Ready Check History | Easy |
-| 14 | Raid Announcement Templates | Easy |
-| 15 | Smart Vendor Price Tooltip | Easy |
-| 16 | Alt Character Summary Panel | Medium |
-| 17 | Auto Group Loot Threshold Setter | Easy |
-| 18 | Crafting Order Expiry Timer | Medium |
-| 19 | BoE Item Alert | Easy |
-| 20 | Lightweight Aura Display | Hard |
-| 21 | Death Recap Overlay | Very Hard (API-blocked) |
+| # | Feature | Difficulty | Status |
+|---|---------|-----------|--------|
+| 1 | Boss Ability Timers | Medium | Pending |
+| 2 | Interrupt Assignment / Rotation | Medium | Pending |
+| 3 | Wipe Recovery Checklist | Easy | Pending |
+| 4 | Encounter Pull Log | Easy | Pending |
+| 5 | Defensive Cooldown Tracker | Hard | Pending |
+| 6 | Nameplate Aura Tracker | Hard | Pending |
+| 7 | GCD Bar | Medium | Pending |
+| 8 | Screen Edge Alerts | Medium | Pending |
+| 9 | Personal Cooldown Tracking Bar | Medium | Pending |
+| 10 | Font Profile System | Easy | Pending |
+| 11 | Minimap Drawer Auto-Hide in Combat | Easy | Pending |
+| 12 | Group Role Composition Widget | Easy | Pending |
+| 13 | Ready Check History | Easy | Pending |
+| 14 | Raid Announcement Templates | Easy | Pending |
+| 15 | Smart Vendor Price Tooltip | Easy | Pending |
+| 16 | Alt Character Summary Panel | Medium | Pending |
+| 17 | Auto Group Loot Threshold Setter | Easy | Pending |
+| 18 | Crafting Order Expiry Timer | Medium | Pending |
+| 19 | BoE Item Alert | Easy | Pending |
+| 20 | Lightweight Aura Display | Hard | Pending |
+| 21 | Death Recap Overlay | Very Hard (API-blocked) | Pending |
+| 22 | LFG Queue Pop Timer | Easy | ✅ Implemented |

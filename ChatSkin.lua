@@ -6,6 +6,7 @@ local containerFrame = nil
 local resizeGrip = nil
 local skinnedFrames = {}
 local skinnedTabs = {}
+local hookedObjects = {} -- side table: tracks hooked Blizzard frames without writing fields onto them
 local hiddenButtons = {}
 local isTabUnlocked = false
 local isSetup = false
@@ -359,17 +360,9 @@ local function SkinChatFrame(chatFrame)
         bg:SetScript("OnShow", function(self)
             if UIThingsDB.chatSkin.enabled then self:Hide() end
         end)
-        if not bg.lunaHooked then
-            local suppressBgAlpha = false
-            hooksecurefunc(bg, "SetAlpha", function(self)
-                if suppressBgAlpha then return end
-                if UIThingsDB.chatSkin.enabled then
-                    suppressBgAlpha = true
-                    self:SetAlpha(0)
-                    suppressBgAlpha = false
-                end
-            end)
-            bg.lunaHooked = true
+        if not hookedObjects[bg] then
+            -- Hide() + OnShow->Hide() is sufficient; no frame-object hooksecurefunc needed
+            hookedObjects[bg] = true
         end
     end
 
@@ -384,20 +377,12 @@ local function SkinChatFrame(chatFrame)
         if tex then
             tex:SetAlpha(0)
             tex:Hide()
-            if not tex.lunaHooked then
+            if not hookedObjects[tex] then
                 tex:HookScript("OnShow", function(self)
                     if UIThingsDB.chatSkin.enabled then self:Hide() end
                 end)
-                local suppressAlpha = false
-                hooksecurefunc(tex, "SetAlpha", function(self)
-                    if suppressAlpha then return end
-                    if UIThingsDB.chatSkin.enabled then
-                        suppressAlpha = true
-                        self:SetAlpha(0)
-                        suppressAlpha = false
-                    end
-                end)
-                tex.lunaHooked = true
+                -- Hide() + OnShow->Hide() is sufficient; no frame-object hooksecurefunc needed
+                hookedObjects[tex] = true
             end
         end
     end
@@ -406,21 +391,13 @@ local function SkinChatFrame(chatFrame)
     for _, region in pairs({ chatFrame:GetRegions() }) do
         if region:IsObjectType("Texture") then
             local layer = region:GetDrawLayer()
-            if layer == "BORDER" and not region.lunaHooked then
+            if layer == "BORDER" and not hookedObjects[region] then
                 region:SetAlpha(0)
                 region:HookScript("OnShow", function(self)
                     if UIThingsDB.chatSkin.enabled then self:Hide() end
                 end)
-                local suppressAlpha = false
-                hooksecurefunc(region, "SetAlpha", function(self)
-                    if suppressAlpha then return end
-                    if UIThingsDB.chatSkin.enabled then
-                        suppressAlpha = true
-                        self:SetAlpha(0)
-                        suppressAlpha = false
-                    end
-                end)
-                region.lunaHooked = true
+                -- Hide() + OnShow->Hide() is sufficient; no frame-object hooksecurefunc needed
+                hookedObjects[region] = true
             end
         end
     end
@@ -461,13 +438,13 @@ local function HideButtons()
     if ChatFrame1ButtonFrame then
         ChatFrame1ButtonFrame:SetAlpha(0)
         ChatFrame1ButtonFrame:Hide()
-        if not ChatFrame1ButtonFrame.lunaHooked then
+        if not hookedObjects[ChatFrame1ButtonFrame] then
             ChatFrame1ButtonFrame:SetScript("OnShow", function(self)
                 if UIThingsDB.chatSkin.enabled then
                     self:Hide()
                 end
             end)
-            ChatFrame1ButtonFrame.lunaHooked = true
+            hookedObjects[ChatFrame1ButtonFrame] = true
         end
     end
 end
@@ -1043,9 +1020,11 @@ local function SetupChatSkin()
 
     -- All hooks below are permanent and must only be installed once
     if not hooksInstalled then
-        -- Hook SetItemRef to handle our custom lunaurl hyperlinks
-        local origSetItemRef = SetItemRef
-        SetItemRef = function(link, text, button, chatFrame)
+        -- Hook SetItemRef to handle our custom lunaurl hyperlinks.
+        -- Use the safe global-name form of hooksecurefunc (post-hook).
+        -- For lunaurl: links the original SetItemRef does nothing meaningful so
+        -- showing our URL copy frame in the post-hook produces the correct result.
+        hooksecurefunc("SetItemRef", function(link, text, button, chatFrame)
             local url = link:match("^lunaurl:(.+)$")
             if url then
                 urlCopyEditBox:SetText(url)
@@ -1057,10 +1036,8 @@ local function SetupChatSkin()
                 urlCopyFrame:Show()
                 urlCopyEditBox:HighlightText()
                 urlCopyEditBox:SetFocus()
-                return
             end
-            return origSetItemRef(link, text, button, chatFrame)
-        end
+        end)
 
         -- Register URL detection filter on common chat events
         ChatSkin.InstallMessageFilters()

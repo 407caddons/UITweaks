@@ -218,6 +218,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "vers",             label = "Versatility" },
         { key = "waypointDistance", label = "Waypoint Distance" },
         { key = "addonComm",        label = "Addon Comm Status" },
+        { key = "wheeCheck",        label = "DMF WHEE! Buff" },
     }
 
     local CONDITIONS = {

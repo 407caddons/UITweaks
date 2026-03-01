@@ -788,36 +788,14 @@ EventBus.Register("ZONE_CHANGED_INDOORS",   UpdateTitleZone,        "Coordinates
 SLASH_LUNAWAY1 = "/lway"
 SlashCmdList["LUNAWAY"] = SlashHandler
 
--- /way alias: intercept via editbox hook so TomTom cannot override us
+-- /way alias: registered as a slash command alias so Blizzard edit box frames are not hooked.
+-- Registered in PLAYER_LOGIN (after all addons load) so we win over TomTom's file-load-time
+-- registration when the user opts in via registerWayCommand.
 local wayHooked = false
-
-local function HookChatEditBoxes()
-    local function HookBox(box)
-        box:HookScript("OnKeyDown", function(self, key)
-            if not UIThingsDB.coordinates.registerWayCommand then return end
-            if key ~= "ENTER" and key ~= "NUMPADENTER" then return end
-            local text = self:GetText()
-            if not text then return end
-            local args = text:match("^%s*/[Ww][Aa][Yy]%s+(.+)$")
-            if not args then return end
-            -- Swallow the keypress so OnEnterPressed (and TomTom) never fire
-            self:SetPropagateKeyboardInput(false)
-            self:SetText("")
-            self:ClearFocus()
-            self:Hide()
-            SlashHandler(args)
-        end)
-    end
-
-    for i = 1, NUM_CHAT_WINDOWS do
-        local box = _G["ChatFrame" .. i .. "EditBox"]
-        if box then HookBox(box) end
-    end
-end
 
 function Coordinates.ApplyWayCommand()
     if UIThingsDB.coordinates.registerWayCommand and not wayHooked then
-        HookChatEditBoxes()
+        SLASH_LUNAWAY2 = "/way"
         wayHooked = true
     end
 end
