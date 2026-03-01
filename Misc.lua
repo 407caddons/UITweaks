@@ -505,21 +505,21 @@ HookTooltipSpellID = function()
 
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
         if tooltip ~= GameTooltip then return end
-        if data and data.id and data.id > 0 then
+        if data and data.id and not issecretvalue(data.id) and data.id > 0 then
             AddIDLine(tooltip, data.id, "Spell ID:")
         end
     end)
 
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
         if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
-        if data and data.id and data.id > 0 then
+        if data and data.id and not issecretvalue(data.id) and data.id > 0 then
             AddIDLine(tooltip, data.id, "Item ID:")
         end
     end)
 
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Action, function(tooltip, data)
         if tooltip ~= GameTooltip then return end
-        if not data then return end
+        if not data or not data.actionSlot or issecretvalue(data.actionSlot) then return end
         -- Actions backed by a spell
         local actionType, id = GetActionInfo(data.actionSlot)
         if actionType == "spell" and id and id > 0 then

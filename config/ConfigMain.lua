@@ -224,7 +224,8 @@ function addonTable.Config.Initialize()
             { id = 22, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
             { id = 23, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 24, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
-            { id = 25, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 25, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
+            { id = 26, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -337,6 +338,10 @@ function addonTable.Config.Initialize()
         xpBarPanel:SetAllPoints()
         xpBarPanel:Hide()
 
+        local queueTimerPanel = CreateFrame("Frame", nil, contentContainer)
+        queueTimerPanel:SetAllPoints()
+        queueTimerPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -363,6 +368,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.coordinates = coordinatesPanel
         addonTable.ConfigPanels.warehousing = warehousingPanel
         addonTable.ConfigPanels.xpBar = xpBarPanel
+        addonTable.ConfigPanels.queueTimer = queueTimerPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -390,7 +396,8 @@ function addonTable.Config.Initialize()
             [22] = miscPanel,
             [23] = widgetsPanel,
             [24] = warehousingPanel,
-            [25] = addonVersionsPanel,
+            [25] = queueTimerPanel,
+            [26] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -555,8 +562,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Warehousing then
                 addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[24], configWindow)
             end
+            if addonTable.ConfigSetup.QueueTimer then
+                addonTable.ConfigSetup.QueueTimer(queueTimerPanel, navButtons[25], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[25], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[26], configWindow)
             end
         end
         ----------------------------------------------------

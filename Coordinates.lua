@@ -743,6 +743,19 @@ function Coordinates.UpdateSettings()
 end
 
 -- ============================================================
+-- Zone title helper
+-- ============================================================
+local function UpdateTitleZone()
+    if not mainFrame or not mainFrame.titleText then return end
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if mapID then
+        mainFrame.titleText:SetText("Waypoints  |cFFAAAAAA#" .. mapID .. "|r")
+    else
+        mainFrame.titleText:SetText("Waypoints")
+    end
+end
+
+-- ============================================================
 -- Event handlers
 -- ============================================================
 local function OnPlayerEnteringWorld()
@@ -751,6 +764,7 @@ local function OnPlayerEnteringWorld()
     CreateMainFrame()
     Coordinates.UpdateSettings()
     Coordinates.RefreshList()
+    UpdateTitleZone()
 end
 
 local function OnUserWaypointUpdated()
@@ -764,8 +778,11 @@ end
 -- ============================================================
 -- Initialization
 -- ============================================================
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Coordinates")
-EventBus.Register("USER_WAYPOINT_UPDATED", OnUserWaypointUpdated, "Coordinates")
+EventBus.Register("PLAYER_ENTERING_WORLD",  OnPlayerEnteringWorld, "Coordinates")
+EventBus.Register("USER_WAYPOINT_UPDATED",  OnUserWaypointUpdated, "Coordinates")
+EventBus.Register("ZONE_CHANGED",           UpdateTitleZone,        "Coordinates")
+EventBus.Register("ZONE_CHANGED_NEW_AREA",  UpdateTitleZone,        "Coordinates")
+EventBus.Register("ZONE_CHANGED_INDOORS",   UpdateTitleZone,        "Coordinates")
 
 -- Slash commands: /lway always registered
 SLASH_LUNAWAY1 = "/lway"

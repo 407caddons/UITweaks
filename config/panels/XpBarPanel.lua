@@ -11,7 +11,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 680)
+    child:SetSize(600, 880)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -224,6 +224,47 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
         -568
     )
 
+    Helpers.CreateColorPicker(child, "UIThingsXpBarPendingColorBtn", "Pending Quest XP Color",
+        function()
+            local c = UIThingsDB.xpBar.pendingColor
+            return c.r, c.g, c.b
+        end,
+        function(r, g, b)
+            UIThingsDB.xpBar.pendingColor.r = r
+            UIThingsDB.xpBar.pendingColor.g = g
+            UIThingsDB.xpBar.pendingColor.b = b
+            UpdateXpBar()
+        end,
+        -598
+    )
+
+    -- XP bonus % for Warband Mentor / Midnight achievement bonuses
+    local bonusNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bonusNote:SetPoint("TOPLEFT", 20, -638)
+    bonusNote:SetTextColor(0.7, 0.7, 0.7, 1)
+    bonusNote:SetText("XP Bonus % — add your Warband Mentor or Midnight achievement bonus here\nif it is not already reflected in the quest log reward values (default 0).")
+
+    local bonusLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    bonusLabel:SetPoint("TOPLEFT", 20, -680)
+    bonusLabel:SetText("XP Bonus %:")
+
+    local bonusSlider = CreateFrame("Slider", "UIThingsXpBarBonusPctSlider", child, "OptionsSliderTemplate")
+    bonusSlider:SetPoint("TOPLEFT", 110, -675)
+    bonusSlider:SetWidth(200)
+    bonusSlider:SetMinMaxValues(0, 200)
+    bonusSlider:SetValueStep(5)
+    bonusSlider:SetObeyStepOnDrag(true)
+    _G[bonusSlider:GetName() .. "Low"]:SetText("0%")
+    _G[bonusSlider:GetName() .. "High"]:SetText("200%")
+    _G[bonusSlider:GetName() .. "Text"]:SetText("Bonus: " .. UIThingsDB.xpBar.xpBonusPct .. "%")
+    bonusSlider:SetValue(UIThingsDB.xpBar.xpBonusPct)
+    bonusSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 5) * 5
+        UIThingsDB.xpBar.xpBonusPct = value
+        _G[self:GetName() .. "Text"]:SetText("Bonus: " .. value .. "%")
+        UpdateXpBar()
+    end)
+
     Helpers.CreateColorPicker(child, "UIThingsXpBarBgColorBtn", "Background Color",
         function()
             local c = UIThingsDB.xpBar.bgColor
@@ -235,6 +276,6 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
             UIThingsDB.xpBar.bgColor.b = b
             UpdateXpBar()
         end,
-        -598
+        -728
     )
 end

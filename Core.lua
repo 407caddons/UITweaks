@@ -698,6 +698,16 @@ local function OnEvent(self, event, ...)
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
             },
+            queueTimer = {
+                enabled = false,
+                showText = true,
+                dynamicColor = true,
+                width = 280,
+                height = 16,
+                barColor = { r = 0.2, g = 0.85, b = 0.2, a = 1 },
+                bgColor  = { r = 0,   g = 0,    b = 0,   a = 0.8 },
+                pos = { x = 0, y = -150 },
+            },
             xpBar = {
                 enabled = false,
                 locked = true,
@@ -706,9 +716,11 @@ local function OnEvent(self, event, ...)
                 height = 20,
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 11,
-                barColor = { r = 0.337, g = 0.388, b = 1, a = 1 },
-                restedColor = { r = 0.3, g = 0.1, b = 0.8, a = 0.6 },
-                bgColor = { r = 0, g = 0, b = 0, a = 0.6 },
+                barColor     = { r = 0.337, g = 0.388, b = 1,    a = 1    },
+                restedColor  = { r = 0.3,   g = 0.1,   b = 0.8,  a = 0.6  },
+                pendingColor = { r = 1,     g = 0.82,  b = 0,    a = 0.85 },
+                bgColor      = { r = 0,     g = 0,     b = 0,    a = 0.6  },
+                xpBonusPct   = 0,
                 showLevel = true,
                 showXPText = true,
                 showPercent = true,

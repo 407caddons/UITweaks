@@ -25,7 +25,13 @@
       "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -File -Filter ''*.lua'' | Select-Object Name\")",
       "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -Recurse -Filter ''Gossip*'' | Select-Object FullName\")",
       "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\FrameGeneral'' -Recurse | Select-Object -First 20 Name\")",
-      "Bash(powershell.exe -Command:*)"
+      "Bash(powershell.exe -Command:*)",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/QuestLog.md\")",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/UnitAuras.md\")",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/Unit.md\")",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/PlayerInfo.md\")",
+      "Bash(xargs -I {} bash -c 'grep -q \"\"GetXPExhaustion\\\\|GetRestXP\\\\|UnitXP\"\" {} && echo {}')",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/PlayerScript.md\")"
     ]
   }
 }

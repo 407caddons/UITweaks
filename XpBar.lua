@@ -9,9 +9,11 @@ local barFrame
 local barBg
 local barFill
 local restedFill
+local pendingFill
 local levelText
 local xpText
 local pctText
+local pendingQuestText
 
 -- Session tracking
 local sessionStartTime = nil
@@ -33,6 +35,27 @@ local function FormatTime(seconds)
     end
 end
 
+-- Sum XP from all quests currently ready to turn in.
+-- GetQuestLogRewardXP(questID) returns the actual XP the player will receive (includes level scaling).
+-- An optional xpBonusPct setting lets users add a manual percentage for Warband Mentor /
+-- Midnight achievement bonuses that the client may not reflect in the quest log value.
+local function GetPendingQuestXP()
+    local total = 0
+    local numEntries = C_QuestLog.GetNumQuestLogEntries()
+    for i = 1, numEntries do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader and info.questID and C_QuestLog.IsComplete(info.questID) then
+            local xp = (GetQuestLogRewardXP and GetQuestLogRewardXP(info.questID)) or 0
+            total = total + xp
+        end
+    end
+    local bonusPct = UIThingsDB.xpBar and UIThingsDB.xpBar.xpBonusPct or 0
+    if bonusPct ~= 0 then
+        total = math.floor(total * (1 + bonusPct / 100))
+    end
+    return total
+end
+
 local function UpdateDisplay()
     if not barFrame or not barFrame:IsShown() then return end
 
@@ -50,9 +73,10 @@ local function UpdateDisplay()
     local maxXP = UnitXPMax("player")
     local restedXP = GetXPExhaustion() or 0
 
-    local barColor = settings.barColor
+    local barColor    = settings.barColor
     local restedColor = settings.restedColor
-    local bgColor = settings.bgColor
+    local pendingColor = settings.pendingColor
+    local bgColor     = settings.bgColor
 
     -- Background
     barBg:SetColorTexture(bgColor.r, bgColor.g, bgColor.b, bgColor.a)
@@ -61,16 +85,44 @@ local function UpdateDisplay()
 
     if not isMaxLevel and maxXP and maxXP > 0 then
         local xpFrac = currentXP / maxXP
+        local xpWidth = math.max(1, xpFrac * barW)
         barFill:Show()
         barFill:SetColorTexture(barColor.r, barColor.g, barColor.b, barColor.a)
-        barFill:SetWidth(math.max(1, xpFrac * barW))
+        barFill:SetWidth(xpWidth)
 
-        -- Rested XP overlay
-        if restedXP > 0 then
-            local restedFrac = math.min(1, restedXP / maxXP)
-            restedFill:Show()
+        local remaining = maxXP - currentXP
+
+        -- Pending quest XP fill (OVERLAY — renders above rested fill).
+        -- Shows XP you'll gain from turning in all completed quests.
+        local pendingXP = GetPendingQuestXP()
+        if pendingXP > 0 and remaining > 0 then
+            local pendingFrac = math.min(pendingXP, remaining) / maxXP
+            local pendingWidth = math.max(1, pendingFrac * barW)
+            pendingFill:ClearAllPoints()
+            pendingFill:SetPoint("TOPLEFT",    barFrame, "TOPLEFT",    xpWidth, 0)
+            pendingFill:SetPoint("BOTTOMLEFT", barFrame, "BOTTOMLEFT", xpWidth, 0)
+            pendingFill:SetWidth(pendingWidth)
+            pendingFill:SetColorTexture(pendingColor.r, pendingColor.g, pendingColor.b, pendingColor.a)
+            pendingFill:Show()
+            if pendingQuestText then
+                pendingQuestText:SetText(AbbreviateNumber(pendingXP) .. " quest xp")
+                pendingQuestText:Show()
+            end
+        else
+            pendingFill:Hide()
+            if pendingQuestText then pendingQuestText:Hide() end
+        end
+
+        -- Rested XP fill (ARTWORK — sits below pending fill in the same region).
+        if restedXP > 0 and remaining > 0 then
+            local restedFrac = math.min(restedXP, remaining) / maxXP
+            local restedWidth = math.max(1, restedFrac * barW)
+            restedFill:ClearAllPoints()
+            restedFill:SetPoint("TOPLEFT",    barFrame, "TOPLEFT",    xpWidth, 0)
+            restedFill:SetPoint("BOTTOMLEFT", barFrame, "BOTTOMLEFT", xpWidth, 0)
+            restedFill:SetWidth(restedWidth)
             restedFill:SetColorTexture(restedColor.r, restedColor.g, restedColor.b, restedColor.a)
-            restedFill:SetWidth(math.max(1, restedFrac * barW))
+            restedFill:Show()
         else
             restedFill:Hide()
         end
@@ -119,6 +171,8 @@ local function UpdateDisplay()
         -- Max level: hide the bar fill, show level
         barFill:SetWidth(1)
         restedFill:Hide()
+        pendingFill:Hide()
+        if pendingQuestText then pendingQuestText:Hide() end
         if levelText then levelText:SetText(tostring(level)) end
         if xpText then xpText:SetText("Max Level") end
         if pctText then pctText:SetText("") end
@@ -229,15 +283,21 @@ local function Init()
     barBg = barFrame:CreateTexture(nil, "BACKGROUND")
     barBg:SetAllPoints()
 
-    -- Rested XP fill (behind main fill so it shows through as overlay tint)
-    restedFill = barFrame:CreateTexture(nil, "BORDER")
-    restedFill:SetPoint("TOPLEFT")
-    restedFill:SetPoint("BOTTOMLEFT")
-
     -- XP fill
     barFill = barFrame:CreateTexture(nil, "ARTWORK")
     barFill:SetPoint("TOPLEFT")
     barFill:SetPoint("BOTTOMLEFT")
+
+    -- Rested XP fill (ARTWORK — sits behind pending fill; positioned in UpdateDisplay)
+    restedFill = barFrame:CreateTexture(nil, "ARTWORK")
+    restedFill:SetPoint("TOPLEFT")
+    restedFill:SetPoint("BOTTOMLEFT")
+
+    -- Pending quest XP fill (OVERLAY — renders above rested; positioned in UpdateDisplay)
+    -- Shows XP from completed quests not yet turned in.
+    pendingFill = barFrame:CreateTexture(nil, "OVERLAY")
+    pendingFill:SetPoint("TOPLEFT")
+    pendingFill:SetPoint("BOTTOMLEFT")
 
     -- Level text (left)
     levelText = barFrame:CreateFontString(nil, "OVERLAY")
@@ -256,6 +316,13 @@ local function Init()
     pctText:SetPoint("RIGHT", barFrame, "RIGHT", -6, 0)
     pctText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
     pctText:SetTextColor(1, 1, 1, 1)
+
+    -- Pending quest XP label (small, just below the bottom-right of the bar)
+    pendingQuestText = barFrame:CreateFontString(nil, "OVERLAY")
+    pendingQuestText:SetPoint("TOPRIGHT", barFrame, "BOTTOMRIGHT", 0, -2)
+    pendingQuestText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+    pendingQuestText:SetTextColor(1, 0.82, 0, 1)
+    pendingQuestText:Hide()
 
     barFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.xpBar.locked then
@@ -287,6 +354,14 @@ local function Init()
             GameTooltip:AddDoubleLine("Rested:", string.format("%s (%.1f%%)",
                 AbbreviateNumber(restedXP), restedPct), 1, 1, 1, 0.25, 0.5, 1)
         end
+        local pendingXP = GetPendingQuestXP()
+        if pendingXP > 0 then
+            local pendingPct = maxXP and maxXP > 0 and (pendingXP / maxXP * 100) or 0
+            local bonusPct = UIThingsDB.xpBar.xpBonusPct or 0
+            local bonusStr = bonusPct > 0 and string.format(" +%d%% bonus", bonusPct) or ""
+            GameTooltip:AddDoubleLine("Pending quests:", string.format("%s (%.1f%%)%s",
+                AbbreviateNumber(pendingXP), pendingPct, bonusStr), 1, 1, 1, 1, 0.85, 0)
+        end
 
         -- Session stats
         if sessionStartXP and sessionStartTime then
@@ -316,6 +391,7 @@ local function Init()
     EventBus.Register("ENABLE_XP_GAIN", OnXPUpdate, "XpBar")
     EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate, "XpBar")
     EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld, "XpBar")
+    EventBus.Register("QUEST_LOG_UPDATE", OnXPUpdate, "XpBar")
 
     addonTable.XpBar.UpdateSettings()
 end
@@ -323,3 +399,4 @@ end
 EventBus.Register("PLAYER_LOGIN", function()
     addonTable.Core.SafeAfter(0.5, Init)
 end)
+

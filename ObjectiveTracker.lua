@@ -110,6 +110,26 @@ local function OnQuestClick(self, button)
         return
     end
 
+    -- Left-Click: autocomplete quests that are ready → show completion UI (higher priority than quest log)
+    if button == "LeftButton" and not InCombatLockdown() and self.questID and type(self.questID) == "number" then
+        local questID = self.questID
+        if C_QuestLog.IsComplete(questID) then
+            local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+            local isAutoComplete = false
+            if logIndex then
+                local info = C_QuestLog.GetInfo(logIndex)
+                if info then isAutoComplete = info.isAutoComplete or false end
+                if not isAutoComplete and GetQuestLogIsAutoComplete then
+                    isAutoComplete = GetQuestLogIsAutoComplete(logIndex) == 1
+                end
+            end
+            if isAutoComplete then
+                ShowQuestComplete(questID)
+                return
+            end
+        end
+    end
+
     -- Left-Click to open quest log (blocked in combat — UI panels are protected)
     if not InCombatLockdown() and self.questID and type(self.questID) == "number" and UIThingsDB.tracker.clickOpenQuest then
         -- Try modern Map/Quest Log
@@ -706,6 +726,7 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             ucState.yOffset = ucState.yOffset - (lineHeight + 4)
         end
     end
+    return btn
 end
 
 --- Returns campaign quest color override if quest is a campaign quest
@@ -1116,6 +1137,32 @@ local function RenderQuests()
                             end
                         end
                     end
+
+                    -- Autocomplete quests: show "Click to complete quest" when ready
+                    if C_QuestLog.IsComplete(questID) then
+                        local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+                        local isAutoComplete = false
+                        if logIndex then
+                            local info = C_QuestLog.GetInfo(logIndex)
+                            if info then isAutoComplete = info.isAutoComplete or false end
+                            if not isAutoComplete and GetQuestLogIsAutoComplete then
+                                isAutoComplete = GetQuestLogIsAutoComplete(logIndex) == 1
+                            end
+                        end
+                        if isAutoComplete then
+                            local completeBtn = AddLine("|cFFFFD100Click to complete quest|r", false, questID, nil, true)
+                            if completeBtn then
+                                completeBtn:EnableMouse(true)
+                                local qid = questID
+                                completeBtn:SetScript("OnClick", function(self, button)
+                                    if button == "LeftButton" and not InCombatLockdown() then
+                                        ShowQuestComplete(qid)
+                                    end
+                                end)
+                            end
+                        end
+                    end
+
                     ucState.yOffset = ucState.yOffset - ITEM_SPACING
                 end
                 if extraIndent then ucState.indent = 0 end
@@ -1710,6 +1757,23 @@ local function RenderCampaignQuests()
                     end
                 end
             end
+
+            -- Autocomplete quests: show "Click to complete quest" when ready
+            if C_QuestLog.IsComplete(questID) then
+                local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+                local isAutoComplete = false
+                if logIndex then
+                    local info = C_QuestLog.GetInfo(logIndex)
+                    if info then isAutoComplete = info.isAutoComplete or false end
+                    if not isAutoComplete and GetQuestLogIsAutoComplete then
+                        isAutoComplete = GetQuestLogIsAutoComplete(logIndex) == 1
+                    end
+                end
+                if isAutoComplete then
+                    AddLine("|cFFFFD100Click to complete quest|r", false, questID, nil, true)
+                end
+            end
+
             ucState.yOffset = ucState.yOffset - ITEM_SPACING
         end
         if extraIndent then ucState.indent = 0 end
@@ -2026,7 +2090,9 @@ local function HookBlizzardTracker()
     blizzardTrackerHooked = true
     hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled then
-            ObjectiveTrackerFrame:Hide()
+            ObjectiveTrackerFrame:SetAlpha(0)
+            ObjectiveTrackerFrame:SetScale(0.00001)
+            ObjectiveTrackerFrame:EnableMouse(false)
         end
     end)
 end
@@ -2223,23 +2289,15 @@ function addonTable.ObjectiveTracker.UpdateSettings()
     if enabled then
         HookBlizzardTracker()
         if ObjectiveTrackerFrame then
-            ObjectiveTrackerFrame:Hide()
-            ObjectiveTrackerFrame:SetParent(UIThingsHiddenFrame or CreateFrame("Frame", "UIThingsHiddenFrame"))
-            if ObjectiveTrackerFrame.UnregisterAllEvents then
-                ObjectiveTrackerFrame:UnregisterAllEvents()
-            end
+            ObjectiveTrackerFrame:SetAlpha(0)
+            ObjectiveTrackerFrame:SetScale(0.00001)
+            ObjectiveTrackerFrame:EnableMouse(false)
         end
     else
         if ObjectiveTrackerFrame then
-            ObjectiveTrackerFrame:SetParent(UIParent)
-            ObjectiveTrackerFrame:Show()
-            if ObjectiveTrackerFrame.RegisterEvent then
-                -- We might need to re-register events if we unregistered them.
-                -- Ideally, a /reload is best for restoring completely, but let's try basic restoration
-                ObjectiveTrackerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-                ObjectiveTrackerFrame:RegisterEvent("QUEST_LOG_UPDATE")
-                ObjectiveTrackerFrame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
-            end
+            ObjectiveTrackerFrame:SetAlpha(1)
+            ObjectiveTrackerFrame:SetScale(1)
+            ObjectiveTrackerFrame:EnableMouse(true)
         end
         if trackerFrame then
             trackerFrame:UnregisterAllEvents()
@@ -2413,7 +2471,9 @@ hookFrame:SetScript("OnEvent", function(self, event)
     if blizzardTrackerHooked then
         -- Also force-hide the Blizzard tracker on world entry if our tracker is enabled
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled and ObjectiveTrackerFrame then
-            ObjectiveTrackerFrame:Hide()
+            ObjectiveTrackerFrame:SetAlpha(0)
+            ObjectiveTrackerFrame:SetScale(0.00001)
+            ObjectiveTrackerFrame:EnableMouse(false)
         end
         self:UnregisterAllEvents()
     end
