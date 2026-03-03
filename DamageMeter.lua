@@ -1,10 +1,6 @@
 -- DamageMeter.lua
--- Custom damage meter built from combat log data.
---
--- NOTE: This module uses COMBAT_LOG_EVENT_UNFILTERED. Despite the CLAUDE.md
--- note, this event IS fully available to third-party addons in WoW retail and
--- is used by every major damage meter addon (Details!, Recount, etc.).
--- A damage meter cannot be built without access to this event.
+-- Custom damage meter using the C_DamageMeter API (WoW 12.0+).
+-- Data is pulled from Blizzard's built-in combat session store — no combat log parsing.
 
 local addonName, addonTable = ...
 addonTable.DamageMeter = {}
@@ -18,199 +14,162 @@ local Abbrev    = addonTable.Core.AbbreviateNumber
 -- ============================================================
 
 local METER_TYPES = {
-    "damage", "healing", "interrupts", "deaths",
-    "dispels", "damageTaken", "enemyHeal", "enemyDamageTaken",
+    "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken",
 }
 
 local TYPE_LABEL = {
-    damage           = "Damage",
-    healing          = "Healing",
-    interrupts       = "Interrupts",
-    deaths           = "Deaths",
-    dispels          = "Dispels",
-    damageTaken      = "Dmg Taken",
-    enemyHeal        = "Enemy Heal",
-    enemyDamageTaken = "Enemy Dmg In",
+    damage      = "Damage",
+    healing     = "Healing",
+    interrupts  = "Interrupts",
+    deaths      = "Deaths",
+    dispels     = "Dispels",
+    damageTaken = "Dmg Taken",
 }
 
--- Combat log flags
-local AFFIL_MASK = 0x0000000F
-local BIT_MINE   = 0x00000001
-local BIT_PARTY  = 0x00000002
-local BIT_RAID   = 0x00000004
-local BIT_FRIEND = 0x00000010
-
-local function IsGroupMember(flags)
-    local aff = bit.band(flags, AFFIL_MASK)
-    return aff == BIT_MINE or aff == BIT_PARTY or aff == BIT_RAID
-end
-
-local function IsFriendly(flags)
-    return bit.band(flags, BIT_FRIEND) ~= 0
-end
+-- Maps our keys to Enum.DamageMeterType field names
+local ENUM_NAMES = {
+    damage      = "DamageDone",
+    healing     = "HealingDone",
+    damageTaken = "DamageTaken",
+    interrupts  = "Interrupts",
+    dispels     = "Dispels",
+    deaths      = "Deaths",
+}
 
 -- ============================================================
--- Data Storage
+-- Data Layer (C_DamageMeter API)
 -- ============================================================
 
-local function NewSession()
-    return {
-        damage           = {},
-        healing          = {},
-        interrupts       = {},
-        deaths           = {},
-        dispels          = {},
-        damageTaken      = {},
-        enemyHeal        = {},
-        enemyDamageTaken = {},
-    }
+-- overallBaseIdx: sessions at-or-below this index are excluded from "overall" view.
+-- Reset to #sessions at ResetData() time.
+local overallBaseIdx = 0
+
+-- Short-lived cache so repeated renders in the same frame don't re-query the API.
+local entryCache = {}   -- [cacheKey] = { entries, expiry }
+local CACHE_TTL  = 1.0
+
+local function SafeVal(v)
+    if issecretvalue and issecretvalue(v) then return 0 end
+    return type(v) == "number" and v or 0
 end
 
-local sessions    = { fight = NewSession(), overall = NewSession() }
-local classCache  = {}  -- guid → class token
-
-local function GetGuidClass(guid)
-    if classCache[guid] then return classCache[guid] end
-    local _, cls = GetPlayerInfoByGUID(guid)
-    if cls then classCache[guid] = cls end
-    return cls
+local function GetEnumType(mtype)
+    local name = ENUM_NAMES[mtype]
+    if not name then return nil end
+    return Enum.DamageMeterType and Enum.DamageMeterType[name]
 end
 
-local function EnsureUnit(cat, guid, name)
-    local u = cat[guid]
-    if not u then
-        u = { name = name or guid, class = GetGuidClass(guid), total = 0, spells = {} }
-        cat[guid] = u
+local function GetSessions()
+    local ok, list = pcall(C_DamageMeter.GetAvailableCombatSessions)
+    if ok and list then return list end
+    return {}
+end
+
+-- Returns a sorted array of { guid, name, class, total } for the given view.
+-- Returns {} immediately when values are still secret post-combat.
+local function FetchEntries(sessKey, mtype)
+    local cacheKey = sessKey .. "|" .. mtype
+    local cached   = entryCache[cacheKey]
+    if cached and GetTime() < cached.expiry then
+        return cached.entries
+    end
+
+    local enumType = GetEnumType(mtype)
+    if not enumType then return {} end
+
+    local sessions = GetSessions()
+    if #sessions == 0 then return {} end
+
+    local byGuid = {}
+
+    local function ProcessSession(sessID)
+        local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sessID, enumType)
+        if not ok or not sessData then return false end
+        -- Values may be briefly secret immediately after combat ends
+        if sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount) then
+            return false
+        end
+        for _, src in ipairs(sessData.combatSources or {}) do
+            if src.sourceGUID and src.name then
+                local amt     = SafeVal(src.totalAmount)
+                local existing = byGuid[src.sourceGUID]
+                if existing then
+                    existing.total = existing.total + amt
+                else
+                    byGuid[src.sourceGUID] = {
+                        guid  = src.sourceGUID,
+                        name  = src.name,
+                        class = src.classFilename,  -- e.g. "WARRIOR"
+                        total = amt,
+                    }
+                end
+            end
+        end
+        return true
+    end
+
+    if sessKey == "fight" then
+        ProcessSession(sessions[#sessions].sessionID)
     else
-        if name and u.name ~= name then u.name = name end
-        if not u.class then u.class = GetGuidClass(guid) end
-    end
-    return u
-end
-
-local function AddSpell(u, spellId, spellName, amount)
-    local id = spellId or 0
-    local sp = u.spells[id]
-    if not sp then
-        u.spells[id] = { name = spellName or "Unknown", total = amount, hits = 1 }
-    else
-        sp.total = sp.total + amount
-        sp.hits  = sp.hits + 1
-    end
-end
-
-local function RecordBoth(catName, guid, name, amount, spellId, spellName)
-    local u1 = EnsureUnit(sessions.fight[catName],   guid, name)
-    u1.total = u1.total + amount
-    AddSpell(u1, spellId, spellName, amount)
-    local u2 = EnsureUnit(sessions.overall[catName], guid, name)
-    u2.total = u2.total + amount
-    AddSpell(u2, spellId, spellName, amount)
-end
-
-local function RecordBothNoSpell(catName, guid, name, amount)
-    local u1 = EnsureUnit(sessions.fight[catName],   guid, name)
-    u1.total = u1.total + amount
-    local u2 = EnsureUnit(sessions.overall[catName], guid, name)
-    u2.total = u2.total + amount
-end
-
--- ============================================================
--- Combat Log Parsing
--- ============================================================
-
-local function OnCombatLog()
-    local _, sub, _,
-          srcGUID, srcName, srcFlags, _,
-          dstGUID, dstName, dstFlags = CombatLogGetCurrentEventInfo()
-
-    -- ---- SWING DAMAGE ----
-    if sub == "SWING_DAMAGE" then
-        local amount = select(12, CombatLogGetCurrentEventInfo())
-        if IsGroupMember(srcFlags) then
-            RecordBoth("damage", srcGUID, srcName, amount, 0, "Auto Attack")
-        end
-        if IsFriendly(dstFlags) then
-            RecordBoth("damageTaken", dstGUID, dstName, amount, 0, "Auto Attack")
-        end
-        if not IsFriendly(dstFlags) and IsGroupMember(srcFlags) then
-            RecordBothNoSpell("enemyDamageTaken", dstGUID, dstName, amount)
-        end
-
-    -- ---- SPELL / PERIODIC / RANGE DAMAGE ----
-    elseif sub == "SPELL_DAMAGE" or sub == "SPELL_PERIODIC_DAMAGE" or sub == "RANGE_DAMAGE" then
-        local spellId, spellName, _, amount = select(12, CombatLogGetCurrentEventInfo())
-        if IsGroupMember(srcFlags) then
-            RecordBoth("damage", srcGUID, srcName, amount, spellId, spellName)
-        end
-        if IsFriendly(dstFlags) then
-            RecordBoth("damageTaken", dstGUID, dstName, amount, spellId, spellName)
-        end
-        if not IsFriendly(dstFlags) and IsGroupMember(srcFlags) then
-            RecordBothNoSpell("enemyDamageTaken", dstGUID, dstName, amount)
-        end
-
-    -- ---- HEALING ----
-    elseif sub == "SPELL_HEAL" or sub == "SPELL_PERIODIC_HEAL" then
-        local spellId, spellName, _, amount, overheal = select(12, CombatLogGetCurrentEventInfo())
-        local eff = math.max(0, amount - (overheal or 0))
-        if IsGroupMember(srcFlags) then
-            RecordBoth("healing", srcGUID, srcName, eff, spellId, spellName)
-        end
-        -- Enemy self-heal tracking
-        if not IsFriendly(srcFlags) and not IsFriendly(dstFlags) then
-            RecordBothNoSpell("enemyHeal", srcGUID, srcName, eff)
-        end
-
-    -- ---- INTERRUPT ----
-    elseif sub == "SPELL_INTERRUPT" then
-        if IsGroupMember(srcFlags) then
-            -- params 15-16: the spell that was interrupted
-            local _, _, _, intSpellId, intSpellName = select(12, CombatLogGetCurrentEventInfo())
-            RecordBoth("interrupts", srcGUID, srcName, 1, intSpellId, intSpellName)
-        end
-
-    -- ---- DEATH ----
-    elseif sub == "UNIT_DIED" then
-        if IsFriendly(dstFlags) then
-            RecordBothNoSpell("deaths", dstGUID, dstName, 1)
-        end
-
-    -- ---- DISPEL ----
-    elseif sub == "SPELL_DISPEL" then
-        if IsGroupMember(srcFlags) then
-            -- params 15-16: the dispelled spell
-            local _, _, _, extSpellId, extSpellName = select(12, CombatLogGetCurrentEventInfo())
-            RecordBoth("dispels", srcGUID, srcName, 1, extSpellId, extSpellName)
+        for i = overallBaseIdx + 1, #sessions do
+            ProcessSession(sessions[i].sessionID)
         end
     end
-end
 
--- ============================================================
--- Sorted Entry Helpers
--- ============================================================
-
-local function GetEntries(sessKey, mtype)
-    local cat = sessions[sessKey] and sessions[sessKey][mtype]
-    if not cat then return {} end
     local list = {}
-    for guid, d in pairs(cat) do
-        if d.total > 0 then
-            list[#list + 1] = { guid = guid, name = d.name, class = d.class, total = d.total, spells = d.spells }
-        end
+    for _, d in pairs(byGuid) do
+        if d.total > 0 then list[#list + 1] = d end
     end
     table.sort(list, function(a, b) return a.total > b.total end)
+
+    entryCache[cacheKey] = { entries = list, expiry = GetTime() + CACHE_TTL }
     return list
 end
 
-local function GetSpellEntries(sessKey, mtype, guid)
-    local cat = sessions[sessKey] and sessions[sessKey][mtype]
-    if not cat or not cat[guid] then return {} end
-    local list = {}
-    for spellId, sp in pairs(cat[guid].spells) do
-        if sp.total > 0 then
-            list[#list + 1] = { spellId = spellId, name = sp.name, total = sp.total, hits = sp.hits or 1 }
+-- Returns a sorted array of { spellId, name, total } for one source's spell breakdown.
+local function FetchSpellEntries(sessKey, mtype, guid)
+    local enumType = GetEnumType(mtype)
+    if not enumType then return {} end
+
+    local sessions = GetSessions()
+    if #sessions == 0 then return {} end
+
+    local bySpell = {}
+
+    local function ProcessSession(sessID)
+        local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessID, enumType, guid)
+        if not ok or not srcData or not srcData.combatSpells then return end
+        for _, sp in ipairs(srcData.combatSpells) do
+            local amt = SafeVal(sp.totalAmount)
+            -- Count-based types (interrupts/dispels/deaths) use casts as the value
+            if amt == 0 then amt = SafeVal(sp.casts) end
+            if sp.spellID and amt > 0 then
+                local existing = bySpell[sp.spellID]
+                if existing then
+                    existing.total = existing.total + amt
+                else
+                    local spellName = sp.name
+                    if not spellName or spellName == "" then
+                        local ok2, n = pcall(C_Spell.GetSpellName, sp.spellID)
+                        spellName = (ok2 and n) or ("Spell " .. sp.spellID)
+                    end
+                    bySpell[sp.spellID] = { spellId = sp.spellID, name = spellName, total = amt }
+                end
+            end
         end
+    end
+
+    if sessKey == "fight" then
+        ProcessSession(sessions[#sessions].sessionID)
+    else
+        for i = overallBaseIdx + 1, #sessions do
+            ProcessSession(sessions[i].sessionID)
+        end
+    end
+
+    local list = {}
+    for _, sp in pairs(bySpell) do
+        if sp.total > 0 then list[#list + 1] = sp end
     end
     table.sort(list, function(a, b) return a.total > b.total end)
     return list
@@ -239,9 +198,9 @@ end
 -- UI State
 -- ============================================================
 
-local mainFrame  = nil
-local panes      = {}
-local drilldown  = {}   -- drilldown[idx] = { guid, name } or nil
+local mainFrame   = nil
+local panes       = {}
+local drilldown   = {}   -- drilldown[idx] = { guid, name } or nil
 local initialized = false
 local dockTicker  = nil
 
@@ -312,19 +271,19 @@ local function RenderPane(idx)
     -- Build entry list
     local entries
     if dd then
-        entries = GetSpellEntries(sess, mtype, dd.guid)
+        entries = FetchSpellEntries(sess, mtype, dd.guid)
     else
-        entries = GetEntries(sess, mtype)
+        entries = FetchEntries(sess, mtype)
     end
 
     HideAllRows(pane.rowPool)
 
-    local barH      = s.barHeight or 18
-    local useClass  = s.useClassColors
-    local barCol    = s.barColor    or { r = 0.2, g = 0.5, b = 0.9, a = 1 }
-    local barBgCol  = s.barBgColor  or { r = 0.12, g = 0.12, b = 0.12, a = 1 }
-    local txtCol    = s.barTextColor or { r = 1, g = 1, b = 1, a = 1 }
-    local paneW     = pane.scrollFrame:GetWidth()
+    local barH     = s.barHeight or 18
+    local useClass = s.useClassColors
+    local barCol   = s.barColor     or { r = 0.2, g = 0.5, b = 0.9, a = 1 }
+    local barBgCol = s.barBgColor   or { r = 0.12, g = 0.12, b = 0.12, a = 1 }
+    local txtCol   = s.barTextColor or { r = 1, g = 1, b = 1, a = 1 }
+    local paneW    = pane.scrollFrame:GetWidth()
     if not paneW or paneW <= 0 then paneW = 200 end
 
     local maxVal = 1
@@ -338,10 +297,8 @@ local function RenderPane(idx)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
         row:SetSize(paneW, barH)
 
-        -- Background
         row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
 
-        -- Fill bar
         local frac = entry.total / maxVal
         local bw   = math.max(2, math.floor(paneW * frac + 0.5))
         row.bar:SetSize(bw, barH)
@@ -352,13 +309,11 @@ local function RenderPane(idx)
             row.bar:SetColorTexture(barCol.r, barCol.g, barCol.b, barCol.a or 1)
         end
 
-        -- Text
         row.nameFS:SetText(entry.name or "?")
         row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
         row.valFS:SetText(FormatVal(entry.total, mtype))
         row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
 
-        -- Click: left = drill in, right = back
         local captEntry = entry
         local captIdx   = idx
         local captDd    = dd
@@ -376,7 +331,7 @@ local function RenderPane(idx)
         yOff = yOff + barH + 1
     end
 
-    -- Empty state row
+    -- Empty state
     if #entries == 0 then
         local row = AcquireRow(pane.rowPool, pane.scrollContent)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
@@ -433,6 +388,7 @@ local function BuildPane(idx, parent)
         local cfg3 = (ci3 == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
         cfg3.session  = (cfg3.session == "fight") and "overall" or "fight"
         drilldown[ci3] = nil
+        entryCache = {}
         RenderPane(ci3)
     end)
     pane.sessBtn = sessBtn
@@ -448,6 +404,7 @@ local function BuildPane(idx, parent)
         for i, t in ipairs(METER_TYPES) do if t == cfg2.type then cur = i; break end end
         cfg2.type      = METER_TYPES[(cur % #METER_TYPES) + 1]
         drilldown[ci2] = nil
+        entryCache = {}
         RenderPane(ci2)
     end)
     pane.typeBtn = typeBtn
@@ -477,7 +434,6 @@ local function BuildPane(idx, parent)
     sf:SetScrollChild(sc)
     pane.scrollContent = sc
 
-    -- Helper to refresh button labels from current settings
     pane.RefreshBtnLabels = function()
         local cfg = (idx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
         if not cfg then return end
@@ -563,7 +519,7 @@ local function LayoutPanes()
                 p.frame:ClearAllPoints()
                 p.frame:SetSize(halfW, fullH)
                 if i == 1 then
-                    p.frame:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", bs, -bs)
+                    p.frame:SetPoint("TOPLEFT",  mainFrame, "TOPLEFT",  bs,  -bs)
                 else
                     p.frame:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -bs, -bs)
                 end
@@ -589,8 +545,8 @@ local function SyncDocked()
     if dockIdx == 0 then return end
     local target = _G["UIThingsCustomFrame" .. dockIdx]
     if not target or not target:IsShown() then return end
-    local w  = target:GetWidth()
-    local h  = target:GetHeight()
+    local w        = target:GetWidth()
+    local h        = target:GetHeight()
     local cx, cy   = target:GetCenter()
     local pcx, pcy = UIParent:GetCenter()
     if not cx or not pcx then return end
@@ -660,7 +616,7 @@ local function CreateMainFrame()
         end
     end)
 
-    -- Periodic refresh (0.75s throttle) to update live numbers
+    -- Periodic refresh (0.75s) to keep live numbers up to date
     local updateTimer = 0
     mainFrame:SetScript("OnUpdate", function(_, elapsed)
         updateTimer = updateTimer + elapsed
@@ -716,14 +672,14 @@ function addonTable.DamageMeter.SetLocked(locked)
 end
 
 function addonTable.DamageMeter.ResetData()
-    sessions.fight   = NewSession()
-    sessions.overall = NewSession()
+    local sessions = GetSessions()
+    overallBaseIdx = #sessions
+    entryCache = {}
     for i = 1, 2 do drilldown[i] = nil end
     if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
 end
 
 function addonTable.DamageMeter.GetFrame() return mainFrame end
-
 function addonTable.DamageMeter.GetMeterTypes() return METER_TYPES end
 function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 
@@ -731,22 +687,31 @@ function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 -- Events
 -- ============================================================
 
--- COMBAT_LOG_EVENT_UNFILTERED: standard WoW event, available to all addons.
-EventBus.Register("COMBAT_LOG_EVENT_UNFILTERED", OnCombatLog, "DamageMeter")
-
--- Reset fight session on each combat start
-EventBus.Register("PLAYER_REGEN_DISABLED", function()
-    sessions.fight = NewSession()
-    for i = 1, 2 do drilldown[i] = nil end
+-- Invalidate cache when combat ends — session data is now finalised
+EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    entryCache = {}
+    -- Clear fight drilldown: old fight is done, next click is a fresh session
+    for i = 1, 2 do
+        local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+        if cfg and cfg.session == "fight" then drilldown[i] = nil end
+    end
 end, "DamageMeter")
 
--- Initialize after login/zone change
+-- Invalidate cache at combat start — new live session begins
+EventBus.Register("PLAYER_REGEN_DISABLED", function()
+    entryCache = {}
+    for i = 1, 2 do
+        local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+        if cfg and cfg.session == "fight" then drilldown[i] = nil end
+    end
+end, "DamageMeter")
+
 EventBus.Register("PLAYER_ENTERING_WORLD", function()
     if not UIThingsDB or not UIThingsDB.damageMeter then return end
+    entryCache = {}
     SafeAfter(1, addonTable.DamageMeter.Initialize)
 end, "DamageMeter")
 
--- Optionally clear all data on instance entry
 EventBus.Register("ZONE_CHANGED_NEW_AREA", function()
     if not UIThingsDB or not UIThingsDB.damageMeter then return end
     if UIThingsDB.damageMeter.clearOnInstance then
