@@ -11,22 +11,32 @@ function addonTable.ConfigSetup.ChatSkin(panel, tab, configWindow)
     title:SetText("Chat Skin")
 
     -- Enable Checkbox
+    local chattynatorActive = C_AddOns.IsAddOnLoaded("Chattynator")
+
     local enableCheckbox = CreateFrame("CheckButton", "UIThingsChatSkinEnable", panel, "ChatConfigCheckButtonTemplate")
     enableCheckbox:SetPoint("TOPLEFT", 20, -50)
     _G[enableCheckbox:GetName() .. "Text"]:SetText("Enable Chat Skin")
-    enableCheckbox:SetChecked(UIThingsDB.chatSkin.enabled)
+    enableCheckbox:SetChecked(UIThingsDB.chatSkin.enabled and not chattynatorActive)
+    enableCheckbox:SetEnabled(not chattynatorActive)
     enableCheckbox:SetScript("OnClick", function(self)
+        if chattynatorActive then self:SetChecked(false); return end
         UIThingsDB.chatSkin.enabled = self:GetChecked()
         Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.chatSkin.enabled)
         if addonTable.ChatSkin and addonTable.ChatSkin.UpdateSettings then
             addonTable.ChatSkin.UpdateSettings()
         end
     end)
-    Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.chatSkin.enabled)
+    Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.chatSkin.enabled and not chattynatorActive)
 
-    -- Create ScrollFrame
+    if chattynatorActive then
+        local conflictNote = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        conflictNote:SetPoint("TOPLEFT", 20, -72)
+        conflictNote:SetText("|cFFFF6666Chattynator is loaded — Chat Skin is disabled to avoid conflicts.|r")
+    end
+
+    -- Create ScrollFrame (shift down extra when conflict note is shown)
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsChatSkinScroll", panel, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 0, -80)
+    scrollFrame:SetPoint("TOPLEFT", 0, chattynatorActive and -100 or -80)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)

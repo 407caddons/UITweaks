@@ -181,11 +181,11 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     local sf = CreateFrame("ScrollFrame", "UIThingsDMPanelScroll", panel, "UIPanelScrollFrameTemplate")
     sf:SetPoint("TOPLEFT",     0,   0)
     sf:SetPoint("BOTTOMRIGHT", -30, 0)
+
+    local child = CreateFrame("Frame", nil, sf)
     sf:SetScript("OnShow", function()
         child:SetWidth(sf:GetWidth())
     end)
-
-    local child = CreateFrame("Frame", nil, sf)
     child:SetSize(640, 1600)
     sf:SetScrollChild(child)
 
@@ -214,10 +214,10 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.damageMeter.enabled)
 
-    -- Reset data button
+    -- Reset data + Lock/Unlock on their own line below the checkbox
     local resetBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     resetBtn:SetSize(110, 22)
-    resetBtn:SetPoint("LEFT", enableCB, "RIGHT", 30, 0)
+    resetBtn:SetPoint("TOPLEFT", 20, yBase - 30)
     resetBtn:SetText("Reset All Data")
     resetBtn:SetScript("OnClick", ResetData)
 
@@ -237,7 +237,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         RefreshLock()
     end)
 
-    yBase = yBase - 36
+    yBase = yBase - 64
 
     -- ============================================================
     -- Section: Meter Configuration
@@ -284,17 +284,22 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
                            dispels="Dispels", damageTaken="Dmg Taken" }
 
     for mIdx = 1, 2 do
+        local captMIdx = mIdx
+
+        -- Row 1: "Meter X:" header label
         local mLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         mLabel:SetPoint("TOPLEFT", 20, yBase)
         mLabel:SetText("Meter " .. mIdx .. ":")
+
+        -- Row 2: type dropdown + session controls (22px below header)
+        local controlY = yBase - 22
 
         -- Type dropdown
         local typeItems = {}
         for _, t in ipairs(METER_TYPES) do
             typeItems[#typeItems + 1] = { label = TYPE_LABELS[t] or t, value = t }
         end
-        local captMIdx = mIdx
-        MakeDropdown(child, yBase - 4, 130,
+        MakeDropdown(child, controlY, 130,
             function() return typeItems end,
             function()
                 local cfg = (captMIdx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
@@ -306,9 +311,9 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
                 Refresh()
             end)
 
-        -- Session radio
+        -- Session radio (same row as dropdown)
         local sessLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        sessLabel:SetPoint("TOPLEFT", 160, yBase)
+        sessLabel:SetPoint("TOPLEFT", 170, controlY)
         sessLabel:SetText("Session:")
 
         local fightRB = CreateFrame("CheckButton", "UIThingsDMFight" .. mIdx, child, "UICheckButtonTemplate")
@@ -340,7 +345,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
             Refresh()
         end)
 
-        yBase = yBase - 30
+        yBase = yBase - 52
     end
 
     -- ============================================================

@@ -367,8 +367,6 @@ local function AddReagentLinesToTooltip(tooltip, itemID)
     if warbandCount > 0 then
         tooltip:AddDoubleLine("Warband", tostring(warbandCount), 0.4, 0.78, 1, 1, 1, 1)
     end
-
-    tooltip:Show()
 end
 
 --- Hook the tooltip system using TooltipDataProcessor

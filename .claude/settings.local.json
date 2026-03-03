@@ -32,7 +32,9 @@
       "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/PlayerInfo.md\")",
       "Bash(xargs -I {} bash -c 'grep -q \"\"GetXPExhaustion\\\\|GetRestXP\\\\|UnitXP\"\" {} && echo {}')",
       "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/PlayerScript.md\")",
-      "Bash(head -200 \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/WorldQuestsList/WorldQuestsList.lua\")"
+      "Bash(head -200 \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/WorldQuestsList/WorldQuestsList.lua\")",
+      "Bash(wc -l \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_beta_\\\\Interface\\\\AddOns\\\\LDCombatStats\\\\CombatTracker.lua\")",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/SuperTrackManager.md\")"
     ]
   }
 }

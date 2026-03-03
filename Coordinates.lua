@@ -438,7 +438,7 @@ local function GetOrCreatePasteDialog()
     if pasteDialog then return pasteDialog end
 
     local f = CreateFrame("Frame", "LunaCoordinatesPasteDialog", UIParent, "BackdropTemplate")
-    f:SetSize(450, 300)
+    f:SetSize(450, 500)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({
@@ -473,22 +473,48 @@ local function GetOrCreatePasteDialog()
     hint:SetText("One waypoint per line: [zone] x, y [name]")
     hint:SetTextColor(0.5, 0.5, 0.5)
 
-    local editBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
-    editBox:SetMultiLine(true)
-    editBox:SetAutoFocus(false)
-    editBox:SetFontObject("ChatFontNormal")
-    editBox:SetMaxLetters(0)
-    editBox:SetPoint("TOPLEFT", 10, -45)
-    editBox:SetPoint("BOTTOMRIGHT", -10, 40)
-    editBox:SetBackdrop({
+    -- Background frame for the edit area
+    local editBg = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    editBg:SetPoint("TOPLEFT", 10, -45)
+    editBg:SetPoint("BOTTOMRIGHT", -10, 40)
+    editBg:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    editBox:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
-    editBox:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    editBg:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    editBg:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    -- ScrollFrame inside the background (leave 16px on right for scrollbar)
+    local sf = CreateFrame("ScrollFrame", "LunaCoordPasteScroll", editBg, "UIPanelScrollFrameTemplate")
+    sf:SetPoint("TOPLEFT", 4, -4)
+    sf:SetPoint("BOTTOMRIGHT", -20, 4)
+
+    local editBox = CreateFrame("EditBox", nil, sf)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetMaxLetters(0)
     editBox:SetTextInsets(6, 6, 4, 4)
+    editBox:SetWidth(sf:GetWidth())
+    sf:SetScrollChild(editBox)
+
+    -- Keep editBox width in sync with scroll frame
+    sf:SetScript("OnSizeChanged", function(self)
+        editBox:SetWidth(self:GetWidth())
+    end)
+
+    -- Wire scrolling to cursor/text changes
+    editBox:SetScript("OnCursorChanged", function(self, x, y, w, h)
+        ScrollingEdit_OnCursorChanged(self, x, y, w, h)
+    end)
+    editBox:SetScript("OnUpdate", function(self, elapsed)
+        ScrollingEdit_OnUpdate(self, elapsed, sf)
+    end)
+    editBox:SetScript("OnTextChanged", function(self)
+        ScrollingEdit_OnTextChanged(self, sf)
+    end)
     editBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
         f:Hide()
@@ -678,6 +704,43 @@ local function CreateMainFrame()
 end
 
 -- ============================================================
+-- Active waypoint validation (must be above UpdateSettings/ticker)
+-- ============================================================
+
+-- Returns true if the current user waypoint still matches the given waypoint entry
+-- AND the tracking arrow is still pointing at the user waypoint (not a quest/other)
+local function ActiveWaypointStillCurrent(wp)
+    if not wp then return false end
+    if not C_Map.HasUserWaypoint() then return false end
+    -- If super tracking has been taken over by a quest/content pin, consider it gone
+    if not C_SuperTrack.IsSuperTrackingUserWaypoint() then
+        return false
+    end
+    local current = C_Map.GetUserWaypoint()
+    if not current then return false end
+    -- position may be a plain table {x,y} or a Vector2DMixin — handle both
+    local pos = current.position
+    local cx = pos and (pos.x ~= nil and pos.x or (type(pos.GetXY) == "function" and (select(1, pos:GetXY()))))
+    local cy = pos and (pos.y ~= nil and pos.y or (type(pos.GetXY) == "function" and (select(2, pos:GetXY()))))
+    if not cx or not cy then return false end
+    -- uiMapID is the documented field; also accept mapID as fallback
+    local mapID = current.uiMapID or current.mapID
+    return mapID == wp.mapID
+        and math.abs(cx - wp.x) <= 0.002
+        and math.abs(cy - wp.y) <= 0.002
+end
+
+local function CheckActiveWaypointStolen()
+    if not activeWaypointIndex then return end
+    local db = UIThingsDB.coordinates
+    local wp = db.waypoints[activeWaypointIndex]
+    if not ActiveWaypointStillCurrent(wp) then
+        activeWaypointIndex = nil
+        Coordinates.RefreshList()
+    end
+end
+
+-- ============================================================
 -- Settings application
 -- ============================================================
 function Coordinates.UpdateSettings()
@@ -726,6 +789,7 @@ function Coordinates.UpdateSettings()
         if not distanceTicker then
             distanceTicker = C_Timer.NewTicker(2, function()
                 if mainFrame:IsShown() then
+                    CheckActiveWaypointStolen()
                     Coordinates.RefreshList()
                 end
             end)
@@ -768,18 +832,20 @@ local function OnPlayerEnteringWorld()
 end
 
 local function OnUserWaypointUpdated()
-    -- If the user cleared the waypoint via the map, unhighlight our active row
-    if not C_Map.HasUserWaypoint() and activeWaypointIndex then
-        activeWaypointIndex = nil
-        Coordinates.RefreshList()
-    end
+    CheckActiveWaypointStolen()
+end
+
+local function OnSuperTrackingChanged()
+    -- Defer one frame so C_SuperTrack state has settled before checking
+    C_Timer.After(0, CheckActiveWaypointStolen)
 end
 
 -- ============================================================
 -- Initialization
 -- ============================================================
-EventBus.Register("PLAYER_ENTERING_WORLD",  OnPlayerEnteringWorld, "Coordinates")
-EventBus.Register("USER_WAYPOINT_UPDATED",  OnUserWaypointUpdated, "Coordinates")
+EventBus.Register("PLAYER_ENTERING_WORLD",  OnPlayerEnteringWorld,       "Coordinates")
+EventBus.Register("USER_WAYPOINT_UPDATED",  OnUserWaypointUpdated,       "Coordinates")
+EventBus.Register("SUPER_TRACKING_CHANGED", OnSuperTrackingChanged,      "Coordinates")
 EventBus.Register("ZONE_CHANGED",           UpdateTitleZone,        "Coordinates")
 EventBus.Register("ZONE_CHANGED_NEW_AREA",  UpdateTitleZone,        "Coordinates")
 EventBus.Register("ZONE_CHANGED_INDOORS",   UpdateTitleZone,        "Coordinates")

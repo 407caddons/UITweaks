@@ -80,13 +80,14 @@ table.insert(Widgets.moduleInits, function()
         UpdateCachedText()
     end
 
-    local function OnReadyCheckResponse(event, name, ready)
+    local function OnReadyCheckResponse(event, unit, isReady)
         if not checkActive then return end
+        local name = UnitName(unit)
         local short = GetShortName(name)
         if not short then return end
         -- Never override player's own "ready" status
         if short == GetPlayerShortName() then return end
-        memberStatus[short] = ready and "ready" or "notready"
+        memberStatus[short] = isReady and "ready" or "notready"
         UpdateCachedText()
     end
 
@@ -98,11 +99,11 @@ table.insert(Widgets.moduleInits, function()
     rcFrame.ApplyEvents = function(enabled)
         if enabled then
             EventBus.Register("READY_CHECK", OnReadyCheck, "W:ReadyCheck")
-            EventBus.Register("READY_CHECK_RESPONSE", OnReadyCheckResponse, "W:ReadyCheck")
+            EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckResponse, "W:ReadyCheck")
             EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:ReadyCheck")
         else
             EventBus.Unregister("READY_CHECK", OnReadyCheck)
-            EventBus.Unregister("READY_CHECK_RESPONSE", OnReadyCheckResponse)
+            EventBus.Unregister("READY_CHECK_CONFIRM", OnReadyCheckResponse)
             EventBus.Unregister("READY_CHECK_FINISHED", OnReadyCheckFinished)
             checkActive = false
             wipe(memberStatus)

@@ -66,7 +66,6 @@ local function GetSessions()
 end
 
 -- Returns a sorted array of { guid, name, class, total } for the given view.
--- Returns {} immediately when values are still secret post-combat.
 local function FetchEntries(sessKey, mtype)
     local cacheKey = sessKey .. "|" .. mtype
     local cached   = entryCache[cacheKey]
@@ -77,42 +76,62 @@ local function FetchEntries(sessKey, mtype)
     local enumType = GetEnumType(mtype)
     if not enumType then return {} end
 
-    local sessions = GetSessions()
-    if #sessions == 0 then return {} end
-
     local byGuid = {}
 
-    local function ProcessSession(sessID)
-        local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sessID, enumType)
-        if not ok or not sessData then return false end
-        -- Values may be briefly secret immediately after combat ends
-        if sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount) then
-            return false
-        end
-        for _, src in ipairs(sessData.combatSources or {}) do
-            if src.sourceGUID and src.name then
-                local amt     = SafeVal(src.totalAmount)
-                local existing = byGuid[src.sourceGUID]
+    local function AccumulateSources(combatSources)
+        for _, src in ipairs(combatSources or {}) do
+            local guid = src.sourceGUID
+            local name = src.name
+            -- Both GUID and name are secret values during live combat — skip if so
+            if guid and name
+                    and not (issecretvalue and issecretvalue(guid))
+                    and not (issecretvalue and issecretvalue(name)) then
+                local amt      = SafeVal(src.totalAmount)
+                local existing = byGuid[guid]
                 if existing then
                     existing.total = existing.total + amt
                 else
-                    byGuid[src.sourceGUID] = {
-                        guid  = src.sourceGUID,
-                        name  = src.name,
-                        class = src.classFilename,  -- e.g. "WARRIOR"
+                    byGuid[guid] = {
+                        guid  = guid,
+                        name  = name,
+                        class = src.classFilename,
                         total = amt,
                     }
                 end
             end
         end
-        return true
     end
 
     if sessKey == "fight" then
-        ProcessSession(sessions[#sessions].sessionID)
+        -- During combat the live session data is fully secret — skip it and show last
+        -- finalized session instead.  After combat, sessionType 1 returns readable data.
+        if not InCombatLockdown() then
+            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
+            if ok and sessData and sessData.combatSources then
+                AccumulateSources(sessData.combatSources)
+            end
+        end
+        -- Fallback: last finalized session (used during combat or when no current session)
+        if next(byGuid) == nil then
+            local sessions = GetSessions()
+            if #sessions > 0 then
+                local ok2, sessData2 = pcall(C_DamageMeter.GetCombatSessionFromID, sessions[#sessions].sessionID, enumType)
+                if ok2 and sessData2 then
+                    if not (sessData2.totalAmount ~= nil and issecretvalue and issecretvalue(sessData2.totalAmount)) then
+                        AccumulateSources(sessData2.combatSources)
+                    end
+                end
+            end
+        end
     else
+        local sessions = GetSessions()
         for i = overallBaseIdx + 1, #sessions do
-            ProcessSession(sessions[i].sessionID)
+            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sessions[i].sessionID, enumType)
+            if ok and sessData then
+                if not (sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount)) then
+                    AccumulateSources(sessData.combatSources)
+                end
+            end
         end
     end
 
@@ -131,15 +150,10 @@ local function FetchSpellEntries(sessKey, mtype, guid)
     local enumType = GetEnumType(mtype)
     if not enumType then return {} end
 
-    local sessions = GetSessions()
-    if #sessions == 0 then return {} end
-
     local bySpell = {}
 
-    local function ProcessSession(sessID)
-        local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessID, enumType, guid)
-        if not ok or not srcData or not srcData.combatSpells then return end
-        for _, sp in ipairs(srcData.combatSpells) do
+    local function AccumulateSpells(combatSpells)
+        for _, sp in ipairs(combatSpells or {}) do
             local amt = SafeVal(sp.totalAmount)
             -- Count-based types (interrupts/dispels/deaths) use casts as the value
             if amt == 0 then amt = SafeVal(sp.casts) end
@@ -160,10 +174,25 @@ local function FetchSpellEntries(sessKey, mtype, guid)
     end
 
     if sessKey == "fight" then
-        ProcessSession(sessions[#sessions].sessionID)
+        -- During combat the live session data is fully secret — use last finalized instead.
+        if not InCombatLockdown() then
+            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
+            if ok and srcData then
+                AccumulateSpells(srcData.combatSpells)
+            end
+        end
+        if next(bySpell) == nil then
+            local sessions = GetSessions()
+            if #sessions > 0 then
+                local ok2, srcData2 = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessions[#sessions].sessionID, enumType, guid)
+                if ok2 and srcData2 then AccumulateSpells(srcData2.combatSpells) end
+            end
+        end
     else
+        local sessions = GetSessions()
         for i = overallBaseIdx + 1, #sessions do
-            ProcessSession(sessions[i].sessionID)
+            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessions[i].sessionID, enumType, guid)
+            if ok and srcData then AccumulateSpells(srcData.combatSpells) end
         end
     end
 
@@ -697,14 +726,7 @@ EventBus.Register("PLAYER_REGEN_ENABLED", function()
     end
 end, "DamageMeter")
 
--- Invalidate cache at combat start — new live session begins
-EventBus.Register("PLAYER_REGEN_DISABLED", function()
-    entryCache = {}
-    for i = 1, 2 do
-        local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-        if cfg and cfg.session == "fight" then drilldown[i] = nil end
-    end
-end, "DamageMeter")
+
 
 EventBus.Register("PLAYER_ENTERING_WORLD", function()
     if not UIThingsDB or not UIThingsDB.damageMeter then return end

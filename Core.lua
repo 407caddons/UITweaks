@@ -488,6 +488,7 @@ local function OnEvent(self, event, ...)
                 locked = true,
                 showWoWOnly = false,
                 showAddonMemory = true,
+                sessionStaticOnly = false,
                 font = "Fonts\\FRIZQT__.TTF",
                 fontSize = 12,
                 strata = "LOW",
@@ -703,6 +704,20 @@ local function OnEvent(self, event, ...)
                 autoBuyEnabled = true,
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
+            },
+            lootChecklist = {
+                enabled         = false,
+                locked          = false,
+                pos             = nil,
+                width           = 220,
+                height          = 280,
+                backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.9 },
+                borderColor     = { r = 0.4,  g = 0.4,  b = 0.4,  a = 1   },
+                showBorder      = true,
+                showBackground  = true,
+                font            = "Fonts\\FRIZQT__.TTF",
+                fontSize        = 12,
+                checklist       = {},
             },
             queueTimer = {
                 enabled = false,

@@ -53,7 +53,7 @@ function addonTable.Config.Initialize()
             if UIThingsDB.widgets then
                 UIThingsDB.widgets.locked = true
                 if addonTable.Widgets and addonTable.Widgets.UpdateVisuals then
-                    addonTable.Widgets.UpdateVisuals()
+                    C_Timer.After(0, addonTable.Widgets.UpdateVisuals)
                 end
             end
 
@@ -121,6 +121,14 @@ function addonTable.Config.Initialize()
                 UIThingsDB.mplusTimer.locked = true
                 if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
                     addonTable.MplusTimer.UpdateSettings()
+                end
+            end
+
+            -- Loot Checklist
+            if UIThingsDB.lootChecklist then
+                UIThingsDB.lootChecklist.locked = true
+                if addonTable.LootChecklist and addonTable.LootChecklist.UpdateSettings then
+                    addonTable.LootChecklist.UpdateSettings()
                 end
             end
 
@@ -224,8 +232,9 @@ function addonTable.Config.Initialize()
             { id = 22, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
             { id = 23, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 24, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
-            { id = 25, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
-            { id = 26, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 25, name = "Queue Timer",      key = "queueTimer",     icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
+            { id = 26, name = "Loot Checklist",   key = "lootChecklist",  icon = "Interface\\Icons\\Inv_Chest_Cloth_Rogue_C_01" },
+            { id = 27, name = "Addon Versions",   key = "addonVersions",  icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         local navButtons = {}
@@ -342,6 +351,10 @@ function addonTable.Config.Initialize()
         queueTimerPanel:SetAllPoints()
         queueTimerPanel:Hide()
 
+        local lootChecklistPanel = CreateFrame("Frame", nil, contentContainer)
+        lootChecklistPanel:SetAllPoints()
+        lootChecklistPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.tracker = trackerPanel
         addonTable.ConfigPanels.vendor = vendorPanel
@@ -368,7 +381,8 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.coordinates = coordinatesPanel
         addonTable.ConfigPanels.warehousing = warehousingPanel
         addonTable.ConfigPanels.xpBar = xpBarPanel
-        addonTable.ConfigPanels.queueTimer = queueTimerPanel
+        addonTable.ConfigPanels.queueTimer     = queueTimerPanel
+        addonTable.ConfigPanels.lootChecklist  = lootChecklistPanel
 
         -- Map IDs to Panels
         local idToPanel = {
@@ -397,7 +411,8 @@ function addonTable.Config.Initialize()
             [23] = widgetsPanel,
             [24] = warehousingPanel,
             [25] = queueTimerPanel,
-            [26] = addonVersionsPanel,
+            [26] = lootChecklistPanel,
+            [27] = addonVersionsPanel,
         }
 
         ----------------------------------------------------
@@ -565,8 +580,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.QueueTimer then
                 addonTable.ConfigSetup.QueueTimer(queueTimerPanel, navButtons[25], configWindow)
             end
+            if addonTable.ConfigSetup.LootChecklist then
+                addonTable.ConfigSetup.LootChecklist(lootChecklistPanel, navButtons[26], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[26], configWindow)
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[27], configWindow)
             end
         end
         ----------------------------------------------------

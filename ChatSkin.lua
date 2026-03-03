@@ -1141,9 +1141,14 @@ function ChatSkin.UpdateTabDraggability()
     end
 end
 
+local function IsChattynatorActive()
+    return C_AddOns.IsAddOnLoaded("Chattynator")
+end
+
 function ChatSkin.Initialize()
     addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", function()
         if not UIThingsDB.chatSkin.enabled then return end
+        if IsChattynatorActive() then return end
         C_Timer.After(0.5, function()
             if not isSetup then SetupChatSkin() end
         end)
@@ -1153,7 +1158,7 @@ end
 function ChatSkin.UpdateSettings()
     local settings = UIThingsDB.chatSkin
 
-    if not settings.enabled then
+    if not settings.enabled or IsChattynatorActive() then
         ChatSkin.Disable()
         return
     end

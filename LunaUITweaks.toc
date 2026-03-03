@@ -54,6 +54,7 @@ config\panels\MplusTimerPanel.lua
 config\panels\CoordinatesPanel.lua
 config\panels\WarehousingPanel.lua
 config\panels\QueueTimerPanel.lua
+config\panels\LootChecklistPanel.lua
 config\ConfigMain.lua
 
 # Feature modules
@@ -83,6 +84,7 @@ MplusTimer.lua
 Coordinates.lua
 Warehousing.lua
 QueueTimer.lua
+LootChecklist.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua

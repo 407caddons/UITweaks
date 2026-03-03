@@ -89,6 +89,12 @@ table.insert(Widgets.moduleInits, function()
     local function UpdateCachedText()
         local elapsed = GetTime() - sessionStart
 
+        -- If static-only mode, always show session time
+        if UIThingsDB.widgets.sessionStaticOnly then
+            cachedText = "Session: " .. FormatDuration(elapsed)
+            return
+        end
+
         -- Determine how many display modes are available
         local maxXP = UnitXPMax("player") or 0
         local isLeveling = maxXP > 0 and elapsed > 60

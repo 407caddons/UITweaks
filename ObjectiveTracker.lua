@@ -970,7 +970,20 @@ local function RenderWorldQuests()
                         end
                     elseif isWorldQuest then
                         if onlyActive then
-                            if isActive then
+                            -- "Only active" = has any progress started (at least one objective
+                            -- fulfilled). World quests are never formally accepted so IsOnQuest
+                            -- is almost always false; checking objectives is more useful.
+                            local hasProgress = false
+                            local objectives = C_QuestLog.GetQuestObjectives(questID)
+                            if objectives then
+                                for _, obj in ipairs(objectives) do
+                                    if obj.numFulfilled and obj.numFulfilled > 0 then
+                                        hasProgress = true
+                                        break
+                                    end
+                                end
+                            end
+                            if hasProgress or isActive then
                                 table.insert(activeWQs, questID)
                             end
                         else
@@ -1030,7 +1043,7 @@ local function RenderQuests()
     for i = 1, numQuestLogEntries do
         local info = C_QuestLog.GetInfo(i)
         if info and not info.isHeader and info.isHidden and info.isTask and info.isOnMap and info.questID then
-            if not displayedIDs[info.questID] then
+            if not displayedIDs[info.questID] and not C_QuestLog.IsWorldQuest(info.questID) then
                 table.insert(hiddenTaskQuests, info.questID)
             end
         end

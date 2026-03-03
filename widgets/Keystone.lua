@@ -133,9 +133,16 @@ table.insert(Widgets.moduleInits, function()
         keystoneFrame.isMoving = false
         local cx, cy = keystoneFrame:GetCenter()
         local pcx, pcy = UIParent:GetCenter()
-        if cx and pcx then
-            UIThingsDB.widgets.keystone.pos = { x = cx - pcx, y = cy - pcy }
-        end
+        if not cx or not pcx then return end
+        local x = cx - pcx
+        local y = cy - pcy
+        keystoneFrame:ClearAllPoints()
+        keystoneFrame:SetPoint("CENTER", UIParent, "CENTER", x, y)
+        UIThingsDB.widgets.keystone.point = "CENTER"
+        UIThingsDB.widgets.keystone.relPoint = "CENTER"
+        UIThingsDB.widgets.keystone.x = x
+        UIThingsDB.widgets.keystone.y = y
+        keystoneFrame.coords:SetText(string.format("(%.0f, %.0f)", x, y))
     end)
 
     -- Pass through tooltip

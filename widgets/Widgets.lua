@@ -267,6 +267,7 @@ local function UpdateAnchoredLayouts()
 end
 
 function Widgets.UpdateVisuals()
+    if InCombatLockdown() then return end
     local db = UIThingsDB.widgets
     if not db then
         StopWidgetTicker()
@@ -462,8 +463,11 @@ function Widgets.UpdateConditions()
 end
 
 -- Single handler for all state transitions relevant to widget conditions.
-local function OnConditionEvent()
+local function OnConditionEvent(event)
     if UIThingsDB and UIThingsDB.widgets and UIThingsDB.widgets.enabled then
+        if event == "PLAYER_REGEN_ENABLED" then
+            Widgets.UpdateVisuals()
+        end
         Widgets.UpdateConditions()
     end
 end
