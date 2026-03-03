@@ -196,7 +196,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
 
     local desc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     desc:SetPoint("TOPLEFT", 16, -44)
-    desc:SetText("|cff888888A custom damage meter that tracks combat data directly from the combat log.|r")
+    desc:SetText("|cff888888A custom damage meter powered by Blizzard's C_DamageMeter API. Supports Damage, Healing, Interrupts, Deaths, Dispels, and Damage Taken.|r")
 
     local yBase = -70
 
@@ -279,9 +279,9 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     yBase = yBase - 30
 
     -- Meter type / session for each meter
-    local METER_TYPES  = { "damage","healing","interrupts","deaths","dispels","damageTaken","enemyHeal","enemyDamageTaken" }
+    local METER_TYPES  = { "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken" }
     local TYPE_LABELS  = { damage="Damage", healing="Healing", interrupts="Interrupts", deaths="Deaths",
-                           dispels="Dispels", damageTaken="Dmg Taken", enemyHeal="Enemy Heal", enemyDamageTaken="Enemy Dmg In" }
+                           dispels="Dispels", damageTaken="Dmg Taken" }
 
     for mIdx = 1, 2 do
         local mLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
