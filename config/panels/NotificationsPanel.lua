@@ -22,7 +22,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 950)
+    scrollChild:SetSize(panel:GetWidth() - 30, 1200)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -445,4 +445,92 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
             addonTable.Misc.ShowBoeAlert()
         end
     end)
+
+    -- == Death Notification Section ==
+    Helpers.CreateSectionHeader(panel, "Death Notification", -790)
+
+    local deathBtn = CreateFrame("CheckButton", "UIThingsNotifDeathCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    deathBtn:SetPoint("TOPLEFT", 20, -820)
+    _G[deathBtn:GetName() .. "Text"]:SetText("Enable Death Notification (party / raid members)")
+    deathBtn:SetChecked(UIThingsDB.misc.deathNotify)
+    deathBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.deathNotify = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+        UpdateNavColor()
+    end)
+
+    -- Death TTS Enable
+    local deathTtsBtn = CreateFrame("CheckButton", "UIThingsNotifDeathTTSEnable", panel,
+        "ChatConfigCheckButtonTemplate")
+    deathTtsBtn:SetPoint("TOPLEFT", 20, -860)
+    _G[deathTtsBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
+    deathTtsBtn:SetChecked(UIThingsDB.misc.deathTtsEnabled)
+    deathTtsBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.deathTtsEnabled = self:GetChecked()
+    end)
+
+    -- Death TTS Message
+    local deathTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    deathTtsLabel:SetPoint("TOPLEFT", 40, -900)
+    deathTtsLabel:SetText("TTS Message:")
+
+    local deathTtsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    deathTtsEdit:SetSize(250, 20)
+    deathTtsEdit:SetPoint("LEFT", deathTtsLabel, "RIGHT", 10, 0)
+    deathTtsEdit:SetAutoFocus(false)
+    deathTtsEdit:SetText(UIThingsDB.misc.deathTtsMessage)
+    deathTtsEdit:SetScript("OnEnterPressed", function(self)
+        UIThingsDB.misc.deathTtsMessage = self:GetText()
+        self:ClearFocus()
+    end)
+
+    -- Test Button
+    local testDeathBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    testDeathBtn:SetSize(60, 22)
+    testDeathBtn:SetPoint("LEFT", deathTtsEdit, "RIGHT", 5, 0)
+    testDeathBtn:SetText("Test")
+    testDeathBtn:SetScript("OnClick", function()
+        UIThingsDB.misc.deathTtsMessage = deathTtsEdit:GetText()
+        if addonTable.Misc and addonTable.Misc.TestDeathTTS then
+            addonTable.Misc.TestDeathTTS()
+        end
+    end)
+
+    -- Placeholder hint
+    local deathHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    deathHint:SetPoint("TOPLEFT", 40, -928)
+    deathHint:SetTextColor(0.5, 0.5, 0.5)
+    deathHint:SetText("Placeholders: {name} = player name   {role} = Tank / Healer / DPS")
+
+    -- Death TTS Voice Dropdown
+    local deathVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    deathVoiceLabel:SetPoint("TOPLEFT", 40, -960)
+    deathVoiceLabel:SetText("Voice Type:")
+
+    local deathVoiceDropdown = CreateFrame("Frame", "UIThingsNotifDeathVoiceDropdown", panel, "UIDropDownMenuTemplate")
+    deathVoiceDropdown:SetPoint("LEFT", deathVoiceLabel, "RIGHT", -15, -3)
+
+    local deathVoiceOptions = {
+        { text = "Standard",    value = 0 },
+        { text = "Alternate 1", value = 1 },
+    }
+
+    UIDropDownMenu_SetWidth(deathVoiceDropdown, 120)
+    UIDropDownMenu_Initialize(deathVoiceDropdown, function(self, level)
+        for _, option in ipairs(deathVoiceOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.func = function(btn)
+                UIThingsDB.misc.deathTtsVoice = btn.value
+                UIDropDownMenu_SetSelectedValue(deathVoiceDropdown, btn.value)
+            end
+            info.checked = (UIThingsDB.misc.deathTtsVoice == option.value)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(deathVoiceDropdown, UIThingsDB.misc.deathTtsVoice or 0)
 end

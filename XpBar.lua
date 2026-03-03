@@ -42,16 +42,32 @@ end
 -- or scan all buffs: /run for i=1,40 do local a=C_UnitAuras.GetAuraDataByIndex("player",i,"HELPFUL") if a then print(a.spellId,a.name) end end
 local XP_BOOST_BUFFS = {
     { id = 46668, pct = 10, label = "DMF WHEE!" },         -- Darkmoon Faire Carousel (+10% XP, 1hr)
-    { id = 71968, pct = 10, label = "DMF Top Hat" },        -- Darkmoon Top Hat (+10% XP, 1hr)
-    -- Warband Mentor / Midnight achievement bonus: uncomment and fill in spell ID when known
-    -- { id = 0, pct = 0, label = "Mentor: Midnight" },
+    { id = 136583, pct = 10, label = "DMF Top Hat" },       -- Darkmoon Top Hat (+10% XP, 1hr)
 }
+
+-- Warband Mentor: Midnight achievement tiers (highest completed wins)
+local MENTOR_ACHIEVEMENTS = {
+    { id = 42332, pct = 25 },
+    { id = 42331, pct = 20 },
+    { id = 42330, pct = 15 },
+    { id = 42329, pct = 10 },
+    { id = 42328, pct = 5 },
+}
+
+local function GetMentorBonus()
+    for _, ach in ipairs(MENTOR_ACHIEVEMENTS) do
+        if select(4, GetAchievementInfo(ach.id)) then
+            return ach.pct
+        end
+    end
+    return 0
+end
 
 -- Returns the total auto-detected XP bonus percentage from active buffs, plus any manual override.
 local function GetXPBonusPct()
-    local total = 0
+    local total = GetMentorBonus()
     for _, buff in ipairs(XP_BOOST_BUFFS) do
-        if buff.id > 0 and C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+        if C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
             total = total + buff.pct
         end
     end
@@ -60,8 +76,8 @@ local function GetXPBonusPct()
     return total + manual
 end
 
--- Sum XP from all quests currently ready to turn in, with XP boost buffs applied.
--- GetQuestLogRewardXP returns base XP (before active buff multipliers).
+-- Sum XP from all quests currently ready to turn in.
+-- GetQuestLogRewardXP already returns XP with all active bonuses applied.
 local function GetPendingQuestXP()
     local total = 0
     local numEntries = C_QuestLog.GetNumQuestLogEntries()
@@ -71,10 +87,6 @@ local function GetPendingQuestXP()
             local xp = (GetQuestLogRewardXP and GetQuestLogRewardXP(info.questID)) or 0
             total = total + xp
         end
-    end
-    local bonusPct = GetXPBonusPct()
-    if bonusPct ~= 0 then
-        total = math.floor(total * (1 + bonusPct / 100))
     end
     return total
 end
@@ -242,12 +254,8 @@ function addonTable.XpBar.UpdateSettings()
         barFrame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
     end
 
-    -- Lock/unlock
-    if settings.locked then
-        barFrame:EnableMouse(false)
-    else
-        barFrame:EnableMouse(true)
-    end
+    -- Lock/unlock (mouse stays enabled for tooltip; dragging is gated inside OnMouseDown)
+    barFrame:EnableMouse(true)
 
     -- Font
     local font = settings.font or "Fonts\\FRIZQT__.TTF"
@@ -386,9 +394,13 @@ local function Init()
                 AbbreviateNumber(pendingXP), pendingPct, bonusStr), 1, 1, 1, 1, 0.85, 0)
             -- List active XP boost buffs
             for _, buff in ipairs(XP_BOOST_BUFFS) do
-                if buff.id > 0 and C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+                if C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
                     GameTooltip:AddDoubleLine("  " .. buff.label, string.format("+%d%%", buff.pct), 0.8, 0.8, 0.8, 0.4, 1, 0.4)
                 end
+            end
+            local mentorPct = GetMentorBonus()
+            if mentorPct > 0 then
+                GameTooltip:AddDoubleLine("  Warband Mentor: Midnight", string.format("+%d%%", mentorPct), 0.8, 0.8, 0.8, 0.4, 1, 0.4)
             end
             local manual = UIThingsDB.xpBar.xpBonusPct or 0
             if manual > 0 then

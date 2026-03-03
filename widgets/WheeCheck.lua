@@ -2,7 +2,20 @@ local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
 
-local DMF_WHEE_SPELL_ID = 46668  -- Darkmoon Faire Carousel buff (+10% XP/rep, 1hr)
+-- All DMF XP/rep buffs that the widget should recognise
+local DMF_BUFFS = {
+    { id = 46668, label = "WHEE!" },   -- Darkmoon Carousel
+    { id = 136583, label = "Top Hat" }, -- Darkmoon Top Hat
+}
+
+-- Returns the first active DMF buff aura, or nil
+local function GetActiveDMFBuff()
+    for _, buff in ipairs(DMF_BUFFS) do
+        local aura = C_UnitAuras.GetPlayerAuraBySpellID(buff.id)
+        if aura then return aura, buff.label end
+    end
+    return nil, nil
+end
 
 -- Returns true if the Darkmoon Faire is currently active (first full week of each month)
 local function IsDMFActive()
@@ -29,14 +42,14 @@ table.insert(Widgets.moduleInits, function()
             return
         end
 
-        local aura = C_UnitAuras.GetPlayerAuraBySpellID(DMF_WHEE_SPELL_ID)
+        local aura, label = GetActiveDMFBuff()
         if aura then
             local remaining = aura.expirationTime - GetTime()
             local m = math.floor(remaining / 60)
             local s = math.floor(remaining % 60)
-            wheeFrame.text:SetText(string.format("|cFF00FF00WHEE! %d:%02d|r", m, s))
+            wheeFrame.text:SetText(string.format("|cFF00FF00%s %d:%02d|r", label, m, s))
         else
-            wheeFrame.text:SetText("|cFFFF6666WHEE! \226\156\152|r")
+            wheeFrame.text:SetText("|cFFFF6666DMF buff \226\156\152|r")
         end
     end
 
@@ -80,17 +93,17 @@ table.insert(Widgets.moduleInits, function()
             return
         end
 
-        local aura = C_UnitAuras.GetPlayerAuraBySpellID(DMF_WHEE_SPELL_ID)
+        local aura, label = GetActiveDMFBuff()
         if aura then
             local remaining = aura.expirationTime - GetTime()
             local m = math.floor(remaining / 60)
             local s = math.floor(remaining % 60)
-            GameTooltip:AddDoubleLine("Status:", "|cFF00FF00Active|r", 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Buff:", "|cFF00FF00" .. label .. "|r", 1, 1, 1, 1, 1, 1)
             GameTooltip:AddDoubleLine("Remaining:", string.format("%d:%02d", m, s), 1, 1, 1, 1, 0.82, 0)
             GameTooltip:AddLine("+10% XP and reputation", 0.7, 0.7, 0.7)
         else
-            GameTooltip:AddDoubleLine("Status:", "|cFFFF6666Not active|r", 1, 1, 1, 1, 1, 1)
-            GameTooltip:AddLine("Ride the Darkmoon Carousel to get it.", 0.7, 0.7, 0.7)
+            GameTooltip:AddDoubleLine("Status:", "|cFFFF6666No DMF buff|r", 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddLine("Ride the Carousel or use the Top Hat.", 0.7, 0.7, 0.7)
         end
         GameTooltip:Show()
     end)

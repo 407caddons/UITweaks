@@ -1,8 +1,12 @@
 # LunaUITweaks — Code Review
 
-**Date:** 2026-02-26 (updated 2026-03-01)
+**Date:** 2026-02-26 (updated 2026-03-02, updated again 2026-03-02 pass 2)
 **Scope:** Full addon review — all Lua modules and widget files (~65 files, ~20,000+ lines)
 **Reviewer:** Claude Sonnet 4.6
+
+**Update 2026-03-02 (pass 2):** New features reviewed: BoE Item Alert and Death Notification (both in Misc.lua), Death Notification config panel (NotificationsPanel.lua). Core.lua received `AbbreviateNumber` and `SpeakTTS` utilities. Six new issues found (#46–#51). Issue #22 (dead code at file load) corrected — was a false positive (WoW loads saved variables before Lua execution). Feature #19 (BoE alert) marked implemented in features.md.
+
+**Update 2026-03-02:** Bug fixes across WheeCheck, XpBar, Widgets, and WidgetsPanel. Darkmoon Top Hat spell ID corrected in both WheeCheck and XpBar (was `71968`, now `136583` — buff was never detected). XpBar received achievement-based Warband Mentored Leveling detection (replacing broken aura placeholder), a double-counting fix in `GetPendingQuestXP`, and a tooltip mouse-enable fix for the locked state. Widgets.lua and WidgetsPanel.lua received per-widget clickthrough support. Two new issues found: duplicated DMF calendar math (#44) and `GetMentorBonus()` uncached achievement calls (#45).
 
 **Update 2026-03-01:** New pass covering all changes since 2026-02-26. New module added: `QueueTimer.lua`. Eight new widgets added: `Spec`, `FPS`, `WeeklyReset`, `Time`, `Speed`, `Volume`, `BattleRes`, `Coordinates` (widget). `ObjectiveTracker.lua` received a timing fix on `PLAYER_ENTERING_WORLD`. Issues found in new code are numbered 31+ below. Status of previously-identified issues is unchanged unless noted.
 
@@ -590,12 +594,103 @@ The intent is to let Blizzard's show logic fully settle before the addon applies
 
 ---
 
+## New Issues (2026-03-02 pass 2) — Misc BoE/Death, XpBar, WheeCheck
+
+### 44. WheeCheck.lua / IsDMFActive — Dead Code Branch (previously referenced, now detailed)
+
+```lua
+local firstSunday = 1 + (8 - firstDow) % 7
+if firstSunday > 7 then firstSunday = firstSunday - 7 end
+```
+
+`firstDow` is `date("*t").wday` which is in `[1, 7]`. Therefore `(8 - firstDow) % 7` produces values in `{0, 1, 2, 3, 4, 5, 6}` and `firstSunday = 1 + value` produces `{1, 2, 3, 4, 5, 6, 7}`. The maximum is exactly 7, never greater than 7. The `if firstSunday > 7` branch is dead code and can never execute. Remove it.
+
+---
+
+### 45. XpBar.lua — `GetMentorBonus()` Calls `GetAchievementInfo` Up to 5 Times Uncached
+
+```lua
+local function GetMentorBonus()
+    for _, ach in ipairs(MENTOR_ACHIEVEMENTS) do
+        if select(4, GetAchievementInfo(ach.id)) then ...
+```
+
+Called in `GetXPBonusPct()` and again explicitly in the `OnEnter` tooltip handler, resulting in up to 10 `GetAchievementInfo` calls per tooltip hover. Achievement completion status only changes when an achievement is earned — cache the result in a module-level upvalue, invalidate on `ACHIEVEMENT_EARNED`.
+
+---
+
+### 46. Misc.lua — `UNIT_HEALTH` Too Broad for Death Detection ✅ FIXED 2026-03-02
+
+`UNIT_HEALTH` is one of the highest-frequency events in WoW — it fires on every health change for every tracked unit. In a 20-player raid this can be hundreds of calls per second.
+
+**Fix applied:** Replaced permanent `UNIT_HEALTH` subscription with `UNIT_DIED` for death detection (fires once per death). Added `OnUnitHealthResurrect` + `UpdateResurrectionTracking()` which dynamically subscribes to `UNIT_HEALTH` only while `deathAnnounced` has entries, then unregisters immediately when the table empties. In a typical raid with no recent deaths, `UNIT_HEALTH` is no longer subscribed at all.
+
+---
+
+### 47. Issue #22 Correction — False Positive (file-load check IS correct)
+
+The original issue #22 stated: *"UIThingsDB is nil at file load — saved variables are only available after ADDON_LOADED"*. This is incorrect. WoW loads saved variables **before** executing addon Lua files. `UIThingsDB` is available at file-scope execution time if a previous session saved it. The `Misc.ToggleQuickDestroy(true)` call at file scope is intentional — it re-installs the hook on UI reload without waiting for `PLAYER_ENTERING_WORLD`. This is safe because `hooksecurefunc("StaticPopup_Show", ...)` is always safe to call during addon load. **Issue #22 is a false positive and should be closed.**
+
+---
+
+### 48. Misc.lua — BoE Alert: `GetItemInfo` May Return nil for Uncached Items
+
+```lua
+local itemName, _, quality, ..., bindType = GetItemInfo(itemID)
+if not itemName then return end
+```
+
+The nil guard is correct but silently drops alerts for uncached items. `CHAT_MSG_LOOT` can fire before the item data is fully populated in the client cache, particularly for items the player has never seen before. The alert is silently lost in this case — no retry, no fallback. Consider queuing the check with `SafeAfter(0.3, function() ... end)` to allow the client to finish fetching item data from the server after the loot event.
+
+---
+
+### 49. Core.lua — `AbbreviateNumber` Gap: 1,000–9,999 Returned as Raw Integer
+
+```lua
+elseif value >= 10000 then
+    return string.format("%.1fK", value / 1000)
+end
+return tostring(value)  -- values 1000–9999 hit this branch
+```
+
+Values between 1,000 and 9,999 are returned as raw numbers (e.g. `9500` → `"9500"`). This is likely intentional to avoid showing `"1.0K"` for small round numbers, but the intent is undocumented. In contexts where the function formats XP values in the hundreds-of-thousands range the gap is irrelevant, but in tooltip lines showing smaller values (e.g. repair costs, minor gold amounts) this produces unexpectedly long strings. Add a comment explaining the 10,000 threshold choice.
+
+---
+
+### 50. XpBar.lua — `GetMentorBonus()` Called Twice Per Tooltip Hover
+
+In the `OnEnter` handler:
+
+```lua
+-- First call (inside GetXPBonusPct):
+local totalBonus = GetXPBonusPct()  -- calls GetMentorBonus() internally
+
+-- Second call (direct, for display):
+local mentorPct = GetMentorBonus()  -- calls GetMentorBonus() again
+```
+
+`GetXPBonusPct()` calls `GetMentorBonus()` once, and then `mentorPct` calls it again directly. This doubles the `GetAchievementInfo` calls (up to 10 total). Refactor `GetXPBonusPct()` to return both the total and the breakdown components, or cache `GetMentorBonus()` result locally and pass it.
+
+---
+
+### 51. WidgetsPanel.lua — Condition Dropdown Uses `notCheckable = true`
+
+```lua
+info.notCheckable = true
+info.func = ConditionOnClick
+```
+
+The condition dropdown renders without checkmarks on any item, so when the user opens the dropdown they cannot visually identify which condition is currently active. The dropdown header text IS updated after selection (via `UIDropDownMenu_SetText`), but the in-dropdown active indicator is missing. Compare to the anchor dropdown which correctly uses `info.checked`. Change to use `info.checked = (cond.value == UIThingsDB.widgets[widget.key].condition)` for visual consistency.
+
+---
+
 ## Summary Table
 
 | Severity | Count | Key Examples |
 |----------|-------|-------------|
 | Critical (taint/correctness) | 4 ✅ ALL FIXED | ChatSkin hook forms ✅, MinimapCustom global ✅, ActionBars field write ✅, Coordinates HookScript ✅ |
-| Performance | 11 | EventBus allocation, Combat UNIT_AURA, SkinButton OnUpdate, Widgets anchor recalc, Warehousing double scan, Keystone bag scan, Coordinates distance ticker, SCT SetCVar, AddonVersions bag scan, per-widget OnUpdate, QueueTimer permanent OnUpdate (#31) |
+| Performance | 12 | EventBus allocation, Combat UNIT_AURA, SkinButton OnUpdate, Widgets anchor recalc, Warehousing double scan, Keystone bag scan, Coordinates distance ticker, SCT SetCVar, AddonVersions bag scan, per-widget OnUpdate, QueueTimer permanent OnUpdate (#31), **UNIT_HEALTH death detection (#46)** |
 | Memory | 6 | ChatSkin closures, kwPlaceholders per message, Kick frames, TalentReminder allocation, SessionStats lastSeen write, Warehousing closure chain |
-| Code Quality | 14 | TalentReminder duplication, Misc dead code, Loot dead branch, SCT O(n) recycle, CENTER convention (10 modules), Widgets hard-coded keys, MplusTimer death logic, Warehousing duplicate logic, QuestReminder stale data, Warehousing debug log, Time.lua dead variable (#39), Time.lua leading space (#40), FPS.lua double sort (#36), Spec.lua no event sub (#35) |
+| Code Quality | 18 | TalentReminder duplication, Misc dead code (#22 CLOSED — false positive), Loot dead branch, SCT O(n) recycle, CENTER convention (10 modules), Widgets hard-coded keys, MplusTimer death logic, Warehousing duplicate logic, QuestReminder stale data, Warehousing debug log, Time.lua dead variable (#39), Time.lua leading space (#40), FPS.lua double sort (#36), Spec.lua no event sub (#35), **IsDMFActive dead branch (#44)**, **GetMentorBonus double-call (#50)**, **WidgetsPanel condition no-checkmark (#51)**, **AbbreviateNumber gap note (#49)** |
 | New (2026-03-01) | 13 | QueueTimer OnUpdate/SafeAfter/anon listener, Spec combat guard/event sub, FPS double sort, Time ToggleCalendar/dead var/space, BattleRes spell ID note, Speed HookScript style, ObjTracker 5s delay |
+| New (2026-03-02 pass 2) | 8 | UNIT_HEALTH death detection (#46), false-positive #22 closed (#47), BoE GetItemInfo nil race (#48), AbbreviateNumber gap (#49), GetMentorBonus double-call (#50), IsDMFActive dead branch (#44 detailed), Condition dropdown no checkmark (#51), GetMentorBonus uncached (#45) |

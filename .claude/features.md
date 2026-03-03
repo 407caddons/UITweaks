@@ -1,7 +1,11 @@
 # Feature Suggestions — LunaUITweaks
-Date: 2026-02-26 (updated 2026-03-01)
+Date: 2026-02-26 (updated 2026-03-01, 2026-03-02, 2026-03-02 pass 2)
 
 **Update 2026-03-01:** Several widget suggestions from the companion widgets.md have been implemented: Clock/Server Time (→ `widgets/Time.lua` ✓), FPS/Latency (→ `widgets/FPS.lua` ✓), Weekly Reset Countdown (→ `widgets/WeeklyReset.lua` ✓), Spec Display (→ `widgets/Spec.lua` ✓). A new module not previously suggested has also shipped: `QueueTimer.lua` — a progress bar that counts down the LFG proposal acceptance window. Three more widgets also shipped that were not in the original suggestions: `Speed` (movement speed %), `Volume` (sound toggle/cycle), `BattleRes` (battle resurrection charge tracker). Feature suggestions below are updated with implemented/pending status.
+
+**Update 2026-03-02 (pass 2):** BoE Item Alert (**feature #19**) and Death Notification shipped in Misc.lua with full config panel support (NotificationsPanel.lua). BoE alert detects Bind-on-Equip loot via `CHAT_MSG_LOOT`, filters by item quality (Uncommon/Rare/Epic/Legendary), and shows a coloured overlay with TTS. Death Notification announces party/raid member deaths via TTS with configurable message (`{name}`, `{role}` placeholders) and voice type. Two new code review issues (#46 UNIT_HEALTH too broad, #48 GetItemInfo nil race) found in the new code.
+
+**Update 2026-03-02:** Per-widget clickthrough toggle shipped in Widgets config panel. XP bar tooltip fix (mouse always enabled, drag gated by lock). Warband Mentor XP bonus is now auto-detected via `GetAchievementInfo` (achievements 42328–42332). DMF WHEE widget spell ID corrected (71968 → 136583).
 
 ## Introduction
 
@@ -113,10 +117,10 @@ LunaUITweaks is already a mature, self-contained addon covering a wide range of 
 **Description:** Extend the personal order notification with expiry countdown display using data from `C_CraftingOrders.GetPersonalOrdersInfo()` (already called in Misc.lua).
 **Notes:** Needs a ticker since no expiry events fire. The data is already being fetched, so it's an extension of existing work.
 
-### 19. BoE Item Alert
+### 19. BoE Item Alert ✅ Implemented (Misc.lua)
 **Difficulty:** Easy
-**Description:** When a looted item is BoE (via `C_Item.GetItemBindType`), trigger a prominent alert/sound. Piggybacks on existing `CHAT_MSG_LOOT` parsing in Loot.lua.
-**Notes:** Very small addition to the Loot module. High value for players who want to notice tradeable drops.
+**Description:** When a looted item is BoE (`CHAT_MSG_LOOT` + `GetItemInfo` bind type check), shows a coloured alert overlay with the item name and quality colour. Configurable minimum quality (Uncommon → Legendary), alert duration, and alert colour. No TTS for BoE (silent alert only). Quality filtering uses `boeMinQuality` (default: Epic+).
+**Notes:** One minor issue (#48 in codereview.md): `GetItemInfo` may return nil for items not yet in the client cache when the loot event fires. Silent drop — no retry. Consider queuing a `SafeAfter(0.3, ...)` retry.
 
 ---
 
@@ -136,12 +140,41 @@ LunaUITweaks is already a mature, self-contained addon covering a wide range of 
 
 ---
 
+## Features Added/Fixed Since Last Review (2026-03-02 pass 2)
+
+### 24. Death Notification ✅ Implemented (Misc.lua + NotificationsPanel.lua)
+**Difficulty:** Easy *(shipped)*
+**Description:** Announces party and raid member deaths via TTS. Triggers on `UNIT_HEALTH` events, checks `UnitIsDead(unitTarget)` for party/raid unit tokens, and speaks a configurable message with `{name}` and `{role}` placeholder substitution. Deduplicated via a `deathAnnounced` table — each death fires TTS once and resets when the unit is resurrected. Voice type (Standard / Alternate 1) is configurable. Full config panel UI in Notifications tab.
+**Notes:** Performance concern (#46 in codereview.md): uses `UNIT_HEALTH` (extremely frequent) rather than `UNIT_DIED` (fires once on death). Recommend switching to `UNIT_DIED` for detection and a lighter event for resurrection reset.
+
+### BoE Item Alert — see feature #19 above ✅ Implemented
+
+---
+
 ## Features Added Since Last Review (2026-03-01)
 
 ### 22. LFG Queue Pop Timer ✅ Implemented (`QueueTimer.lua`)
 **Difficulty:** Easy *(was not previously suggested — shipped)*
 **Description:** A progress bar that counts down the LFG dungeon-finder proposal window. Anchors below the Blizzard `LFGDungeonReadyDialog` when visible; falls back to a configurable CENTER position. Reads the actual expiration timestamp from `GetLFGProposal()` and supports dynamic green→yellow→red color, optional text countdown, and configurable size. Starts on `LFG_PROPOSAL_SHOW`, stops on `LFG_PROPOSAL_FAILED`/`LFG_PROPOSAL_SUCCEEDED` or when entering an instance.
 **Notes:** Minor code issues (#31, #32, #33 in codereview.md). Overall a clean, well-scoped module.
+
+---
+
+## Features Added/Fixed Since Last Review (2026-03-02)
+
+### 23. Per-Widget Clickthrough Toggle ✅ Implemented (Widgets config panel)
+**Difficulty:** Easy *(new micro-feature)*
+**Description:** A "CT" (clickthrough) checkbox added per widget in the Widgets config panel. When enabled and widgets are locked, `EnableMouse(false)` is set on that widget so clicks pass through to the UI underneath. Useful for widgets positioned over the game world or other interactive frames where mouse input should not be intercepted.
+**Notes:** Small, clean addition to the widget framework. No taint concerns — `EnableMouse` on addon-created frames is always safe.
+
+### XP Bar Tooltip Fix ✅ Fixed
+**Description:** The XP bar tooltip was invisible when the bar was locked because locking previously called `EnableMouse(false)`. Mouse is now always enabled; drag eligibility is gated separately by the lock state. Tooltip is visible regardless of lock status.
+
+### XP Bar Warband Mentor Auto-Detection ✅ Improved
+**Description:** The Warband Mentor: Midnight XP bonus (5%–25% based on tier, driven by achievements 42328–42332) is now auto-detected via `GetAchievementInfo` instead of requiring manual user configuration. The detected bonus tier is shown in the XP bar tooltip automatically.
+
+### DMF WHEE Widget Spell ID Fix ✅ Fixed
+**Description:** The Darkmoon Faire WHEE! buff was using the wrong spell ID (71968). Corrected to 136583 so the widget now accurately detects when the buff is active.
 
 ---
 
@@ -167,7 +200,9 @@ LunaUITweaks is already a mature, self-contained addon covering a wide range of 
 | 16 | Alt Character Summary Panel | Medium | Pending |
 | 17 | Auto Group Loot Threshold Setter | Easy | Pending |
 | 18 | Crafting Order Expiry Timer | Medium | Pending |
-| 19 | BoE Item Alert | Easy | Pending |
+| 19 | BoE Item Alert | Easy | ✅ Implemented |
 | 20 | Lightweight Aura Display | Hard | Pending |
 | 21 | Death Recap Overlay | Very Hard (API-blocked) | Pending |
 | 22 | LFG Queue Pop Timer | Easy | ✅ Implemented |
+| 23 | Per-Widget Clickthrough Toggle | Easy | ✅ Implemented |
+| 24 | Death Notification (TTS) | Easy | ✅ Implemented |

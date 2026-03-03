@@ -959,7 +959,7 @@ local function RenderWorldQuests()
                 local isWorldQuest = C_QuestLog.IsWorldQuest(questID)
                 local isTaskQuest = C_QuestLog.IsQuestTask(questID)
 
-                if isWorldQuest or isTaskQuest then
+                if (isWorldQuest or isTaskQuest) and not validWQs[questID] then
                     validWQs[questID] = true
 
                     local isActive = C_QuestLog.IsOnQuest(questID)
@@ -1380,7 +1380,11 @@ local function RenderScenarios()
             if not criteriaInfo then break end
 
             local text = criteriaInfo.description or ""
-            if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+            if criteriaInfo.isWeightedProgress then
+                if criteriaInfo.quantity then
+                    text = text .. " " .. criteriaInfo.quantity .. "%"
+                end
+            elseif criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
                 text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
             end
 
@@ -1404,7 +1408,11 @@ local function RenderScenarios()
             if not criteriaInfo then break end
 
             local text = criteriaInfo.description or ""
-            if criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+            if criteriaInfo.isWeightedProgress then
+                if criteriaInfo.quantity then
+                    text = text .. " " .. criteriaInfo.quantity .. "%"
+                end
+            elseif criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
                 text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
             end
             if criteriaInfo.failed then

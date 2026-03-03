@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(630, 1800)
+    scrollChild:SetSize(630, 1900)
     scrollFrame:SetScrollChild(scrollChild)
     panel = scrollChild
 
@@ -219,6 +219,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "waypointDistance", label = "Waypoint Distance" },
         { key = "addonComm",        label = "Addon Comm Status" },
         { key = "wheeCheck",        label = "DMF WHEE! Buff" },
+        { key = "pullTimer",        label = "Pull Timer" },
     }
 
     local CONDITIONS = {
@@ -352,6 +353,16 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         rightBtn:SetSize(22, 22)
         rightBtn:SetText(">")
         rightBtn:SetScript("OnClick", function() SwapOrder(1) end)
+
+        -- Clickthrough Checkbox
+        local ctBtn = CreateFrame("CheckButton", "UIThingsWidget" .. widget.key .. "CTCheck", panel, "ChatConfigCheckButtonTemplate")
+        ctBtn:SetPoint("LEFT", rightBtn, "RIGHT", 10, 0)
+        ctBtn:SetChecked(UIThingsDB.widgets[widget.key].clickthrough or false)
+        _G[ctBtn:GetName() .. "Text"]:SetText("CT")
+        ctBtn:SetScript("OnClick", function(self)
+            UIThingsDB.widgets[widget.key].clickthrough = self:GetChecked()
+            UpdateWidgets()
+        end)
 
         -- Visibility Helper
         local function UpdateButtonVisibility()

@@ -33,7 +33,22 @@ end
 
 addonTable.EventBus.Register("PLAYER_LOGOUT", SaveAllFramePositions, "Frames")
 
+local pendingUpdate = false
+
+local function OnCombatEnd()
+    if pendingUpdate then
+        pendingUpdate = false
+        addonTable.Frames.UpdateFrames()
+    end
+end
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", OnCombatEnd, "Frames")
+
 function addonTable.Frames.UpdateFrames()
+    if InCombatLockdown() then
+        pendingUpdate = true
+        return
+    end
+
     -- Invalidate widget anchor cache since frames may have changed
     if addonTable.Widgets and addonTable.Widgets.InvalidateAnchorCache then
         addonTable.Widgets.InvalidateAnchorCache()

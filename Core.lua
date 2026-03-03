@@ -389,6 +389,10 @@ local function OnEvent(self, event, ...)
                 boeMinQuality = 4, -- 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary
                 boeAlertDuration = 5,
                 boeAlertColor = { r = 0.63, g = 0.21, b = 0.93, a = 1 }, -- epic purple
+                deathNotify = false,
+                deathTtsEnabled = true,
+                deathTtsMessage = "{name} died",
+                deathTtsVoice = 0,
             },
             minimap = {
                 angle = 45,
@@ -525,6 +529,7 @@ local function OnEvent(self, event, ...)
                 waypointDistance = { enabled = false, point = "CENTER", x = 0, y = -660, condition = "always" },
                 addonComm = { enabled = false, point = "CENTER", x = 0, y = -680, condition = "group" },
                 wheeCheck = { enabled = false, point = "CENTER", x = 0, y = -700, condition = "nocombat" },
+                pullTimer = { enabled = false, point = "CENTER", x = 0, y = -720, condition = "group" },
             },
             kick = {
                 enabled = false,

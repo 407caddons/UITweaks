@@ -1,5 +1,58 @@
 # Widget Ideas — LunaUITweaks
-Date: 2026-02-26 (updated 2026-03-01)
+Date: 2026-02-26 (updated 2026-03-02, updated again 2026-03-02 pass 2)
+
+## Update 2026-03-02 (pass 2)
+
+### WheeCheck.lua — `IsDMFActive()` Dead Code Branch
+The `IsDMFActive()` function contains a dead branch that can never execute:
+
+```lua
+local firstSunday = 1 + (8 - firstDow) % 7
+if firstSunday > 7 then firstSunday = firstSunday - 7 end  -- dead: max value is 7
+```
+
+`firstDow` is `date("*t").wday` in `[1, 7]`. The formula `1 + (8 - firstDow) % 7` produces values in `{1, 2, 3, 4, 5, 6, 7}` — the maximum is exactly 7, so the `if` branch never triggers. The branch should be removed to avoid misleading future readers.
+
+### WidgetsPanel.lua — Condition Dropdown Missing Active Indicator
+
+The per-widget condition dropdown (Always / In Combat / Out of Combat / etc.) uses `info.notCheckable = true`, so when the dropdown is opened, there is no visual checkmark on the currently-active option. The dropdown header text IS updated correctly on selection, but in-dropdown feedback is absent. The anchor dropdown in the same panel correctly uses `info.checked` for comparison. This is a minor UX inconsistency — changing to `info.checked = (cond.value == UIThingsDB.widgets[widget.key].condition)` would add the visual indicator.
+
+### Core.lua — New Utility Functions
+
+Two new utility functions added to `addonTable.Core`:
+
+- **`AbbreviateNumber(value)`** — Formats large numbers with M/K suffixes (`>= 1,000,000` → M; `>= 10,000` → K; below 10,000 returned as plain integer). The 10,000 threshold means values 1,000–9,999 are shown as raw numbers — intentional to avoid `"1.0K"` for small values, but undocumented. Used by XpBar.lua for XP display.
+- **`SpeakTTS(message, voiceType)`** — Centralised TTS dispatcher. Tries `TextToSpeech_Speak` first, falls back to `C_VoiceChat.SpeakText`. Used by Misc.lua (personal orders, mail, death, BoE), allowing future modules to use TTS without duplicating the dispatch logic.
+
+---
+
+## Update 2026-03-02
+
+### DMF WHEE! Widget — Spell ID Bug Fix (`widgets/WheeCheck.lua`)
+The Darkmoon Top Hat buff spell ID was wrong from day one. The widget shipped in v1.20.0 with `71968` as the Top Hat spell ID, which was never a valid aura ID for that buff — it silently failed to detect the Top Hat buff and only the Carousel (WHEE!, spell ID `46668`) worked. The correct Top Hat spell ID is `136583`. This has been corrected in `DMF_BUFFS`:
+
+```lua
+local DMF_BUFFS = {
+    { id = 46668,  label = "WHEE!" },   -- Darkmoon Carousel
+    { id = 136583, label = "Top Hat" }, -- Darkmoon Top Hat  ← was 71968
+}
+```
+
+This was a silent failure — no Lua error was produced. Players who only used the Top Hat to get their DMF buff would have seen the red "DMF buff ✘" text every time even when the buff was active.
+
+### Per-Widget Clickthrough Toggle — Framework Feature
+A clickthrough (CT) checkbox has been added to the config panel for every widget. The checkbox appears after the `<` `>` order buttons in the widget row. Behaviour:
+
+- When CT is enabled and widgets are **locked**, `EnableMouse(false)` is called on the widget frame, allowing mouse events to fall through to the UI beneath.
+- When CT is enabled, the tooltip is suppressed (expected — the frame never receives `OnEnter` since mouse is disabled).
+- When CT is disabled (default), widget behaves as before: mouse-enabled, tooltip shown on hover.
+- When widgets are **unlocked** (edit mode), CT has no effect — mouse must remain enabled to allow dragging.
+
+This is implemented uniformly in `widgets/Widgets.lua` and requires no per-widget code changes.
+
+**Implication for future widgets:** Purely informational display widgets (e.g. coordinates, zone, speed, session time) are natural candidates to ship with CT enabled by default, since users are unlikely to want to click them and may prefer mouse events to reach frames beneath. See improvement ideas at the end of this document.
+
+---
 
 ## Update 2026-03-01
 
@@ -215,3 +268,26 @@ Tracks the shared battle res pool via `C_Spell.GetSpellCharges(20484)` (Druid Re
 Simple widget complement to the full `Coordinates.lua` module. Calls `C_Map.GetBestMapForUnit("player")` and `C_Map.GetPlayerMapPosition()` every 1s — both are lightweight. Uses correct UTF-8 em dash decimal escapes for the "no data" fallback. No issues identified.
 
 ---
+
+### DMF WHEE! (`widgets/WheeCheck.lua`) — Bug Fixed 2026-03-02
+The widget shipped in v1.20.0 with the wrong spell ID for the Darkmoon Top Hat buff (`71968` instead of `136583`). Because `C_UnitAuras.GetPlayerAuraBySpellID()` returns nil for an unknown spell ID rather than erroring, the bug was silent — the widget always reported "no buff" for Top Hat users. Fixed: `136583` is now the correct entry in `DMF_BUFFS`. The Carousel buff (`46668`) was always correct and unaffected. No other issues identified in the widget logic.
+
+---
+
+## Clickthrough-Aware Widget Improvement Ideas (2026-03-02)
+
+The addition of per-widget CT toggles surfaces a natural follow-on improvement: widgets that are purely informational (display-only, no meaningful click action) could ship with CT **enabled by default**, reducing accidental misclicks and keeping the UI surface clean. The following existing widgets are good candidates:
+
+| Widget | Current Click Action | CT-Default Suggestion | Rationale |
+|--------|---------------------|-----------------------|-----------|
+| `Coordinates.lua` | None | Enable CT by default | Pure display, no click action defined |
+| `Speed.lua` | None | Enable CT by default | Pure display, no click action defined |
+| `Zone.lua` | None (tooltip only) | Enable CT by default | Tooltip still works when unlocked; in locked mode CT removes accidental clicks |
+| `SessionStats.lua` | None (tooltip only) | Enable CT by default | Session info is read-only; no click action |
+| `BattleRes.lua` | None (tooltip only) | Enable CT by default | Read-only status display |
+| `Combat.lua` (widget) | None | Enable CT by default | Timer display only |
+| `FPS.lua` | None (tooltip only) | Consider CT by default | Performance info is read-only; tooltip still available in unlocked mode |
+
+Widgets with meaningful click actions (`Spec.lua`, `Hearthstone.lua`, `Bags.lua`, `Volume.lua`, `Time.lua`, `WeeklyReset.lua`, `Mail.lua`, etc.) should keep CT disabled by default so left/right-click functionality remains accessible.
+
+Implementation note: defaulting CT to true for specific widgets would require per-widget entries in `Core.lua`'s `DEFAULTS` table under `UIThingsDB.widgets.<widgetKey>.clickthrough = true`. The framework already supports this — it is a data-only change per widget.

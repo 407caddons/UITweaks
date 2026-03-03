@@ -121,6 +121,7 @@ widgets\Vers.lua
 widgets\WaypointDistance.lua
 widgets\AddonComm.lua
 widgets\WheeCheck.lua
+widgets\PullTimer.lua
 
 # Games
 games\Games.lua

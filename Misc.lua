@@ -201,6 +201,54 @@ function Misc.TestTTS()
     )
 end
 
+-- == DEATH NOTIFICATION ==
+
+local deathAnnounced = {}  -- [unitToken] = true while dead, cleared on resurrection
+
+local function GetRoleLabel(unit)
+    local role = UnitGroupRolesAssigned(unit)
+    if role == "TANK"    then return "Tank"
+    elseif role == "HEALER"  then return "Healer"
+    elseif role == "DAMAGER" then return "DPS"
+    else return "" end
+end
+
+-- UNIT_HEALTH passes non-secret unit tokens; handles both death detection and
+-- resurrection reset in one handler so we only need one event registration.
+local function OnUnitHealth(event, unitTarget)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    if not UIThingsDB.misc.deathNotify then return end
+    if not unitTarget or issecretvalue(unitTarget) then return end
+
+    local isParty = unitTarget:match("^party%d+$")
+    local isRaid  = unitTarget:match("^raid%d+$")
+    if not isParty and not isRaid then return end
+
+    if UnitIsDead(unitTarget) then
+        if not deathAnnounced[unitTarget] then
+            deathAnnounced[unitTarget] = true
+            if UIThingsDB.misc.deathTtsEnabled then
+                local name = UnitName(unitTarget) or "Unknown"
+                local role = GetRoleLabel(unitTarget)
+                local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
+                msg = msg:gsub("{name}", name)
+                msg = msg:gsub("{role}", role)
+                addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
+            end
+        end
+    else
+        -- Unit is alive again — reset so the next death fires TTS again
+        deathAnnounced[unitTarget] = nil
+    end
+end
+
+function Misc.TestDeathTTS()
+    local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
+    msg = msg:gsub("{name}", UnitName("player") or "Player")
+    msg = msg:gsub("{role}", GetRoleLabel("player"))
+    addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
+end
+
 -- == AH FILTER ==
 
 local hookSet = false
@@ -539,6 +587,8 @@ ApplyMiscEvents = function()
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLootBoE)
+        EventBus.Unregister("UNIT_HEALTH", OnUnitHealth)
+        wipe(deathAnnounced)
         return
     end
 
@@ -579,6 +629,13 @@ ApplyMiscEvents = function()
         EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLootBoE, "Misc")
     else
         EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLootBoE)
+    end
+
+    if UIThingsDB.misc.deathNotify then
+        EventBus.Register("UNIT_HEALTH", OnUnitHealth, "Misc")
+    else
+        EventBus.Unregister("UNIT_HEALTH", OnUnitHealth)
+        wipe(deathAnnounced)
     end
 
     if UIThingsDB.misc.classColorTooltips then

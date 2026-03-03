@@ -367,16 +367,18 @@ function Widgets.UpdateVisuals()
         else
             frame.bg:Hide()
             frame.coords:Hide()
-            frame:SetMovable(false) -- Ensure not movable if locked (though Drag script checks db.locked)
+            frame:SetMovable(false)
+            frame:EnableMouse(not db[key].clickthrough)
         end
     end
 
     -- Force locked state on anchored widgets (layout handled by UpdateAnchoredLayouts)
-    for _, items in pairs(anchoredWidgets) do
+    for anchorName, items in pairs(anchoredWidgets) do
         for _, item in ipairs(items) do
             item.frame.bg:Hide()
             item.frame.coords:Hide()
             item.frame:SetMovable(false)
+            item.frame:EnableMouse(not (db[item.key] and db[item.key].clickthrough))
         end
     end
 

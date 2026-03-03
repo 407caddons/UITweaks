@@ -4,80 +4,94 @@ local EventBus = addonTable.EventBus
 
 table.insert(Widgets.moduleInits, function()
     local rcFrame = Widgets.CreateWidgetFrame("ReadyCheck", "readyCheck")
+    rcFrame:RegisterForClicks("AnyUp")
 
-    -- Session-only history: list of { time, results = { {name, ready} } }
-    local history = {}
-    local MAX_HISTORY = 5
-
-    -- State for the current in-progress ready check
-    local pending = nil  -- { startTime, responses = { [name] = ready } }
-
+    local checkActive = false
+    local memberStatus = {}  -- [shortName] = "ready" | "notready" | "unknown"
+    local groupSize = 0
     local cachedText = "|cFF888888Ready Check|r"
 
+    local function GetShortName(name)
+        if not name then return nil end
+        return name:match("^([^%-]+)") or name
+    end
+
+    local function GetPlayerShortName()
+        return GetShortName(UnitName("player"))
+    end
+
     local function UpdateCachedText()
-        if not pending and #history == 0 then
+        if not checkActive and not next(memberStatus) then
             cachedText = "|cFF888888Ready Check|r"
             return
         end
 
-        -- Use latest completed check, or pending state
-        local latest = history[#history]
-        if pending then
-            -- Count responses so far
-            local readyCount, totalCount = 0, 0
-            for _, ready in pairs(pending.responses) do
-                totalCount = totalCount + 1
-                if ready then readyCount = readyCount + 1 end
-            end
-            local groupSize = GetNumGroupMembers()
-            cachedText = string.format("RC: %d/%d", readyCount, groupSize > 0 and groupSize or totalCount)
-        elseif latest then
-            local readyCount, notReadyCount = 0, 0
-            for _, r in ipairs(latest.results) do
-                if r.ready then readyCount = readyCount + 1
-                else notReadyCount = notReadyCount + 1 end
-            end
-            if notReadyCount == 0 then
-                cachedText = "|cFF00FF00RC: All Ready|r"
+        local ready, notReady, unknown = 0, 0, 0
+        for _, status in pairs(memberStatus) do
+            if status == "ready" then
+                ready = ready + 1
+            elseif status == "notready" then
+                notReady = notReady + 1
             else
-                cachedText = string.format("|cFFFF4444RC: %d not ready|r", notReadyCount)
+                unknown = unknown + 1
+            end
+        end
+
+        local total = groupSize > 0 and groupSize or (ready + notReady + unknown)
+        local prefix = total > 0 and (total .. "m ") or ""
+
+        if notReady == 0 and unknown == 0 then
+            cachedText = string.format("|cFF00FF00RC: %s%d/0/0|r", prefix, ready)
+        else
+            cachedText = string.format("RC: %s|cFF00FF00%d|r/|cFFFF4444%d|r/|cFF888888%d|r",
+                prefix, ready, notReady, unknown)
+        end
+    end
+
+    local function PopulateGroupMembers()
+        wipe(memberStatus)
+        groupSize = GetNumGroupMembers()
+        local playerName = GetPlayerShortName()
+
+        if IsInRaid() then
+            for i = 1, groupSize do
+                local name = GetRaidRosterInfo(i)
+                if name then
+                    local short = GetShortName(name)
+                    memberStatus[short] = (short == playerName) and "ready" or "unknown"
+                end
+            end
+        elseif IsInGroup() then
+            -- Player is always ready
+            memberStatus[playerName] = "ready"
+            -- party1..N (player counts in GetNumGroupMembers so loop to N-1)
+            for i = 1, groupSize - 1 do
+                local name = UnitName("party" .. i)
+                if name then
+                    memberStatus[GetShortName(name)] = "unknown"
+                end
             end
         end
     end
 
-    local function OnReadyCheck(event, initiatedBy, text)
-        -- New ready check started — reset pending state
-        pending = { startTime = GetTime(), responses = {} }
-        -- Record player's own response as unknown until they respond
+    local function OnReadyCheck(event, initiatedBy, waitTime)
+        checkActive = true
+        PopulateGroupMembers()
         UpdateCachedText()
     end
 
     local function OnReadyCheckResponse(event, name, ready)
-        if not pending then return end
-        -- name is the shortened unit name
-        pending.responses[name] = ready
+        if not checkActive then return end
+        local short = GetShortName(name)
+        if not short then return end
+        -- Never override player's own "ready" status
+        if short == GetPlayerShortName() then return end
+        memberStatus[short] = ready and "ready" or "notready"
         UpdateCachedText()
     end
 
     local function OnReadyCheckFinished()
-        if not pending then return end
-
-        -- Build result list from pending responses
-        local results = {}
-        for name, ready in pairs(pending.responses) do
-            table.insert(results, { name = name, ready = ready })
-        end
-
-        -- Sort: not-ready first, then ready, alphabetically within each group
-        table.sort(results, function(a, b)
-            if a.ready ~= b.ready then return not a.ready end
-            return a.name < b.name
-        end)
-
-        table.insert(history, { time = GetTime(), results = results })
-        if #history > MAX_HISTORY then table.remove(history, 1) end
-
-        pending = nil
+        checkActive = false
         UpdateCachedText()
     end
 
@@ -86,89 +100,83 @@ table.insert(Widgets.moduleInits, function()
             EventBus.Register("READY_CHECK", OnReadyCheck, "W:ReadyCheck")
             EventBus.Register("READY_CHECK_RESPONSE", OnReadyCheckResponse, "W:ReadyCheck")
             EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:ReadyCheck")
-            UpdateCachedText()
         else
             EventBus.Unregister("READY_CHECK", OnReadyCheck)
             EventBus.Unregister("READY_CHECK_RESPONSE", OnReadyCheckResponse)
             EventBus.Unregister("READY_CHECK_FINISHED", OnReadyCheckFinished)
+            checkActive = false
+            wipe(memberStatus)
+            groupSize = 0
             cachedText = "|cFF888888Ready Check|r"
         end
-    end
-
-    local function FormatAge(seconds)
-        if seconds < 60 then return string.format("%ds ago", math.floor(seconds))
-        elseif seconds < 3600 then return string.format("%dm ago", math.floor(seconds / 60))
-        else return string.format("%dh ago", math.floor(seconds / 3600)) end
     end
 
     rcFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
         Widgets.SmartAnchorTooltip(self)
-        GameTooltip:SetText("Ready Check History", 1, 0.82, 0)
+        GameTooltip:SetText("Ready Check", 1, 0.82, 0)
 
-        if pending then
-            local readyCount, notReadyCount = 0, 0
-            for _, ready in pairs(pending.responses) do
-                if ready then readyCount = readyCount + 1
-                else notReadyCount = notReadyCount + 1 end
+        if not next(memberStatus) then
+            GameTooltip:AddLine("No ready check data this session.", 0.6, 0.6, 0.6)
+        else
+            -- Count summary header
+            local ready, notReady, unknown = 0, 0, 0
+            for _, status in pairs(memberStatus) do
+                if status == "ready" then ready = ready + 1
+                elseif status == "notready" then notReady = notReady + 1
+                else unknown = unknown + 1 end
             end
-            local groupSize = GetNumGroupMembers()
-            GameTooltip:AddLine(string.format("In progress: %d/%d responded",
-                readyCount + notReadyCount, groupSize), 1, 1, 0)
+            GameTooltip:AddDoubleLine(
+                string.format("|cFF00FF00Ready: %d|r", ready),
+                string.format("|cFFFF4444Not Ready: %d|r  |cFF888888Unknown: %d|r", notReady, unknown),
+                1, 1, 1, 1, 1, 1)
             GameTooltip:AddLine(" ")
+
+            -- Sort: ready first, then not ready, then unknown; alphabetically within each
+            local sorted = {}
+            for name, status in pairs(memberStatus) do
+                table.insert(sorted, { name = name, status = status })
+            end
+            table.sort(sorted, function(a, b)
+                local order = { ready = 1, notready = 2, unknown = 3 }
+                local oa = order[a.status] or 4
+                local ob = order[b.status] or 4
+                if oa ~= ob then return oa < ob end
+                return a.name < b.name
+            end)
+
+            for _, entry in ipairs(sorted) do
+                local statusStr
+                if entry.status == "ready" then
+                    statusStr = "|cFF00FF00Ready|r"
+                elseif entry.status == "notready" then
+                    statusStr = "|cFFFF4444Not ready|r"
+                else
+                    statusStr = "|cFF888888Unknown|r"
+                end
+                GameTooltip:AddDoubleLine(entry.name, statusStr, 0.9, 0.9, 0.9, 1, 1, 1)
+            end
         end
 
-        if #history == 0 then
-            GameTooltip:AddLine("No ready checks this session.", 0.6, 0.6, 0.6)
-        else
-            for i = #history, 1, -1 do
-                local check = history[i]
-                local age = FormatAge(GetTime() - check.time)
-
-                local readyCount, notReadyCount = 0, 0
-                for _, r in ipairs(check.results) do
-                    if r.ready then readyCount = readyCount + 1
-                    else notReadyCount = notReadyCount + 1 end
-                end
-
-                local total = readyCount + notReadyCount
-                if notReadyCount == 0 then
-                    GameTooltip:AddDoubleLine(
-                        string.format("Check #%d (%s)", #history - i + 1, age),
-                        string.format("|cFF00FF00All Ready (%d/%d)|r", readyCount, total),
-                        0.8, 0.8, 0.8, 1, 1, 1)
-                else
-                    GameTooltip:AddDoubleLine(
-                        string.format("Check #%d (%s)", #history - i + 1, age),
-                        string.format("|cFFFF4444%d not ready|r  |cFF00FF00%d ready|r", notReadyCount, readyCount),
-                        0.8, 0.8, 0.8, 1, 1, 1)
-                end
-
-                -- Show not-ready players first
-                for _, r in ipairs(check.results) do
-                    if not r.ready then
-                        GameTooltip:AddLine("  |cFFFF4444✗|r " .. r.name, 1, 0.4, 0.4)
-                    end
-                end
-                -- Then ready players, but only if there aren't too many
-                if readyCount <= 10 then
-                    for _, r in ipairs(check.results) do
-                        if r.ready then
-                            GameTooltip:AddLine("  |cFF00FF00✓|r " .. r.name, 0.4, 1, 0.4)
-                        end
-                    end
-                else
-                    GameTooltip:AddLine(string.format("  |cFF00FF00✓|r %d others ready", readyCount), 0.4, 1, 0.4)
-                end
-
-                if i > 1 then GameTooltip:AddLine(" ") end
-            end
+        GameTooltip:AddLine(" ")
+        if checkActive then
+            GameTooltip:AddLine("Ready check in progress...", 1, 1, 0)
+        elseif IsInGroup() then
+            GameTooltip:AddLine("Click to start a ready check", 0.5, 0.5, 1)
         end
 
         GameTooltip:Show()
     end)
 
     rcFrame:SetScript("OnLeave", GameTooltip_Hide)
+
+    rcFrame:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" and UIThingsDB.widgets.locked then
+            if IsInGroup() and not checkActive then
+                DoReadyCheck()
+            end
+        end
+    end)
 
     rcFrame.UpdateContent = function(self)
         self.text:SetText(cachedText)
