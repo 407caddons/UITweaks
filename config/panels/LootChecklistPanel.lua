@@ -50,10 +50,20 @@ function addonTable.ConfigSetup.LootChecklist(panel, tab, configWindow)
         UpdateModule()
     end)
 
+    -- Hide in combat checkbox
+    local combatCheck = CreateFrame("CheckButton", "UIThingsLCCombatCheck", child, "ChatConfigCheckButtonTemplate")
+    combatCheck:SetPoint("TOPLEFT", 20, -94)
+    _G[combatCheck:GetName() .. "Text"]:SetText("Hide in Combat")
+    combatCheck:SetChecked(db.hideInCombat)
+    combatCheck:SetScript("OnClick", function(self)
+        db.hideInCombat = not not self:GetChecked()
+        UpdateModule()
+    end)
+
     -- Open Browser button
     local openBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     openBtn:SetSize(150, 22)
-    openBtn:SetPoint("TOPLEFT", 20, -100)
+    openBtn:SetPoint("TOPLEFT", 20, -122)
     openBtn:SetText("Open Loot Browser")
     openBtn:SetScript("OnClick", function()
         if addonTable.LootChecklist then

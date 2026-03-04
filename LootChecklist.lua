@@ -23,10 +23,18 @@ local RAID_DIFFS = {
 }
 local ROW_H = 22
 
+-- Standard EJ slot type names (used to populate the Slot dropdown statically)
+local SLOT_TYPES = {
+    "Back", "Chest", "Feet", "Finger", "Hands", "Head",
+    "Held In Off-hand", "Legs", "Main Hand", "Neck", "Off Hand",
+    "One-Hand", "Ranged", "Shoulder", "Trinket", "Two-Hand", "Waist", "Wrist",
+}
+
 -- ============================================================
 -- Module state
 -- ============================================================
 local db               -- UIThingsDB.lootChecklist shortcut
+local charDB           -- LunaUITweaks_LootChecklist (per-character checklist data)
 local checklistFrame
 local checklistScrollChild
 local checklistRows    = {}
@@ -39,11 +47,13 @@ local bInstanceType = 1      -- 1=dungeon, 2=raid
 local bInstanceID   = nil
 local bDifficultyID = nil
 local bEncounterID  = nil    -- nil = all bosses
+local bInstanceName = nil    -- display name of selected instance
 local bItems        = {}     -- fetched EJ loot entries
 
 -- Browser UI references
-local tierDD, instanceDD, diffDD, encounterDD
+local tierDD, instanceDD, diffDD, encounterDD, slotDD
 local dungeonBtn, raidBtn
+local bSlotFilter = nil   -- nil = all slots, otherwise slot string e.g. "Back"
 local ejScrollChild, bcScrollChild
 local ejRows    = {}
 local ejRowPool = {}
@@ -75,10 +85,11 @@ local function FetchInstances(tierIndex, instanceType)
     local isRaid = (instanceType == 2)
     local idx = 1
     while true do
-        local journalInstID, name, _, _, _, _, _, _, _, _, instID = EJ_GetInstanceByIndex(idx, isRaid)
+        local journalInstID, name = EJ_GetInstanceByIndex(idx, isRaid)
         if not journalInstID then break end
-        if name and instID then
-            table.insert(list, { name = name, instanceID = instID })
+        if name then
+            -- journalInstID is JournalInstance.ID, required by EJ_SelectInstance
+            table.insert(list, { name = name, instanceID = journalInstID })
         end
         idx = idx + 1
     end
@@ -91,17 +102,19 @@ local function FetchEncounters(instanceID)
     if not EnsureEJLoaded() then return list end
     local ok = pcall(EJ_SelectInstance, instanceID)
     if not ok then return list end
-    local count = EJ_GetNumEncounters()
-    for i = 1, count do
-        local encID, name = EJ_GetEncounterInfo(i)
-        if encID and name then
+    local idx = 1
+    while true do
+        local name, _, encID = EJ_GetEncounterInfoByIndex(idx)
+        if not name then break end
+        if encID then
             table.insert(list, { encounterID = encID, name = name })
         end
+        idx = idx + 1
     end
     return list
 end
 
-local function FetchLoot(instanceID, difficultyID, encounterID)
+local function FetchLoot(instanceID, difficultyID, encounterID, instanceName)
     local items = {}
     if not instanceID then return items end
     if not EnsureEJLoaded() then return items end
@@ -112,7 +125,7 @@ local function FetchLoot(instanceID, difficultyID, encounterID)
     local localClass = UnitClass("player") or ""
     local seen = {}
 
-    local function fetchEnc(encID)
+    local function fetchEnc(encID, encName)
         if not pcall(EJ_SelectEncounter, encID) then return end
         local idx = 1
         while true do
@@ -125,12 +138,22 @@ local function FetchLoot(instanceID, difficultyID, encounterID)
                     pass = info.classNames:lower():find(localClass:lower(), 1, true) ~= nil
                 end
                 if pass then
+                    -- EJ may have nil name/link on first fetch before EJ_LOOT_DATA_RECIEVED.
+                    -- Try GetItemInfo as a fallback for name; link will be corrected on re-fetch.
+                    local iname, ilink, itex = info.name, info.link, info.icon
+                    if not iname then
+                        local n, _, _, _, _, _, _, _, _, t = GetItemInfo(info.itemID)
+                        iname = n
+                        itex  = itex or t
+                    end
                     table.insert(items, {
-                        itemID   = info.itemID,
-                        name     = info.name or ("Item " .. info.itemID),
-                        slot     = info.slot or "",
-                        itemLink = info.itemLink,
-                        texture  = info.texture,
+                        itemID        = info.itemID,
+                        name          = iname or ("Item " .. info.itemID),
+                        slot          = info.slot or "",
+                        itemLink      = ilink,
+                        texture       = itex,
+                        instanceName  = instanceName,
+                        encounterName = encName,
                     })
                 end
             end
@@ -139,12 +162,23 @@ local function FetchLoot(instanceID, difficultyID, encounterID)
     end
 
     if encounterID then
-        fetchEnc(encounterID)
+        -- Look up the encounter name from the journal
+        local encName
+        local eidx = 1
+        while true do
+            local ename, _, eid = EJ_GetEncounterInfoByIndex(eidx)
+            if not ename then break end
+            if eid == encounterID then encName = ename; break end
+            eidx = eidx + 1
+        end
+        fetchEnc(encounterID, encName)
     else
-        local count = EJ_GetNumEncounters()
-        for i = 1, count do
-            local encID = EJ_GetEncounterInfo(i)
-            if encID then fetchEnc(encID) end
+        local idx = 1
+        while true do
+            local name, _, encID = EJ_GetEncounterInfoByIndex(idx)
+            if not name then break end
+            if encID then fetchEnc(encID, name) end
+            idx = idx + 1
         end
     end
 
@@ -155,24 +189,69 @@ local function FetchLoot(instanceID, difficultyID, encounterID)
     return items
 end
 
+-- Fetch loot across ALL instances in a tier (used when slot is selected but no instance)
+local function FetchAllInstancesLoot(tierIndex, instanceType, difficultyID)
+    local items = {}
+    local seen  = {}
+    if not tierIndex then return items end
+    if not EnsureEJLoaded() then return items end
+    pcall(EJ_SelectTier, tierIndex)
+    local isRaid = (instanceType == 2)
+    local idx = 1
+    while true do
+        local journalInstID, instName = EJ_GetInstanceByIndex(idx, isRaid)
+        if not journalInstID then break end
+        local instItems = FetchLoot(journalInstID, difficultyID, nil, instName)
+        for _, item in ipairs(instItems) do
+            if not seen[item.itemID] then
+                seen[item.itemID] = true
+                table.insert(items, item)
+            end
+        end
+        idx = idx + 1
+    end
+    table.sort(items, function(a, b)
+        if a.slot ~= b.slot then return a.slot < b.slot end
+        return (a.name or "") < (b.name or "")
+    end)
+    return items
+end
+
 -- ============================================================
 -- Checklist DB management
 -- ============================================================
-local function IsOnChecklist(itemID)
-    for _, e in ipairs(db.checklist) do
-        if e.itemID == itemID then return true end
+local function GetLinkIlvl(link)
+    if not link then return nil end
+    return select(3, GetDetailedItemLevelInfo(link))
+end
+
+-- Two entries for the same itemID at different difficulties are treated as distinct.
+-- itemLevel may be nil for old entries (no level check performed in that case).
+local function IsOnChecklist(itemID, itemLevel)
+    for _, e in ipairs(charDB.checklist) do
+        if e.itemID == itemID then
+            if e.itemLevel and itemLevel then
+                if math.abs(e.itemLevel - itemLevel) <= 5 then return true end
+            else
+                return true  -- no level data on one side; treat as same
+            end
+        end
     end
     return false
 end
 
 local function AddToChecklist(item)
-    if IsOnChecklist(item.itemID) then return end
-    table.insert(db.checklist, {
-        itemID   = item.itemID,
-        name     = item.name,
-        slot     = item.slot,
-        itemLink = item.itemLink,
-        obtained = false,
+    local ilvl = GetLinkIlvl(item.itemLink)
+    if IsOnChecklist(item.itemID, ilvl) then return end
+    table.insert(charDB.checklist, {
+        itemID        = item.itemID,
+        name          = item.name,
+        slot          = item.slot,
+        itemLink      = item.itemLink,
+        itemLevel     = ilvl,
+        obtained      = false,
+        instanceName  = item.instanceName,
+        encounterName = item.encounterName,
     })
     LootChecklist.RefreshChecklist()
     if browserFrame and browserFrame:IsShown() then
@@ -181,9 +260,9 @@ local function AddToChecklist(item)
 end
 
 local function RemoveFromChecklist(itemID)
-    for i, e in ipairs(db.checklist) do
+    for i, e in ipairs(charDB.checklist) do
         if e.itemID == itemID then
-            table.remove(db.checklist, i)
+            table.remove(charDB.checklist, i)
             LootChecklist.RefreshChecklist()
             if browserFrame and browserFrame:IsShown() then
                 LootChecklist.RefreshBrowserChecklist()
@@ -193,13 +272,18 @@ local function RemoveFromChecklist(itemID)
     end
 end
 
-local function MarkObtained(itemID)
-    for _, e in ipairs(db.checklist) do
+local function MarkObtained(itemID, itemLevel)
+    for _, e in ipairs(charDB.checklist) do
         if e.itemID == itemID and not e.obtained then
-            e.obtained = true
-            LootChecklist.RefreshChecklist()
-            Log("LootChecklist", "Obtained: " .. (e.name or tostring(itemID)), LogLevel.INFO)
-            return true
+            -- Skip if both sides have level data and they don't match (different difficulty)
+            if e.itemLevel and itemLevel and math.abs(e.itemLevel - itemLevel) > 5 then
+                -- continue to next entry
+            else
+                e.obtained = true
+                LootChecklist.RefreshChecklist()
+                Log("LootChecklist", "Obtained: " .. (e.name or tostring(itemID)), LogLevel.INFO)
+                return true
+            end
         end
     end
     return false
@@ -208,11 +292,15 @@ end
 -- ============================================================
 -- Loot detection
 -- ============================================================
-local function CheckItemLinks(text)
-    if not text then return end
-    for link in text:gmatch("|H(item:[^|]+)|h") do
-        local itemID = tonumber(link:match("item:(%d+)"))
-        if itemID then MarkObtained(itemID) end
+local function CheckItemLinks(msg)
+    if not msg or issecretvalue(msg) then return end
+    local itemLink = msg:match("|c%x+|Hitem:.-|h.-|h|r")
+    if itemLink then
+        local itemID = tonumber(itemLink:match("item:(%d+)"))
+        if itemID then
+            local ilvl = GetLinkIlvl(itemLink)
+            MarkObtained(itemID, ilvl)
+        end
     end
 end
 
@@ -222,14 +310,22 @@ local function OnChatMsgLoot(event, msg)
 end
 
 local function ScanBagsForChecklist()
-    if not db or not db.enabled or #db.checklist == 0 then return end
+    if not db or not db.enabled or not charDB or #charDB.checklist == 0 then return end
     for bag = 0, 4 do
         local slots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, slots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID then MarkObtained(info.itemID) end
+            if info and info.itemID then
+                local ilvl = GetLinkIlvl(info.hyperlink)
+                MarkObtained(info.itemID, ilvl)
+            end
         end
     end
+end
+
+local function OnLootClosed()
+    if not db or not db.enabled then return end
+    C_Timer.After(0.1, ScanBagsForChecklist)
 end
 
 -- ============================================================
@@ -240,11 +336,11 @@ local function NewChecklistRow(parent)
     row:SetHeight(ROW_H)
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
 
-    row.checkTex = row:CreateFontString(nil, "OVERLAY")
+    row.checkTex = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.checkTex:SetPoint("LEFT", 4, 0)
     row.checkTex:SetWidth(14)
 
-    row.label = row:CreateFontString(nil, "OVERLAY")
+    row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.label:SetPoint("LEFT", 20, 0)
     row.label:SetPoint("RIGHT", -20, 0)
     row.label:SetJustifyH("LEFT")
@@ -282,37 +378,119 @@ function LootChecklist.RefreshChecklist()
     local font     = (db and db.font)     or "Fonts\\FRIZQT__.TTF"
     local fontSize = (db and db.fontSize) or 12
     local rh       = fontSize + 8
+    local hh       = math.max(14, fontSize)
 
-    for i, entry in ipairs(db.checklist) do
-        local row = table.remove(checklistRowPool) or NewChecklistRow(checklistScrollChild)
-        row:SetParent(checklistScrollChild)
-        row:SetHeight(rh)
-        row:SetPoint("TOPLEFT", 0, -((i - 1) * rh))
-        row:SetPoint("RIGHT", 0, 0)
-        row.itemID   = entry.itemID
-        row.itemLink = entry.itemLink
+    -- Sort by instance → encounter → name
+    local sorted = {}
+    for _, e in ipairs(charDB.checklist) do table.insert(sorted, e) end
+    table.sort(sorted, function(a, b)
+        local ai = a.instanceName or ""
+        local bi = b.instanceName or ""
+        if ai ~= bi then return ai < bi end
+        local ae = a.encounterName or ""
+        local be = b.encounterName or ""
+        if ae ~= be then return ae < be end
+        return (a.name or "") < (b.name or "")
+    end)
 
-        row.checkTex:SetFont(font, fontSize, "")
-        row.label:SetFont(font, fontSize, "")
-
-        if entry.obtained then
-            row.checkTex:SetText("|cFF44FF44\226\156\147|r")
-            row.label:SetText("|cFF888888" .. (entry.name or "") .. "|r")
-        else
-            row.checkTex:SetText("|cFFAAAAAA\226\150\161|r")
-            row.label:SetText(entry.name or "")
+    -- Pre-count items per instance for the header display
+    local instCount = {}
+    for _, e in ipairs(sorted) do
+        local inst = e.instanceName or ""
+        if inst ~= "" then
+            instCount[inst] = (instCount[inst] or 0) + 1
         end
-        row:Show()
-
-        local iid = entry.itemID
-        row.removeBtn:SetScript("OnClick", function() RemoveFromChecklist(iid) end)
-        table.insert(checklistRows, row)
     end
 
-    checklistScrollChild:SetHeight(math.max(1, #db.checklist * rh))
+    local yOff    = 0
+    local lastInst = nil
+    local lastEnc  = nil
+
+    local function emitHeader(text, indentX)
+        local row = table.remove(checklistRowPool) or NewChecklistRow(checklistScrollChild)
+        row:SetParent(checklistScrollChild)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -yOff)
+        row:SetPoint("RIGHT",   0, 0)
+        row:SetHeight(hh)
+        row:EnableMouse(false)
+        row.checkTex:SetText("")
+        row.label:ClearAllPoints()
+        row.label:SetPoint("LEFT", indentX, 0)
+        row.label:SetPoint("RIGHT", 0, 0)
+        row.label:SetFont(font, fontSize - 1, "OUTLINE")
+        row.label:SetText(text)
+        row.removeBtn:Hide()
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
+        row:Show()
+        table.insert(checklistRows, row)
+        yOff = yOff + hh
+    end
+
+    for _, entry in ipairs(sorted) do
+        local inst = entry.instanceName or ""
+        local enc  = entry.encounterName or ""
+
+        if inst ~= lastInst then
+            lastInst = inst
+            lastEnc  = nil
+            if inst ~= "" then
+                local n = instCount[inst] or 0
+                emitHeader("|cFFFFD100" .. inst .. " (" .. n .. ")|r", 4)
+            end
+        end
+        if enc ~= lastEnc then
+            lastEnc = enc
+            if enc ~= "" then
+                emitHeader("|cFFBBBBBB  " .. enc .. "|r", 4)
+            end
+        end
+
+        local row = table.remove(checklistRowPool) or NewChecklistRow(checklistScrollChild)
+        row:SetParent(checklistScrollChild)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -yOff)
+        row:SetPoint("RIGHT",   0, 0)
+        row:SetHeight(rh)
+        row:EnableMouse(true)
+        row.itemID   = entry.itemID
+        row.itemLink = entry.itemLink
+        row.checkTex:SetFont("Interface\\AddOns\\LunaUITweaks\\fonts\\NotoSans-Regular.ttf", fontSize, "")
+        row.checkTex:SetPoint("LEFT", 4, 0)
+        row.label:ClearAllPoints()
+        row.label:SetPoint("LEFT", 20, 0)
+        row.label:SetPoint("RIGHT", -20, 0)
+        row.label:SetFont(font, fontSize, "")
+        local slotSuffix = (entry.slot and entry.slot ~= "") and ("|cFFAAAAAA - " .. entry.slot .. "|r") or ""
+        local ilvlSuffix = entry.itemLevel and ("|cFFAAAAAA (" .. entry.itemLevel .. ")|r") or ""
+        if entry.obtained then
+            row.checkTex:SetText("|cFF44FF44\226\156\147|r")
+            row.label:SetText("|cFF888888" .. (entry.name or "") .. " - " .. (entry.slot or "") .. ilvlSuffix .. "|r")
+        else
+            row.checkTex:SetText("|cFFAAAAAA-|r")
+            row.label:SetText((entry.name or "") .. slotSuffix .. ilvlSuffix)
+        end
+        row.removeBtn:Show()
+        row:SetScript("OnEnter", function(self)
+            if self.itemLink then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetHyperlink(self.itemLink)
+                GameTooltip:Show()
+            end
+        end)
+        row:SetScript("OnLeave", GameTooltip_Hide)
+        local iid = entry.itemID
+        row.removeBtn:SetScript("OnClick", function() RemoveFromChecklist(iid) end)
+        row:Show()
+        table.insert(checklistRows, row)
+        yOff = yOff + rh
+    end
+
+    checklistScrollChild:SetHeight(math.max(1, yOff))
 
     if db.enabled then
-        if #db.checklist == 0 and db.locked then
+        if #charDB.checklist == 0 and db.locked then
             checklistFrame:Hide()
         else
             checklistFrame:Show()
@@ -327,6 +505,7 @@ local function CreateChecklistFrame()
     f:SetSize(db.width or 220, db.height or 280)
     f:SetMovable(true)
     f:SetClampedToScreen(true)
+    f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     checklistFrame = f
 
@@ -343,7 +522,7 @@ local function CreateChecklistFrame()
     clearBtn:SetHighlightTexture("Interface\\Buttons\\UI-StopButton")
     clearBtn:GetHighlightTexture():SetVertexColor(1, 0.6, 0.2)
     clearBtn:SetScript("OnClick", function()
-        wipe(db.checklist)
+        wipe(charDB.checklist)
         LootChecklist.RefreshChecklist()
         if browserFrame and browserFrame:IsShown() then
             LootChecklist.RefreshBrowserChecklist()
@@ -533,11 +712,10 @@ local function NewEJRow(parent)
     row.addBtn:SetNormalFontObject("GameFontNormalSmall")
 
     row:SetScript("OnEnter", function(self)
-        if self.itemLink then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetHyperlink(self.itemLink)
-            GameTooltip:Show()
-        end
+        if not self.itemLink then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(self.itemLink)
+        GameTooltip:Show()
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)
     return row
@@ -552,11 +730,20 @@ local function RefreshEJList()
     wipe(ejRows)
     if not ejScrollChild then return end
 
-    for i, item in ipairs(bItems) do
+    -- Apply slot filter
+    local displayItems = {}
+    for _, item in ipairs(bItems) do
+        if not bSlotFilter or item.slot == bSlotFilter then
+            table.insert(displayItems, item)
+        end
+    end
+
+    for i, item in ipairs(displayItems) do
         local row = table.remove(ejRowPool) or NewEJRow(ejScrollChild)
         row:SetParent(ejScrollChild)
         row:SetPoint("TOPLEFT", 0, -((i - 1) * ROW_H))
         row:SetPoint("RIGHT",   0, 0)
+        row.itemID   = item.itemID
         row.itemLink = item.itemLink
         row:Show()
 
@@ -567,7 +754,7 @@ local function RefreshEJList()
             row.icon:Hide()
         end
 
-        local onList = IsOnChecklist(item.itemID)
+        local onList = IsOnChecklist(item.itemID, GetLinkIlvl(item.itemLink))
         local slotPfx = item.slot ~= "" and ("|cFFAAAAAA" .. item.slot .. ":|r ") or ""
         row.label:SetText(slotPfx .. (item.name or ""))
         row.addBtn:SetEnabled(not onList)
@@ -582,7 +769,22 @@ local function RefreshEJList()
         table.insert(ejRows, row)
     end
 
-    ejScrollChild:SetHeight(math.max(1, #bItems * ROW_H))
+    ejScrollChild:SetHeight(math.max(1, #displayItems * ROW_H))
+end
+
+local ReloadEJItems  -- forward declaration (defined below in Browser: controls)
+
+local function InitSlotDropdown()
+    if not slotDD then return end
+    local items = { { label = "All Types", slot = nil } }
+    for _, s in ipairs(SLOT_TYPES) do
+        table.insert(items, { label = s, slot = s })
+    end
+    slotDD:SetItems(items, function(item)
+        bSlotFilter = item.slot
+        ReloadEJItems()
+    end)
+    slotDD:SetValue("All Types")
 end
 
 -- ============================================================
@@ -627,43 +829,135 @@ function LootChecklist.RefreshBrowserChecklist()
     wipe(bcRows)
     if not bcScrollChild then return end
 
-    for i, entry in ipairs(db.checklist) do
+    -- Sort by instance → encounter → name
+    local sorted = {}
+    for _, e in ipairs(charDB.checklist) do table.insert(sorted, e) end
+    table.sort(sorted, function(a, b)
+        local ai = a.instanceName or ""
+        local bi = b.instanceName or ""
+        if ai ~= bi then return ai < bi end
+        local ae = a.encounterName or ""
+        local be = b.encounterName or ""
+        if ae ~= be then return ae < be end
+        return (a.name or "") < (b.name or "")
+    end)
+
+    -- Pre-count items per instance for the header display
+    local instCount = {}
+    for _, e in ipairs(sorted) do
+        local inst = e.instanceName or ""
+        if inst ~= "" then
+            instCount[inst] = (instCount[inst] or 0) + 1
+        end
+    end
+
+    local yOff    = 0
+    local lastInst = nil
+    local lastEnc  = nil
+    local HH = ROW_H - 4   -- header height
+
+    local function emitHeader(text, indentX)
         local row = table.remove(bcRowPool) or NewBCRow(bcScrollChild)
         row:SetParent(bcScrollChild)
-        row:SetPoint("TOPLEFT", 0, -((i - 1) * ROW_H))
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -yOff)
         row:SetPoint("RIGHT",   0, 0)
-        row.itemLink = entry.itemLink
+        row:SetHeight(HH)
+        row:EnableMouse(false)
+        row.label:ClearAllPoints()
+        row.label:SetPoint("LEFT", indentX, 0)
+        row.label:SetPoint("RIGHT", 0, 0)
+        row.label:SetText(text)
+        row.removeBtn:Hide()
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
         row:Show()
+        table.insert(bcRows, row)
+        yOff = yOff + HH
+    end
 
-        if entry.obtained then
-            row.label:SetText("|cFF44FF44\226\156\147|r |cFF888888" .. (entry.name or "") .. "|r")
-        else
-            row.label:SetText("|cFFAAAAAA\226\150\161|r " .. (entry.name or ""))
+    for _, entry in ipairs(sorted) do
+        local inst = entry.instanceName or ""
+        local enc  = entry.encounterName or ""
+
+        if inst ~= lastInst then
+            lastInst = inst
+            lastEnc  = nil
+            if inst ~= "" then
+                local n = instCount[inst] or 0
+                emitHeader("|cFFFFD100" .. inst .. " (" .. n .. ")|r", 4)
+            end
+        end
+        if enc ~= lastEnc then
+            lastEnc = enc
+            if enc ~= "" then
+                emitHeader("|cFFBBBBBB  " .. enc .. "|r", 4)
+            end
         end
 
+        local row = table.remove(bcRowPool) or NewBCRow(bcScrollChild)
+        row:SetParent(bcScrollChild)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -yOff)
+        row:SetPoint("RIGHT",   0, 0)
+        row:SetHeight(ROW_H)
+        row:EnableMouse(true)
+        row.itemLink = entry.itemLink
+        row.label:ClearAllPoints()
+        row.label:SetPoint("LEFT", 4, 0)
+        row.label:SetPoint("RIGHT", -22, 0)
+        local slotSuffix = (entry.slot and entry.slot ~= "") and ("|cFFAAAAAA - " .. entry.slot .. "|r") or ""
+        local ilvlSuffix = entry.itemLevel and ("|cFFAAAAAA (" .. entry.itemLevel .. ")|r") or ""
+        if entry.obtained then
+            row.label:SetText("|cFF44FF44\226\156\147|r |cFF888888" .. (entry.name or "") .. " - " .. (entry.slot or "") .. ilvlSuffix .. "|r")
+        else
+            row.label:SetText("|cFFAAAAAA-|r " .. (entry.name or "") .. slotSuffix .. ilvlSuffix)
+        end
+        row.removeBtn:Show()
+        row:SetScript("OnEnter", function(self)
+            if self.itemLink then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetHyperlink(self.itemLink)
+                GameTooltip:Show()
+            end
+        end)
+        row:SetScript("OnLeave", GameTooltip_Hide)
         local iid = entry.itemID
         row.removeBtn:SetScript("OnClick", function()
             RemoveFromChecklist(iid)
             RefreshEJList()
         end)
+        row:Show()
         table.insert(bcRows, row)
+        yOff = yOff + ROW_H
     end
 
-    bcScrollChild:SetHeight(math.max(1, #db.checklist * ROW_H))
+    bcScrollChild:SetHeight(math.max(1, yOff))
 end
 
 -- ============================================================
 -- Browser: controls
 -- ============================================================
-local function ReloadEJItems()
-    bItems = FetchLoot(bInstanceID, bDifficultyID, bEncounterID)
+ReloadEJItems = function()
+    if bInstanceID then
+        -- Specific instance selected — fetch its loot
+        bItems = FetchLoot(bInstanceID, bDifficultyID, bEncounterID, bInstanceName)
+    elseif bSlotFilter then
+        -- Slot selected but no instance — scan all instances in this tier
+        bItems = FetchAllInstancesLoot(bTierIdx, bInstanceType, bDifficultyID)
+    else
+        bItems = {}
+    end
     RefreshEJList()
     LootChecklist.RefreshBrowserChecklist()
 end
 
 local function OnInstanceSelected(instanceInfo)
-    bInstanceID  = instanceInfo.instanceID
-    bEncounterID = nil
+    bInstanceID   = instanceInfo.instanceID
+    bInstanceName = instanceInfo.name
+    bEncounterID  = nil
+    bSlotFilter   = nil
+    if slotDD then slotDD:SetValue("All Types") end
 
     local encs = FetchEncounters(bInstanceID)
     local encItems = { { label = "All Bosses", encounterID = nil } }
@@ -681,8 +975,11 @@ end
 local function SetInstanceType(itype)
     bInstanceType = itype
     bInstanceID   = nil
+    bInstanceName = nil
     bEncounterID  = nil
     bItems        = {}
+    bSlotFilter   = nil
+    InitSlotDropdown()
     RefreshEJList()
     LootChecklist.RefreshBrowserChecklist()
 
@@ -824,13 +1121,17 @@ local function CreateBrowserFrame()
     bossLabel:SetPoint("TOPLEFT", 12, y)
     bossLabel:SetText("Boss:")
 
-    encounterDD = MakeDropdown(f, 220)
+    encounterDD = MakeDropdown(f, 200)
     encounterDD:SetPoint("LEFT", bossLabel, "RIGHT", 6, 0)
     encounterDD:SetValue("All Bosses")
 
-    local classNote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    classNote:SetPoint("LEFT", encounterDD, "RIGHT", 12, 0)
-    classNote:SetText("|cFF888888Filtered by your class|r")
+    local slotLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    slotLabel:SetPoint("LEFT", encounterDD, "RIGHT", 16, 0)
+    slotLabel:SetText("Slot:")
+
+    slotDD = MakeDropdown(f, 160)
+    slotDD:SetPoint("LEFT", slotLabel, "RIGHT", 6, 0)
+    slotDD:SetValue("All Types")
 
     -- ---- Divider ----
     y = y - 28
@@ -906,22 +1207,27 @@ local function CreateBrowserFrame()
     end
 
     tierDD:SetItems(tiers, function(item)
-        bTierIdx = item.tierIndex
+        bTierIdx      = item.tierIndex
+        bInstanceID   = nil
+        bInstanceName = nil
+        bEncounterID  = nil
+        bSlotFilter   = nil
         local instances = FetchInstances(bTierIdx, bInstanceType)
         instanceDD:SetItems(instances, OnInstanceSelected)
         instanceDD:SetValue("Select Instance...")
-        bInstanceID  = nil
-        bEncounterID = nil
-        bItems       = {}
+        bItems = {}
+        InitSlotDropdown()
         RefreshEJList()
         LootChecklist.RefreshBrowserChecklist()
     end)
 
-    -- Default to most recent tier
+    -- Default to most recent tier; InitSlotDropdown is called inside SetInstanceType
     if #tiers > 0 then
         bTierIdx = tiers[#tiers].tierIndex
         tierDD:SelectByIndex(#tiers)
         SetInstanceType(1)    -- sets dungeons + default difficulty, populates instanceDD
+    else
+        InitSlotDropdown()
     end
 
     LootChecklist.RefreshBrowserChecklist()
@@ -977,7 +1283,7 @@ function LootChecklist.UpdateSettings()
     end
 
     if db.enabled then
-        if #db.checklist == 0 and db.locked then
+        if #charDB.checklist == 0 and db.locked then
             checklistFrame:Hide()
         else
             checklistFrame:Show()
@@ -992,9 +1298,24 @@ end
 -- ============================================================
 -- Event handlers
 -- ============================================================
+local function OnEJLootDataReceived()
+    -- EJ has finished loading loot data for the current encounter/instance.
+    -- Re-fetch so item links now contain the correct difficulty bonus IDs
+    -- (which encode the proper scaled item level for tooltips).
+    if not bInstanceID then return end
+    if not browserFrame or not browserFrame:IsShown() then return end
+    bItems = FetchLoot(bInstanceID, bDifficultyID, bEncounterID)
+    RefreshEJList()
+end
+
 local function OnEnteringWorld()
     EventBus.Unregister("PLAYER_ENTERING_WORLD", OnEnteringWorld)
     db = UIThingsDB.lootChecklist
+    LunaUITweaks_LootChecklist = LunaUITweaks_LootChecklist or {}
+    if not LunaUITweaks_LootChecklist.checklist then
+        LunaUITweaks_LootChecklist.checklist = {}
+    end
+    charDB = LunaUITweaks_LootChecklist
     CreateChecklistFrame()
     LootChecklist.UpdateSettings()
     C_Timer.After(2, ScanBagsForChecklist)
@@ -1004,12 +1325,26 @@ local function OnTradeClosed()
     C_Timer.After(0.5, ScanBagsForChecklist)
 end
 
+local function OnEnterCombat()
+    if not db or not db.enabled or not db.hideInCombat then return end
+    if checklistFrame then checklistFrame:Hide() end
+end
+
+local function OnLeaveCombat()
+    if not db or not db.enabled or not db.hideInCombat then return end
+    if checklistFrame and #charDB.checklist > 0 then checklistFrame:Show() end
+end
+
 -- ============================================================
 -- Initialization
 -- ============================================================
-EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld,   "LootChecklist")
-EventBus.Register("CHAT_MSG_LOOT",         OnChatMsgLoot,     "LootChecklist")
-EventBus.Register("TRADE_CLOSED",          OnTradeClosed,     "LootChecklist")
+EventBus.Register("PLAYER_ENTERING_WORLD",  OnEnteringWorld,      "LootChecklist")
+EventBus.Register("CHAT_MSG_LOOT",          OnChatMsgLoot,        "LootChecklist")
+EventBus.Register("LOOT_CLOSED",            OnLootClosed,         "LootChecklist")
+EventBus.Register("TRADE_CLOSED",           OnTradeClosed,        "LootChecklist")
+EventBus.Register("EJ_LOOT_DATA_RECIEVED",  OnEJLootDataReceived, "LootChecklist")
+EventBus.Register("PLAYER_REGEN_DISABLED",  OnEnterCombat,        "LootChecklist")
+EventBus.Register("PLAYER_REGEN_ENABLED",   OnLeaveCombat,        "LootChecklist")
 
 SLASH_LUITLOOT1 = "/luitloot"
 SlashCmdList["LUITLOOT"] = function()

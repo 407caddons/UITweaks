@@ -708,6 +708,7 @@ local function OnEvent(self, event, ...)
             lootChecklist = {
                 enabled         = false,
                 locked          = false,
+                hideInCombat    = false,
                 pos             = nil,
                 width           = 220,
                 height          = 280,
@@ -717,7 +718,6 @@ local function OnEvent(self, event, ...)
                 showBackground  = true,
                 font            = "Fonts\\FRIZQT__.TTF",
                 fontSize        = 12,
-                checklist       = {},
             },
             queueTimer = {
                 enabled = false,
@@ -769,6 +769,7 @@ local function OnEvent(self, event, ...)
                 barBgColor     = { r = 0.12, g = 0.12, b = 0.12, a = 1    },
                 barColor       = { r = 0.2,  g = 0.5,  b = 0.9,  a = 1    },
                 barTextColor   = { r = 1,    g = 1,    b = 1,    a = 1    },
+                showDps        = false,
                 meter1         = { type = "damage",  session = "fight" },
                 meter2         = { type = "healing", session = "fight" },
             },

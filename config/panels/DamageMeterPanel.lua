@@ -373,6 +373,17 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         UIThingsDB.damageMeter.useClassColors = self:GetChecked()
         Refresh()
     end)
+    yBase = yBase - 28
+
+    -- Show DPS
+    local dpsCB = CreateFrame("CheckButton", "UIThingsDMShowDps", child, "ChatConfigCheckButtonTemplate")
+    dpsCB:SetPoint("TOPLEFT", 20, yBase)
+    _G[dpsCB:GetName() .. "Text"]:SetText("Show DPS (damage/healing types, requires bar height \226\137\165 28)")
+    dpsCB:SetChecked(UIThingsDB.damageMeter.showDps)
+    dpsCB:SetScript("OnClick", function(self)
+        UIThingsDB.damageMeter.showDps = self:GetChecked()
+        Refresh()
+    end)
     yBase = yBase - 34
 
     -- ============================================================

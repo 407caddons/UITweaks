@@ -263,6 +263,8 @@ All repositionable addon frames **must anchor from CENTER of UIParent**. Positio
 
 The `docs/` folder contains WoW API documentation extracted directly from the in-game client. **Always consult `docs/index.md` and the linked files in the `docs/` folder first for all WoW API lookups and research.** This is the most accurate source of information as it was taken from in-game documentation and reflects the actual available API for the current client version.
 
+The `.api/` folder contains addon-specific API reference documentation covering every WoW/Blizzard Lua API actually used across this codebase. **When using any WoW API in this addon, consult `.api/index.md` first** — it links to per-category files with caveats, secret-value warnings, taint rules, and patterns derived from real debugging sessions. **When introducing a new API that is not yet documented there, add it to the appropriate `.api/*.md` file** (or create a new category file and link it from `index.md`).
+
 ## Daily prompts (3)
 
 Each of these prompts may have been done already today, if so could you not remove them and use them as a baseline for your review. If anything has fixed or been changed mark it as such in the file.

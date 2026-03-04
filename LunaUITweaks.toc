@@ -5,6 +5,7 @@
 ## Version: 1.20.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
+## SavedVariablesPerCharacter: LunaUITweaks_LootChecklist
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
 ## AddonCompartmentFunc: LunaUITweaks_OpenConfig
 

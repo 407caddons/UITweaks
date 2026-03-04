@@ -48,6 +48,20 @@ local overallBaseIdx = 0
 local entryCache = {}   -- [cacheKey] = { entries, expiry }
 local CACHE_TTL  = 1.0
 
+-- DPS computation: track fight durations using combat events.
+-- "fight" DPS uses lastFightDuration; "overall" DPS sums sessionDurations.
+local fightStartTime   = nil
+local lastFightDuration = 0
+local sessionDurations  = {}   -- durations (seconds) of all fights after last ResetData()
+
+local DPS_TYPES = { damage = true, healing = true, damageTaken = true }
+
+local function GetOverallDuration()
+    local total = 0
+    for _, d in ipairs(sessionDurations) do total = total + d end
+    return total
+end
+
 local function SafeVal(v)
     if issecretvalue and issecretvalue(v) then return 0 end
     return type(v) == "number" and v or 0
@@ -260,6 +274,10 @@ local function AcquireRow(pool, parent)
     row.valFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.valFS:SetPoint("RIGHT", -4, 0)
     row.valFS:SetJustifyH("RIGHT")
+    row.dpsFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.dpsFS:SetPoint("BOTTOMRIGHT", -4, 2)
+    row.dpsFS:SetJustifyH("RIGHT")
+    row.dpsFS:Hide()
     pool[#pool + 1] = row
     return row
 end
@@ -343,6 +361,21 @@ local function RenderPane(idx)
         row.valFS:SetText(FormatVal(entry.total, mtype))
         row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
 
+        -- DPS sub-label (bottom-right, dimmed)
+        if s.showDps and DPS_TYPES[mtype] and not dd and row.dpsFS and barH >= 28 then
+            local dur = (sess == "fight") and lastFightDuration or GetOverallDuration()
+            if dur > 0 then
+                local dps = entry.total / dur
+                row.dpsFS:SetText(Abbrev(dps) .. "/s")
+                row.dpsFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, 0.6)
+                row.dpsFS:Show()
+            else
+                row.dpsFS:Hide()
+            end
+        elseif row.dpsFS then
+            row.dpsFS:Hide()
+        end
+
         local captEntry = entry
         local captIdx   = idx
         local captDd    = dd
@@ -370,6 +403,7 @@ local function RenderPane(idx)
         row.bar:SetColorTexture(0, 0, 0, 0)
         row.nameFS:SetText("|cff555555No data|r")
         row.valFS:SetText("")
+        if row.dpsFS then row.dpsFS:Hide() end
         yOff = barH
     end
 
@@ -704,6 +738,9 @@ function addonTable.DamageMeter.ResetData()
     local sessions = GetSessions()
     overallBaseIdx = #sessions
     entryCache = {}
+    lastFightDuration = 0
+    sessionDurations  = {}
+    fightStartTime    = nil
     for i = 1, 2 do drilldown[i] = nil end
     if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
 end
@@ -719,11 +756,21 @@ function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 -- Invalidate cache when combat ends — session data is now finalised
 EventBus.Register("PLAYER_REGEN_ENABLED", function()
     entryCache = {}
+    -- Record fight duration for DPS computation
+    if fightStartTime then
+        lastFightDuration = math.max(1, GetTime() - fightStartTime)
+        table.insert(sessionDurations, lastFightDuration)
+        fightStartTime = nil
+    end
     -- Clear fight drilldown: old fight is done, next click is a fresh session
     for i = 1, 2 do
         local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
         if cfg and cfg.session == "fight" then drilldown[i] = nil end
     end
+end, "DamageMeter")
+
+EventBus.Register("PLAYER_REGEN_DISABLED", function()
+    fightStartTime = GetTime()
 end, "DamageMeter")
 
 

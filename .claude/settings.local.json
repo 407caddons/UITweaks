@@ -34,7 +34,10 @@
       "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/PlayerScript.md\")",
       "Bash(head -200 \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/WorldQuestsList/WorldQuestsList.lua\")",
       "Bash(wc -l \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_beta_\\\\Interface\\\\AddOns\\\\LDCombatStats\\\\CombatTracker.lua\")",
-      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/SuperTrackManager.md\")"
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/docs/SuperTrackManager.md\")",
+      "WebFetch(domain:warcraft.wiki.gg)",
+      "WebFetch(domain:wowpedia.fandom.com)",
+      "WebFetch(domain:www.wowinterface.com)"
     ]
   }
 }
