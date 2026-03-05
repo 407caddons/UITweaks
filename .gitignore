@@ -1,5 +1,6 @@
 # Claude Code configuration
 docs/
+.claude/worktrees/
 
 # Compiled Lua sources
 luac.out
