@@ -99,9 +99,18 @@ local function UpdateDisplay()
     local maxLevel = GetMaxPlayerLevel()
     local isMaxLevel = level >= maxLevel
 
-    if isMaxLevel and not settings.showAtMaxLevel and not settings.repBarEnabled then
-        barFrame:Hide()
-        return
+    if isMaxLevel then
+        if settings.repBarEnabled then
+            -- Only show if a faction is actually being watched
+            local data = C_Reputation.GetWatchedFactionData()
+            if not (data and data.name) then
+                barFrame:Hide()
+                return
+            end
+        elseif not settings.showAtMaxLevel then
+            barFrame:Hide()
+            return
+        end
     end
 
     local currentXP = UnitXP("player")
@@ -272,11 +281,9 @@ local function UpdateDisplay()
                     pctText:Hide()
                 end
             else
-                -- No watched faction
-                barFill:SetWidth(1)
-                if levelText then levelText:SetText(tostring(level)) end
-                if xpText then xpText:SetText("Max Level — watch a faction in the Reputation panel") end
-                if pctText then pctText:SetText("") end
+                -- No watched faction — hide the bar entirely
+                barFrame:Hide()
+                return
             end
         else
             barFill:SetWidth(1)
@@ -310,7 +317,16 @@ function addonTable.XpBar.UpdateSettings()
 
     ApplyBlizzardBarVisibility()
 
-    if not settings.enabled or (isMaxLevel and not settings.showAtMaxLevel and not settings.repBarEnabled) then
+    local hideAtMaxLevel = false
+    if isMaxLevel then
+        if settings.repBarEnabled then
+            local data = C_Reputation.GetWatchedFactionData()
+            hideAtMaxLevel = not (data and data.name)
+        else
+            hideAtMaxLevel = not settings.showAtMaxLevel
+        end
+    end
+    if not settings.enabled or hideAtMaxLevel then
         barFrame:Hide()
         return
     end
@@ -344,6 +360,13 @@ end
 local function OnXPUpdate()
     if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
     UpdateDisplay()
+end
+
+local function OnFactionUpdate()
+    if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
+    -- Use UpdateSettings so the bar can be shown/hidden based on whether
+    -- a faction is now being watched (UpdateDisplay bails early when hidden)
+    addonTable.XpBar.UpdateSettings()
 end
 
 local function OnLevelUp()
@@ -559,7 +582,7 @@ local function Init()
     EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate, "XpBar")
     EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld, "XpBar")
     EventBus.Register("QUEST_LOG_UPDATE", OnXPUpdate, "XpBar")
-    EventBus.Register("UPDATE_FACTION", OnXPUpdate, "XpBar")
+    EventBus.Register("UPDATE_FACTION", OnFactionUpdate, "XpBar")
     -- Refresh pending XP when XP boost buffs are gained or dropped
     EventBus.RegisterUnit("UNIT_AURA", "player", OnXPUpdate)
 

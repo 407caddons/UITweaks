@@ -1,65 +1,55 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with LunaUITweaks.
+
+@../.claude/CLAUDE.md
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon that provides UI enhancements: a custom objective tracker, talent change reminders, auto-repair/durability warnings, loot toast notifications, a combat timer, custom layout frames, personal order alerts, AH filtering, action bar skinning, a custom cast bar, chat skinning, an interrupt cooldown tracker, info widgets, and addon version checking. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, talent change reminders, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, action bar skinning, custom cast bar, chat skinning, interrupt cooldown tracker, info widgets, damage meter, XP/rep bar, and addon version checking. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
-There is no build step or test suite. The addon is pure Lua loaded directly by the WoW client.
+No build step or test suite. Pure Lua loaded directly by the WoW client.
 
-- **Release:** Push a git tag matching `v*` (e.g., `v0.15`) to trigger the GitHub Actions packager (`.github/workflows/release.yml`), which uses `BigWigsMods/packager@v2` to package and upload to CurseForge.
-- **Local testing:** Copy or symlink the addon folder into `Interface/AddOns/` and reload the WoW client (`/reload`). Use `/luit` or `/luithings` in-game to open the config window.
+- **Release:** Push a git tag matching `v*` (e.g. `v0.15`) to trigger the GitHub Actions packager (`.github/workflows/release.yml`), which uses `BigWigsMods/packager@v2` to package and upload to CurseForge.
+- **Local testing:** Reload the WoW client (`/reload`). Use `/luit` or `/luithings` in-game to open the config window.
 
 ## Architecture
 
 ### Module System
 
-Each `.lua` file is a self-contained module that registers itself on the shared addon table:
+Each `.lua` file registers itself on the shared addon table:
 
 ```lua
 local addonName, addonTable = ...
 addonTable.ModuleName = {}
 ```
 
-The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** and initializes everything on `ADDON_LOADED`:
-1. Applies default settings to `UIThingsDB` (recursive merge that preserves existing user values)
-2. Calls `Initialize()` on Config, Minimap, Frames, and TalentReminder modules
-3. Registers slash commands and the Addon Compartment function
+The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** and on `ADDON_LOADED`:
+1. Applies default settings to `UIThingsDB` (recursive merge preserving existing user values)
+2. Calls `Initialize()` on Minimap, Frames, TalentReminder, Widgets, ChatSkin, QuestReminder
+3. Registers slash commands (`/luit`, `/luithings`) and Addon Compartment function
+4. **Does NOT call `Config.Initialize()`** — the config window is built lazily on first open so companion addons can register their panels first
 
 ### Saved Variables
 
-Three persistent tables declared in the TOC:
-- **`UIThingsDB`** — All module settings, organized by module key (`tracker`, `vendor`, `loot`, `combat`, `frames`, `misc`, `minimap`, `talentReminders`, `widgets`, `kick`, `chatSkin`, `castBar`, `actionBars`, `addonComm`, `reagents`)
-- **`LunaUITweaks_TalentReminders`** — User-created talent reminder definitions (separate so they survive settings resets)
-- **`LunaUITweaks_ReagentData`** — Cross-character reagent inventory data (separate so accumulated scan data survives settings resets)
+- **`UIThingsDB`** — All module settings by module key
+- **`LunaUITweaks_TalentReminders`** — User talent reminder definitions
+- **`LunaUITweaks_ReagentData`** — Cross-character reagent inventory data
+- **`LunaUITweaks_CharacterData`** — Central character registry
 
-Settings are accessed directly (e.g., `UIThingsDB.vendor.autoRepair`). Defaults are defined in Core.lua's `DEFAULTS` table and merged via `ApplyDefaults()`, which skips keys that already exist and treats tables with an `r` field as color values (not recursed into).
-
-### Event-Driven Pattern
-
-Modules create frames, register WoW events, and respond in `OnEvent` handlers. Common pattern:
-
-```lua
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("EVENT_NAME")
-frame:SetScript("OnEvent", function(self, event, ...) ... end)
-```
+Defaults in Core.lua's `DEFAULTS` table, merged via `ApplyDefaults()`. Tables with an `r` field are treated as color values (leaf, not recursed into).
 
 ### Settings Update Flow
 
-The config system is split across multiple files: `config/ConfigMain.lua` creates the window and tab navigation, `config/Helpers.lua` provides shared UI factories, and `config/panels/*.lua` contain individual module settings panels (one file per tab). Each panel's setup function is registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. When a user changes a setting, the panel writes to `UIThingsDB` and calls the module's `UpdateSettings()` function to apply changes immediately without reload.
-
-### Frame Pooling
-
-Loot.lua and Frames.lua use object pools — frames are hidden and recycled via `AcquireToast()`/`RecycleToast()` or equivalent instead of being destroyed/recreated.
+Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared factories), `config/panels/*.lua` (one panel per tab). Panel setup registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. Changes write to `UIThingsDB` and call the module's `UpdateSettings()` immediately.
 
 ### Core Utilities
 
 - `addonTable.Core.SafeAfter(delay, func)` — pcall-wrapped `C_Timer.After`
-- `addonTable.Core.Log(module, msg, level)` — Colored chat logging. Levels: `DEBUG=0`, `INFO=1`, `WARN=2`, `ERROR=3`. Current threshold is INFO.
+- `addonTable.Core.Log(module, msg, level)` — Colored chat logging. Levels: `DEBUG=0`, `INFO=1`, `WARN=2`, `ERROR=3`
+- `addonTable.Core.AbbreviateNumber(value)` — e.g. 1500000 → "1.5M"
 
 ## File Responsibilities
 
@@ -82,6 +72,8 @@ Loot.lua and Frames.lua use object pools — frames are hidden and recycled via 
 | CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
 | ChatSkin.lua | `ChatSkin` | Chat frame skinning, keyword highlighting, timestamps |
 | Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
+| XpBar.lua | `XpBar` | Custom XP bar with rested/pending fills and rep bar at max level |
+| DamageMeter.lua | `DamageMeter` | Session damage/healing meter using C_DamageMeter API |
 | EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
 | AddonComm.lua | `AddonComm` | Centralized addon communication message bus |
 | Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
@@ -89,193 +81,72 @@ Loot.lua and Frames.lua use object pools — frames are hidden and recycled via 
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
 
-## EventBus (Centralized Event Dispatcher)
+## EventBus
 
-`EventBus.lua` provides a single-frame centralized event dispatcher that replaces the per-module pattern of creating individual frames and registering events. It loads after Core.lua and before all feature modules.
-
-### Architecture
-- Uses a single `CreateFrame("Frame", "LunaUITweaks_EventBus")` frame to handle all WoW events
-- Maintains a `listeners[eventName] = { callback, ... }` registry
-- Automatically registers/unregisters WoW events on the frame as listeners are added/removed
-- Dispatch uses a snapshot copy of the listener array so callbacks can safely unregister themselves mid-dispatch
-
-### API
-
-```lua
--- Subscribe to a WoW event
--- callback receives: callback(event, ...)
-addonTable.EventBus.Register(event, callback)
-
--- Unsubscribe a specific callback (reference equality)
-addonTable.EventBus.Unregister(event, callback)
-
--- Subscribe to a unit event with automatic unit filtering
--- Returns the wrapper function (needed to Unregister later)
-local wrapper = addonTable.EventBus.RegisterUnit(event, unit, callback)
-```
-
-### Usage Pattern
-Modules should use EventBus instead of creating their own event frames:
+Single-frame centralized event dispatcher. Modules use this instead of creating their own event frames.
 
 ```lua
 local EventBus = addonTable.EventBus
-
-local function OnPlayerLogin(event, ...)
-    -- initialize module
-end
-EventBus.Register("PLAYER_LOGIN", OnPlayerLogin)
+EventBus.Register(event, callback)           -- subscribe
+EventBus.Unregister(event, callback)         -- unsubscribe (reference equality)
+local w = EventBus.RegisterUnit(event, unit, callback)  -- unit-filtered; returns wrapper for Unregister
 ```
 
-### Current Consumers
-Most modules use EventBus for event handling, including Loot, QuestAuto, Kick, AddonComm, Combat, Vendor, Misc, ChatSkin, ActionBars, TalentReminder, Reagents, AddonVersions, widgets, and others.
+## AddonComm
 
-## AddonComm (Inter-Addon Communication)
-
-`AddonComm.lua` provides a centralized message bus for addon-to-addon communication over WoW's `C_ChatInfo.SendAddonMessage` system. It handles message routing, rate limiting, deduplication, and legacy prefix compatibility.
-
-### Message Format
-Messages use the unified prefix `"LunaUI"` with a structured format: `MODULE:ACTION:PAYLOAD`
-
-- **MODULE** — uppercase namespace (e.g., `"VER"`, `"KICK"`)
-- **ACTION** — uppercase action name (e.g., `"HELLO"`, `"CD"`, `"REQ"`, `"SPELLS"`)
-- **PAYLOAD** — optional data string
-
-### Legacy Compatibility
-Two legacy prefixes are still supported for backwards compatibility with older addon versions:
-- `"LunaVer"` — mapped to `VER:HELLO` or `VER:REQ`
-- `"LunaKick"` — mapped to `KICK:CD`
-
-`Comm.Send()` accepts optional `legacyPrefix` and `legacyMessage` parameters to dual-send in both new and legacy formats.
-
-### Built-in Protections
-- **Rate limiting** — `MIN_SEND_INTERVAL` (1.0s) per `module:action` key prevents message flooding
-- **Deduplication** — `DEDUP_WINDOW` (1.0s) ignores duplicate messages from the same sender
-- **Hide from world** — `UIThingsDB.addonComm.hideFromWorld` suppresses all sends
-- **Periodic cleanup** — Expired dedup/rate-limit entries are purged every 20 messages
-
-### API
+Centralized addon messaging over `C_ChatInfo.SendAddonMessage`. Prefix `"LunaUI"`, format `MODULE:ACTION:PAYLOAD`.
 
 ```lua
--- Register a handler for incoming messages
--- callback receives: callback(senderShort, payload, senderFull)
-addonTable.Comm.Register(module, action, callback)
-
--- Send a message to the group (returns false if suppressed)
-addonTable.Comm.Send(module, action, payload, legacyPrefix, legacyMessage)
-
--- Check if communication is allowed (in group + not hidden)
-addonTable.Comm.IsAllowed()
-
--- Get current channel ("RAID", "PARTY", or nil)
-addonTable.Comm.GetChannel()
-
--- Schedule a throttled broadcast (cancels pending for same key)
-addonTable.Comm.ScheduleThrottled(key, delay, func)
-
--- Cancel a pending throttled broadcast
-addonTable.Comm.CancelThrottle(key)
+addonTable.Comm.Register(module, action, callback)            -- receive
+addonTable.Comm.Send(module, action, payload, legacyPrefix, legacyMessage)  -- send
+addonTable.Comm.IsAllowed()    -- in group + not hidden
+addonTable.Comm.GetChannel()   -- "RAID", "PARTY", or nil
 ```
 
-### Current Message Types
+Legacy prefixes `"LunaVer"` and `"LunaKick"` still supported for older clients.
 
-| Module | Action | Direction | Purpose |
-|--------|--------|-----------|---------|
-| `VER` | `HELLO` | Send/Receive | Broadcast addon version to group |
-| `VER` | `REQ` | Send/Receive | Request version info from group members |
-| `KICK` | `CD` | Send/Receive | Broadcast interrupt cooldown status |
-| `KICK` | `SPELLS` | Send/Receive | Share available interrupt spell list |
-| `KICK` | `REQ` | Send/Receive | Request interrupt data from group |
+## Companion Addon API
 
-### Integration with EventBus
-AddonComm listens for `CHAT_MSG_ADDON` via EventBus (not its own frame), keeping event registration centralized:
+`LunaUITweaksAPI` is a global table defined in Core.lua that companion addons (e.g. `LunaUITweaks_UnitFrames`) can use to inject tabs into the config window.
 
 ```lua
-addonTable.EventBus.Register("CHAT_MSG_ADDON", function(event, ...)
-    OnAddonMessage(...)
-end)
+-- Call from companion ADDON_LOADED handler:
+LunaUITweaksAPI.RegisterConfigPanel(key, name, icon, setupFunc)
+-- setupFunc signature: function(panel, navBtn, configWindow)
+
+-- Shared UI helpers (available after Helpers.lua loads):
+LunaUITweaksAPI.Helpers  -- same as addonTable.ConfigHelpers
 ```
 
-## Combat-Safe Frame Positioning (ActionBars Pattern)
+Because the config window is built lazily on first open, companion registrations made at ADDON_LOADED time are always processed before the window is created.
 
-Blizzard's edit mode system frames (action bars, chat frames, etc.) have fully protected positioning methods during `InCombatLockdown()`. The addon uses a three-layer strategy developed in ActionBars.lua:
+## Config Navigation Order
 
-### Layer 1: SetPointBase / ClearAllPointsBase
-Edit mode system frames override `SetPoint`/`ClearAllPoints` with secure versions. Use the `Base` variants (`SetPointBase`/`ClearAllPointsBase`) to bypass the edit mode layer and directly position the frame. Fall back to standard methods if Base doesn't exist:
-```lua
-local clearPoints = barFrame.ClearAllPointsBase or barFrame.ClearAllPoints
-local setPoint = barFrame.SetPointBase or barFrame.SetPoint
-```
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–27. Companion panels are inserted at 27, 28, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
 
-### Layer 2: hooksecurefunc on SetPointBase
-Hook the bar's `SetPointBase` method so that whenever Blizzard re-layouts the frame (edit mode, zone changes, etc.), the hook fires and re-applies our offset on top. Use a `suppressHook` flag to prevent infinite recursion from our own positioning calls.
+## LunaUITweaks-Specific Conventions
 
-### Layer 3: SecureHandlerStateTemplate
-Create a `SecureHandlerStateTemplate` frame per bar with `SetFrameRef` pointing to the protected frame. Store original position + offsets as attributes. Register a state driver (`[combat] combat; nocombat`) that fires a restricted Lua snippet on combat transitions. The restricted environment can call `SetPoint`/`ClearAllPoints` on protected frame handles even during combat.
+- Color values stored as `{ r, g, b, a }` — `ApplyDefaults` treats tables with an `r` field as leaf values
+- Movable frames use lock/unlock pattern: unlocked = draggable; locked = mouse disabled
+- No external library dependencies — everything self-contained
+- `UNIT_SPELLCAST_INTERRUPTED` `interruptedBy` GUID is a secret value during combat — cannot be read by addons
+- C_DamageMeter live combat fields (`sourceGUID`, `name`, `totalAmount`, `amountPerSecond`, `maxAmount`) are all secret — never copy to your own table
 
-### Initialization Timing
-Run `ApplySkin()` immediately on `PLAYER_ENTERING_WORLD` (not delayed) to beat combat start. Then run again after 1.5s as a followup to catch bars Blizzard laid out late. If reloading in combat, defer everything to `PLAYER_REGEN_ENABLED` and wipe stale `originalBarPositions`/`originalButtonPositions` so fresh positions are captured.
+**Frame positioning migration status:**
 
-### General Rules for Protected Frames
-- Always check `InCombatLockdown()` before calling `SetPoint`, `ClearAllPoints`, `SetParent`, `SetSize`, `Show`, `Hide`, `RegisterStateDriver`, or `UnregisterStateDriver` on Blizzard-owned frames.
-- Addon-created frames (not inheriting from secure templates) are safe to position anytime.
-- Use `RegisterStateDriver(frame, "visibility", "hide"/"show")` for combat-safe show/hide — but the `RegisterStateDriver` call itself must happen out of combat.
+Migrated to CENTER anchor ✓: `DamageMeter`, `ChatSkin`, `Frames`, `Widgets`
 
-### Config Navigation Order
-
-The config window tabs in `ConfigMain.lua` are ordered by module ID. **Addon Versions must always remain the last tab** in the navigation list. When adding new modules, insert them before Addon Versions and increment its ID accordingly.
-
-## Frame Positioning Convention
-
-All repositionable addon frames **must anchor from CENTER of UIParent**. Position is stored as `x, y` offsets from the screen centre — negative X = left of centre, positive X = right, negative Y = below centre, positive Y = above.
-
-- **Saving position (drag stop):** Use `GetCenter()` minus `UIParent:GetCenter()` to obtain centre-relative x/y. Store as `{ point = "CENTER", x = x, y = y }`.
-- **Applying position:** `frame:SetPoint("CENTER", UIParent, "CENTER", pos.x, pos.y)`
-- **Config panel sliders:** X range `−screenHalfW` to `+screenHalfW` (use −2000 to 2000 as safe bounds); Y range `−screenHalfH` to `+screenHalfH` (use −1200 to 1200 as safe bounds).
-- **Live read for config panel:** `math.floor((frame:GetCenter()) - (UIParent:GetCenter()) + 0.5)` — read both axes separately.
-- Frames.lua and Widgets.lua already follow this convention. All other draggable frames should be migrated to match.
-
-**Modules not yet migrated (still using dynamic GetPoint anchor):**
-- `XpBar.lua` / `XpBarPanel.lua` — dynamic GetPoint
-- `CastBar.lua` — dynamic GetPoint
-- `Combat.lua` (timer) — dynamic GetPoint
-- `Kick.lua` — dynamic GetPoint
-- `ObjectiveTracker.lua` — dynamic GetPoint (separate point/x/y fields)
-- `MinimapCustom.lua` — dynamic GetPoint
-
-**Migrated to CENTER:**
-- `DamageMeter.lua` / `DamageMeterPanel.lua` ✓
-- `ChatSkin.lua` / `ChatSkinPanel.lua` ✓
-- `Frames.lua` ✓ (was already CENTER)
-- `Widgets.lua` ✓ (was already CENTER)
-
-## Key Conventions
-
-- Color values are stored as tables with `r`, `g`, `b` (and optional `a`) fields — `ApplyDefaults` treats these as leaf values, not subtables to recurse into.
-- Movable UI elements use a lock/unlock pattern: when unlocked, the frame is draggable and shows controls; when locked, mouse interaction is disabled.
-- The addon targets WoW API for Interface version 120000 (The War Within, 12.0). All API calls are Blizzard's standard Lua API (C_Timer, C_TradeSkillUI, C_QuestLog, etc.).
-- No external library dependencies (no Ace3, LibDBIcon, etc.) — everything is self-contained.
-- `issecretvalue(v)` is a real WoW API function that returns `true` for values returned by Blizzard's secure code paths during combat. **Secret value rules (verified via DamageMeter development):**
-  - **FAILS:** using as table key (`table[secret] = v` → "table index is secret"); comparison operators `>`, `<`, `>=`, `<=` ("attempt to compare secret value")
-  - **WORKS on Blizzard-tainted locals:** `type(secret)`, arithmetic (`+`, `-`, `*`, `/`), `string.format`, `SetText`, `SetStatusBarColor`, `SetValue`, `SetMinMaxValues`, `UnitName(secretString)`, storing as table value
-  - **FAILS after table copy:** writing `myTable.x = secretVal` makes it "tainted by LunaUITweaks" — arithmetic on `myTable.x` then fails. Keep secret values as direct locals and pass them straight to WoW API/string.format.
-  - **C_DamageMeter live combat:** `sourceGUID`, `name`, `totalAmount`, `amountPerSecond`, `maxAmount` are all secret. Never copy into your own table. Use a `StatusBar` with `SetMinMaxValues(0, sessData.maxAmount)` + `SetValue(src.totalAmount)` for bars; call `Abbrev(src.totalAmount)` directly for text. Non-secret fields: `classFilename`, `isLocalPlayer`, `specIconID`.
-  - See `.api/secure-protected.md` for the complete pattern with code example.
-- Showing and hiding frames in combat should be done with UnregisterStateDriver and RegisterStateDriver. RegisterStateDriver is used to show/hide frames in combat, while UnregisterStateDriver is used to unregister the driver when the frame is no longer needed.
-- `COMBAT_LOG_EVENT_UNFILTERED` must not be used — it is restricted to Blizzard UI only and will produce a blocking error for third-party addons.
-- `UNIT_SPELLCAST_INTERRUPTED` provides `(unitTarget, castGUID, spellID, interruptedBy, castBarID)` as of Patch 12.0.0. However, the `interruptedBy` GUID is a **secret value** during combat (`issecretvalue()` returns true), making it unreadable by addons. The event still fires and confirms an interrupt occurred, but the interrupter cannot be identified directly.
+Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`
 
 ## API Documentation
 
-The `docs/` folder contains WoW API documentation extracted directly from the in-game client. **Always consult `docs/index.md` and the linked files in the `docs/` folder first for all WoW API lookups and research.** This is the most accurate source of information as it was taken from in-game documentation and reflects the actual available API for the current client version.
+- `docs/` — WoW API docs extracted from the in-game client. **Consult `docs/index.md` first** for any WoW API lookup.
+- `.api/` — Addon-specific API reference with caveats, secret-value warnings, and taint patterns. **Consult `.api/index.md` first** before using any WoW API. Add new APIs here when introduced.
 
-The `.api/` folder contains addon-specific API reference documentation covering every WoW/Blizzard Lua API actually used across this codebase. **When using any WoW API in this addon, consult `.api/index.md` first** — it links to per-category files with caveats, secret-value warnings, taint rules, and patterns derived from real debugging sessions. **When introducing a new API that is not yet documented there, add it to the appropriate `.api/*.md` file** (or create a new category file and link it from `index.md`).
+## Daily Prompts (3)
 
-## Daily prompts (3)
+Each of these prompts may have been done already today — use existing files as a baseline and mark changes.
 
-Each of these prompts may have been done already today, if so could you not remove them and use them as a baseline for your review. If anything has fixed or been changed mark it as such in the file.
-
-1. Could you do an in depth code review of this entire addon? Look for performance issues, code readability, and potential improvements. Also, please check for any potential memory leaks and optimize the code to reduce memory usage. Write the results to .clause\codereview.md.
-
-2. Could you take a look at the addon and suggest possible features that could be added in future, give an estimation of ease of use. Write the results to .clause\features.md
-
-3. Can you give me 20 ideas for widgets and improvements to existing ones, give an estimation of ease of use. Write the results to .clause\widgets.md
+1. In-depth code review: performance, readability, memory leaks. Write to `.claude/codereview.md`.
+2. Suggest possible future features with ease estimates. Write to `.claude/features.md`.
+3. 20 widget ideas and improvements with ease estimates. Write to `.claude/widgets.md`.

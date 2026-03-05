@@ -4,6 +4,30 @@ _G[addonName]                                           = addonTable
 addonTable.Core                                         = {}
 
 -- ============================================================
+-- Companion Addon Integration API
+-- Companion addons can call LunaUITweaksAPI.RegisterConfigPanel()
+-- from their ADDON_LOADED handler to inject a tab into the
+-- LunaUITweaks config window.
+-- ============================================================
+LunaUITweaksAPI = {
+    _pendingPanels = {},
+    --- Register a config panel in the LunaUITweaks config window.
+    -- @param key      string   Unique key matching your DB key (e.g. "unitFrames")
+    -- @param name     string   Display name shown in the sidebar
+    -- @param icon     string   Optional sidebar icon texture path
+    -- @param setupFunc function Called as setupFunc(panel, navBtn, configWindow)
+    RegisterConfigPanel = function(key, name, icon, setupFunc)
+        table.insert(LunaUITweaksAPI._pendingPanels, {
+            key   = key,
+            name  = name,
+            icon  = icon or "Interface\\Icons\\Inv_Misc_Gear_01",
+            setup = setupFunc,
+        })
+    end,
+    Helpers = nil, -- populated by Helpers.lua after it loads
+}
+
+-- ============================================================
 -- Key Binding display names (read by WoW's Key Bindings UI)
 -- ============================================================
 BINDING_HEADER_LUNAUITWEAKS                             = "Luna's UI Tweaks"
@@ -846,9 +870,8 @@ local function OnEvent(self, event, ...)
         self:UnregisterEvent("ADDON_LOADED")
 
         -- Initialize Modules
-        if addonTable.Config and addonTable.Config.Initialize then
-            addonTable.Config.Initialize()
-        end
+        -- Note: Config.Initialize() is NOT called here — the window is built lazily
+        -- on first open so companion addons can register their panels first.
 
         if addonTable.Minimap and addonTable.Minimap.Initialize then
             addonTable.Minimap.Initialize()

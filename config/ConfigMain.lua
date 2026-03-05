@@ -237,6 +237,25 @@ function addonTable.Config.Initialize()
             { id = 27, name = "Addon Versions",   key = "addonVersions",  icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
+        -- Insert companion addon panels before AddonVersions (always last)
+        local companionPanels = LunaUITweaksAPI and LunaUITweaksAPI._pendingPanels or {}
+        if #companionPanels > 0 then
+            local lastMod = table.remove(modules)
+            for _, entry in ipairs(companionPanels) do
+                table.insert(modules, {
+                    id   = #modules + 1,
+                    name = entry.name,
+                    key  = entry.key,
+                    icon = entry.icon,
+                })
+            end
+            lastMod.id = #modules + 1
+            table.insert(modules, lastMod)
+        end
+
+        -- Expand scroll child to fit all nav buttons (30px each)
+        navScrollChild:SetHeight(math.max(500, #modules * 30 + 10))
+
         local navButtons = {}
         local currentPanel = nil
 
@@ -415,6 +434,21 @@ function addonTable.Config.Initialize()
             [27] = addonVersionsPanel,
         }
 
+        -- Create companion panels and shift AddonVersions to its new slot
+        if #companionPanels > 0 then
+            local numCompanions = #companionPanels
+            idToPanel[27 + numCompanions] = idToPanel[27]
+            idToPanel[27] = nil
+            for i, entry in ipairs(companionPanels) do
+                local panel = CreateFrame("Frame", nil, contentContainer)
+                panel:SetAllPoints()
+                panel:Hide()
+                idToPanel[26 + i] = panel
+                addonTable.ConfigPanels[entry.key] = panel
+                entry._panelFrame = panel
+            end
+        end
+
         ----------------------------------------------------
         -- Navigation Logic
         ----------------------------------------------------
@@ -584,7 +618,15 @@ function addonTable.Config.Initialize()
                 addonTable.ConfigSetup.LootChecklist(lootChecklistPanel, navButtons[26], configWindow)
             end
             if addonTable.ConfigSetup.AddonVersions then
-                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[27], configWindow)
+                local avIdx = 27 + #companionPanels
+                addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[avIdx], configWindow)
+            end
+        end
+
+        -- Call companion addon panel setup functions
+        for i, entry in ipairs(companionPanels) do
+            if entry._panelFrame and entry.setup then
+                entry.setup(entry._panelFrame, navButtons[26 + i], configWindow)
             end
         end
         ----------------------------------------------------

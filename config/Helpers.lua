@@ -534,6 +534,11 @@ end
 -- Shared texture list (built once on load)
 Helpers.textures = BuildTextureList()
 
+-- Expose to companion addons via the global API
+if LunaUITweaksAPI then
+    LunaUITweaksAPI.Helpers = Helpers
+end
+
 --- Helper: Create Texture Dropdown with visual texture preview
 -- @param parent frame Parent frame
 -- @param name string Unique name for the dropdown
