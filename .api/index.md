@@ -36,12 +36,27 @@ All WoW/Blizzard Lua APIs used across this addon, documented with caveats, secre
 ## Cross-Cutting Concerns
 
 ### Secret Values
-Blizzard's secure code sets certain frame fields and event parameters as "secret" — they cannot be read by addon Lua without tainting the addon's execution context. Use `issecretvalue(val)` to test before reading.
+Blizzard's secure code returns certain values as "secret" — they have restricted usage in addon Lua. Use `issecretvalue(val)` to detect them.
 
-Known secret values in this addon's context:
-- `UNIT_SPELLCAST_INTERRUPTED` → `interruptedBy` parameter (4th arg) — always secret during combat
-- Fields on Blizzard-owned frame tables (e.g. `DamageMeter` frame fields like `sessionType`, `damageMeterType`)
-- Any value returned by `GetText()` on a Blizzard FontString that was set by secure code
+**What FAILS with secret values:**
+- Using as a table key → `"table index is secret"` error
+- Comparison operators `>`, `<`, `>=`, `<=` → `"attempt to compare ... secret value"` error
+
+**What WORKS with secret values:**
+- `type(secretVal)` — returns the type string safely
+- Arithmetic: `+`, `-`, `*`, `/` — produces a tainted result but doesn't error
+- `string.format("%d", secretVal)` — formats and displays correctly
+- `frame:SetText(secretStr)`, `frame:SetWidth(n)`, `frame:SetValue(n)` — visual output calls
+- `UnitName(secretString)` — resolves a secret name string to the real display name
+- Storing as a table **value** (not key)
+
+**Known secret values in this addon:**
+- `C_DamageMeter` `combatSources`: `sourceGUID`, `name`, `totalAmount`, `amountPerSecond`, `maxAmount` — all secret during live combat. Non-secret: `classFilename`, `isLocalPlayer`, `specIconID`.
+- `UNIT_SPELLCAST_INTERRUPTED` → `interruptedBy` (4th arg) — always secret during combat
+- Fields on Blizzard-owned frame tables (`DamageMeter` frame fields like `sessionType`, `damageMeterType`)
+- Any value returned by `GetText()` on a Blizzard FontString set by secure code
+
+See [secure-protected.md](secure-protected.md) for the full pattern including the C_DamageMeter live data example.
 
 ### Taint Rules Summary
 - **Never** write fields onto Blizzard frames (`frame.myField = x`)

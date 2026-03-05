@@ -32,6 +32,8 @@ Returns the name and realm of the unit. `realm` is `nil` or `""` if the unit is 
 
 **Caveat:** For cross-realm players, `realm` is set. `name` alone is not unique across realms — use `name .. "-" .. (realm or GetRealmName())` for a unique key.
 
+**Secret value use:** `UnitName(secretString)` works — you can pass a secret name value (e.g. from `combatSources[i].name`) and it will return the real display name. This is how DamageMeter.lua resolves player names from live C_DamageMeter data during combat.
+
 ---
 
 ## UnitClass

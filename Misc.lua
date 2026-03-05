@@ -272,7 +272,7 @@ local function ApplyAHFilter()
     addonTable.Core.SafeAfter(0, SetFilter)
 
     -- Re-apply on tab switches via global hook (safe — no frame-object tainting)
-    if not hookSet then
+    if not hookSet and AuctionHouseFrame_SetDisplayMode then
         hooksecurefunc("AuctionHouseFrame_SetDisplayMode", function()
             addonTable.Core.SafeAfter(0, SetFilter)
         end)

@@ -60,7 +60,7 @@ function addonTable.Core.AbbreviateNumber(value)
     elseif value >= 10000 then
         return string.format("%.1fK", value / 1000)
     end
-    return tostring(value)
+    return tostring(math.floor(value + 0.5))
 end
 
 --------------------------------------------------------------
@@ -770,8 +770,8 @@ local function OnEvent(self, event, ...)
                 barColor       = { r = 0.2,  g = 0.5,  b = 0.9,  a = 1    },
                 barTextColor   = { r = 1,    g = 1,    b = 1,    a = 1    },
                 showDps        = false,
-                meter1         = { type = "damage",  session = "fight" },
-                meter2         = { type = "healing", session = "fight" },
+                meter1         = { type = "damage",  session = "current" },
+                meter2         = { type = "healing", session = "current" },
             },
             games = {
                 closeInCombat = true,

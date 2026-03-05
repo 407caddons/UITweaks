@@ -26,6 +26,20 @@ local TYPE_LABEL = {
     damageTaken = "Dmg Taken",
 }
 
+local SESSION_LABELS = {
+    segment = "Seg",
+    current = "Cur",
+    overall = "All",
+    fight   = "Seg",   -- legacy alias
+}
+
+local SESSION_FULL = {
+    segment = "Segment",
+    current = "Current",
+    overall = "All",
+    fight   = "Segment",
+}
+
 -- Maps our keys to Enum.DamageMeterType field names
 local ENUM_NAMES = {
     damage      = "DamageDone",
@@ -46,13 +60,15 @@ local overallBaseIdx = 0
 
 -- Short-lived cache so repeated renders in the same frame don't re-query the API.
 local entryCache = {}   -- [cacheKey] = { entries, expiry }
-local CACHE_TTL  = 1.0
+local CACHE_TTL  = 0.5
 
 -- DPS computation: track fight durations using combat events.
 -- "fight" DPS uses lastFightDuration; "overall" DPS sums sessionDurations.
 local fightStartTime   = nil
 local lastFightDuration = 0
-local sessionDurations  = {}   -- durations (seconds) of all fights after last ResetData()
+local sessionDurations    = {}  -- durations (seconds) of all fights after last ResetData()
+local sessionDurationByID = {}  -- [sessionID] = duration in seconds
+local sessionNameByID     = {}  -- [sessionID] = encounter/combat name (if readable)
 
 local DPS_TYPES = { damage = true, healing = true, damageTaken = true }
 
@@ -63,7 +79,8 @@ local function GetOverallDuration()
 end
 
 local function SafeVal(v)
-    if issecretvalue and issecretvalue(v) then return 0 end
+    -- Secret values are allowed in arithmetic/display — only table keys are restricted.
+    -- Don't gate on issecretvalue here; just ensure we have a number.
     return type(v) == "number" and v or 0
 end
 
@@ -96,10 +113,9 @@ local function FetchEntries(sessKey, mtype)
         for _, src in ipairs(combatSources or {}) do
             local guid = src.sourceGUID
             local name = src.name
-            -- Both GUID and name are secret values during live combat — skip if so
-            if guid and name
-                    and not (issecretvalue and issecretvalue(guid))
-                    and not (issecretvalue and issecretvalue(name)) then
+            -- guid/name may be secret during live combat but are safe as table keys/display values.
+            -- Only totalAmount needs SafeVal (arithmetic on secret numbers returns garbage).
+            if guid and name then
                 local amt      = SafeVal(src.totalAmount)
                 local existing = byGuid[guid]
                 if existing then
@@ -116,28 +132,48 @@ local function FetchEntries(sessKey, mtype)
         end
     end
 
-    if sessKey == "fight" then
-        -- During combat the live session data is fully secret — skip it and show last
-        -- finalized session instead.  After combat, sessionType 1 returns readable data.
-        if not InCombatLockdown() then
+    local liveMode = false
+    if sessKey == "current" then
+        if InCombatLockdown() then
+            -- Live combat: sourceGUID/name/totalAmount/maxAmount are all secret values.
+            -- Store in byGuid with integer keys; liveMode=true tells the render path to
+            -- skip Lua sorting/arithmetic and use only C-level calls on the secret values.
             local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
             if ok and sessData and sessData.combatSources then
-                AccumulateSources(sessData.combatSources)
-            end
-        end
-        -- Fallback: last finalized session (used during combat or when no current session)
-        if next(byGuid) == nil then
-            local sessions = GetSessions()
-            if #sessions > 0 then
-                local ok2, sessData2 = pcall(C_DamageMeter.GetCombatSessionFromID, sessions[#sessions].sessionID, enumType)
-                if ok2 and sessData2 then
-                    if not (sessData2.totalAmount ~= nil and issecretvalue and issecretvalue(sessData2.totalAmount)) then
-                        AccumulateSources(sessData2.combatSources)
+                liveMode = true
+                for i, src in ipairs(sessData.combatSources) do
+                    if type(src.totalAmount) == "number" then
+                        -- UnitName() accepts a secret name string and returns the real display name.
+                        local displayName
+                        if src.isLocalPlayer then
+                            displayName = UnitName("player")
+                        else
+                            displayName = UnitName(src.name) or src.classFilename or "Unknown"
+                        end
+                        byGuid[i] = {
+                            guid     = src.sourceGUID,
+                            name     = displayName,
+                            class    = src.classFilename,
+                            total    = src.totalAmount,
+                            maxTotal = sessData.maxAmount,
+                        }
                     end
                 end
             end
+        else
+            -- Post-combat: use the last finalized session by ID — always clean, non-tainted.
+            -- GetCombatSessionFromType can still return tainted values briefly after combat
+            -- ends (before restrictions lift), so GetCombatSessionFromID is the safe path.
+            local sessions = GetSessions()
+            if #sessions > 0 then
+                local sid = sessions[#sessions].sessionID
+                local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sid, enumType)
+                if ok and sessData then
+                    AccumulateSources(sessData.combatSources)
+                end
+            end
         end
-    else
+    elseif sessKey == "overall" then
         local sessions = GetSessions()
         for i = overallBaseIdx + 1, #sessions do
             local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sessions[i].sessionID, enumType)
@@ -147,13 +183,39 @@ local function FetchEntries(sessKey, mtype)
                 end
             end
         end
+    else
+        -- Specific sessionID (number) or legacy "segment"/"fight" aliases
+        local sid
+        if type(sessKey) == "number" then
+            sid = sessKey
+        elseif sessKey == "segment" or sessKey == "fight" then
+            local sessions = GetSessions()
+            if #sessions > 0 then sid = sessions[#sessions].sessionID end
+        end
+        if sid then
+            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sid, enumType)
+            if ok and sessData then
+                if not (sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount)) then
+                    AccumulateSources(sessData.combatSources)
+                end
+            end
+        end
     end
 
     local list = {}
-    for _, d in pairs(byGuid) do
-        if d.total > 0 then list[#list + 1] = d end
+    if liveMode then
+        -- byGuid has sequential integer keys; ipairs preserves API sort order.
+        -- Secret values can't be compared so we skip re-sorting.
+        for i = 1, #byGuid do
+            local d = byGuid[i]
+            if d and type(d.total) == "number" then list[#list + 1] = d end
+        end
+    else
+        for _, d in pairs(byGuid) do
+            if d.total > 0 then list[#list + 1] = d end
+        end
+        table.sort(list, function(a, b) return a.total > b.total end)
     end
-    table.sort(list, function(a, b) return a.total > b.total end)
 
     entryCache[cacheKey] = { entries = list, expiry = GetTime() + CACHE_TTL }
     return list
@@ -187,25 +249,27 @@ local function FetchSpellEntries(sessKey, mtype, guid)
         end
     end
 
-    if sessKey == "fight" then
-        -- During combat the live session data is fully secret — use last finalized instead.
-        if not InCombatLockdown() then
-            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
-            if ok and srcData then
-                AccumulateSpells(srcData.combatSpells)
-            end
+    if sessKey == "current" then
+        local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
+        if ok and srcData then
+            AccumulateSpells(srcData.combatSpells)
         end
-        if next(bySpell) == nil then
-            local sessions = GetSessions()
-            if #sessions > 0 then
-                local ok2, srcData2 = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessions[#sessions].sessionID, enumType, guid)
-                if ok2 and srcData2 then AccumulateSpells(srcData2.combatSpells) end
-            end
-        end
-    else
+    elseif sessKey == "overall" then
         local sessions = GetSessions()
         for i = overallBaseIdx + 1, #sessions do
             local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessions[i].sessionID, enumType, guid)
+            if ok and srcData then AccumulateSpells(srcData.combatSpells) end
+        end
+    else
+        local sid
+        if type(sessKey) == "number" then
+            sid = sessKey
+        elseif sessKey == "segment" or sessKey == "fight" then
+            local sessions = GetSessions()
+            if #sessions > 0 then sid = sessions[#sessions].sessionID end
+        end
+        if sid then
+            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sid, enumType, guid)
             if ok and srcData then AccumulateSpells(srcData.combatSpells) end
         end
     end
@@ -263,9 +327,11 @@ local function AcquireRow(pool, parent)
     local row = CreateFrame("Button", nil, parent)
     row.bg  = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints()
-    row.bar = row:CreateTexture(nil, "BORDER")
+    -- StatusBar lets us use SetMinMaxValues/SetValue with secret numbers (no Lua arithmetic needed)
+    row.bar = CreateFrame("StatusBar", nil, row)
+    row.bar:SetStatusBarTexture("Interface/Buttons/WHITE8x8")
     row.bar:SetPoint("TOPLEFT")
-    row.bar:SetPoint("BOTTOMLEFT")
+    row.bar:SetPoint("BOTTOMRIGHT")
     row.nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.nameFS:SetPoint("LEFT", 4, 0)
     row.nameFS:SetPoint("RIGHT", -50, 0)
@@ -310,7 +376,19 @@ local function RenderPane(idx)
     if dd then
         tstr = "|cff999999< |r" .. (TYPE_LABEL[mtype] or mtype) .. ": " .. (dd.name or "?")
     else
-        tstr = (TYPE_LABEL[mtype] or mtype) .. "  [" .. (sess == "fight" and "Fight" or "Overall") .. "]"
+        local sessLabel
+        if type(sess) == "number" then
+            local dur = sessionDurationByID[sess]
+            local durStr = dur and string.format(" [%02d:%02d]", math.floor(dur / 60), dur % 60) or ""
+            sessLabel = (sessionNameByID[sess] or "Segment") .. durStr
+        elseif sess == "current" then
+            sessLabel = "Current"
+        elseif sess == "overall" then
+            sessLabel = "All"
+        else
+            sessLabel = SESSION_FULL[sess] or "Segment"
+        end
+        tstr = (TYPE_LABEL[mtype] or mtype) .. "  [" .. sessLabel .. "]"
     end
     pane.titleFS:SetText(tstr)
     pane.backBtn:SetShown(dd ~= nil)
@@ -333,10 +411,106 @@ local function RenderPane(idx)
     local paneW    = pane.scrollFrame:GetWidth()
     if not paneW or paneW <= 0 then paneW = 200 end
 
-    local maxVal = 1
-    for _, e in ipairs(entries) do
-        if e.total > maxVal then maxVal = e.total end
+    -- ── Live combat path ────────────────────────────────────────────────────
+    -- For sess=="current" during combat: render directly from sessData so that
+    -- secret values (totalAmount, maxAmount) stay as Blizzard-tainted locals
+    -- and are NEVER copied into our own Lua table.  Blizzard-tainted values
+    -- allow arithmetic and can be passed to WoW API calls (SetValue, Abbrev/
+    -- string.format); LunaUITweaks-tainted copies (from our table) do not.
+    -- ─────────────────────────────────────────────────────────────────────────
+    if sess == "current" and not dd and InCombatLockdown() then
+        local enumType = GetEnumType(mtype)
+        local yOff = 0
+        local hasRows = false
+        if enumType then
+            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
+            if ok and sessData and sessData.combatSources then
+                for i, src in ipairs(sessData.combatSources) do
+                    local row = AcquireRow(pane.rowPool, pane.scrollContent)
+                    row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
+                    row:SetSize(paneW, barH)
+                    row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
+
+                    -- Bar: SetMinMaxValues/SetValue accept secret values (C-level calls).
+                    -- This taints StatusBar geometry but we never call UpdateScrollChildRect.
+                    row.bar:SetMinMaxValues(0, sessData.maxAmount)
+                    row.bar:SetValue(src.totalAmount)
+                    if useClass and src.classFilename then
+                        local r, g, b = GetClassColor(src.classFilename)
+                        row.bar:SetStatusBarColor(r, g, b, 0.65)
+                    else
+                        row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
+                    end
+
+                    -- Name: resolve via UnitName (accepts secret strings)
+                    local displayName
+                    if src.isLocalPlayer then
+                        displayName = UnitName("player")
+                    else
+                        displayName = UnitName(src.name) or src.classFilename or "?"
+                    end
+                    row.nameFS:SetText(displayName or "?")
+                    row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
+
+                    -- Values: AbbreviateNumbers is a C-level WoW function — no Lua comparison,
+                    -- handles secret/tainted values. string.format("%d") also safe for counts.
+                    -- Concatenate into valFS (same as post-combat path) to avoid overlap with dpsFS.
+                    local valText
+                    if mtype == "interrupts" or mtype == "deaths" or mtype == "dispels" then
+                        valText = string.format("%d", src.totalAmount)
+                    else
+                        valText = AbbreviateNumbers(src.totalAmount)
+                        if DPS_TYPES[mtype] then
+                            valText = valText .. "  |cffaaaaaa" .. AbbreviateNumbers(src.amountPerSecond) .. "/s|r"
+                        end
+                    end
+                    row.valFS:SetText(valText)
+                    row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
+                    if row.dpsFS then row.dpsFS:Hide() end
+
+                    -- Drilldown: store src reference so guid stays as a table value
+                    local captSrc = src
+                    local captName = displayName
+                    local captIdx = idx
+                    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                    row:SetScript("OnClick", function(_, btn)
+                        if btn == "RightButton" then
+                            drilldown[captIdx] = nil
+                            RenderPane(captIdx)
+                        elseif btn == "LeftButton" then
+                            drilldown[captIdx] = { guid = captSrc.sourceGUID, name = captName }
+                            RenderPane(captIdx)
+                        end
+                    end)
+
+                    yOff = yOff + barH + 1
+                    hasRows = true
+                end
+            end
+        end
+        if not hasRows then
+            local row = AcquireRow(pane.rowPool, pane.scrollContent)
+            row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
+            row:SetSize(paneW, barH)
+            row.bg:SetColorTexture(0, 0, 0, 0)
+            row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
+            row.bar:SetStatusBarColor(0, 0, 0, 0)
+            row.nameFS:SetText("|cff555555No data|r")
+            row.valFS:SetText("")
+            if row.dpsFS then row.dpsFS:Hide() end
+            yOff = barH
+        end
+        pane.scrollContent:SetSize(paneW, math.max(yOff + 4, 20))
+        -- Never call UpdateScrollChildRect during combat: secret StatusBar geometry causes
+        -- a non-suppressable WoW taint error even inside pcall. Row positions are set via
+        -- SetPoint so rows are visible without it. ADDON_RESTRICTION_STATE_CHANGED will
+        -- trigger a clean re-render once restrictions lift and scrolling can be updated.
+        return
     end
+
+    -- ── Post-combat / historical path ────────────────────────────────────────
+    -- Non-secret values; arithmetic and comparison work normally.
+    local maxVal = (#entries > 0 and entries[1].total) or 1
 
     local yOff = 0
     for _, entry in ipairs(entries) do
@@ -346,35 +520,35 @@ local function RenderPane(idx)
 
         row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
 
-        local frac = entry.total / maxVal
-        local bw   = math.max(2, math.floor(paneW * frac + 0.5))
-        row.bar:SetSize(bw, barH)
+        row.bar:SetMinMaxValues(0, maxVal)
+        row.bar:SetValue(entry.total)
         if useClass and entry.class and not dd then
             local r, g, b = GetClassColor(entry.class)
-            row.bar:SetColorTexture(r, g, b, 0.65)
+            row.bar:SetStatusBarColor(r, g, b, 0.65)
         else
-            row.bar:SetColorTexture(barCol.r, barCol.g, barCol.b, barCol.a or 1)
+            row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
         end
 
         row.nameFS:SetText(entry.name or "?")
         row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-        row.valFS:SetText(FormatVal(entry.total, mtype))
-        row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
 
-        -- DPS sub-label (bottom-right, dimmed)
-        if s.showDps and DPS_TYPES[mtype] and not dd and row.dpsFS and barH >= 28 then
-            local dur = (sess == "fight") and lastFightDuration or GetOverallDuration()
-            if dur > 0 then
-                local dps = entry.total / dur
-                row.dpsFS:SetText(Abbrev(dps) .. "/s")
-                row.dpsFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, 0.6)
-                row.dpsFS:Show()
+        local valText = FormatVal(entry.total, mtype)
+        if DPS_TYPES[mtype] and not dd then
+            local dur
+            if sess == "overall" then
+                dur = GetOverallDuration()
+            elseif type(sess) == "number" then
+                dur = sessionDurationByID[sess] or lastFightDuration
             else
-                row.dpsFS:Hide()
+                dur = lastFightDuration
             end
-        elseif row.dpsFS then
-            row.dpsFS:Hide()
+            if dur > 0 then
+                valText = valText .. "  |cffaaaaaa" .. Abbrev(entry.total / dur) .. "/s|r"
+            end
         end
+        row.valFS:SetText(valText)
+        row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
+        if row.dpsFS then row.dpsFS:Hide() end
 
         local captEntry = entry
         local captIdx   = idx
@@ -399,8 +573,8 @@ local function RenderPane(idx)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
         row:SetSize(paneW, barH)
         row.bg:SetColorTexture(0, 0, 0, 0)
-        row.bar:SetSize(1, barH)
-        row.bar:SetColorTexture(0, 0, 0, 0)
+        row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
+        row.bar:SetStatusBarColor(0, 0, 0, 0)
         row.nameFS:SetText("|cff555555No data|r")
         row.valFS:SetText("")
         if row.dpsFS then row.dpsFS:Hide() end
@@ -408,12 +582,169 @@ local function RenderPane(idx)
     end
 
     pane.scrollContent:SetSize(paneW, math.max(yOff + 4, 20))
-    pane.scrollFrame:UpdateScrollChildRect()
+    -- Do NOT call UpdateScrollChildRect — StatusBar geometry is tainted during live combat
+    -- renders (SetValue with secret values), and that taint persists on the frame objects.
+    -- UpdateScrollChildRect reads child geometry and fails with "numeric conversion on
+    -- secret number value" even in the post-combat path.  scrollContent:SetSize() triggers
+    -- OnSizeChanged which updates the scroll range automatically via UIPanelScrollFrame.
 end
 
 local function RenderAllPanes()
     local n = UIThingsDB.damageMeter.numMeters or 1
     for i = 1, n do RenderPane(i) end
+end
+
+-- ============================================================
+-- Session Context Menu
+-- ============================================================
+
+local sessMenuFrame   = nil
+local sessMenuBtnPool = {}
+
+local RADIO_ON  = "*"
+local RADIO_OFF = "-"
+
+local function AcquireSessMenuBtn()
+    for _, btn in ipairs(sessMenuBtnPool) do
+        if not btn:IsShown() then
+            btn:Show()
+            return btn
+        end
+    end
+    local btn = CreateFrame("Button", nil, sessMenuFrame)
+    btn:SetHeight(22)
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.08)
+    local dot = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dot:SetPoint("LEFT", 4, 0)
+    dot:SetWidth(14)
+    dot:SetJustifyH("LEFT")
+    btn.dot = dot
+    local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    fs:SetPoint("LEFT", dot, "RIGHT", 2, 0)
+    fs:SetPoint("RIGHT", -4, 0)
+    fs:SetJustifyH("LEFT")
+    fs:SetWordWrap(false)
+    btn.fs = fs
+    sessMenuBtnPool[#sessMenuBtnPool + 1] = btn
+    return btn
+end
+
+local function SetupSessBtn(btn, sessionVal, label, isSelected, menuW)
+    btn:SetWidth(menuW)
+    btn.dot:SetText(isSelected and RADIO_ON or RADIO_OFF)
+    btn.dot:SetTextColor(isSelected and 1 or 0.45, isSelected and 0.8 or 0.45, isSelected and 0 or 0.45)
+    btn.fs:SetText(label)
+    btn.fs:SetTextColor(isSelected and 1 or 0.85, isSelected and 0.85 or 0.85, isSelected and 0.85 or 0.85)
+    btn:SetScript("OnClick", function()
+        local pidx = sessMenuFrame.paneIdx
+        local cfg = (pidx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+        cfg.session = sessionVal
+        drilldown[pidx] = nil
+        entryCache = {}
+        RenderPane(pidx)
+        if panes[pidx] and panes[pidx].RefreshBtnLabels then
+            panes[pidx].RefreshBtnLabels()
+        end
+        sessMenuFrame:Hide()
+    end)
+end
+
+local function RebuildSessionMenu(paneIdx)
+    for _, btn in ipairs(sessMenuBtnPool) do btn:Hide() end
+
+    local cfg         = (paneIdx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+    local currentSess = cfg.session
+    local menuW       = sessMenuFrame:GetWidth() - 6
+    local sessions    = GetSessions()
+    local yOff        = 3
+    local count       = 0
+
+    -- Past sessions, newest first
+    for i = #sessions, overallBaseIdx + 1, -1 do
+        local sess = sessions[i]
+        local sid  = sess.sessionID
+        -- Try reading a name from the session object itself
+        local rawName = sess.name
+        if rawName and issecretvalue and issecretvalue(rawName) then rawName = nil end
+        local dur    = sessionDurationByID[sid]
+        local durStr = dur and string.format(" [%02d:%02d]", math.floor(dur / 60), dur % 60) or " [--:--]"
+        local name   = (rawName and rawName ~= "") and rawName
+                       or sessionNameByID[sid]
+                       or ("Combat " .. count + 1)
+        local btn = AcquireSessMenuBtn()
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", 3, -yOff)
+        SetupSessBtn(btn, sid, name .. durStr, currentSess == sid, menuW)
+        yOff  = yOff + 23
+        count = count + 1
+    end
+
+    -- Divider
+    if count > 0 then
+        sessMenuFrame.divider:ClearAllPoints()
+        sessMenuFrame.divider:SetPoint("TOPLEFT",  4, -(yOff + 2))
+        sessMenuFrame.divider:SetPoint("TOPRIGHT", -4, -(yOff + 2))
+        sessMenuFrame.divider:Show()
+        yOff = yOff + 7
+    else
+        sessMenuFrame.divider:Hide()
+    end
+
+    -- "Current Segment"
+    local curBtn = AcquireSessMenuBtn()
+    curBtn:ClearAllPoints()
+    curBtn:SetPoint("TOPLEFT", 3, -yOff)
+    SetupSessBtn(curBtn, "current", "Current Segment", currentSess == "current", menuW)
+    yOff = yOff + 23
+
+    -- "Overall"
+    local allBtn = AcquireSessMenuBtn()
+    allBtn:ClearAllPoints()
+    allBtn:SetPoint("TOPLEFT", 3, -yOff)
+    SetupSessBtn(allBtn, "overall", "Overall", currentSess == "overall", menuW)
+    yOff = yOff + 23
+
+    sessMenuFrame:SetHeight(yOff + 3)
+end
+
+local function ShowSessionMenu(paneIdx, anchorBtn)
+    if not sessMenuFrame then
+        local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        menu:SetWidth(190)
+        menu:SetHeight(74)
+        menu:SetFrameStrata("TOOLTIP")
+        menu:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            tile = false, tileSize = 0, edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        menu:SetBackdropColor(0.08, 0.08, 0.08, 0.96)
+        menu:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        menu:SetClampedToScreen(true)
+        menu:EnableMouse(true)
+        local div = menu:CreateTexture(nil, "OVERLAY")
+        div:SetHeight(1)
+        div:SetColorTexture(0.35, 0.35, 0.35, 0.8)
+        div:Hide()
+        menu.divider = div
+        menu:Hide()
+        sessMenuFrame = menu
+    end
+
+    -- Toggle: hide if already showing for this pane
+    if sessMenuFrame:IsShown() and sessMenuFrame.paneIdx == paneIdx then
+        sessMenuFrame:Hide()
+        return
+    end
+
+    sessMenuFrame.paneIdx = paneIdx
+    RebuildSessionMenu(paneIdx)
+    sessMenuFrame:ClearAllPoints()
+    sessMenuFrame:SetPoint("TOPRIGHT", anchorBtn, "BOTTOMRIGHT", 0, -2)
+    sessMenuFrame:Show()
 end
 
 -- ============================================================
@@ -447,12 +778,8 @@ local function BuildPane(idx, parent)
     sessBtn:SetSize(52, 20)
     sessBtn:SetPoint("RIGHT", -2, 0)
     local ci3 = idx
-    sessBtn:SetScript("OnClick", function()
-        local cfg3 = (ci3 == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-        cfg3.session  = (cfg3.session == "fight") and "overall" or "fight"
-        drilldown[ci3] = nil
-        entryCache = {}
-        RenderPane(ci3)
+    sessBtn:SetScript("OnClick", function(self)
+        ShowSessionMenu(ci3, self)
     end)
     pane.sessBtn = sessBtn
 
@@ -502,7 +829,15 @@ local function BuildPane(idx, parent)
         if not cfg then return end
         local lbl = TYPE_LABEL[cfg.type] or cfg.type
         typeBtn:SetText(string.sub(lbl, 1, 5))
-        sessBtn:SetText(cfg.session == "fight" and "Fight" or "All")
+        local sl
+        if type(cfg.session) == "number" then
+            sl = "Seg"
+        elseif cfg.session == "current" then
+            sl = "Cur"
+        else
+            sl = "All"
+        end
+        sessBtn:SetText(sl)
     end
 
     return pane
@@ -737,10 +1072,12 @@ end
 function addonTable.DamageMeter.ResetData()
     local sessions = GetSessions()
     overallBaseIdx = #sessions
-    entryCache = {}
-    lastFightDuration = 0
-    sessionDurations  = {}
-    fightStartTime    = nil
+    entryCache          = {}
+    lastFightDuration   = 0
+    sessionDurations    = {}
+    sessionDurationByID = {}
+    sessionNameByID     = {}
+    fightStartTime      = nil
     for i = 1, 2 do drilldown[i] = nil end
     if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
 end
@@ -760,12 +1097,26 @@ EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if fightStartTime then
         lastFightDuration = math.max(1, GetTime() - fightStartTime)
         table.insert(sessionDurations, lastFightDuration)
+        -- Cache duration (and name if available) keyed by sessionID
+        local dur = lastFightDuration
+        SafeAfter(0.1, function()
+            local sessions = GetSessions()
+            if #sessions > 0 then
+                local last = sessions[#sessions]
+                local sid  = last.sessionID
+                sessionDurationByID[sid] = dur
+                local rawName = last.name
+                if rawName and not (issecretvalue and issecretvalue(rawName)) and rawName ~= "" then
+                    sessionNameByID[sid] = rawName
+                end
+            end
+        end)
         fightStartTime = nil
     end
     -- Clear fight drilldown: old fight is done, next click is a fresh session
     for i = 1, 2 do
         local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-        if cfg and cfg.session == "fight" then drilldown[i] = nil end
+        if cfg and cfg.session ~= "overall" then drilldown[i] = nil end
     end
 end, "DamageMeter")
 
@@ -773,11 +1124,35 @@ EventBus.Register("PLAYER_REGEN_DISABLED", function()
     fightStartTime = GetTime()
 end, "DamageMeter")
 
+-- Blizzard fires this whenever per-player stats change during combat — use it for timely updates
+EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", function()
+    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+    entryCache = {}
+    if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
+end, "DamageMeter")
+
+-- Fires when combat restrictions lift (state==0) — clear cache and re-render
+-- with fresh data from GetCombatSessionFromID (finalized, non-tainted).
+EventBus.Register("ADDON_RESTRICTION_STATE_CHANGED", function()
+    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+    local restrState = C_RestrictedActions and Enum.AddOnRestrictionType and
+        C_RestrictedActions.GetAddOnRestrictionState(Enum.AddOnRestrictionType.Combat)
+    if not restrState or restrState == 0 then
+        entryCache = {}
+        if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
+    end
+end, "DamageMeter")
+
 
 
 EventBus.Register("PLAYER_ENTERING_WORLD", function()
     if not UIThingsDB or not UIThingsDB.damageMeter then return end
     entryCache = {}
+    -- If we reloaded mid-combat, PLAYER_REGEN_DISABLED won't fire again.
+    -- Seed fightStartTime so live DPS has a valid denominator.
+    if InCombatLockdown() then
+        fightStartTime = GetTime()
+    end
     SafeAfter(1, addonTable.DamageMeter.Initialize)
 end, "DamageMeter")
 

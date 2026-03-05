@@ -13,19 +13,27 @@ table.insert(Widgets.moduleInits, function()
 
         if IsInGuild() then
             local numMembers = GetNumGuildMembers()
+            local online = {}
             for i = 1, numMembers do
-                local name, rank, rankIndex, level, class, zone, note, officernote, online, status, classFileName =
+                local name, rank, rankIndex, level, class, zone, note, officernote, isOnline, status, classFileName =
                     GetGuildRosterInfo(i)
-                if online then
-                    local charName = name:match("^([^-]+)") or name
-                    local rightText = (zone or "") .. "  " .. level
-                    local classColor = C_ClassColor.GetClassColor(classFileName)
-                    if classColor then
-                        GameTooltip:AddDoubleLine(charName, rightText, classColor.r, classColor.g, classColor.b, 0.7, 0.7,
-                            0.7)
-                    else
-                        GameTooltip:AddDoubleLine(charName, rightText, 1, 1, 1, 0.7, 0.7, 0.7)
-                    end
+                if isOnline then
+                    online[#online + 1] = {
+                        name          = name:match("^([^-]+)") or name,
+                        level         = level,
+                        zone          = zone or "",
+                        classFileName = classFileName,
+                    }
+                end
+            end
+            table.sort(online, function(a, b) return a.name < b.name end)
+            for _, m in ipairs(online) do
+                local rightText = m.zone .. "  " .. m.level
+                local classColor = C_ClassColor.GetClassColor(m.classFileName)
+                if classColor then
+                    GameTooltip:AddDoubleLine(m.name, rightText, classColor.r, classColor.g, classColor.b, 0.7, 0.7, 0.7)
+                else
+                    GameTooltip:AddDoubleLine(m.name, rightText, 1, 1, 1, 0.7, 0.7, 0.7)
                 end
             end
         else

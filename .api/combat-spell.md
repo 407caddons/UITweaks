@@ -134,6 +134,78 @@ Returns charge info for spells with charges (e.g. Battle Resurrection). Returns 
 
 ---
 
+## C_DamageMeter
+
+WoW 12.0 (The War Within) damage/healing meter data API. Used by `DamageMeter.lua` instead of the forbidden `COMBAT_LOG_EVENT_UNFILTERED`.
+
+```lua
+-- Get the live/current session (type 1 = current fight)
+local sessData = C_DamageMeter.GetCombatSessionFromType(sessionType, enumType)
+-- sessData.combatSources  — array of source entries
+-- sessData.maxAmount      — highest individual total in session (secret during combat)
+-- sessData.totalAmount    — session total (secret during combat)
+
+-- Get a specific completed session by ID
+local sessData = C_DamageMeter.GetCombatSessionFromID(sessionID, enumType)
+
+-- Get list of available past sessions
+local sessions = C_DamageMeter.GetAvailableCombatSessions()
+-- sessions[i].sessionID
+
+-- Get spell breakdown for a single source
+local srcData = C_DamageMeter.GetCombatSessionSourceFromType(sessionType, enumType, sourceGUID)
+local srcData = C_DamageMeter.GetCombatSessionSourceFromID(sessionID, enumType, sourceGUID)
+-- srcData.combatSpells[i].spellID, .name, .totalAmount, .casts
+```
+
+**`Enum.DamageMeterType` values:**
+| Key | Usage |
+|---|---|
+| `DamageDone` | Damage dealt |
+| `HealingDone` | Healing done |
+| `DamageTaken` | Damage received |
+| `Interrupts` | Interrupt count |
+| `Dispels` | Dispel count |
+| `Deaths` | Death count |
+
+**Session type constants:** `1` = current/live session (maps to `Enum.DamageMeterSessionType.Current` if available).
+
+**`combatSources` entry fields:**
+| Field | Secret during combat? | Notes |
+|---|---|---|
+| `sourceGUID` | YES | Can't use as table key |
+| `name` | YES | `UnitName(src.name)` works to resolve it |
+| `totalAmount` | YES | Arithmetic and string.format work; comparisons fail |
+| `amountPerSecond` | YES | Same restrictions as totalAmount |
+| `maxAmount` | YES | On the session root, not per-source |
+| `classFilename` | NO | Safe for table keys and comparisons |
+| `isLocalPlayer` | NO | Boolean, safe |
+| `specIconID` | NO | Safe |
+| `classification` | NO | Safe |
+
+**⚠️ Critical: live combat data is secret.** See [secure-protected.md](secure-protected.md) for the complete pattern.
+**⚠️ Wrap all calls in `pcall`** — `GetCombatSessionFromType`/`GetCombatSessionFromID` can error if the session doesn't exist.
+
+**Triggering event:** `DAMAGE_METER_COMBAT_SESSION_UPDATED` fires when per-player stats change during an active combat session. Register via EventBus:
+```lua
+EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", function()
+    entryCache = {}
+    RenderAllPanes()
+end)
+```
+
+**Restriction state API (used by Details to know when secrets drop):**
+```lua
+local state = C_RestrictedActions.GetAddOnRestrictionState(Enum.AddOnRestrictionType.Combat)
+-- state == 0 means no restrictions; data from completed sessions is fully readable
+```
+
+**Event:** `ADDON_RESTRICTION_STATE_CHANGED` fires when restriction state changes (combat start/end).
+
+**Usage in this addon:** `DamageMeter.lua` — see that file for the full live-vs-post-combat data pattern.
+
+---
+
 ## COMBAT_LOG_EVENT_UNFILTERED — FORBIDDEN
 
 ```
@@ -172,3 +244,5 @@ Used in Combat.lua to detect whether combat logging is active (for display purpo
 | `SPELL_UPDATE_COOLDOWN` | A spell's cooldown changed |
 | `UNIT_SPELLCAST_SENT` | Cast was sent to server |
 | `ZONE_CHANGED_NEW_AREA` | Zone changed (instance transitions) |
+| `DAMAGE_METER_COMBAT_SESSION_UPDATED` | Per-player stats updated during active combat session — use to refresh DamageMeter display |
+| `ADDON_RESTRICTION_STATE_CHANGED` | Combat restriction state changed — `state > 0` means secrets still active |
