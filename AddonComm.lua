@@ -43,10 +43,24 @@ function Comm.Register(module, action, callback)
     handlers[module][action] = callback
 end
 
---- Check if communication is allowed (in group and not hidden)
+--- Returns true if there is at least one real human player in the group (excludes NPC-only parties)
+local function HasRealGroupMembers()
+    local prefix = IsInRaid() and "raid" or "party"
+    local max = IsInRaid() and 40 or 4
+    for i = 1, max do
+        local unit = prefix .. i
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            return true
+        end
+    end
+    return false
+end
+
+--- Check if communication is allowed (in group with real players and not hidden)
 -- @return boolean
 function Comm.IsAllowed()
     if not IsInGroup() then return false end
+    if not HasRealGroupMembers() then return false end
     if UIThingsDB and UIThingsDB.addonComm and UIThingsDB.addonComm.hideFromWorld then return false end
     return true
 end

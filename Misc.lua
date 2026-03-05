@@ -286,13 +286,10 @@ local function ApplyUIScale()
     if not UIThingsDB.misc.uiScaleEnabled then return end
 
     local scale = UIThingsDB.misc.uiScale or 0.711
-    -- Round to 3 decimal places to avoid precision issues with CVars
     scale = tonumber(string.format("%.3f", scale))
 
-    SetCVar("useUiScale", "1")
-    SetCVar("uiScale", tostring(scale))
-
-    -- Force UIParent scale to bypass internal 0.64 floor in TWW
+    -- Apply directly to UIParent — avoid SetCVar("uiScale") which triggers
+    -- Blizzard's internal CVar scaling callback and overrides this call.
     if not InCombatLockdown() then
         UIParent:SetScale(scale)
     end
@@ -646,8 +643,7 @@ ApplyMiscEvents = function()
     end
 end
 
-EventBus.Register("ADDON_LOADED", function(event, name)
-    if name ~= "LunaUITweaks" then return end
+EventBus.Register("PLAYER_LOGIN", function()
     if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.enabled then
         ApplyUIScale()
     end

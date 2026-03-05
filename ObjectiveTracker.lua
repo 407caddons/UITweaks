@@ -536,7 +536,10 @@ local function AddLine(text, isHeader, questID, achieID, isObjective, overrideCo
             btn.ToggleBtn:Hide()
         end
 
-        ucState.yOffset = ucState.yOffset - (ucState.sectionHeaderSize + 6)
+        local sh = btn.Text:GetStringHeight()
+        local sLineH = (sh and sh > 0) and sh or ucState.sectionHeaderSize
+        btn:SetHeight(sLineH + 4)
+        ucState.yOffset = ucState.yOffset - (sLineH + 6)
     else
         if isObjective then
             local currentSize = ucState.detailSize
@@ -1212,7 +1215,10 @@ local function RenderQuests()
                 local textWidth = btn.Text:GetStringWidth()
                 btn.ToggleBtn:SetPoint("LEFT", btn.Text, "LEFT", textWidth + 5, 0)
 
-                ucState.yOffset = ucState.yOffset - (ucState.questNameSize + 4)
+                local gh = btn.Text:GetStringHeight()
+                local gLineH = (gh and gh > 0) and gh or ucState.questNameSize
+                btn:SetHeight(gLineH + 4)
+                ucState.yOffset = ucState.yOffset - (gLineH + 4)
 
                 if not isCollapsed then
                     for _, questID in ipairs(quests) do
