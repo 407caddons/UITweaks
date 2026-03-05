@@ -99,7 +99,7 @@ local function UpdateDisplay()
     local maxLevel = GetMaxPlayerLevel()
     local isMaxLevel = level >= maxLevel
 
-    if isMaxLevel and not settings.showAtMaxLevel then
+    if isMaxLevel and not settings.showAtMaxLevel and not settings.repBarEnabled then
         barFrame:Hide()
         return
     end
@@ -203,14 +203,87 @@ local function UpdateDisplay()
             pctText:Hide()
         end
     else
-        -- Max level: hide the bar fill, show level
-        barFill:SetWidth(1)
+        -- Max level
         restedFill:Hide()
         pendingFill:Hide()
         if pendingQuestText then pendingQuestText:Hide() end
-        if levelText then levelText:SetText(tostring(level)) end
-        if xpText then xpText:SetText("Max Level") end
-        if pctText then pctText:SetText("") end
+
+        if settings.repBarEnabled then
+            local data = C_Reputation.GetWatchedFactionData()
+            if data and data.name then
+                local repColor = settings.repBarColor
+                local barW = barFrame:GetWidth()
+                local current, max
+
+                if C_Reputation.IsMajorFaction(data.factionID) then
+                    local mfData = C_MajorFactions.GetMajorFactionData(data.factionID)
+                    if mfData and mfData.renownLevelThreshold and mfData.renownLevelThreshold > 0 then
+                        current = mfData.renownReputationEarned or 0
+                        max = mfData.renownLevelThreshold
+                    else
+                        current, max = 1, 1
+                    end
+                elseif C_Reputation.IsFactionParagon(data.factionID) then
+                    local pVal, pThresh = C_Reputation.GetFactionParagonInfo(data.factionID)
+                    if pVal and pThresh and pThresh > 0 then
+                        current = pVal % pThresh
+                        max = pThresh
+                    else
+                        current, max = 1, 1
+                    end
+                else
+                    current = data.currentStanding - data.currentReactionThreshold
+                    max = data.nextReactionThreshold - data.currentReactionThreshold
+                    if max <= 0 then current, max = 1, 1 end
+                end
+
+                local fraction = math.min(1, max > 0 and (current / max) or 1)
+                barFill:Show()
+                barFill:SetColorTexture(repColor.r, repColor.g, repColor.b, repColor.a)
+                barFill:SetWidth(math.max(1, fraction * barW))
+
+                if settings.showLevel and levelText then
+                    levelText:Show()
+                    levelText:SetText(tostring(level))
+                elseif levelText then
+                    levelText:Hide()
+                end
+
+                if settings.showXPText and xpText then
+                    xpText:Show()
+                    local label
+                    if C_Reputation.IsMajorFaction(data.factionID) then
+                        local renownLevel = C_MajorFactions.GetCurrentRenownLevel(data.factionID)
+                        label = string.format("%s  R%d  %s/%s",
+                            data.name, renownLevel or 0, AbbreviateNumber(current), AbbreviateNumber(max))
+                    else
+                        label = string.format("%s  %s/%s",
+                            data.name, AbbreviateNumber(current), AbbreviateNumber(max))
+                    end
+                    xpText:SetText(label)
+                elseif xpText then
+                    xpText:Hide()
+                end
+
+                if settings.showPercent and pctText then
+                    pctText:Show()
+                    pctText:SetText(string.format("%.1f%%", fraction * 100))
+                elseif pctText then
+                    pctText:Hide()
+                end
+            else
+                -- No watched faction
+                barFill:SetWidth(1)
+                if levelText then levelText:SetText(tostring(level)) end
+                if xpText then xpText:SetText("Max Level — watch a faction in the Reputation panel") end
+                if pctText then pctText:SetText("") end
+            end
+        else
+            barFill:SetWidth(1)
+            if levelText then levelText:SetText(tostring(level)) end
+            if xpText then xpText:SetText("Max Level") end
+            if pctText then pctText:SetText("") end
+        end
     end
 end
 
@@ -237,7 +310,7 @@ function addonTable.XpBar.UpdateSettings()
 
     ApplyBlizzardBarVisibility()
 
-    if not settings.enabled or (isMaxLevel and not settings.showAtMaxLevel) then
+    if not settings.enabled or (isMaxLevel and not settings.showAtMaxLevel and not settings.repBarEnabled) then
         barFrame:Hide()
         return
     end
@@ -366,7 +439,56 @@ local function Init()
 
         local level = UnitLevel("player")
         local maxLevel = GetMaxPlayerLevel()
-        if level >= maxLevel then return end
+        if level >= maxLevel then
+            if not UIThingsDB.xpBar.repBarEnabled then return end
+            -- Reputation tooltip at max level
+            local data = C_Reputation.GetWatchedFactionData()
+            if not data or not data.name then
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText("|cFFFFD100Reputation|r")
+                GameTooltip:AddLine("No faction watched. Watch one via the Reputation panel.", 0.7, 0.7, 0.7, true)
+                GameTooltip:Show()
+            else
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(data.name, 1, 1, 1)
+                if C_Reputation.IsMajorFaction(data.factionID) then
+                    local mfData = C_MajorFactions.GetMajorFactionData(data.factionID)
+                    local renownLevel = mfData and mfData.renownLevel or 0
+                    local isMaxRenown = C_MajorFactions.HasMaximumRenown(data.factionID)
+                    local rLabel = isMaxRenown and string.format("%d (Max)", renownLevel) or tostring(renownLevel)
+                    GameTooltip:AddDoubleLine("Renown:", rLabel, 1, 1, 1, 0, 1, 0)
+                    if mfData and mfData.renownLevelThreshold and mfData.renownLevelThreshold > 0 then
+                        local cur = mfData.renownReputationEarned or 0
+                        local mx = mfData.renownLevelThreshold
+                        GameTooltip:AddDoubleLine("Progress:",
+                            string.format("%s / %s (%.1f%%)", AbbreviateNumber(cur), AbbreviateNumber(mx), cur/mx*100),
+                            1, 1, 1, 0.8, 0.8, 0.8)
+                    end
+                elseif C_Reputation.IsFactionParagon(data.factionID) then
+                    local pVal, pThresh, _, hasReward = C_Reputation.GetFactionParagonInfo(data.factionID)
+                    if pVal and pThresh then
+                        local STANDING_LABELS = { "Hated","Hostile","Unfriendly","Neutral","Friendly","Honored","Revered","Exalted" }
+                        GameTooltip:AddDoubleLine("Standing:", STANDING_LABELS[data.reaction] or "Exalted", 1, 1, 1, 0, 0.8, 0)
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddDoubleLine("Paragon:",
+                            string.format("%d / %d", pVal % pThresh, pThresh), 1, 0.82, 0, 0.8, 0.8, 0.8)
+                        if hasReward then GameTooltip:AddLine("|cFF00FF00Reward available!|r") end
+                    end
+                else
+                    local STANDING_LABELS = { "Hated","Hostile","Unfriendly","Neutral","Friendly","Honored","Revered","Exalted" }
+                    GameTooltip:AddDoubleLine("Standing:", STANDING_LABELS[data.reaction] or "Unknown", 1, 1, 1, 0, 0.8, 0)
+                    local cur = data.currentStanding - data.currentReactionThreshold
+                    local mx = data.nextReactionThreshold - data.currentReactionThreshold
+                    if mx > 0 then
+                        GameTooltip:AddDoubleLine("Progress:",
+                            string.format("%s / %s (%.1f%%)", AbbreviateNumber(cur), AbbreviateNumber(mx), cur/mx*100),
+                            1, 1, 1, 0.8, 0.8, 0.8)
+                    end
+                end
+                GameTooltip:Show()
+            end
+            return
+        end
 
         local currentXP = UnitXP("player")
         local maxXP = UnitXPMax("player")
@@ -437,6 +559,7 @@ local function Init()
     EventBus.Register("DISABLE_XP_GAIN", OnXPUpdate, "XpBar")
     EventBus.Register("PLAYER_ENTERING_WORLD", OnEnteringWorld, "XpBar")
     EventBus.Register("QUEST_LOG_UPDATE", OnXPUpdate, "XpBar")
+    EventBus.Register("UPDATE_FACTION", OnXPUpdate, "XpBar")
     -- Refresh pending XP when XP boost buffs are gained or dropped
     EventBus.RegisterUnit("UNIT_AURA", "player", OnXPUpdate)
 

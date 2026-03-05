@@ -11,7 +11,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 880)
+    child:SetSize(600, 1020)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -277,5 +277,38 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
             UpdateXpBar()
         end,
         -728
+    )
+
+    -------------------------------------------------------------
+    -- SECTION: Rep Bar at Max Level
+    -------------------------------------------------------------
+    Helpers.CreateSectionHeader(child, "Rep Bar at Max Level", -778)
+
+    local repBarBtn = CreateFrame("CheckButton", "UIThingsXpBarRepBarCheck", child, "ChatConfigCheckButtonTemplate")
+    repBarBtn:SetPoint("TOPLEFT", 20, -808)
+    _G[repBarBtn:GetName() .. "Text"]:SetText("At max level, show watched reputation as bar")
+    repBarBtn:SetChecked(UIThingsDB.xpBar.repBarEnabled)
+    repBarBtn:SetScript("OnClick", function(self)
+        UIThingsDB.xpBar.repBarEnabled = not not self:GetChecked()
+        UpdateXpBar()
+    end)
+
+    local repNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    repNote:SetPoint("TOPLEFT", 20, -832)
+    repNote:SetTextColor(0.7, 0.7, 0.7, 1)
+    repNote:SetText("Watch a faction via the in-game Reputation panel (eye icon) to display it here.")
+
+    Helpers.CreateColorPicker(child, "UIThingsXpBarRepColorBtn", "Rep Bar Color",
+        function()
+            local c = UIThingsDB.xpBar.repBarColor
+            return c.r, c.g, c.b
+        end,
+        function(r, g, b)
+            UIThingsDB.xpBar.repBarColor.r = r
+            UIThingsDB.xpBar.repBarColor.g = g
+            UIThingsDB.xpBar.repBarColor.b = b
+            UpdateXpBar()
+        end,
+        -858
     )
 end

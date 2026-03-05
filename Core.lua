@@ -748,6 +748,8 @@ local function OnEvent(self, event, ...)
                 showTimers = true,
                 showAtMaxLevel = false,
                 hideBlizzardBar = false,
+                repBarEnabled = false,
+                repBarColor = { r = 0.0, g = 0.8, b = 0.2, a = 1 },
             },
             damageMeter = {
                 enabled        = false,
