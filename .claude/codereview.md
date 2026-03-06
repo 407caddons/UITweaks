@@ -1,5 +1,5 @@
 # LunaUITweaks Code Review
-_Last updated: 2026-03-06_
+_Last updated: 2026-03-06 (re-review)_
 
 ## Overall Health: GOOD
 
@@ -62,16 +62,27 @@ Called from `UpdateContent` (every second when widgets are enabled), this create
 
 ## HIGH — Bugs (pre-existing)
 
-### CastBar.lua:30 — `CASTBAR_DEBUG = true` hardcoded
-The flag is checked in all logging paths but never set to `false`. Every user sees debug messages in chat on every cast event. Set `CASTBAR_DEBUG = false` before release.
+### ~~CastBar.lua:30 — `CASTBAR_DEBUG = true` hardcoded~~ ✅ FIXED (2026-03-06)
+Flag is now correctly `false`.
 
-### Misc.lua:139 — `issecretvalue(msg)` on CHAT_MSG_LOOT message
-Chat message strings from loot events are NOT secret values — only GUID/sourceGUID fields from the combat log are. This guard causes `ShowBoeAlert` to silently return early during any combat loot event, breaking BoE detection precisely when it matters most.
-_Fix: Remove this check._
+### Loot.lua:497 — `issecretvalue(msg)` guard in `OnChatMsgLoot`
+Chat strings from `CHAT_MSG_LOOT` are never secret values (only GUID/sourceGUID fields from the combat log are). This guard silently drops loot toasts during combat. The BoE handler in `Misc.lua` correctly omits this guard; `Loot.lua` should too.
+_Fix: Remove the `issecretvalue(msg)` check._
 
-### Misc.lua:327 — `keywordCache` not cleared on disable
-`UpdateAutoInviteKeywords()` inserts into `keywordCache` but disabling auto-invite in `ApplyMiscEvents()` only unregisters the whisper listener — it never wipes the cache. On re-enable, old and new keywords accumulate.
-_Fix: `table.wipe(keywordCache)` in the auto-invite disable branch._
+### MplusTimer.lua:893-904 — Death attribution off-by-one
+```lua
+for i = 1, members do
+    local unit = "party" .. i
+    if i == members then unit = "player" end
+```
+For a 5-player group (`members = 5`), when `i == 5` the code sets `unit = "player"`. But `party5` does not exist — `party1`–`party4` cover the other four. The last iteration always tests if the player is dead and can falsely attribute a death to them.
+_Fix: iterate `party1`–`party4` then check `"player"` outside the loop._
+
+### QueueTimer.lua:142 — `OnUpdate` perpetually runs every frame when stopped
+`timerBar:SetScript("OnUpdate", OnUpdate)` is installed at `Init()` and never cleared. When `isRunning` is false, `OnUpdate` fires every frame and exits via early return — a perpetual no-op per-frame call for the session lifetime.
+_Fix: clear the script in `StopTimer()`; restore it in `StartTimer()`._
+
+### ~~Misc.lua:327 — `keywordCache` not cleared on disable~~ ✅ FIXED (2026-03-06)
 
 ---
 
@@ -104,6 +115,9 @@ Every party invite triggers a linear scan of all BNet friends via `C_BattleNet.G
 
 `RecycleSCTFrame` iterates the full `sctActive` list to find a frame by reference. With `SCT_MAX_ACTIVE = 30` this is O(30) inside an OnUpdate path. Use a hash set (`sctActiveSet = {}`) for O(1) removal.
 
+### MplusTimer.lua — drag-stop saves raw `GetPoint` anchor, not CENTER-normalized
+The drag-stop handler saves `{ point = point, x = x, y = y }` from `GetPoint()` which can return any anchor. This diverges from the addon's CENTER-relative convention established in CLAUDE.md. Migrate to the standard `GetCenter()` minus `UIParent:GetCenter()` pattern.
+
 ### AddonVersions.GetPlayerKeystone — bag scan on every roster update (AddonVersions.lua:17-38)
 
 `GetPlayerKeystone` scans all bag slots on every `GROUP_ROSTER_UPDATE` and every `RefreshVersions`. Cache the result and invalidate on `BAG_UPDATE_DELAYED` or `ITEM_PUSH` events.
@@ -132,9 +146,12 @@ The ~600-line DEFAULTS table is defined inside the `ADDON_LOADED` handler. While
 
 If called while in combat, the scale is silently dropped. Register a one-shot `PLAYER_REGEN_ENABLED` handler to retry.
 
+### Profiler.lua — `sortedRows` scratch table never trimmed
+`wipe()` resets it each interval, but if module count exceeds `MAX_ROWS = 40` the table grows past the display cap. The `math.min` guard prevents display overflow but the raw table is never trimmed. Not impactful in normal use, but a simple `for i = #sortedRows, MAX_ROWS+1, -1 do sortedRows[i] = nil end` post-wipe would keep it bounded.
+
 ### Multiple files — Frame positions not yet migrated to CENTER anchor
 
-Per CLAUDE.md — not yet migrated: `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`.
+Per CLAUDE.md — not yet migrated: `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`, `MplusTimer`.
 
 ---
 
@@ -149,23 +166,27 @@ Per CLAUDE.md — not yet migrated: `XpBar`, `CastBar`, `Combat`, `Kick`, `Objec
 | 5 | High | Widgets.lua | OnUpdate fires every frame for all widgets even when idle |
 | 6 | High | Widgets.lua | UpdateVisuals rebuilds anchor lookup ignoring cache |
 | 7 | High | Widgets.lua | UpdateAnchoredLayouts allocates tables every second |
-| 8 | High | CastBar.lua | CASTBAR_DEBUG = true hardcoded |
-| 9 | High | Misc.lua | issecretvalue on CHAT_MSG_LOOT breaks BoE detection in combat |
-| 10 | High | Misc.lua | keywordCache not wiped on auto-invite disable |
-| 11 | Med | Reagents.lua | Live bag scan on every tooltip hover — no cache |
-| 12 | Med | Vendor.lua | Bag range hardcoded 0-4, misses reagent bag |
-| 13 | Med | Loot.lua | Dead-code if/else in UpdateLayout |
-| 14 | Med | FPS.lua | Redundant sort of addonMemList on every tooltip open |
-| 15 | Med | Misc.lua | Three alert frames created unconditionally at load |
-| 16 | Med | Misc.lua | O(n BNet friends) scan on every party invite |
-| 17 | Med | SCT.lua | Linear scan of sctActive in RecycleSCTFrame |
-| 18 | Med | AddonVersions.lua | Bag scan for keystone on every roster update |
-| 19 | Low | SessionStats.lua | SaveSessionData called on every loot event |
-| 20 | Low | Widgets.lua | GetInstanceInfo called redundantly per UpdateConditions pass |
-| 21 | Low | Core.lua | DEFAULTS defined inside event handler |
-| 22 | Low | Reagents.lua | bagList rebuilt on every scan call |
-| 23 | Low | Misc.lua | ApplyUIScale in-combat failure has no retry |
-| 24 | Low | Multiple | Frame positions not yet migrated to CENTER anchor |
+| 8 | ~~High~~ | ~~CastBar.lua~~ | ~~CASTBAR_DEBUG = true hardcoded~~ ✅ |
+| 9 | High | Loot.lua | issecretvalue(msg) guard silently drops loot toasts in combat |
+| 10 | ~~High~~ | ~~Misc.lua~~ | ~~keywordCache not wiped on auto-invite disable~~ ✅ |
+| 11 | High | MplusTimer.lua | Death attribution off-by-one for 5-player groups |
+| 12 | High | QueueTimer.lua | OnUpdate runs every frame when timer is stopped |
+| 13 | Med | Reagents.lua | Live bag scan on every tooltip hover — no cache |
+| 14 | Med | Vendor.lua | Bag range hardcoded 0-4, misses reagent bag |
+| 15 | Med | Loot.lua | Dead-code if/else in UpdateLayout |
+| 16 | Med | FPS.lua | Redundant sort of addonMemList on every tooltip open |
+| 17 | Med | Misc.lua | Three alert frames created unconditionally at load |
+| 18 | Med | Misc.lua | O(n BNet friends) scan on every party invite |
+| 19 | Med | SCT.lua | Linear scan of sctActive in RecycleSCTFrame |
+| 20 | Med | AddonVersions.lua | Bag scan for keystone on every roster update |
+| 21 | Med | MplusTimer.lua | Drag-stop saves raw GetPoint anchor, not CENTER-normalized |
+| 22 | Low | SessionStats.lua | SaveSessionData called on every loot event |
+| 23 | Low | Widgets.lua | GetInstanceInfo called redundantly per UpdateConditions pass |
+| 24 | Low | Core.lua | DEFAULTS defined inside event handler |
+| 25 | Low | Reagents.lua | bagList rebuilt on every scan call |
+| 26 | Low | Misc.lua | ApplyUIScale in-combat failure has no retry |
+| 27 | Low | Profiler.lua | sortedRows scratch table never trimmed past MAX_ROWS |
+| 28 | Low | Multiple | Frame positions not yet migrated to CENTER anchor (incl. MplusTimer) |
 
 ---
 
