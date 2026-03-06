@@ -125,3 +125,6 @@ function EventBus.RegisterUnit(event, unit, callback, moduleName)
     EventBus.Register(event, wrapper, moduleName, callback)
     return wrapper
 end
+
+-- Expose EventBus for companion addons
+if LunaUITweaksAPI then LunaUITweaksAPI.EventBus = addonTable.EventBus end

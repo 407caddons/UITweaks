@@ -221,6 +221,9 @@ function addonTable.Core.Log(module, msg, level)
     print(prefix .. " " .. tostring(msg))
 end
 
+-- Expose Core for companion addons (EventBus exposed at end of EventBus.lua)
+LunaUITweaksAPI.Core = addonTable.Core
+
 --- Event handler for ADDON_LOADED
 -- Initializes saved variables with defaults and modules
 -- @param self frame The event frame

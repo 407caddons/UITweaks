@@ -581,25 +581,8 @@ local function CheckRestoreSuperTrack()
         end
         local currentST = C_SuperTrack.GetSuperTrackedQuestID()
 
-        -- If we manually set a WQ for proximity, check whether to keep or restore.
-        if proximityTrackedWQ then
-            if currentST ~= proximityTrackedWQ then
-                -- Player manually changed super-track — abandon our tracking.
-                proximityTrackedWQ = nil
-                return
-            end
-            if not C_TaskQuest.IsActive(proximityTrackedWQ) then
-                -- Left the WQ area — restore the saved campaign quest.
-                proximityTrackedWQ = nil
-                if savedSuperTrackedQuestID
-                    and C_QuestLog.IsOnQuest(savedSuperTrackedQuestID)
-                    and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
-                    C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
-                end
-                savedSuperTrackedQuestID = nil
-            end
-            return
-        end
+        -- If we manually set a WQ for proximity, the ticker handles restoration.
+        if proximityTrackedWQ then return end
 
         -- Nothing tracked — restore saved quest if we have one.
         if not currentST or currentST == 0 then
@@ -1933,6 +1916,21 @@ UpdateContent = function()
         if renderer then renderer() end
     end
 
+    -- If we proximity-tracked a WQ and it's no longer in the display, restore the
+    -- saved campaign quest. validWQs is repopulated by RenderWorldQuests each frame.
+    if proximityTrackedWQ and cachedMapID and not validWQs[proximityTrackedWQ] then
+        local currentST = C_SuperTrack.GetSuperTrackedQuestID()
+        if currentST == proximityTrackedWQ then
+            if savedSuperTrackedQuestID
+                and C_QuestLog.IsOnQuest(savedSuperTrackedQuestID)
+                and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
+                C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
+            end
+            savedSuperTrackedQuestID = nil
+        end
+        proximityTrackedWQ = nil
+    end
+
     if ucState.yOffset == -5 and UIThingsDB.tracker.locked then
         if not inCombat then
             UnregisterStateDriver(trackerFrame, "visibility")
@@ -2053,6 +2051,16 @@ SetupTrackerEvents = function()
                 end
                 if proximityTrackedWQ == questID then
                     proximityTrackedWQ = nil
+                    -- WQ auto-removed on area exit — restore the saved campaign quest.
+                    local currentST = C_SuperTrack.GetSuperTrackedQuestID()
+                    if currentST == questID then
+                        if savedSuperTrackedQuestID
+                            and C_QuestLog.IsOnQuest(savedSuperTrackedQuestID)
+                            and C_QuestLog.GetQuestWatchType(savedSuperTrackedQuestID) then
+                            C_SuperTrack.SetSuperTrackedQuestID(savedSuperTrackedQuestID)
+                        end
+                        savedSuperTrackedQuestID = nil
+                    end
                 end
             end
             ScheduleUpdateContent()
