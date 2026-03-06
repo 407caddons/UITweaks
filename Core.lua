@@ -897,6 +897,10 @@ local function OnEvent(self, event, ...)
             addonTable.QuestReminder.Initialize()
         end
 
+        if addonTable.DamageMeter and addonTable.DamageMeter.Initialize then
+            addonTable.DamageMeter.Initialize()
+        end
+
         -- Slash Commands
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"

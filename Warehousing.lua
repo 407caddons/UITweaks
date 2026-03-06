@@ -21,6 +21,14 @@ local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 
 local MAX_ATTACHMENTS = ATTACHMENTS_MAX_SEND or 12
 local MAIL_STEP_DELAY = 0.3
 
+-- Prebuilt bag list (player bags 0..NUM_BAG_SLOTS + reagent bag) — used by all scan helpers
+local BAG_LIST = (function()
+    local t = {}
+    for bag = 0, NUM_BAG_SLOTS do t[#t + 1] = bag end
+    t[#t + 1] = REAGENT_BAG_SLOT
+    return t
+end)()
+
 -- State
 local scanTimer = nil
 local popupFrame = nil
@@ -155,11 +163,7 @@ local function ScanBags()
         end
     end
 
-    local bagList = {}
-    for bag = 0, NUM_BAG_SLOTS do bagList[#bagList + 1] = bag end
-    bagList[#bagList + 1] = REAGENT_BAG_SLOT
-
-    for _, bag in ipairs(bagList) do
+    for _, bag in ipairs(BAG_LIST) do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -358,10 +362,7 @@ end
 local function FindItemSlots(itemID, maxCount)
     local slots = {}
     local remaining = maxCount
-    local bagList = {}
-    for bag = 0, NUM_BAG_SLOTS do bagList[#bagList + 1] = bag end
-    bagList[#bagList + 1] = REAGENT_BAG_SLOT
-    for _, bag in ipairs(bagList) do
+    for _, bag in ipairs(BAG_LIST) do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             if remaining <= 0 then return slots end
@@ -399,10 +400,7 @@ end
 
 --- Find an empty slot in bags (including reagent bag)
 local function FindEmptyBagSlot()
-    local bagList = {}
-    for bag = 0, NUM_BAG_SLOTS do bagList[#bagList + 1] = bag end
-    bagList[#bagList + 1] = REAGENT_BAG_SLOT
-    for _, bag in ipairs(bagList) do
+    for _, bag in ipairs(BAG_LIST) do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -539,12 +537,14 @@ local function GetHeaderRow(index)
     return row
 end
 
---- Refresh the popup content
+--- Refresh the popup content.
+-- Returns true if there are actionable items for the current mode (used by OnMailShow to decide visibility).
 function Warehousing.RefreshPopup()
-    if not popupFrame then return end
+    if not popupFrame then return false end
 
     EnsureDB()
     local overflow, deficit = CalculateOverflowDeficit()
+    local hasAction = false
 
     -- Hide all rows
     for _, row in ipairs(popupRows) do
@@ -609,6 +609,7 @@ function Warehousing.RefreshPopup()
         else
             popupFrame.statusText:SetText("")
             popupFrame.actionBtn:Enable()
+            hasAction = true
         end
 
     elseif popupMode == "bank" then
@@ -701,10 +702,101 @@ function Warehousing.RefreshPopup()
         else
             popupFrame.statusText:SetText("")
             popupFrame.actionBtn:Enable()
+            hasAction = true
         end
     end
 
     popupFrame.scrollChild:SetHeight(math.max(yOffset, 1))
+    return hasAction
+end
+
+--------------------------------------------------------------
+-- State Machine Queue Processor
+--------------------------------------------------------------
+
+local queueProcessor = CreateFrame("Frame")
+local workQueue = {}
+local isProcessing = false
+local queueOnComplete = nil
+
+local function IsGameReady()
+    if GetCursorInfo() then return false end
+
+    local function CheckContainers(bags)
+        for _, bag in ipairs(bags) do
+            local numSlots = C_Container.GetContainerNumSlots(bag)
+            for slot = 1, numSlots do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                if info and info.isLocked then return false end
+            end
+        end
+        return true
+    end
+
+    if not CheckContainers(BAG_LIST) then return false end
+    if not CheckContainers(GetOpenBankContainers()) then return false end
+
+    return true
+end
+
+local function ProcessQueueStep()
+    if #workQueue == 0 then
+        queueProcessor:SetScript("OnUpdate", nil)
+        isProcessing = false
+        if queueOnComplete then
+            local cb = queueOnComplete
+            queueOnComplete = nil
+            cb()
+        end
+        return
+    end
+
+    if not IsGameReady() then return end
+
+    local task = table.remove(workQueue, 1)
+
+    if task.action == "split" then
+        C_Container.SplitContainerItem(task.bag, task.slot, task.count)
+        table.insert(workQueue, 1, { action = "place_in_empty", bankType = task.bankType })
+
+    elseif task.action == "place_in_empty" then
+        local emptyBag, emptySlot = FindEmptyBagSlot()
+        if emptyBag then
+            C_Container.PickupContainerItem(emptyBag, emptySlot)
+            if task.bankType then
+                table.insert(workQueue, 1, { action = "use", bag = emptyBag, slot = emptySlot, bankType = task.bankType })
+            end
+        else
+            Log("No empty bag slot found for split!", 2)
+        end
+
+    elseif task.action == "use" then
+        C_Container.UseContainerItem(task.bag, task.slot, nil, task.bankType)
+
+    elseif task.action == "attach_mail" then
+        C_Container.PickupContainerItem(task.bag, task.slot)
+        ClickSendMailItemButton(task.attachIndex)
+
+    elseif task.action == "send_mail" then
+        SendMail(task.charName, "Warehousing", "")
+        -- Pause queue, wait for MAIL_SEND_SUCCESS event to trigger next batch
+        queueProcessor:SetScript("OnUpdate", nil)
+        isProcessing = false
+    end
+end
+
+local function StartQueueProcessor(onComplete)
+    if isProcessing then return end
+    isProcessing = true
+    queueOnComplete = onComplete
+    queueProcessor:SetScript("OnUpdate", ProcessQueueStep)
+end
+
+local function StopQueueProcessor()
+    workQueue = {}
+    isProcessing = false
+    queueOnComplete = nil
+    queueProcessor:SetScript("OnUpdate", nil)
 end
 
 --------------------------------------------------------------
@@ -720,7 +812,6 @@ local function BuildMailQueue()
     local byDest = {}
     for itemID, data in pairs(overflow) do
         local dest = data.destination
-        -- Strip " (you)" suffix that may have been stored when this character was active
         local destPlain = dest:match("^(.+) %(you%)$") or dest
         if dest ~= "Warband Bank" and dest ~= "Personal Bank"
             and destPlain:lower() ~= currentName:lower() then
@@ -730,10 +821,7 @@ local function BuildMailQueue()
     end
 
     for dest, items in pairs(byDest) do
-        -- Strip the " (you)" suffix added to the current character's display name
         local recipientName = dest:match("^(.+) %(you%)$") or dest
-
-        -- Build slot list for all items going to this destination
         local allSlots = {}
         for itemID, count in pairs(items) do
             local slots = FindItemSlots(itemID, count)
@@ -742,7 +830,6 @@ local function BuildMailQueue()
             end
         end
 
-        -- Chunk into batches of MAX_ATTACHMENTS
         local batch = {}
         for _, s in ipairs(allSlots) do
             table.insert(batch, s)
@@ -760,7 +847,6 @@ end
 local function ProcessNextMail()
     mailQueueIndex = mailQueueIndex + 1
     if mailQueueIndex > #mailQueue then
-        -- Done
         mailSending = false
         mailQueueIndex = 0
         if popupFrame and popupFrame.actionBtn then
@@ -771,10 +857,7 @@ local function ProcessNextMail()
             popupFrame.statusText:SetText("All mail sent!")
         end
         Log("Mail queue complete.", 0)
-        -- Refresh after a brief delay to let bag update
-        C_Timer.After(0.5, function()
-            ScheduleBagScan()
-        end)
+        C_Timer.After(0.5, function() ScheduleBagScan() end)
         return
     end
 
@@ -784,35 +867,17 @@ local function ProcessNextMail()
         popupFrame.actionBtn:Disable()
     end
 
-    -- Clear mail UI
     ClearSendMail()
-
-    -- Set recipient
     SendMailNameEditBox:SetText(entry.charName)
     SendMailSubjectEditBox:SetText("Warehousing")
 
-    -- Attach items with small delays between each
-    local attachIndex = 0
-    local function AttachNext()
-        attachIndex = attachIndex + 1
-        if attachIndex > #entry.slots then
-            -- All attached, send
-            C_Timer.After(MAIL_STEP_DELAY, function()
-                SendMail(entry.charName, "Warehousing", "")
-                -- Will wait for MAIL_SEND_SUCCESS to process next
-            end)
-            return
-        end
-
-        local slotInfo = entry.slots[attachIndex]
-        ClearCursor()
-        C_Container.PickupContainerItem(slotInfo.bag, slotInfo.slot)
-        ClickSendMailItemButton(attachIndex)
-
-        C_Timer.After(MAIL_STEP_DELAY, AttachNext)
+    workQueue = {}
+    for i, slotInfo in ipairs(entry.slots) do
+        table.insert(workQueue, { action = "attach_mail", bag = slotInfo.bag, slot = slotInfo.slot, attachIndex = i })
     end
+    table.insert(workQueue, { action = "send_mail", charName = entry.charName })
 
-    C_Timer.After(MAIL_STEP_DELAY, AttachNext)
+    StartQueueProcessor(nil)
 end
 
 local function StartMailSending()
@@ -833,60 +898,11 @@ end
 -- Bank Logic
 --------------------------------------------------------------
 
-
---- Wait for an item to finish transferring (unlock/disappear), then call callback.
---- Uses ITEM_LOCK_CHANGED for immediate response with a 2s fallback timeout.
-local function WaitForItemUnlock(bag, slot, callback)
-    -- Check immediately — may already be done
-    local info = C_Container.GetContainerItemInfo(bag, slot)
-    if not info or not info.isLocked then
-        callback(not info)
-        return
-    end
-
-    local resolved = false
-    local timeoutHandle = nil
-    local listener = nil
-
-    local function Resolve(moved)
-        if resolved then return end
-        resolved = true
-        if timeoutHandle then
-            timeoutHandle:Cancel()
-            timeoutHandle = nil
-        end
-        if listener then
-            EventBus.Unregister("ITEM_LOCK_CHANGED", listener)
-            listener = nil
-        end
-        callback(moved)
-    end
-
-    listener = function()
-        local i = C_Container.GetContainerItemInfo(bag, slot)
-        if not i or not i.isLocked then
-            Resolve(not i)
-        end
-    end
-
-    EventBus.Register("ITEM_LOCK_CHANGED", listener, "Warehousing")
-
-    -- Fallback: if the event never fires (warband bank latency), resolve after 2s
-    timeoutHandle = C_Timer.NewTicker(2, function()
-        timeoutHandle:Cancel()
-        timeoutHandle = nil
-        Log("  unlock timeout — slot " .. bag .. "/" .. slot, 2)
-        local i = C_Container.GetContainerItemInfo(bag, slot)
-        Resolve(not i)
-    end, 1)
-end
-
 local function StartBankSync(continuationPass)
     if bankSyncing then return end
     continuationPass = continuationPass or 1
     bankSyncing = true
 
-    -- Use C_Bank.CanViewBank to check actual bank accessibility
     local canViewCharacter = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
     local canViewAccount = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
     Log("=== SYNC START === canViewCharacter=" .. tostring(canViewCharacter) .. " canViewAccount=" .. tostring(canViewAccount), 0)
@@ -898,10 +914,8 @@ local function StartBankSync(continuationPass)
         popupFrame.actionBtn:Disable()
     end
 
-    -- Build work list: deposits first, then withdrawals
-    local work = {}
+    workQueue = {}
 
-    -- Deposits: overflow items destined for a bank type
     for itemID, data in pairs(overflow) do
         local dest = data.destination
         local bankType = nil
@@ -915,18 +929,18 @@ local function StartBankSync(continuationPass)
         if bankType then
             local slots = FindItemSlots(itemID, data.count)
             for _, s in ipairs(slots) do
-                table.insert(work, {
-                    action = "deposit",
-                    bag = s.bag,
-                    slot = s.slot,
-                    count = s.count,
-                    bankType = bankType,
-                })
+                local info = C_Container.GetContainerItemInfo(s.bag, s.slot)
+                if info then
+                    if info.stackCount > s.count then
+                        table.insert(workQueue, { action = "split", bag = s.bag, slot = s.slot, count = s.count, bankType = bankType })
+                    else
+                        table.insert(workQueue, { action = "use", bag = s.bag, slot = s.slot, bankType = bankType })
+                    end
+                end
             end
         end
     end
 
-    -- Withdrawals: deficit items available in any open bank
     local bankCounts = ScanOpenBank()
     for itemID, data in pairs(deficit) do
         local bankHas = bankCounts[itemID] or 0
@@ -934,19 +948,21 @@ local function StartBankSync(continuationPass)
             local withdrawCount = math.min(data.count, bankHas)
             local bankSlots = FindOpenBankSlots(itemID, withdrawCount)
             for _, s in ipairs(bankSlots) do
-                table.insert(work, {
-                    action = "withdraw",
-                    bag = s.bag,
-                    slot = s.slot,
-                    count = s.count,
-                })
+                local info = C_Container.GetContainerItemInfo(s.bag, s.slot)
+                if info then
+                    if info.stackCount > s.count then
+                        table.insert(workQueue, { action = "split", bag = s.bag, slot = s.slot, count = s.count })
+                    else
+                        table.insert(workQueue, { action = "use", bag = s.bag, slot = s.slot })
+                    end
+                end
             end
         end
     end
 
-    Log("Total work items: " .. #work, 0)
+    Log("Total work items: " .. #workQueue, 0)
 
-    if #work == 0 then
+    if #workQueue == 0 then
         bankSyncing = false
         if popupFrame and popupFrame.statusText then
             popupFrame.statusText:SetText("Everything is in order.")
@@ -958,188 +974,70 @@ local function StartBankSync(continuationPass)
         return
     end
 
-    local workIndex = 0
-    local workRetries = 0
-    local MAX_WORK_RETRIES = 3
-    local function ProcessNextWork(retry)
-        if retry then
-            workRetries = workRetries + 1
-            if workRetries > MAX_WORK_RETRIES then
-                Log("  giving up on item after " .. MAX_WORK_RETRIES .. " retries, skipping", 2)
-                workRetries = 0
-                workIndex = workIndex + 1
-            end
-        else
-            workRetries = 0
-            workIndex = workIndex + 1
-        end
-        if workIndex > #work then
-            bankSyncing = false
-            Log("Bank sync complete (pass " .. continuationPass .. ").", 0)
-            -- Wait for BAG_UPDATE_DELAYED to confirm the client has settled all
-            -- bag changes from this pass before re-scanning for remaining overflow.
-            -- Falls back to a 3s timer in case the event never fires (warband bank
-            -- latency or no bag changes this pass).
-            if continuationPass < 5 then
-                local bagSettled = false
-                local bagListener = nil
-                local bagFallback = nil
-                local function OnBagsSettled()
-                    if bagSettled then return end
-                    bagSettled = true
-                    if bagListener then
-                        EventBus.Unregister("BAG_UPDATE_DELAYED", bagListener)
-                        bagListener = nil
+    StartQueueProcessor(function()
+        bankSyncing = false
+        Log("Bank sync complete (pass " .. continuationPass .. ").", 0)
+
+        if continuationPass < 5 then
+            local bagSettled = false
+            local bagListener = nil
+            local bagFallback = nil
+            local function OnBagsSettled()
+                if bagSettled then return end
+                bagSettled = true
+                if bagListener then EventBus.Unregister("BAG_UPDATE_DELAYED", bagListener) end
+                if bagFallback then bagFallback:Cancel() end
+
+                local followOverflow = CalculateOverflowDeficit()
+                local hasMore = false
+                local cvChar = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
+                local cvAcct = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
+                for _, data in pairs(followOverflow) do
+                    local dest = data.destination
+                    if (dest == "Warband Bank" and cvAcct) or (dest == "Personal Bank" and cvChar) then
+                        hasMore = true
+                        break
                     end
-                    if bagFallback then
-                        bagFallback:Cancel()
-                        bagFallback = nil
+                end
+
+                if hasMore then
+                    Log("Overflow remains after pass " .. continuationPass .. ", running follow-up sync.", 0)
+                    if popupFrame and popupFrame.statusText then
+                        popupFrame.statusText:SetText("Following up...")
                     end
+                    StartBankSync(continuationPass + 1)
+                else
                     ScheduleBagScan()
-                    local followOverflow = CalculateOverflowDeficit()
-                    local hasMore = false
-                    local cvChar = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Character)
-                    local cvAcct = C_Bank and C_Bank.CanViewBank and C_Bank.CanViewBank(Enum.BankType.Account)
-                    for _, data in pairs(followOverflow) do
-                        local dest = data.destination
-                        if (dest == "Warband Bank" and cvAcct)
-                            or (dest == "Personal Bank" and cvChar) then
-                            hasMore = true
-                            break
-                        end
+                    if popupFrame and popupFrame.actionBtn then
+                        popupFrame.actionBtn:SetText("Sync")
+                        popupFrame.actionBtn:Enable()
                     end
-                    if hasMore then
-                        Log("Overflow remains after pass " .. continuationPass .. ", running follow-up sync.", 0)
-                        if popupFrame and popupFrame.statusText then
-                            popupFrame.statusText:SetText("Following up...")
-                        end
-                        StartBankSync(continuationPass + 1)
-                    else
-                        if popupFrame and popupFrame.actionBtn then
-                            popupFrame.actionBtn:SetText("Sync")
-                            popupFrame.actionBtn:Enable()
-                        end
-                        if popupFrame and popupFrame.statusText then
-                            popupFrame.statusText:SetText("Sync complete!")
-                        end
-                        Warehousing.RefreshPopup()
+                    if popupFrame and popupFrame.statusText then
+                        popupFrame.statusText:SetText("Sync complete!")
                     end
+                    Warehousing.RefreshPopup()
                 end
-                bagListener = OnBagsSettled
-                EventBus.Register("BAG_UPDATE_DELAYED", bagListener, "Warehousing")
-                bagFallback = C_Timer.NewTicker(3, function()
-                    bagFallback:Cancel()
-                    bagFallback = nil
-                    OnBagsSettled()
-                end, 1)
-            else
-                ScheduleBagScan()
-                if popupFrame and popupFrame.actionBtn then
-                    popupFrame.actionBtn:SetText("Sync")
-                    popupFrame.actionBtn:Enable()
-                end
-                if popupFrame and popupFrame.statusText then
-                    popupFrame.statusText:SetText("Sync limit reached — overflow may remain.")
-                end
-                Warehousing.RefreshPopup()
             end
-            return
+
+            bagListener = OnBagsSettled
+            EventBus.Register("BAG_UPDATE_DELAYED", bagListener, "Warehousing")
+            bagFallback = C_Timer.NewTicker(3, function()
+                bagFallback:Cancel()
+                bagFallback = nil
+                OnBagsSettled()
+            end, 1)
+        else
+            ScheduleBagScan()
+            if popupFrame and popupFrame.actionBtn then
+                popupFrame.actionBtn:SetText("Sync")
+                popupFrame.actionBtn:Enable()
+            end
+            if popupFrame and popupFrame.statusText then
+                popupFrame.statusText:SetText("Sync limit reached — overflow may remain.")
+            end
+            Warehousing.RefreshPopup()
         end
-
-        local item = work[workIndex]
-        Log("Processing " .. workIndex .. "/" .. #work .. ": " .. item.action .. " bag=" .. item.bag .. " slot=" .. item.slot .. " count=" .. item.count, 0)
-
-        if popupFrame and popupFrame.statusText then
-            popupFrame.statusText:SetText("Syncing " .. workIndex .. "/" .. #work .. "...")
-        end
-
-        ClearCursor()
-
-        if item.action == "deposit" then
-            local info = C_Container.GetContainerItemInfo(item.bag, item.slot)
-            if not info then
-                C_Timer.After(0.05, ProcessNextWork)
-                return
-            end
-
-            if info.stackCount > item.count then
-                -- Split: put overflow on cursor, place into empty bag slot, then deposit that
-                C_Container.SplitContainerItem(item.bag, item.slot, item.count)
-                C_Timer.After(MAIL_STEP_DELAY, function()
-                    local emptyBag, emptySlot = FindEmptyBagSlot()
-                    if emptyBag then
-                        C_Container.PickupContainerItem(emptyBag, emptySlot)
-                        C_Timer.After(MAIL_STEP_DELAY, function()
-                            C_Container.UseContainerItem(emptyBag, emptySlot, nil, item.bankType)
-                            WaitForItemUnlock(emptyBag, emptySlot, function(moved)
-                                Log("  split deposit " .. (moved and "OK" or "stayed"), moved and 0 or 2)
-                                ClearCursor()
-                                if not moved then
-                                    C_Timer.After(0.5, function() ProcessNextWork(true) end)
-                                else
-                                    C_Timer.After(0.05, ProcessNextWork)
-                                end
-                            end)
-                        end)
-                    else
-                        ClearCursor()
-                        C_Timer.After(0.05, ProcessNextWork)
-                    end
-                end)
-                return
-            else
-                -- Full stack: UseContainerItem with bankType
-                C_Container.UseContainerItem(item.bag, item.slot, nil, item.bankType)
-                WaitForItemUnlock(item.bag, item.slot, function(moved)
-                    Log("  deposit " .. (moved and "OK" or "stayed"), moved and 0 or 2)
-                    ClearCursor()
-                    if not moved then
-                        -- Item didn't move — the bank transfer may be delayed server-side.
-                        -- Wait longer then retry the same work item.
-                        C_Timer.After(0.5, function() ProcessNextWork(true) end)
-                    else
-                        C_Timer.After(0.05, ProcessNextWork)
-                    end
-                end)
-                return
-            end
-
-        elseif item.action == "withdraw" then
-            local info = C_Container.GetContainerItemInfo(item.bag, item.slot)
-            if not info then
-                C_Timer.After(0.05, ProcessNextWork)
-                return
-            end
-
-            if info.stackCount > item.count then
-                -- Split partial amount from bank slot
-                C_Container.SplitContainerItem(item.bag, item.slot, item.count)
-                C_Timer.After(MAIL_STEP_DELAY, function()
-                    local emptyBag, emptySlot = FindEmptyBagSlot()
-                    if emptyBag then
-                        C_Container.PickupContainerItem(emptyBag, emptySlot)
-                    end
-                    ClearCursor()
-                    C_Timer.After(MAIL_STEP_DELAY, ProcessNextWork)
-                end)
-                return
-            else
-                -- Full stack withdraw
-                C_Container.UseContainerItem(item.bag, item.slot)
-                WaitForItemUnlock(item.bag, item.slot, function(moved)
-                    Log("  withdraw " .. (moved and "OK" or "stayed"), moved and 0 or 2)
-                    ClearCursor()
-                    C_Timer.After(0.05, ProcessNextWork)
-                end)
-                return
-            end
-        end
-
-        ClearCursor()
-        C_Timer.After(0.05, ProcessNextWork)
-    end
-
-    ProcessNextWork()
+    end)
 end
 
 --------------------------------------------------------------
@@ -1171,10 +1069,7 @@ function Warehousing.AddItem(itemLink)
     -- Instead, find the item in bags and ask C_Bank directly.
     local warbandAllowed = false
     if C_Bank and C_Bank.IsItemAllowedInBankType and ItemLocation then
-        local bagList = {}
-        for bag = 0, NUM_BAG_SLOTS do bagList[#bagList + 1] = bag end
-        bagList[#bagList + 1] = REAGENT_BAG_SLOT
-        for _, bag in ipairs(bagList) do
+        for _, bag in ipairs(BAG_LIST) do
             local numSlots = C_Container.GetContainerNumSlots(bag)
             for slot = 1, numSlots do
                 local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -1432,21 +1327,7 @@ local function OnMailShow()
     end)
 
     -- Refresh content first, then only show if there are items to mail to other characters
-    Warehousing.RefreshPopup()
-    local overflow = CalculateOverflowDeficit()
-    local currentKey = GetCharacterKey()
-    local currentName = currentKey:match("^(.+) %- ") or ""
-    local hasMailItems = false
-    for _, data in pairs(overflow) do
-        local dest = data.destination
-        -- Strip " (you)" suffix that may have been stored when this character was active
-        local destPlain = dest:match("^(.+) %(you%)$") or dest
-        if dest ~= "Warband Bank" and dest ~= "Personal Bank"
-            and destPlain:lower() ~= currentName:lower() then
-            hasMailItems = true
-            break
-        end
-    end
+    local hasMailItems = Warehousing.RefreshPopup()
     if hasMailItems then
         popupFrame:Show()
     end
@@ -1470,6 +1351,7 @@ end
 local function OnMailFailed()
     if not mailSending then return end
     Log("Mail failed to send! Aborting queue.", 3)
+    StopQueueProcessor()
     mailSending = false
     mailQueueIndex = 0
     mailQueue = {}

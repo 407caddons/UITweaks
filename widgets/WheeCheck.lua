@@ -4,7 +4,7 @@ local EventBus = addonTable.EventBus
 
 -- All DMF XP/rep buffs that the widget should recognise
 local DMF_BUFFS = {
-    { id = 46668, label = "WHEE!" },   -- Darkmoon Carousel
+    { id = 46668,  label = "WHEE!" },   -- Darkmoon Carousel
     { id = 136583, label = "Top Hat" }, -- Darkmoon Top Hat
 }
 
@@ -17,17 +17,23 @@ local function GetActiveDMFBuff()
     return nil, nil
 end
 
+local cachedDMFStatus = nil
+
 -- Returns true if the Darkmoon Faire is currently active (first full week of each month)
 local function IsDMFActive()
+    if cachedDMFStatus ~= nil then return cachedDMFStatus end
+
     local now = time()
     local today = date("*t", now)
     local firstOfMonth = time({ year = today.year, month = today.month, day = 1, hour = 0, min = 0, sec = 0 })
-    local firstDow = date("*t", firstOfMonth).wday  -- 1 = Sunday
+    local firstDow = date("*t", firstOfMonth).wday -- 1 = Sunday
     local firstSunday = 1 + (8 - firstDow) % 7
     if firstSunday > 7 then firstSunday = firstSunday - 7 end
     local dmfStart = time({ year = today.year, month = today.month, day = firstSunday, hour = 0, min = 0, sec = 0 })
     local dmfEnd = dmfStart + (7 * 86400) - 1
-    return now >= dmfStart and now <= dmfEnd
+
+    cachedDMFStatus = (now >= dmfStart and now <= dmfEnd)
+    return cachedDMFStatus
 end
 
 table.insert(Widgets.moduleInits, function()

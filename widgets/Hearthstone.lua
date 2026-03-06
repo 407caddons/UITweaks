@@ -197,6 +197,7 @@ table.insert(Widgets.moduleInits, function()
 
     local function OnHearthUpdate()
         if not UIThingsDB.widgets.hearthstone.enabled then return end
+        if InCombatLockdown() then return end
         local remaining = GetCooldownRemaining()
         if remaining > 0 then
             hearthFrame.text:SetText("Hearth: " .. FormatCooldown(remaining))

@@ -500,11 +500,11 @@ local function RenderPane(idx)
             if row.dpsFS then row.dpsFS:Hide() end
             yOff = barH
         end
-        pane.scrollContent:SetSize(paneW, math.max(yOff + 4, 20))
-        -- Never call UpdateScrollChildRect during combat: secret StatusBar geometry causes
-        -- a non-suppressable WoW taint error even inside pcall. Row positions are set via
-        -- SetPoint so rows are visible without it. ADDON_RESTRICTION_STATE_CHANGED will
-        -- trigger a clean re-render once restrictions lift and scrolling can be updated.
+        -- Do NOT call scrollContent:SetSize() here — it triggers OnSizeChanged on the
+        -- UIPanelScrollFrameTemplate, which calls UpdateScrollChildRect, which reads
+        -- StatusBar geometry tainted by SetValue(secretValue) and throws
+        -- "numeric conversion on secret number value". Rows are already visible via
+        -- SetPoint. ADDON_RESTRICTION_STATE_CHANGED re-renders cleanly after combat ends.
         return
     end
 

@@ -407,6 +407,8 @@ local EventBus = addonTable.EventBus
 local ApplyMiscEvents -- forward declaration
 local HookTooltipClassColors -- forward declaration
 local HookTooltipSpellID -- forward declaration
+local RegisterMiscEvents, UnregisterMiscEvents -- forward declarations (defined below)
+local miscEventsRegistered = false
 
 -- Named event callbacks
 local function OnPlayerEnteringWorld()
@@ -643,14 +645,34 @@ ApplyMiscEvents = function()
     end
 end
 
+RegisterMiscEvents = function()
+    if miscEventsRegistered then return end
+    miscEventsRegistered = true
+    EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Misc")
+end
+
+UnregisterMiscEvents = function()
+    if not miscEventsRegistered then return end
+    miscEventsRegistered = false
+    EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+    ApplyMiscEvents()  -- unregisters all sub-feature events
+end
+
+-- PLAYER_LOGIN fires once per session; bootstrap registration if enabled
 EventBus.Register("PLAYER_LOGIN", function()
-    if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.enabled then
-        ApplyUIScale()
+    if UIThingsDB and UIThingsDB.misc then
+        if UIThingsDB.misc.enabled then
+            ApplyUIScale()
+            RegisterMiscEvents()
+        end
     end
 end, "Misc")
 
-EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "Misc")
-
 function Misc.ApplyEvents()
-    ApplyMiscEvents()
+    if UIThingsDB.misc and UIThingsDB.misc.enabled then
+        RegisterMiscEvents()
+        ApplyMiscEvents()
+    else
+        UnregisterMiscEvents()
+    end
 end
