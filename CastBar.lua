@@ -27,7 +27,7 @@ local fadeOutElapsed = 0
 
 -- == Debug ==
 
-local CASTBAR_DEBUG = true  -- set to false to disable
+local CASTBAR_DEBUG = false  -- set to true to enable debug logging
 
 local function DBG(msg)
     if not CASTBAR_DEBUG then return end

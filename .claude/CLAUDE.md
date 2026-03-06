@@ -124,6 +124,16 @@ Because the config window is built lazily on first open, companion registrations
 
 Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–27. Companion panels are inserted at 27, 28, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
 
+## ObjectiveTracker Taint — Confirmed Root Cause
+
+**Never call `UpdateContent()` synchronously from `UpdateSettings()`.**
+
+`UpdateSettings()` is called directly from the `PLAYER_LOGIN` event handler (not deferred). If it calls `UpdateContent()` synchronously, that runs `ClearAllPoints()`/`SetPoint()` on addon-created `SecureActionButtonTemplate` pool buttons (`btn.ItemBtn`) while the game is still in its login initialization phase. This taints the shared Button prototype, causing `ADDON_ACTION_BLOCKED: Button:SetPassThroughButtons()` / `Frame:SetPropagateMouseClicks()` when Blizzard's map pin code runs later.
+
+**Why deferred is safe:** All other `UpdateContent()` calls go through `ScheduleUpdateContent()` → `SafeAfter()` → `C_Timer.After()`. Timer callbacks run in a fresh, clean execution context — login-phase taint does not carry into them.
+
+**Rule:** `UpdateSettings()` must not call `UpdateContent()` at all. Content updates happen through the event/timer system only.
+
 ## LunaUITweaks-Specific Conventions
 
 - Color values stored as `{ r, g, b, a }` — `ApplyDefaults` treats tables with an `r` field as leaf values

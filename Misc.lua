@@ -136,7 +136,6 @@ local BOE_BIND_ON_EQUIP = 2
 local function OnChatMsgLootBoE(event, msg)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.boeAlert then return end
-    if issecretvalue(msg) then return end
 
     local itemLink = string.match(msg, "|H(item:[^|]+)|h")
     if not itemLink then return end
@@ -620,6 +619,7 @@ ApplyMiscEvents = function()
     else
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
+        table.wipe(keywordCache)
     end
 
     if UIThingsDB.misc.boeAlert then

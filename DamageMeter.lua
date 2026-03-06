@@ -1036,12 +1036,16 @@ end
 -- Public API
 -- ============================================================
 
+local RegisterEvents, UnregisterEvents  -- forward declarations (defined in Events section below)
+
 function addonTable.DamageMeter.Initialize()
     if not UIThingsDB.damageMeter.enabled then
         if mainFrame then mainFrame:Hide() end
         StopDockTicker()
+        UnregisterEvents()
         return
     end
+    RegisterEvents()
     CreateMainFrame()
     ApplyBackdrop()
     ApplyPositionAndSize()
@@ -1054,8 +1058,10 @@ function addonTable.DamageMeter.UpdateSettings()
     if not UIThingsDB.damageMeter.enabled then
         if mainFrame then mainFrame:Hide() end
         StopDockTicker()
+        UnregisterEvents()
         return
     end
+    RegisterEvents()
     CreateMainFrame()
     mainFrame:Show()
     ApplyBackdrop()
@@ -1090,14 +1096,13 @@ function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 -- Events
 -- ============================================================
 
--- Invalidate cache when combat ends — session data is now finalised
-EventBus.Register("PLAYER_REGEN_ENABLED", function()
+local eventsRegistered = false
+
+local function OnRegenEnabled()
     entryCache = {}
-    -- Record fight duration for DPS computation
     if fightStartTime then
         lastFightDuration = math.max(1, GetTime() - fightStartTime)
         table.insert(sessionDurations, lastFightDuration)
-        -- Cache duration (and name if available) keyed by sessionID
         local dur = lastFightDuration
         SafeAfter(0.1, function()
             local sessions = GetSessions()
@@ -1113,53 +1118,63 @@ EventBus.Register("PLAYER_REGEN_ENABLED", function()
         end)
         fightStartTime = nil
     end
-    -- Clear fight drilldown: old fight is done, next click is a fresh session
     for i = 1, 2 do
         local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
         if cfg and cfg.session ~= "overall" then drilldown[i] = nil end
     end
-end, "DamageMeter")
+end
 
-EventBus.Register("PLAYER_REGEN_DISABLED", function()
+local function OnRegenDisabled()
     fightStartTime = GetTime()
-end, "DamageMeter")
+end
 
--- Blizzard fires this whenever per-player stats change during combat — use it for timely updates
-EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", function()
-    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+local function OnSessionUpdated()
     entryCache = {}
     if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
-end, "DamageMeter")
+end
 
--- Fires when combat restrictions lift (state==0) — clear cache and re-render
--- with fresh data from GetCombatSessionFromID (finalized, non-tainted).
-EventBus.Register("ADDON_RESTRICTION_STATE_CHANGED", function()
-    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+local function OnRestrictionChanged()
     local restrState = C_RestrictedActions and Enum.AddOnRestrictionType and
         C_RestrictedActions.GetAddOnRestrictionState(Enum.AddOnRestrictionType.Combat)
     if not restrState or restrState == 0 then
         entryCache = {}
         if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
     end
-end, "DamageMeter")
+end
 
-
-
-EventBus.Register("PLAYER_ENTERING_WORLD", function()
-    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+local function OnEnteringWorld()
     entryCache = {}
-    -- If we reloaded mid-combat, PLAYER_REGEN_DISABLED won't fire again.
-    -- Seed fightStartTime so live DPS has a valid denominator.
     if InCombatLockdown() then
         fightStartTime = GetTime()
     end
     SafeAfter(1, addonTable.DamageMeter.Initialize)
-end, "DamageMeter")
+end
 
-EventBus.Register("ZONE_CHANGED_NEW_AREA", function()
-    if not UIThingsDB or not UIThingsDB.damageMeter then return end
+local function OnZoneChanged()
     if UIThingsDB.damageMeter.clearOnInstance then
         local inInst = IsInInstance()
         if inInst then addonTable.DamageMeter.ResetData() end
     end
-end, "DamageMeter")
+end
+
+RegisterEvents = function()
+    if eventsRegistered then return end
+    eventsRegistered = true
+    EventBus.Register("PLAYER_REGEN_ENABLED",               OnRegenEnabled,       "DamageMeter")
+    EventBus.Register("PLAYER_REGEN_DISABLED",              OnRegenDisabled,      "DamageMeter")
+    EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", OnSessionUpdated,    "DamageMeter")
+    EventBus.Register("ADDON_RESTRICTION_STATE_CHANGED",    OnRestrictionChanged, "DamageMeter")
+    EventBus.Register("PLAYER_ENTERING_WORLD",              OnEnteringWorld,      "DamageMeter")
+    EventBus.Register("ZONE_CHANGED_NEW_AREA",              OnZoneChanged,        "DamageMeter")
+end
+
+UnregisterEvents = function()
+    if not eventsRegistered then return end
+    eventsRegistered = false
+    EventBus.Unregister("PLAYER_REGEN_ENABLED",               OnRegenEnabled)
+    EventBus.Unregister("PLAYER_REGEN_DISABLED",              OnRegenDisabled)
+    EventBus.Unregister("DAMAGE_METER_COMBAT_SESSION_UPDATED", OnSessionUpdated)
+    EventBus.Unregister("ADDON_RESTRICTION_STATE_CHANGED",    OnRestrictionChanged)
+    EventBus.Unregister("PLAYER_ENTERING_WORLD",              OnEnteringWorld)
+    EventBus.Unregister("ZONE_CHANGED_NEW_AREA",              OnZoneChanged)
+end
