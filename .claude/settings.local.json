@@ -41,7 +41,13 @@
       "Bash(cat \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\DamageMeter.lua\")",
       "Bash(wc -l \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\DamageMeter.lua\")",
       "Bash(head -100 \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\LunaUITweaks\\\\DamageMeter.lua\")",
-      "Bash(wc:)"
+      "Bash(wc:)",
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks\"/*.lua)",
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/\"*.lua \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/widgets/\"*.lua)",
+      "Bash(xargs wc -l)",
+      "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/LunaUITweaks.toc\")",
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/\"*.lua)",
+      "Bash(wc -l *.lua)"
     ]
   }
 }

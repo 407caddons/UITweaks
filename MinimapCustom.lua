@@ -87,8 +87,22 @@ local function HookQueueEye()
     queueHooked = true
 end
 
+local deferShapeCb
 local function ApplyMinimapShape(shape)
     if not shape then shape = UIThingsDB.minimap.minimapShape or "ROUND" end
+
+    if InCombatLockdown() then
+        if deferShapeCb then
+            addonTable.EventBus.Unregister("PLAYER_REGEN_ENABLED", deferShapeCb)
+        end
+        deferShapeCb = function()
+            addonTable.EventBus.Unregister("PLAYER_REGEN_ENABLED", deferShapeCb)
+            deferShapeCb = nil
+            ApplyMinimapShape(shape)
+        end
+        addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", deferShapeCb, "MinimapCustom:DeferShape")
+        return
+    end
 
     if shape == "SQUARE" then
         Minimap:SetMaskTexture("Interface\\BUTTONS\\WHITE8X8")

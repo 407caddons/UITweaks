@@ -378,6 +378,18 @@ local function HookTooltip()
             if tooltip ~= GameTooltip then return end
             if not data then return end
 
+            -- Skip tooltips owned by map pin frames (world quest rewards, treasure pins, etc.)
+            -- Adding lines to GameTooltip while it is anchored to a secure map pin taints
+            -- Blizzard's subsequent tooltip reads on the map.
+            if WorldMapFrame then
+                local frame = tooltip:GetOwner()
+                for _ = 1, 10 do
+                    if not frame then break end
+                    if frame == WorldMapFrame then return end
+                    frame = frame:GetParent()
+                end
+            end
+
             local itemID
             if data.id then
                 itemID = data.id

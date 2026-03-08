@@ -51,8 +51,13 @@ local function HandleGossipShow()
     --   • No (Quest) options + multiple options → do nothing
     -- All quests via GetAvailableQuests/GetActiveQuests are handled above first.
     if settings.autoGossip then
-        -- All quests must be resolved before auto-selecting gossip
-        if C_GossipInfo.GetNumActiveQuests() + C_GossipInfo.GetNumAvailableQuests() > 0 then return end
+        -- All quests must be resolved before auto-selecting gossip.
+        -- Incomplete active quests are skipped (nothing to do); only complete ones block.
+        local hasCompleteQuest = false
+        for _, questInfo in pairs(C_GossipInfo.GetActiveQuests()) do
+            if questInfo.isComplete then hasCompleteQuest = true; break end
+        end
+        if hasCompleteQuest or C_GossipInfo.GetNumAvailableQuests() > 0 then return end
 
         -- Separate quest-flagged options (flags ~= 0) from plain gossip options
         local questOption = nil

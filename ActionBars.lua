@@ -810,7 +810,6 @@ end
 
 local ACTION_BARS = {
     { bar = "MainActionBar",       prefix = "ActionButton",              count = 12 },
-    { bar = "MainMenuBar",         prefix = "ActionButton",              count = 12 },
     { bar = "MultiBarBottomLeft",  prefix = "MultiBarBottomLeftButton",  count = 12 },
     { bar = "MultiBarBottomRight", prefix = "MultiBarBottomRightButton", count = 12 },
     { bar = "MultiBarRight",       prefix = "MultiBarRightButton",       count = 12 },

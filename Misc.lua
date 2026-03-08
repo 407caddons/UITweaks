@@ -137,10 +137,12 @@ local function OnChatMsgLootBoE(event, msg)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.boeAlert then return end
 
-    local itemLink = string.match(msg, "|H(item:[^|]+)|h")
-    if not itemLink then return end
+    -- CHAT_MSG_LOOT msg can be a secret/tainted string during combat; pcall to skip safely
+    local ok, itemLink = pcall(string.match, msg, "|H(item:[^|]+)|h")
+    if not ok or not itemLink then return end
 
-    local itemID = tonumber(string.match(itemLink, "item:(%d+)"))
+    local _, itemID = pcall(string.match, itemLink, "item:(%d+)")
+    itemID = tonumber(itemID)
     if not itemID then return end
 
     local itemName, _, quality, _, _, _, _, _, _, _, _, _, _, bindType = GetItemInfo(itemID)

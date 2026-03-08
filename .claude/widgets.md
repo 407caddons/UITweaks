@@ -1,293 +1,257 @@
 # Widget Ideas — LunaUITweaks
-Date: 2026-02-26 (updated 2026-03-02, updated again 2026-03-02 pass 2)
-
-## Update 2026-03-02 (pass 2)
-
-### WheeCheck.lua — `IsDMFActive()` Dead Code Branch
-The `IsDMFActive()` function contains a dead branch that can never execute:
-
-```lua
-local firstSunday = 1 + (8 - firstDow) % 7
-if firstSunday > 7 then firstSunday = firstSunday - 7 end  -- dead: max value is 7
-```
-
-`firstDow` is `date("*t").wday` in `[1, 7]`. The formula `1 + (8 - firstDow) % 7` produces values in `{1, 2, 3, 4, 5, 6, 7}` — the maximum is exactly 7, so the `if` branch never triggers. The branch should be removed to avoid misleading future readers.
-
-### WidgetsPanel.lua — Condition Dropdown Missing Active Indicator
-
-The per-widget condition dropdown (Always / In Combat / Out of Combat / etc.) uses `info.notCheckable = true`, so when the dropdown is opened, there is no visual checkmark on the currently-active option. The dropdown header text IS updated correctly on selection, but in-dropdown feedback is absent. The anchor dropdown in the same panel correctly uses `info.checked` for comparison. This is a minor UX inconsistency — changing to `info.checked = (cond.value == UIThingsDB.widgets[widget.key].condition)` would add the visual indicator.
-
-### Core.lua — New Utility Functions
-
-Two new utility functions added to `addonTable.Core`:
-
-- **`AbbreviateNumber(value)`** — Formats large numbers with M/K suffixes (`>= 1,000,000` → M; `>= 10,000` → K; below 10,000 returned as plain integer). The 10,000 threshold means values 1,000–9,999 are shown as raw numbers — intentional to avoid `"1.0K"` for small values, but undocumented. Used by XpBar.lua for XP display.
-- **`SpeakTTS(message, voiceType)`** — Centralised TTS dispatcher. Tries `TextToSpeech_Speak` first, falls back to `C_VoiceChat.SpeakText`. Used by Misc.lua (personal orders, mail, death, BoE), allowing future modules to use TTS without duplicating the dispatch logic.
+Date: 2026-02-26 (updated 2026-03-02, refreshed 2026-03-06)
 
 ---
 
-## Update 2026-03-02
+## Complete Widget Inventory (as of 2026-03-06)
 
-### DMF WHEE! Widget — Spell ID Bug Fix (`widgets/WheeCheck.lua`)
-The Darkmoon Top Hat buff spell ID was wrong from day one. The widget shipped in v1.20.0 with `71968` as the Top Hat spell ID, which was never a valid aura ID for that buff — it silently failed to detect the Top Hat buff and only the Carousel (WHEE!, spell ID `46668`) worked. The correct Top Hat spell ID is `136583`. This has been corrected in `DMF_BUFFS`:
-
-```lua
-local DMF_BUFFS = {
-    { id = 46668,  label = "WHEE!" },   -- Darkmoon Carousel
-    { id = 136583, label = "Top Hat" }, -- Darkmoon Top Hat  ← was 71968
-}
-```
-
-This was a silent failure — no Lua error was produced. Players who only used the Top Hat to get their DMF buff would have seen the red "DMF buff ✘" text every time even when the buff was active.
-
-### Per-Widget Clickthrough Toggle — Framework Feature
-A clickthrough (CT) checkbox has been added to the config panel for every widget. The checkbox appears after the `<` `>` order buttons in the widget row. Behaviour:
-
-- When CT is enabled and widgets are **locked**, `EnableMouse(false)` is called on the widget frame, allowing mouse events to fall through to the UI beneath.
-- When CT is enabled, the tooltip is suppressed (expected — the frame never receives `OnEnter` since mouse is disabled).
-- When CT is disabled (default), widget behaves as before: mouse-enabled, tooltip shown on hover.
-- When widgets are **unlocked** (edit mode), CT has no effect — mouse must remain enabled to allow dragging.
-
-This is implemented uniformly in `widgets/Widgets.lua` and requires no per-widget code changes.
-
-**Implication for future widgets:** Purely informational display widgets (e.g. coordinates, zone, speed, session time) are natural candidates to ship with CT enabled by default, since users are unlikely to want to click them and may prefer mouse events to reach frames beneath. See improvement ideas at the end of this document.
-
----
-
-## Update 2026-03-01
-
-Since the original document, the following widget suggestions have been **implemented**:
-
-| # | Suggestion | Status |
-|---|-----------|--------|
-| 1 | Spec Display | ✅ Implemented — `widgets/Spec.lua` (left-click spec swap, right-click loot spec) |
-| 2 | Clock / Server Time | ✅ Implemented — `widgets/Time.lua` (12h/24h toggle, reset times in tooltip, calendar on click) |
-| 3 | Weekly Reset Countdown | ✅ Implemented — `widgets/WeeklyReset.lua` (color-coded, daily reset in tooltip) |
-| 4 | FPS / Latency | ✅ Implemented — `widgets/FPS.lua` (jitter tracking, per-addon memory breakdown in tooltip) |
-
-Three additional widgets shipped that were not in the original suggestions:
-- **Speed** (`widgets/Speed.lua`) — Movement speed as % of base (100% = 7 yds/s), skyriding-aware, 0.5s refresh.
-- **Volume** (`widgets/Volume.lua`) — Sound toggle (left-click) and volume cycle 100→75→50→25% (right-click).
-- **BattleRes** (`widgets/BattleRes.lua`) — Battle resurrection charge tracker using Rebirth spell ID for the shared pool.
-- **Coordinates** (`widgets/Coordinates.lua`) — Simple coordinate widget complementing the full Coordinates.lua module.
-
-Issues found in the new widgets are noted in the code review. Remaining suggestions below retain their original numbering.
+| File | Key | Summary |
+|---|---|---|
+| `Bags.lua` | `bags` | Free bag slots; tooltip shows per-toon gold, warband gold, currencies |
+| `BattleRes.lua` | `battleRes` | Battle res pool charges via `C_Spell.GetSpellCharges(20484)` |
+| `Combat.lua` | `combat` | Elapsed combat timer (MM:SS), combat-condition aware |
+| `Coordinates.lua` | `coordinates` | Player map coordinates from `C_Map` |
+| `Crit.lua` | `crit` | Player crit chance; tooltip shows full secondary stats |
+| `Currency.lua` | `currency` | User-configured currencies with popover panel |
+| `DarkmoonFaire.lua` | `darkmoonFaire` | DMF active/countdown; tooltip shows profession quest completion |
+| `Durability.lua` | `durability` | Lowest gear durability %; tooltip shows per-slot, cached repair cost |
+| `FPS.lua` | `fps` | Home latency + FPS; tooltip with jitter, bandwidth, per-addon memory |
+| `Friends.lua` | `friends` | Online friend count; tooltip shows names/zones |
+| `Group.lua` | `group` | Group member count and composition |
+| `Guild.lua` | `guild` | Online guild member count |
+| `Haste.lua` | `haste` | Player haste %; tooltip shows full secondary stats |
+| `Hearthstone.lua` | `hearthstone` | Hearthstone bind location, left-click uses it |
+| `ItemLevel.lua` | `itemLevel` | Equipped/overall average item level; tooltip shows per-slot |
+| `Keystone.lua` | `keystone` | Current keystone with rating gain estimate; teleport button |
+| `Lockouts.lua` | `lockouts` | Raid/dungeon lockout status |
+| `Mail.lua` | `mail` | Mail count (green=gold/items attached); cached from last mailbox visit |
+| `Mastery.lua` | `mastery` | Player mastery %; tooltip shows full secondary stats |
+| `MythicRating.lua` | `mythicRating` | M+ season rating |
+| `PullCounter.lua` | `pullCounter` | Session pull count |
+| `PullTimer.lua` | `pullTimer` | Pull timer; integrates BigWigs/DBM or chat countdown fallback |
+| `PvP.lua` | `pvp` | Honor + conquest raw values; tooltip shows weekly progress + rated |
+| `ReadyCheck.lua` | `readyCheck` | Ready check status display; left-click initiates a ready check |
+| `SessionStats.lua` | `sessionStats` | Cycles: session time → gold/hr → XP/hr; tooltip with deaths/looted |
+| `Spec.lua` | `spec` | Spec + loot spec icons; left=spec switch, right=loot spec switch |
+| `Speed.lua` | `speed` | Movement speed as % of base; skyriding-aware |
+| `Teleports.lua` | `teleports` | Popover of known teleport spells |
+| `Time.lua` | `time` | Local clock (12h/24h); tooltip shows server time + reset countdowns |
+| `Vault.lua` | `vault` | Great Vault progress (M+/Raid/Delves); click opens vault UI |
+| `Vers.lua` | `vers` | Player versatility %; tooltip shows full secondary stats |
+| `Volume.lua` | `volume` | Sound on/off toggle (left), volume cycle (right) |
+| `WaypointDistance.lua` | `waypointDistance` | Distance to active map waypoint |
+| `WeeklyReset.lua` | `weeklyReset` | Weekly reset countdown; tooltip shows daily reset |
+| `WheeCheck.lua` | `wheeCheck` | DMF WHEE!/Top Hat buff timer (hidden outside DMF week) |
+| `XPRep.lua` | `xpRep` | XP% while leveling, watched rep at max level; paragon support |
+| `Zone.lua` | `zone` | Current subzone/zone text |
+| `AddonComm.lua` | `addonComm` | AddonComm latency/status for the group |
 
 ---
 
-## Introduction
+## Previously Suggested Improvements — Updated Status
 
-This document reviews all existing widgets in LunaUITweaks (~35 as of 2026-03-01) and proposes ideas for new widgets and improvements to existing ones. Each idea is assessed for difficulty against the WoW 12.0 retail API constraints (no COMBAT_LOG_EVENT_UNFILTERED, no external libraries, combat lockdown rules apply).
-
-The existing widget suite covers: secondary stats (Haste, Crit, Mastery, Versatility), social (Friends, Guild, Group), progression (MythicRating, Keystone, Vault, Lockouts, XPRep), utility (Bags, Currency, Hearthstone, Teleports, Durability, Mail, WaypointDistance, Zone, DarkmoonFaire, PullCounter, SessionStats, Combat, AddonComm, Speed, Volume, BattleRes, Coordinates), performance (FPS), time (Time, WeeklyReset), and PvP. Spec display widget added for spec/loot spec management.
+| Suggestion | Status |
+|---|---|
+| Mail: count + color-coded (gold/items=green) | Implemented — `Mail.lua` uses `ScanInbox()`, color-coded |
+| Bags: show free/total | Still pending — main text still `Bags: %d` (free only) |
+| Durability: color text + cost | Still pending — plain text, no color gradient in `UpdateContent` |
+| PvP: conquest cap % + War Mode indicator | Still pending — still raw `H:X C:Y` |
+| SessionStats: cycling display modes | Implemented — cycles session time / gold/hr / XP/hr via `tickCount` |
+| ReadyCheck widget | Implemented — `ReadyCheck.lua` |
+| PullTimer widget | Implemented — `PullTimer.lua` |
+| ItemLevel widget | Implemented — `ItemLevel.lua` |
+| Per-widget clickthrough toggle | Implemented — framework-level CT in `Widgets.lua` |
+| CT default=true for display-only widgets | Still pending — not yet set in `Core.lua` DEFAULTS |
+| WheeCheck Top Hat spell ID fix (71968 → 136583) | Implemented |
+| WheeCheck dead branch (firstSunday > 7) | Still present in both `WheeCheck.lua` and `DarkmoonFaire.lua` — cosmetic |
+| WidgetsPanel condition dropdown missing checkmark | Still present — `info.notCheckable = true` |
 
 ---
 
-## New Widget Ideas (12)
+## 20 Widget Ideas and Improvements (2026-03-06)
 
 ---
 
-### 1. Spec Display ✅ IMPLEMENTED (`widgets/Spec.lua`)
-**Type:** New Widget
+### 1. Improvement to Bags — Free/Total Slot Count + Color
+**Type:** Improvement of `Bags.lua`
 **Difficulty:** Easy
-**Description:** Shows current spec and loot spec icons side by side. Left-click opens a context menu to switch specialization; right-click opens a loot spec switcher. The actual implementation went beyond the original suggestion by including both spec swap and loot spec menus.
-**Notes:** Two issues identified in code review (#34, #35 in codereview.md): no `InCombatLockdown()` guard on spec change, and no `ACTIVE_TALENT_GROUP_CHANGED` event subscription (relies on 1s ticker instead).
+**Description:** Change main text from `Bags: 12` to `Bags: 12/36`. Color green when >20% free, yellow 10–20%, red <10%. The total-slot loop already iterates `C_Container.GetContainerNumSlots(bag)` — just accumulate a total alongside the free count.
+**API notes:** `C_Container.GetContainerNumSlots(bag)` for totals. No new events. No secret-value risk.
 
 ---
 
-### 2. Clock / Server Time ✅ IMPLEMENTED (`widgets/Time.lua`)
-**Type:** New Widget
+### 2. Improvement to Durability — Color-Coded Text + Inline Repair Cost
+**Type:** Improvement of `Durability.lua`
 **Difficulty:** Easy
-**Description:** Shows local time (12h or 24h, reusing the minimap clock format setting). Tooltip shows local time, server time, and daily/weekly reset countdowns with color coding. Left-click opens the calendar. Bonus: reset time info in tooltip goes beyond the original suggestion.
-**Notes:** Three issues identified (#38, #39, #40 in codereview.md): `ToggleCalendar()` called without checking if Blizzard_Calendar is loaded (should mirror WeeklyReset's `C_AddOns.LoadAddOn` guard), a dead `calendarTime` variable assignment in `OnEnter`, and a leading space in the `date(" %I:%M %p")` format string.
+**Description:** Add color thresholds in `UpdateContent`: green >80%, yellow 50–80%, red <50%. When below 80%, append the cached repair cost from `cachedRepairCost` (e.g. `Dur: 45% 12g`). Omit when `cachedRepairCost` is nil. Use plain string formatting, not `GetCoinTextureString` (textures render oddly at small sizes).
+**API notes:** Color logic and `cachedRepairCost` already exist in the tooltip block — move into `UpdateContent`.
 
 ---
 
-### 3. Weekly Reset Countdown ✅ IMPLEMENTED (`widgets/WeeklyReset.lua`)
-**Type:** New Widget
+### 3. Improvement to PvP — Conquest Cap % + War Mode Suffix
+**Type:** Improvement of `PvP.lua`
 **Difficulty:** Easy
-**Description:** Uses `C_DateAndTime.GetSecondsUntilWeeklyReset()` (exact API, no hardcoded timezone math). Color-coded: green > 12h, yellow < 12h, red < 3h. Tooltip also shows daily reset. Left-click opens calendar (with proper addon-load guard). Clean implementation.
-**Notes:** `FormatResetTime` and `FormatDailyTime` are separate but nearly identical functions — minor duplication that could be merged into one shared formatter. No functional issues.
+**Description:** Replace `H:X C:Y` with conquest weekly progress as a percentage (e.g. `PvP: 75%`), plus a `WM` suffix when War Mode is active. Color: green >=100%, yellow >=50%, red <50%.
+**API notes:** `C_WeeklyRewards.GetConquestWeeklyProgress()` and `C_PvP.IsWarModeDesired()` are both already in the tooltip. Refactor into `RefreshPvPCache`. No new events.
 
 ---
 
-### 4. FPS / Latency ✅ IMPLEMENTED (`widgets/FPS.lua`)
-**Type:** New Widget
-**Difficulty:** Easy *(actual implementation was Medium — went well beyond the original scope)*
-**Description:** Shows home latency and FPS in main text. Tooltip includes home/world latency, jitter (standard deviation over 30 samples), bandwidth in/out, and optionally a full per-addon memory breakdown (throttled to once per 15s). The jitter calculation and per-addon memory panel are particularly well done.
-**Notes:** One issue (#36 in codereview.md): `table.sort` is called twice on `addonMemList` in `OnEnter` — once inside `RefreshMemoryData()` and again immediately after. The second sort is redundant. Also note the jitter circular buffer is correct but slightly non-obvious (issue #37).
-
----
-
-### 5. Equipped Set / Gear Set Switcher
-**Type:** New Widget
+### 4. Improvement to Zone — PvP Tag + Instance Difficulty Inline
+**Type:** Improvement of `Zone.lua`
 **Difficulty:** Medium
-**Description:** Shows the currently active equipment set name (if any) and allows clicking to open a popover panel listing all saved gear sets. Click on a set name in the panel to equip it. Useful for players who swap between specs with different gear (e.g. tank/heal sets). Displays "Set: None" if no set matches current gear.
-**Notes:** `C_EquipmentSet.GetEquipmentSetIDs()`, `C_EquipmentSet.GetEquipmentSetInfo(setID)`, `C_EquipmentSet.UseEquipmentSet(setID)`. Cannot equip gear sets in combat (`InCombatLockdown()` check required). Equipping gear is fine out of combat. The popover pattern is already established in the Currency and Teleports widgets. Medium difficulty due to the popover UI and set matching logic.
+**Description:** Append a color-coded PvP tag when relevant (e.g. `Stormwind [Sanc]` in green, `Ashenvale [PvP]` in red) and a difficulty abbreviation when inside an instance (e.g. `Ara [M]`). Guard text overflow with a 25-char `strsub` on the zone name.
+**API notes:** `C_PvP.GetZonePVPInfo()` and `GetInstanceInfo()` already fetched in tooltip — lift into `RefreshZoneCache`. Difficulty abbreviation is a small static table.
 
 ---
 
-### 6. Spell Cooldown Monitor
-**Type:** New Widget
+### 5. Improvement to Keystone — Inline Rating Gain Annotation
+**Type:** Improvement of `Keystone.lua`
 **Difficulty:** Medium
-**Description:** Tracks one or more user-specified spell cooldowns and shows the largest remaining cooldown (or "Ready" if all are up). The user configures spell IDs or names via a config panel. Clicking the widget cycles through configured spells showing each cooldown. Tooltip lists all tracked spells and their individual cooldown states. Useful for tracking long-cooldown abilities like Heroism, battle resurrections, or defensive cooldowns.
-**Notes:** `GetSpellCooldown(spellID)` or `C_Spell.GetSpellCooldown(spellID)` returns startTime, duration, isEnabled. `SPELL_UPDATE_COOLDOWN` event for reactive updates, supplemented by the 1-second ticker for countdown text. Config panel needs a text entry for spell IDs. Medium due to the config integration requirement and multiple-spell management.
+**Description:** Store `mapID` from `GetPlayerKeystone()` (currently discarded as the third return value) and use it to call `Widgets.EstimateRatingGain` inside `UpdateContent`. Color main text green with a gain annotation when upgrade available (e.g. `Key: Ara +14 |cFF00FF00+45|r`), grey when no upgrade.
+**API notes:** `mapID` is already returned but discarded. `EstimateRatingGain` is already used in the tooltip. No additional bag scan cost.
 
 ---
 
-### 7. Delve Companion Status
-**Type:** New Widget
-**Difficulty:** Medium
-**Description:** Displays Brann Bronzebeard companion level, current curio slots, and equipment summary for players engaging in Delves content (TWW). Shows something like "Brann: Lv 40" with a tooltip listing active curios, special abilities, and whether the companion is at max level. Provides quick reference without opening the full companion pane.
-**Notes:** `C_DelvesUI` namespace introduced in TWW, specifically `C_DelvesUI.GetCompanionInfo()` and related. Check the in-game docs for exact function signatures. May require loading the Blizzard_DelvesUI addon via `C_AddOns.LoadAddOn`. Events: `COMPANION_UPDATE` or Delves-specific. Medium difficulty — API is newer and may be sparsely documented.
-
----
-
-### 8. Buff / Debuff Tracker
-**Type:** New Widget
-**Difficulty:** Medium
-**Description:** Tracks up to 4 user-specified buffs or debuffs on the player and shows their remaining duration. Configured by spell ID in the options panel. Display shows the shortest remaining duration among tracked auras, or "Ready" if none are active. Tooltip shows all tracked auras individually. Useful for tracking Bloodlust duration, food buffs, flask timers, or important debuffs.
-**Notes:** `C_UnitAuras.GetPlayerAuraBySpellID(spellID)` returns the aura table including expirationTime. Events: `UNIT_AURA` for "player" unit. The 1-second ticker handles countdown. Must not use COMBAT_LOG_EVENT_UNFILTERED. Config needs spell ID entry similar to the Currency widget's customIDs pattern. Medium due to config work and aura management.
-
----
-
-### 9. Auction House / Economy Shortcut
-**Type:** New Widget
+### 6. Improvement to ItemLevel — Per-Slot Color Coding in Tooltip
+**Type:** Improvement of `ItemLevel.lua`
 **Difficulty:** Easy
-**Description:** A simple widget button that opens the Auction House (if the player is in range of an AH NPC) or displays "AH: Far" otherwise. Tooltip shows the number of active auctions the player has up (from `C_AuctionHouse.GetNumOwnedAuctions()`) and whether any auctions have sold. Clicking opens the AH if available.
-**Notes:** `C_AuctionHouse.GetNumOwnedAuctions()` requires the AH to be open. `AUCTION_HOUSE_SHOW` and `AUCTION_HOUSE_CLOSED` events for availability detection. For "how many active auctions" outside of the AH window, the data is only available when the AH is open, so the tooltip should note this limitation. The click action is just `ShowUIPanel(AuctionHouseFrame)` — only works near an AH NPC (WoW enforces proximity server-side). Easy widget with honest limitations noted in tooltip.
+**Description:** Color each slot's item level relative to the character's equipped average: green if at or above average, yellow if 5+ ilvl below, red if 10+ below. Immediately highlights the weakest slot without arithmetic.
+**API notes:** `GetAverageItemLevel()` and `C_Item.GetDetailedItemLevelInfo(itemLink)` are already called. Store `avgItemLevelEquipped` as a local and compare each slot against it.
 
 ---
 
-### 10. Instance / Content Timer
-**Type:** New Widget
+### 7. New Widget — Challenge Mode (M+) Run Timer
+**Type:** New widget
 **Difficulty:** Easy
-**Description:** When inside a Mythic+ dungeon, shows the elapsed challenge mode timer in real time (MM:SS format), color-coded relative to the par time: green = still within time, orange = depleting soon, red = over time. Outside of M+ instances, hides automatically or shows a dash. Complements the MplusTimer module at the full-screen level by providing a compact persistent widget slot.
-**Notes:** `C_ChallengeMode.GetActiveChallengeMapID()`, `C_ChallengeMode.GetActiveKeystoneInfo()`, `C_ChallengeMode.GetDeathCount()`. For elapsed time, `C_ChallengeMode.GetActiveKeystoneInfo()` returns time limit. Events: `CHALLENGE_MODE_START`, `CHALLENGE_MODE_COMPLETED`, `CHALLENGE_MODE_RESET`. Use the 1-second widget ticker to refresh the counter. Show only when `instance` visibility condition is active. Easy since the data is well-exposed.
+**Description:** When inside an active M+ run, shows elapsed time in MM:SS, color-coded green (on pace), orange (within 10% of time limit), red (over). Hides outside M+ instances. Complements Vault and Keystone without a full-screen timer addon.
+**API notes:** `C_ChallengeMode.GetActiveChallengeMapID()`, `C_ChallengeMode.GetActiveKeystoneInfo()`. Capture start time on `CHALLENGE_MODE_START`. End on `CHALLENGE_MODE_COMPLETED` and `CHALLENGE_MODE_RESET`. 1s widget ticker. No secret-value risk.
 
 ---
 
-### 11. Profession Cooldown Tracker
-**Type:** New Widget
+### 8. New Widget — Rested XP Indicator
+**Type:** New widget
+**Difficulty:** Easy
+**Description:** Shows rested XP as a percentage of the current level size (e.g. `Rest: 85%`). Green when rested, grey when none. Hides at max level.
+**API notes:** `GetXPExhaustion()` for rested XP. `UnitXPMax("player")` for level size. `PLAYER_XP_UPDATE` and `PLAYER_ENTERING_WORLD` events. No taint risk.
+
+---
+
+### 9. New Widget — Buff/Aura Tracker
+**Type:** New widget
 **Difficulty:** Medium
-**Description:** Displays the cooldown status of crafting profession daily/weekly cooldowns (e.g. Transmutation cooldowns for Alchemy, unique crafts in other professions). Shows something like "Profs: 2/3 ready" with a tooltip listing each profession cooldown by name and remaining time. Useful for players who use multiple crafting professions on one character.
-**Notes:** Profession cooldowns are tracked via `GetSpellCooldown` on specific spell IDs tied to each profession's daily. The challenge is mapping profession IDs to their cooldown spells — this requires a static table of known cooldown spell IDs per profession. `C_TradeSkillUI.GetProfessionInfo(professionIdx)` provides the player's profession list. Events: `TRADE_SKILL_UPDATE`, `SPELL_UPDATE_COOLDOWN`. Medium due to the static mapping table maintenance requirement and potential seasonal changes to cooldown spell IDs.
+**Description:** Tracks up to 4 user-configured buff/debuff spell IDs on the player. Main text shows the shortest remaining tracked aura duration (e.g. `Flask: 58m`), `All Up` if all active, `None` if none active. Tooltip lists each individually.
+**API notes:** `C_UnitAuras.GetPlayerAuraBySpellID(spellID)`. `UNIT_AURA` on `"player"` for reactive updates plus 1s ticker. Config requires spell ID entry widget. `expirationTime - GetTime()` is plain arithmetic — no secret-value risk.
 
 ---
 
-### 12. Warband / Account Progress Summary
-**Type:** New Widget
+### 10. New Widget — Spell Cooldown Monitor
+**Type:** New widget
 **Difficulty:** Medium
-**Description:** Displays a summary of Warband (account-wide) progress: total warband reputation with key factions, Warband bank gold (already shown in Bags tooltip but not as a standalone widget), and number of Warband-unlocked achievements. Clicking opens the Warband bank or the Collections journal. Shows something like "WB: Rep 42 | 1.2k" where Rep is the number of major warband factions at max renown and the second figure is Warband bank gold in thousands.
-**Notes:** `C_Bank.FetchDepositedMoney(Enum.BankType.Account)` for warband gold. `C_Reputation` for warband reputation — filter to warband-flagged factions using `C_Reputation.GetFactionData(factionID).isAccountWide`. `C_MajorFactions` for renown levels. Events: `CURRENCY_DISPLAY_UPDATE`, `UPDATE_FACTION`. Medium because identifying which factions are "warband" factions reliably requires either API filtering or a static list.
+**Description:** Tracks one or more user-configured spell IDs and shows the longest remaining cooldown (e.g. `CD: Hero 4m`) or `Ready` when all are off cooldown. Tooltip lists each spell individually.
+**API notes:** `C_Spell.GetSpellCooldown(spellID)` returns `{startTime, duration, isEnabled, modRate}`. Skip GCDs with `duration > 1.5` guard. `SPELL_UPDATE_COOLDOWN` plus 1s ticker. Cooldown values are plain numbers — no secret-value risk.
 
 ---
 
-## Existing Widget Improvements (8)
-
----
-
-### 13. Improvement to Mail
-**Type:** Improvement of Mail
-**Difficulty:** Easy
-**Description:** The Mail widget currently only shows "Mail" (green) or "No Mail" (grey) with no count or detail. Improve it to show the number of unread messages (e.g. "Mail: 3") and color-code: green for mail with attachments or gold, white for ordinary mail, grey for no mail. The tooltip should show a count breakdown: "3 letters, 1 with gold, 2 with items."
-**Notes:** `GetInboxNumItems()` returns the count only when the mailbox is open. `HasNewMail()` is always available. When the mailbox is open, iterate `GetInboxHeaderInfo(index)` for each mail to get subject, sender, money attached, and item count. Store this in a cached table on `MAIL_INBOX_UPDATE`. Between mailbox visits the count remains from cache. The display degrades gracefully to "Mail" / "No Mail" when the mailbox has never been opened this session.
-
----
-
-### 14. Improvement to Bags
-**Type:** Improvement of Bags
-**Difficulty:** Easy
-**Description:** The Bags widget currently only shows free slot count ("Bags: 12"). Improve the display to show both free and total slots ("Bags: 12/36") and optionally add a color gradient: green when plenty of space, yellow below 20% free, red below 10% free. The tooltip already has gold data — this is purely a display improvement.
-**Notes:** `C_Container.GetContainerNumSlots(bag)` gives total slots, `C_Container.GetContainerNumFreeSlots(bag)` gives free slots. Already iterated in `UpdateContent` — just add a total counter alongside the free counter. No new events needed. The color threshold comparison is trivial. Very low risk change.
-
----
-
-### 15. Improvement to Durability
-**Type:** Improvement of Durability
-**Difficulty:** Easy
-**Description:** The Durability widget shows lowest durability as a percentage ("Durability: 72%") but gives no visual warning. Improve it to color the text: green above 80%, yellow 50–80%, red below 50%. Also add the estimated repair cost to the widget text itself when below 80% (e.g. "Dur: 45% 12g") so users do not need to hover for cost context. The repair cost is already cached via `MERCHANT_SHOW`.
-**Notes:** The cached repair cost from `GetRepairAllCost()` at merchant visits is already in place. The color logic already exists in the tooltip code — move it to `UpdateContent`. When cachedRepairCost is nil (no merchant visited), omit cost from main text. No new events or API required.
-
----
-
-### 16. Improvement to PvP
-**Type:** Improvement of PvP
-**Difficulty:** Easy
-**Description:** The PvP widget shows "H: X C: Y" (honor and conquest) but provides no visual context about weekly caps. Improve the display to show percentage toward the weekly conquest cap rather than a raw number (e.g. "PvP: 75%") and color it red/yellow/green based on cap proximity. The tooltip already shows full honor and conquest detail. Additionally, show a small "WM" indicator when War Mode is active.
-**Notes:** `C_WeeklyRewards.GetConquestWeeklyProgress()` returns progress and maxProgress for the weekly conquest cap. `C_PvP.IsWarModeDesired()` for War Mode status. All data is already fetched in the tooltip block — refactor into the cache refresh to drive the main display text too. No new events needed.
-
----
-
-### 17. Improvement to SessionStats
-**Type:** Improvement of SessionStats
-**Difficulty:** Easy
-**Description:** The SessionStats widget shows elapsed session time ("Session: 1:23:45") which is useful but the tooltip calculates gold/hr and XP/hr on demand. Improve the main widget text to cycle every few seconds between: session time, gold/hr rate, and (if leveling) XP/hr rate. This gives the user at-a-glance economic and leveling feedback without hovering. The cycle can be a simple modulo on a frame counter.
-**Notes:** All the data is already computed in the tooltip handler. Move the gold/hr and XP/hr calculations into `UpdateContent` and use a local cycle counter incremented each tick. Three display modes cycle every 5 seconds: session time → gold/hr → XP/hr (skip XP at max level). The cycling counter requires no new state beyond a local variable.
-
----
-
-### 18. Improvement to XPRep
-**Type:** Improvement of XPRep
+### 11. New Widget — Equipped Gear Set Switcher
+**Type:** New widget
 **Difficulty:** Medium
-**Description:** The XPRep widget shows XP percentage or watched faction but has no progress bar visual. Improve it by adding an optional thin colored bar underneath the text — a texture that fills proportionally to XP or rep progress. This gives an at-a-glance visual indicator without requiring a separate XP bar module. The bar should be configurable (show/hide) via the config panel.
-**Notes:** Create a texture child on the widget frame set to a fraction of the frame width using `bar:SetWidth(frame:GetWidth() * percent)`. The frame already has a `bg` texture used for drag highlighting — add a second `progressBar` texture at a different sub-layer. The config option needs a checkbox in the WidgetsPanel for this widget. The main challenge is keeping the bar width synchronized when the frame is resized during anchor layout recalculation. Medium due to the config panel integration and layout interaction.
+**Description:** Shows the matching equipment set name (`Set: BiS`) or `Set: None`. Left-click opens a popover listing all saved gear sets; clicking a set equips it.
+**API notes:** `C_EquipmentSet.GetEquipmentSetIDs()`, `GetEquipmentSetInfo(setID)`, `UseEquipmentSet(setID)`. Guard equip with `if InCombatLockdown() then return end`. Events: `EQUIPMENT_SETS_CHANGED`, `PLAYER_EQUIPMENT_CHANGED`. Popover pattern established in `Currency.lua` and `Teleports.lua`.
 
 ---
 
-### 19. Improvement to Keystone
-**Type:** Improvement of Keystone
+### 12. New Widget — World Quest Counter
+**Type:** New widget
 **Difficulty:** Medium
-**Description:** The Keystone widget shows the current keystone dungeon and level, and the tooltip shows party keystones from AddonComm data. Improve the main widget text to show a color based on potential rating gain: green if timing this key gives a rating upgrade, grey if it does not. Also add the estimated score gain to the main text when it is positive (e.g. "Key: Ara +14 |cFF00FF00+45|r"). Currently the gain is only shown in the tooltip.
-**Notes:** `Widgets.EstimateRatingGain(mapID, keystoneLevel)` is already available and called in `UpdateContent`. The return value `gain` drives the color. The `mapID` is returned from `GetPlayerKeystone()` but `UpdateContent` currently discards it — store it in a local `lastKeystoneMapID` alongside the existing `lastKeystoneName` to avoid re-scanning bags on every tick. Medium because the bag scan path needs to be refactored to cache mapID efficiently.
+**Description:** Shows world quests completed today in the current zone (e.g. `WQ: 4/8`). Tooltip breaks down by zone. Left-click opens the world map.
+**API notes:** `C_TaskQuest.GetQuestsForPlayerByMapID(mapID)` for available WQs. `C_QuestLog.IsQuestFlaggedCompleted(questID)` for each. `QUEST_TURNED_IN` and `QUEST_LOG_UPDATE` events.
 
 ---
 
-### 20. Improvement to Zone
-**Type:** Improvement of Zone
+### 13. New Widget — Major Faction Renown Summary
+**Type:** New widget
 **Difficulty:** Medium
-**Description:** The Zone widget shows the current subzone or zone name. Improve it to also show a small PvP status indicator inline — appending "(PvP)" in red for contested/hostile zones or "(Sanc)" in green for sanctuary zones. Additionally, when inside an instance, show the difficulty abbreviation (e.g. "Ara | M" for Mythic) rather than the raw subzone name. This turns the zone widget into a true context display.
-**Notes:** `C_PvP.GetZonePVPInfo()` returns pvpType ("contested", "hostile", "sanctuary", "friendly", "combat"). `GetInstanceInfo()` provides instanceType and difficultyName. Both are already used in the tooltip — lift them into `RefreshZoneCache`. The instance difficulty abbreviation table (M, H, N, LFR, etc.) needs a small static lookup or substring of the difficultyName. The risk is text overflow on narrow widget frames — test with a width cap or truncation. Medium due to text formatting edge cases.
+**Description:** Shows the number of TWW major factions not yet at max renown (e.g. `Renown: 3 left`), green when all capped. Tooltip lists each faction with current renown level and max status.
+**API notes:** `C_MajorFactions.GetMajorFactionIDs(expansionID)`, `GetCurrentRenownLevel(factionID)`, `HasMaximumRenown(factionID)`. `C_Expansion.GetCurrentExpansionLevel()` for expansion filter. Nil-guard for factions not yet unlocked. `UPDATE_FACTION` and `PLAYER_ENTERING_WORLD` events.
 
 ---
 
-## Review Notes — Unplanned New Widgets (2026-03-01)
-
-These widgets shipped without being in the original suggestions list. Notes for completeness.
-
-### Speed (`widgets/Speed.lua`) — ✅ Implemented, Clean
-Uses `C_PlayerInfo.GetGlidingInfo()` for skyriding speed and `GetUnitSpeed("player")` for ground/swim/flight. Refreshes at 0.5s via an `elapsed` accumulator in `HookScript("OnUpdate")`. Uses `HookScript` on an addon-created frame where `SetScript` would be more appropriate (minor style issue, #42 in codereview.md). `BASE_SPEED = 7` yards/sec is correct. The skyriding speed is shown as a percentage of base run speed which may produce values >100% — intentional and accurate for skyriding.
-
-### Volume (`widgets/Volume.lua`) — ✅ Implemented, Clean
-Left-click toggles `Sound_EnableAllSound`. Right-click cycles master volume at 100→75→50→25→100%. Tooltip shows all channel volumes. `UpdateContent` reads CVars every second — CVars are cheap to read. Reads CVars with `GetCVar()` which is safe. No issues identified.
-
-### BattleRes (`widgets/BattleRes.lua`) — ✅ Implemented, Minor Notes
-Tracks the shared battle res pool via `C_Spell.GetSpellCharges(20484)` (Druid Rebirth spell ID). This correctly reflects the shared pool for all classes since WoW routes all combat res charges through this spell's charge data. The `difficultyID ~= 17` (LFR) check is correct. See issue #41 in codereview.md for context on non-druid players and tooltip clarity.
-
-### Coordinates widget (`widgets/Coordinates.lua`) — ✅ Implemented, Clean
-Simple widget complement to the full `Coordinates.lua` module. Calls `C_Map.GetBestMapForUnit("player")` and `C_Map.GetPlayerMapPosition()` every 1s — both are lightweight. Uses correct UTF-8 em dash decimal escapes for the "no data" fallback. No issues identified.
+### 14. New Widget — Delve Companion Level
+**Type:** New widget
+**Difficulty:** Medium
+**Description:** Shows Brann Bronzebeard's companion level (e.g. `Brann: 40`). Tooltip shows equipped curios. Hides or shows `N/A` for players who haven't engaged with Delves.
+**API notes:** `C_DelvesUI` namespace. May require `C_AddOns.LoadAddOn("Blizzard_DelvesUI")`. `COMPANION_UPDATE` event or polling fallback. Consult `.api/index.md` before implementing — sparse documentation.
 
 ---
 
-### DMF WHEE! (`widgets/WheeCheck.lua`) — Bug Fixed 2026-03-02
-The widget shipped in v1.20.0 with the wrong spell ID for the Darkmoon Top Hat buff (`71968` instead of `136583`). Because `C_UnitAuras.GetPlayerAuraBySpellID()` returns nil for an unknown spell ID rather than erroring, the bug was silent — the widget always reported "no buff" for Top Hat users. Fixed: `136583` is now the correct entry in `DMF_BUFFS`. The Carousel buff (`46668`) was always correct and unaffected. No other issues identified in the widget logic.
+### 15. New Widget — Warband Bank Gold
+**Type:** New widget
+**Difficulty:** Easy
+**Description:** Dedicated widget for Warband bank gold (e.g. `WB: 1.2k`). The Bags tooltip already shows this as a secondary line; a dedicated widget keeps it always visible.
+**API notes:** `C_Bank.FetchDepositedMoney(Enum.BankType.Account)`. Accurate data may only be available when the bank frame is open — cache the last known value (same pattern as `cachedRepairCost`). `BANKFRAME_OPENED` and `PLAYER_MONEY` events.
 
 ---
 
-## Clickthrough-Aware Widget Improvement Ideas (2026-03-02)
+### 16. New Widget — Reagent Stock Alert
+**Type:** New widget
+**Difficulty:** Medium
+**Description:** Shows the stock count of one user-configured reagent (e.g. `Flask: 12`), red when below a user-set threshold. Integrates with `Reagents.lua`. Left-click opens bags.
+**API notes:** Reads `LunaUITweaks_ReagentData` maintained by `Reagents.lua`. `BAG_UPDATE_DELAYED` for refresh. Config needs item ID entry and threshold slider. `C_Item.GetItemInfoInstant(itemID)` for validation.
 
-The addition of per-widget CT toggles surfaces a natural follow-on improvement: widgets that are purely informational (display-only, no meaningful click action) could ship with CT **enabled by default**, reducing accidental misclicks and keeping the UI surface clean. The following existing widgets are good candidates:
+---
 
-| Widget | Current Click Action | CT-Default Suggestion | Rationale |
-|--------|---------------------|-----------------------|-----------|
-| `Coordinates.lua` | None | Enable CT by default | Pure display, no click action defined |
-| `Speed.lua` | None | Enable CT by default | Pure display, no click action defined |
-| `Zone.lua` | None (tooltip only) | Enable CT by default | Tooltip still works when unlocked; in locked mode CT removes accidental clicks |
-| `SessionStats.lua` | None (tooltip only) | Enable CT by default | Session info is read-only; no click action |
-| `BattleRes.lua` | None (tooltip only) | Enable CT by default | Read-only status display |
-| `Combat.lua` (widget) | None | Enable CT by default | Timer display only |
-| `FPS.lua` | None (tooltip only) | Consider CT by default | Performance info is read-only; tooltip still available in unlocked mode |
+### 17. New Widget — Simplified Threat Meter
+**Type:** New widget
+**Difficulty:** Medium
+**Description:** Shows current threat on the player's target as a percentage (e.g. `Threat: 72%`), color-coded green/yellow/red. Hides when not in combat or when no target.
+**API notes:** `UnitDetailedThreatSituation("player", "target")` returns `isTanking, status, scaledPercent, rawPercent, threatValue`. IMPORTANT: `scaledPercent` may be a secret value — use only arithmetic operations (`string.format`, `+`, `-`, `*`, `/`), never comparison operators directly on the return value. `UNIT_THREAT_SITUATION_UPDATE` event.
 
-Widgets with meaningful click actions (`Spec.lua`, `Hearthstone.lua`, `Bags.lua`, `Volume.lua`, `Time.lua`, `WeeklyReset.lua`, `Mail.lua`, etc.) should keep CT disabled by default so left/right-click functionality remains accessible.
+---
 
-Implementation note: defaulting CT to true for specific widgets would require per-widget entries in `Core.lua`'s `DEFAULTS` table under `UIThingsDB.widgets.<widgetKey>.clickthrough = true`. The framework already supports this — it is a data-only change per widget.
+### 18. New Widget — Fishing / Profession Quick-Cast Button
+**Type:** New widget
+**Difficulty:** Easy
+**Description:** A `SecureActionButtonTemplate` button widget that casts Fishing (or another user-configured spell) on left-click. Shows skill level in main text (e.g. `Fish: 320`).
+**API notes:** Same `SecureActionButtonTemplate` pattern as `Keystone.lua`. `attribute "type" = "spell"`. Fishing skill via `C_TradeSkillUI.GetTradeSkillLine()`. Lure buff via `C_UnitAuras.GetPlayerAuraBySpellID`. Changing spell attribute requires out-of-combat — acceptable for fishing.
+
+---
+
+### 19. New Widget — Interrupt/CC Group Availability
+**Type:** New widget
+**Difficulty:** Hard
+**Description:** Shows how many party members currently have their interrupt off cooldown (e.g. `CC: 3/4`), turning red when all interrupts are on cooldown. Uses AddonComm data from peers running LunaUITweaks.
+**API notes:** Requires extending `Kick.lua` to broadcast personal interrupt CD state via `addonTable.Comm.Send`. The `interruptedBy` GUID from `UNIT_SPELLCAST_INTERRUPTED` is a secret value — do not use it. Track cooldown state from cast confirmation events only. Hard due to cross-client protocol design and secret-value constraints.
+
+---
+
+### 20. New Widget — Session Kill Counter
+**Type:** New widget (or improvement to `SessionStats.lua`)
+**Difficulty:** Medium
+**Description:** Tracks enemy NPCs killed this session (e.g. `Kills: 47`). Can be standalone or an additional cycling mode in `SessionStats`. Tooltip shows kills/hour and total. Right-click resets.
+**API notes:** `UNIT_DIED` fires when a unit dies — filter with `UnitIsPlayer(unit) == false`. Use `UnitGUID(unit)` to deduplicate. Check `issecretvalue(UnitGUID(unit))` before using as a table key. Do NOT use `COMBAT_LOG_EVENT_UNFILTERED` (restricted). Medium due to deduplication and secret-value verification on GUIDs.
+
+---
+
+## Framework Notes (2026-03-06)
+
+### Clickthrough Default Candidates (still pending)
+Widgets that could ship with `clickthrough = true` in `Core.lua` DEFAULTS — pure display, no click action: `Coordinates.lua`, `Speed.lua`, `Zone.lua`, `BattleRes.lua`, `Combat.lua (widget)`, `FPS.lua`.
+
+### Condition Dropdown — Missing Checkmark (still pending)
+The per-widget condition dropdown uses `info.notCheckable = true`. The active option appears in the dropdown header but has no in-dropdown checkmark. The anchor dropdown correctly uses `info.checked`. Minor UX inconsistency.
+
+### Dead Branch in DMF Time Calculations (still present)
+`firstSunday > 7` can never be true given the `1 + (8 - firstDow) % 7` formula. Present in both `WheeCheck.lua` and `DarkmoonFaire.lua`. Cosmetic only.
+
+---
+
+## Historical Notes
+
+| # | Original Suggestion | Status |
+|---|---|---|
+| 1 | Spec Display | ✅ `widgets/Spec.lua` |
+| 2 | Clock / Server Time | ✅ `widgets/Time.lua` |
+| 3 | Weekly Reset Countdown | ✅ `widgets/WeeklyReset.lua` |
+| 4 | FPS / Latency | ✅ `widgets/FPS.lua` |
+
+Unplanned widgets that also shipped: `Speed.lua`, `Volume.lua`, `BattleRes.lua`, `Coordinates.lua`, `ReadyCheck.lua`, `PullTimer.lua`, `ItemLevel.lua`, `WheeCheck.lua`.
