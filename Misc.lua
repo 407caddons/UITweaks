@@ -606,6 +606,8 @@ ApplyMiscEvents = function()
 
     if UIThingsDB.misc.mailNotification then
         EventBus.Register("UPDATE_PENDING_MAIL", OnUpdatePendingMail, "Misc")
+        -- Check immediately in case UPDATE_PENDING_MAIL already fired before we registered
+        OnUpdatePendingMail()
     else
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
     end
