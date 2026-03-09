@@ -448,14 +448,15 @@ end
 local function OnUpdatePendingMail()
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.mailNotification then return end
-    if HasNewMail() then
-        if not mailAlertShown then
-            mailAlertShown = true
-            ShowMailAlert()
-        end
-    else
-        mailAlertShown = false
+    if HasNewMail() and not mailAlertShown then
+        mailAlertShown = true
+        ShowMailAlert()
     end
+end
+
+local function OnMailClosedMisc()
+    -- Reset after visiting the mailbox so new mail arriving later fires the alert again
+    mailAlertShown = false
 end
 
 local function OnPartyInviteRequest(event, name, isTank, isHealer, isDamage, isNativeRealm, allowMultipleRoles,
@@ -583,6 +584,7 @@ ApplyMiscEvents = function()
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
         EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+        EventBus.Unregister("MAIL_CLOSED", OnMailClosedMisc)
         EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
         EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
@@ -606,10 +608,12 @@ ApplyMiscEvents = function()
 
     if UIThingsDB.misc.mailNotification then
         EventBus.Register("UPDATE_PENDING_MAIL", OnUpdatePendingMail, "Misc")
+        EventBus.Register("MAIL_CLOSED", OnMailClosedMisc, "Misc")
         -- Check immediately in case UPDATE_PENDING_MAIL already fired before we registered
         OnUpdatePendingMail()
     else
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
+        EventBus.Unregister("MAIL_CLOSED", OnMailClosedMisc)
     end
 
     if UIThingsDB.misc.autoAcceptFriends or UIThingsDB.misc.autoAcceptGuild or UIThingsDB.misc.autoAcceptEveryone then

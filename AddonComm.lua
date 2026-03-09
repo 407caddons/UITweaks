@@ -195,6 +195,8 @@ end
 local function OnAddonMessage(prefix, message, channel, sender)
     -- Only process our own prefixes
     if prefix ~= ADDON_PREFIX and not LEGACY_PREFIXES[prefix] then return end
+    -- Ignore if not in a group
+    if not IsInGroup() then return end
 
     local senderShort = sender:match("^([^%-]+)") or sender
 
