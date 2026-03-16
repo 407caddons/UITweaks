@@ -19,7 +19,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 500)
+    scrollChild:SetSize(panel:GetWidth() - 30, 640)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -240,4 +240,44 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
             addonTable.Misc.ToggleQuickDestroy(UIThingsDB.misc.quickDestroy)
         end
     end)
+
+    -- Prey Icon Section
+    Helpers.CreateSectionHeader(panel, "Prey Icon Position", -480)
+
+    local preyInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    preyInfo:SetPoint("TOPLEFT", 20, -510)
+    preyInfo:SetText("Unlock to drag the prey hunt icon to your preferred position.")
+    preyInfo:SetTextColor(0.8, 0.8, 0.8)
+
+    local preyUnlockBtn = CreateFrame("Button", "UIThingsMiscPreyUnlock", panel, "UIPanelButtonTemplate")
+    preyUnlockBtn:SetSize(120, 24)
+    preyUnlockBtn:SetPoint("TOPLEFT", 20, -535)
+
+    local preyLockBtn = CreateFrame("Button", "UIThingsMiscPreyLock", panel, "UIPanelButtonTemplate")
+    preyLockBtn:SetSize(120, 24)
+    preyLockBtn:SetPoint("LEFT", preyUnlockBtn, "RIGHT", 8, 0)
+
+    local function UpdatePreyButtons()
+        local locked = UIThingsDB.misc.preyIconLocked
+        preyUnlockBtn:SetEnabled(locked)
+        preyLockBtn:SetEnabled(not locked)
+    end
+
+    preyUnlockBtn:SetText("Unlock")
+    preyUnlockBtn:SetScript("OnClick", function()
+        if addonTable.Misc and addonTable.Misc.UnlockPreyIcon then
+            addonTable.Misc.UnlockPreyIcon()
+        end
+        UpdatePreyButtons()
+    end)
+
+    preyLockBtn:SetText("Lock")
+    preyLockBtn:SetScript("OnClick", function()
+        if addonTable.Misc and addonTable.Misc.LockPreyIcon then
+            addonTable.Misc.LockPreyIcon()
+        end
+        UpdatePreyButtons()
+    end)
+
+    UpdatePreyButtons()
 end

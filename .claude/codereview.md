@@ -1,204 +1,87 @@
-# LunaUITweaks Code Review
-_Last updated: 2026-03-06 (re-review)_
+# WoW Lua Code Review — 2026-03-14
 
-## Overall Health: GOOD
+## Critical (would cause errors or taint in-game)
 
-The addon has a clean architecture — centralised EventBus, rate-limited AddonComm, good frame pooling in Loot.lua, and proper taint guards in DamageMeter and ActionBars. Main areas for improvement: a critical bug in profiler/EventBus interaction, several GC-pressure patterns from intermediate table allocations, and a few per-frame hot-path issues.
+- **MinimapCustom.lua:50** — `QueueStatusButton:HookScript("OnShow", ...)` — `HookScript` is the frame-object form; it taints `QueueStatusButton`. CLAUDE.md and memory both list this frame as a confirmed Button-prototype taint source. Memory recorded this as FIXED (replaced with a ticker), but the hook is still present in the file. Fix: remove `HookScript` and use only the already-present `C_Timer.After` ticker approach.
 
----
+- **MinimapCustom.lua:62** — `hooksecurefunc(QueueStatusButton, "SetPoint", ...)` — Frame-object form on a Blizzard Button frame. Taints the shared Button prototype → `ADDON_ACTION_BLOCKED: Button:SetPassThroughButtons()`. Memory marked this FIXED but it persists.
 
-## CRITICAL
+- **MinimapCustom.lua:75** — `hooksecurefunc(QueueStatusButton, "UpdatePosition", ...)` — Same Button-prototype taint issue. Memory marked FIXED but still present.
 
-### ~~Profiler wrapping breaks EventBus.Unregister~~ ✅ FIXED (2026-03-06)
+- **MinimapCustom.lua:146–168** — `MinimapCluster.InstanceDifficulty:ClearAllPoints()`, `:SetPoint()`, `:SetParent()` called in `ApplyMinimapShape` for both SQUARE and non-SQUARE paths. `InstanceDifficulty` is explicitly named in CLAUDE.md as a confirmed affected Blizzard Button frame. `ClearAllPoints`/`SetPoint`/`SetParent` on it taint the shared Button prototype. Fix: do not reposition InstanceDifficulty; instead anchor an addon-owned overlay frame relative to it.
 
-`callbackMap` now tracks original→stored for both profiler and unit wrappers. `Register` stores the mapping when wrapping occurs and returns the stored ref. `RegisterUnit` uses the returned stored ref to map the original callback directly. `Unregister` resolves via `callbackMap[callback]` and cleans up the entry.
+- **ActionBars.lua:362** — `hooksecurefunc(QueueStatusButton, "SetPoint", ...)` — Another frame-object hook on the same Blizzard Button frame (QueueStatusButton appears in both ActionBars.lua and MinimapCustom.lua). Memory marked FIXED but still present.
 
----
+- **ActionBars.lua:677** — `hooksecurefunc(MicroMenuContainer, "SetParent", ...)` — Frame-object form taints `MicroMenuContainer`. Fix: use `hooksecurefunc("SecureButton_SetParent", ...)` or poll via ticker if feasible.
 
-## HIGH — Performance / Memory
+- **ActionBars.lua:709** — `hooksecurefunc(EditModeManagerFrame, "Show", ...)` — Frame-object hook on a Blizzard frame. Fix: hook the global function `EditModeManager_EnterEditMode` if one exists, or use EventBus with `EDIT_MODE_LAYOUTS_UPDATED`.
 
-### ~~EventBus snapshot table allocated on every event fire~~ ✅ FIXED (2026-03-06)
+- **ActionBars.lua:736** — `hooksecurefunc(EditModeManagerFrame, "Hide", ...)` — Same issue as above.
 
-Replaced with tombstone + post-dispatch compaction. No per-event allocation. Mid-dispatch unregistrations set `false` as a tombstone; a single compaction pass after dispatch cleans them up in O(n).
+- **ActionBars.lua:1225** — `hooksecurefunc(barFrame, hookTarget, ...)` where `hookTarget` is `"SetPointBase"` or `"SetPoint"` on Blizzard action bar frames. Frame-object form taints the bar frame. For edit-mode system frames, CLAUDE.md allows `SetPointBase` repositioning, but hooking the method still taints the frame context.
 
-Every event dispatch allocates and fills a new table. For high-frequency events (`UNIT_HEALTH`, `UNIT_COMBAT`, `BAG_UPDATE_DELAYED`, `GROUP_ROSTER_UPDATE`) this creates continuous GC pressure. Use a module-level scratch table, `wipe()` before use, and nil entries after iteration:
+- **ActionBars.lua:1406–1428** — `hooksecurefunc(btn, "UpdateHotkeys", ...)`, `hooksecurefunc(btn, "Update", ...)`, `hooksecurefunc(btn, "SetNormalTexture", ...)` on Blizzard action bar buttons. Frame-object hooks on Button frames taint the shared Button prototype → `ADDON_ACTION_BLOCKED`. Memory recorded these as FIXED (replaced with `hooksecurefunc("ActionButton_UpdateHotkeys", ...)` global form + ticker), but the frame-object hooks remain in the file.
 
-```lua
-local dispatchSnapshot = {}
--- inside OnEvent:
-for i = 1, n do dispatchSnapshot[i] = subs[i] end
-for i = 1, n do
-    local cb = dispatchSnapshot[i]
-    if cb then cb(event, ...) end
-    dispatchSnapshot[i] = nil
-end
-```
+- **ChatSkin.lua:681** — `hooksecurefunc(ChatFrame1, "SetPoint", ...)` — Frame-object hook on Blizzard's `ChatFrame1`. Memory recorded a fix applied using global-form `ShowUIPanel`/`HideUIPanel` hooks, but this frame-object hook is still in the file.
 
-### SCT OnUpdate calls ClearAllPoints+SetPoint every frame per active text (SCT.lua:97-98)
+- **ChatSkin.lua:527** — `local text = region:GetText()` where `region` is a FontString from `selectedFrame:GetRegions()` and `selectedFrame` is a Blizzard chat frame. Calling `GetText()` on Blizzard FontStrings returns a tainted string. The subsequent `gsub` chain on `text` (line 529) operates on a tainted value and will produce garbage or silently fail. This is in the "copy chat content" fallback path, so it only fires when the primary `GetMessageInfo` path returns no lines — but the fallback will always fail silently. Fix: skip the `GetText()` fallback entirely since it cannot safely extract content from Blizzard FontStrings.
 
-With `SCT_MAX_ACTIVE = 30` and `captureToFrames` enabled during heavy combat, up to 30 frames each call `ClearAllPoints()` + `SetPoint()` every rendered frame — potentially 1800+ layout ops/sec at 60fps. Use alpha-only animation or pre-parent the text to the anchor so only the Y offset needs updating.
+- **ObjectiveTracker.lua:883** — `hooksecurefunc(ObjectiveTrackerFrame, "Show", ...)` — Frame-object hook on a Blizzard frame. The callback then calls `SetAlpha(0)`, `SetScale(0.00001)`, and `EnableMouse(false)` on it. While those three calls are themselves safe (visual-only), the hook form taints the `ObjectiveTrackerFrame` context. Fix: use the global-form `hooksecurefunc("ObjectiveTracker_Update", ...)` or a polling ticker to suppress the tracker.
 
-### Loot.AcquireToast creates a new closure per toast (Loot.lua:144-155)
+- **CastBar.lua:340–349** — `hooksecurefunc(PlayerCastingBarFrame, "Show", ...)`, `hooksecurefunc(PlayerCastingBarFrame, "SetShown", ...)`, `hooksecurefunc(PlayerCastingBarFrame, "SetAlpha", ...)` — Frame-object hooks on Blizzard's player cast bar. All three forms taint `PlayerCastingBarFrame`. The callbacks then call `ForceBlizzBarHide` which itself calls `frame:SetAlpha(0)` — a re-entrant write to a tainted frame. Fix: replace with a `C_Timer.NewTicker` that checks `PlayerCastingBarFrame:GetAlpha()` and forces it to 0 while `blizzBarHidden` is true.
 
-```lua
-toast:SetScript("OnUpdate", function(self, elapsed) ... end)
-```
+- **Misc.lua:267** — `searchBar.FilterButton.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true` — Writing a field into `AuctionHouseFrame.SearchBar.FilterButton.filters`, a table that lives on a Blizzard frame. This taints the `FilterButton` table and all downstream reads of its `filters` field by Blizzard code. Fix: check if there is a public API (`C_AuctionHouseFilter.SetFilter`) or call Blizzard's own filter setter method.
 
-This is called for every toast including recycled frames. Each call allocates a new function object. Define the handler once at module scope and assign by reference.
+## Warning (likely bugs or violations)
 
-### Widget OnUpdate fires every frame for all visible widgets even when idle (Widgets.lua:87-97)
+- **Vendor.lua:76,95** — Drag-stop handlers save position via raw `GetPoint()` → `{ point = point, x = x, y = y }`. The CLAUDE.md convention requires CENTER-relative offsets (`GetCenter()` minus `UIParent:GetCenter()`). Using raw anchor-relative values means the position is misapplied whenever the frame is next placed with a different anchor. Affected: `warningFrame` and `bagWarningFrame`. Same issue in **Combat.lua:84**, **CastBar.lua:587** (uses `GetPoint` and stores `point`), **XpBar.lua:405**, **SCT.lua:17,43**, **Loot.lua:65**, **QuestReminder.lua:264**, **MplusTimer.lua:126**, **Warehousing.lua:433**, **TalentReminder.lua:1427**.
 
-Every frame created by `CreateWidgetFrame` has an `OnUpdate` that runs every rendered frame just to check `if self.isMoving`. When locked (normal operation), `isMoving` is always false. With 10+ enabled widgets at 60fps this is 600+ no-op calls per second. Only install the `OnUpdate` script during a drag; clear it in `OnDragStop`.
+- **Kick.lua:233,241** — `UnitName(unit) == senderShort` — `UnitName()` may return a secret value on certain unit tokens in restricted contexts. The `==` equality operator fails on secret strings (raises a Lua error or silently evaluates false). The comparison is used to match a sender name received via addon comm to a party unit — if this fires during combat it will silently miss matches. Fix: guard with `if not issecretvalue(name) then`.
 
-### Widgets.UpdateVisuals rebuilds anchor lookup redundantly (Widgets.lua:285-293)
+- **DamageMeter.lua:141–161** — Inside `FetchEntries`, the `liveMode` branch (reached when `sessKey == "current"` and `InCombatLockdown()`) stores `src.totalAmount` (a secret value) into `byGuid[i].total` and `sessData.maxAmount` into `byGuid[i].maxTotal`. Line 281 then does `table.sort(list, function(a, b) return a.total > b.total end)` which uses the `>` comparison operator on secret values — this raises a Lua error. In practice the normal render path (line 421) bypasses `FetchEntries` during combat so this liveMode branch is currently unreachable from rendering, but the dead code would explode if anything else triggered it. Fix: remove the liveMode branch from `FetchEntries` entirely (it's already superseded by the direct render path at line 421).
 
-`UpdateVisuals` builds a local `anchorLookup` table from scratch on every call (lines 285-293), ignoring the existing `cachedAnchorLookup` / `RebuildAnchorCache` system used by `UpdateAnchoredLayouts`. The two systems are independent and unsynchronized. Remove the local duplicate and use the cache.
+- **Misc.lua:494** — `deleteButton:SetParent(dialog)` where `dialog` is a Blizzard `StaticPopup` frame. `SetParent` on a Blizzard-owned frame taints its layout context. The addon-created `deleteButton` inheriting Blizzard's frame as parent is the source. Fix: parent the button to UIParent and use `SetPoint` relative to `editBox` without reparenting.
 
-### UpdateAnchoredLayouts allocates intermediate tables every second (Widgets.lua:204-213)
+- **MinimapCustom.lua:152–160** — Inside the SQUARE-shape path, `QueueStatusButton:ClearAllPoints()`, `SetPoint()`, and `SetParent()` are called directly (not just via hooksecurefunc). CLAUDE.md notes that `SetPoint/ClearAllPoints/SetParent` on QueueStatusButton taint layout context (though not the Button prototype per the ticker fix). This fires every time the shape is applied, including at login.
 
-Called from `UpdateContent` (every second when widgets are enabled), this creates a fresh `anchoredWidgets = {}` and `{ key = key, frame = frame }` entry objects on every call. Reuse module-level tables with `wipe()` instead.
+- **Misc.lua:507–509** — `Misc.ToggleQuickDestroy(true)` is called at file-load time with `if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.quickDestroy`. Saved variables are not available at file-load time (only after `ADDON_LOADED`); `UIThingsDB` will always be nil here. This initialization call is always a no-op. Fix: remove this block; the `PLAYER_ENTERING_WORLD` handler already calls `Misc.ToggleQuickDestroy`.
 
----
+- **QueueTimer.lua:~142** — `OnUpdate` is installed at `Init()` and runs every frame for the addon's session lifetime even when `isRunning = false`. Each frame it enters and early-exits. Fix: set the script only in `StartTimer()`; clear it in `StopTimer()`.
 
-## HIGH — Bugs (pre-existing)
+- **Loot.lua:~497** — `issecretvalue(msg)` guard in `OnChatMsgLoot`. Chat strings from `CHAT_MSG_LOOT` are not secret values. This guard silently drops loot toasts during combat on affected builds. The BoE handler in `Misc.lua` correctly omits this guard. Fix: remove it.
 
-### ~~CastBar.lua:30 — `CASTBAR_DEBUG = true` hardcoded~~ ✅ FIXED (2026-03-06)
-Flag is now correctly `false`.
+- **MplusTimer.lua:893–904** — Death attribution off-by-one: when `i == members` (the 5th player), `unit = "player"` is substituted for `party5` which does not exist. The last iteration always tests the player token instead of a valid party unit and can mis-attribute deaths. Fix: iterate `party1`–`party4` then check `"player"` outside the loop.
 
-### Loot.lua:497 — `issecretvalue(msg)` guard in `OnChatMsgLoot`
-Chat strings from `CHAT_MSG_LOOT` are never secret values (only GUID/sourceGUID fields from the combat log are). This guard silently drops loot toasts during combat. The BoE handler in `Misc.lua` correctly omits this guard; `Loot.lua` should too.
-_Fix: Remove the `issecretvalue(msg)` check._
+## Minor (style, performance, clarity)
 
-### MplusTimer.lua:893-904 — Death attribution off-by-one
-```lua
-for i = 1, members do
-    local unit = "party" .. i
-    if i == members then unit = "player" end
-```
-For a 5-player group (`members = 5`), when `i == 5` the code sets `unit = "player"`. But `party5` does not exist — `party1`–`party4` cover the other four. The last iteration always tests if the player is dead and can falsely attribute a death to them.
-_Fix: iterate `party1`–`party4` then check `"player"` outside the loop._
+- **SCT.lua:89–104** — `ClearAllPoints()` + `SetPoint()` called inside `OnUpdate` every frame for up to 30 simultaneously active SCT text frames. At 60 fps with 30 active this is 3600 layout calls/sec. Pre-parent each text frame to its anchor and use a Y-offset-only `SetPoint("BOTTOM", anchor, "TOP", 0, yOffset)` — but since the frame's parent is already the anchor the `ClearAllPoints` call can be dropped; a single `SetPoint` is needed only when yOffset changes. Alternatively use `SetAlpha`-only fade and position the text at a fixed offset, scrolling via a dedicated scroll frame.
 
-### QueueTimer.lua:142 — `OnUpdate` perpetually runs every frame when stopped
-`timerBar:SetScript("OnUpdate", OnUpdate)` is installed at `Init()` and never cleared. When `isRunning` is false, `OnUpdate` fires every frame and exits via early return — a perpetual no-op per-frame call for the session lifetime.
-_Fix: clear the script in `StopTimer()`; restore it in `StartTimer()`._
+- **Widgets.lua (OnUpdate)** — Every widget frame created by `CreateWidgetFrame` has an `OnUpdate` that runs every rendered frame only to check `if self.isMoving`. When all widgets are locked (`isMoving` is always false), this is hundreds of no-op calls per second. Install `OnUpdate` only during a drag; clear it in `OnDragStop`.
 
-### ~~Misc.lua:327 — `keywordCache` not cleared on disable~~ ✅ FIXED (2026-03-06)
+- **Widgets.lua (UpdateAnchoredLayouts)** — Allocates `anchoredWidgets = {}` and per-entry `{ key = key, frame = frame }` tables on every tick (every second when widgets are enabled). Reuse module-level tables with `wipe()`.
 
----
+- **Reagents.lua** — `GetLiveBagCount` scans all bag slots on every `TooltipDataType.Item` postCall. Cache the result keyed by itemID; invalidate on `BAG_UPDATE_DELAYED`.
 
-## MEDIUM
+- **Vendor.lua** — Bag-space check uses bags 0–4 only, missing the reagent bag (index 5 / `Enum.BagIndex.ReagentBag`). The low-space warning fires incorrectly when free slots are only in the reagent bag.
 
-### Reagents.GetLiveBagCount scans all bags on every tooltip hover (Reagents.lua:246-271)
+- **Core.lua:232–820** — The ~600-line `DEFAULTS` table is defined inside the `ADDON_LOADED` handler closure. Move it to module scope for readability and to avoid it being captured as an upvalue closure.
 
-`GetAllCharCounts` is called on every `TooltipDataType.Item` postCall and calls `GetLiveBagCount` which iterates all bag slots (~250 slots with large bags), with hyperlink string matching as fallback. Cache the result keyed by itemID and invalidate on `BAG_UPDATE_DELAYED`.
+- **Misc.lua:7–127** — `alertFrame`, `mailAlertFrame`, and `boeAlertFrame` are created at module load unconditionally, even when `misc.enabled = false`. Create them lazily on first show.
 
-### Vendor.lua:109 — Bag range hardcoded to 0–4
-`C_Container.GetContainerNumFreeSlots` is called for bags 0–4 only. The reagent bag (index 5 / `Enum.BagIndex.ReagentBag`) is missed, so the low-bag-space warning fires incorrectly when free slots are only in the reagent bag. Extend loop to `NUM_BAG_SLOTS` and include the reagent bag index.
+- **Misc.lua** — `ApplyUIScale` silently drops the scale change when `InCombatLockdown()` with no retry. Register a one-shot `PLAYER_REGEN_ENABLED` handler on failure.
 
-### Loot.UpdateLayout dead-code if/else (Loot.lua:196-215)
+- **Misc.lua:476–484** — `OnPartyInviteRequest` performs an O(n BNet friends) linear scan on every invite. Cache a GUID→bool map, invalidated on `BN_FRIEND_LIST_UPDATE`.
 
-Both branches of `if i == 1` / `else` in both `growUp` and `growDown` paths call `SetPoint` with identical arguments. The `if i == 1` special-case is dead code and should be removed.
+- **SCT.lua:69–74** — `RecycleSCTFrame` iterates the full `sctActive` list to remove a frame by reference. Maintain a parallel set (`sctActiveSet[frame] = true`) for O(1) removal.
 
-### FPS widget re-sorts addonMemList on every tooltip open (FPS.lua:99)
+- **AddonVersions.lua** — `GetPlayerKeystone` scans all bag slots on every `GROUP_ROSTER_UPDATE`. Cache the result; invalidate on `BAG_UPDATE_DELAYED`.
 
-`RefreshMemoryData` already sorts the list (line 44). `OnEnter` sorts it again (line 99). The second sort is redundant.
+- **FPS.lua** — `RefreshMemoryData` sorts `addonMemList` at line 44; `OnEnter` sorts it again at line 99. The second sort is redundant.
 
-### Misc.lua — Three alert frames created unconditionally at load time (Misc.lua:7-127)
+- **Profiler.lua** — `sortedRows` is wiped each interval but never trimmed if module count exceeds `MAX_ROWS = 40`. Add `for i = #sortedRows, MAX_ROWS + 1, -1 do sortedRows[i] = nil end` after `wipe`.
 
-`alertFrame`, `mailAlertFrame`, and `boeAlertFrame` are created at module load even when `misc.enabled` is false. Hidden frames still consume frame table memory and texture slots. Create them lazily on first show.
+- **Multiple files** — Frame positions not yet migrated to CENTER anchor: `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`, `MplusTimer`, `SCT`, `Vendor`, `Loot`, `QuestReminder`, `Warehousing`, `TalentReminder`. All save raw `GetPoint()` anchor-relative coords instead of `GetCenter() - UIParent:GetCenter()`.
 
-### Misc.OnPartyInviteRequest — O(n BNet friends) on every invite (Misc.lua:476-484)
+## Summary
 
-Every party invite triggers a linear scan of all BNet friends via `C_BattleNet.GetFriendAccountInfo`. Cache a GUID→bool map, invalidated on `BN_FRIEND_LIST_UPDATE`.
-
-### SCT RecycleSCTFrame — linear scan of sctActive (SCT.lua:69-74)
-
-`RecycleSCTFrame` iterates the full `sctActive` list to find a frame by reference. With `SCT_MAX_ACTIVE = 30` this is O(30) inside an OnUpdate path. Use a hash set (`sctActiveSet = {}`) for O(1) removal.
-
-### MplusTimer.lua — drag-stop saves raw `GetPoint` anchor, not CENTER-normalized
-The drag-stop handler saves `{ point = point, x = x, y = y }` from `GetPoint()` which can return any anchor. This diverges from the addon's CENTER-relative convention established in CLAUDE.md. Migrate to the standard `GetCenter()` minus `UIParent:GetCenter()` pattern.
-
-### AddonVersions.GetPlayerKeystone — bag scan on every roster update (AddonVersions.lua:17-38)
-
-`GetPlayerKeystone` scans all bag slots on every `GROUP_ROSTER_UPDATE` and every `RefreshVersions`. Cache the result and invalidate on `BAG_UPDATE_DELAYED` or `ITEM_PUSH` events.
-
----
-
-## LOW
-
-### SessionStats.SaveSessionData called on every loot event
-
-`OnChatMsgLoot` writes multiple SavedVariable fields on every loot message. For high-item-drop situations this is a constant write. Consider deferring the write to `PLAYER_LOGOUT` for fields that don't need intra-session persistence.
-
-### Widgets condition evaluation calls GetInstanceInfo redundantly (Widgets.lua:430-438)
-
-If both "instance" and "world" condition widgets are enabled, `GetInstanceInfo()` is called twice per `UpdateConditions` pass. Cache the result at the top of the function.
-
-### Core.lua — DEFAULTS table defined inside event handler (Core.lua:232-820)
-
-The ~600-line DEFAULTS table is defined inside the `ADDON_LOADED` handler. While it only executes once (UnregisterEvent is called immediately after), it makes the function hard to navigate. Moving DEFAULTS to module scope is cleaner.
-
-### Reagents.ScanBags and GetLiveBagCount rebuild bagList on every call (Reagents.lua:65-71)
-
-`bagList` is constructed identically on every call to `ScanBags` and `GetLiveBagCount`. Define it once as a module-level constant.
-
-### Misc.lua — ApplyUIScale silently fails in combat with no retry (Misc.lua:292-294)
-
-If called while in combat, the scale is silently dropped. Register a one-shot `PLAYER_REGEN_ENABLED` handler to retry.
-
-### Profiler.lua — `sortedRows` scratch table never trimmed
-`wipe()` resets it each interval, but if module count exceeds `MAX_ROWS = 40` the table grows past the display cap. The `math.min` guard prevents display overflow but the raw table is never trimmed. Not impactful in normal use, but a simple `for i = #sortedRows, MAX_ROWS+1, -1 do sortedRows[i] = nil end` post-wipe would keep it bounded.
-
-### Multiple files — Frame positions not yet migrated to CENTER anchor
-
-Per CLAUDE.md — not yet migrated: `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`, `MplusTimer`.
-
----
-
-## Summary Table
-
-| # | Severity | File | Issue |
-|---|----------|------|-------|
-| 1 | ~~Critical~~ | ~~EventBus.lua~~ | ~~Profiler wrapping breaks Unregister — events never removed~~ ✅ |
-| 2 | ~~High~~ | ~~EventBus.lua~~ | ~~Snapshot table allocated per event fire — GC pressure~~ ✅ |
-| 3 | High | SCT.lua | ClearAllPoints+SetPoint every frame per SCT text (up to 30) |
-| 4 | High | Loot.lua | New closure created per AcquireToast call |
-| 5 | High | Widgets.lua | OnUpdate fires every frame for all widgets even when idle |
-| 6 | High | Widgets.lua | UpdateVisuals rebuilds anchor lookup ignoring cache |
-| 7 | High | Widgets.lua | UpdateAnchoredLayouts allocates tables every second |
-| 8 | ~~High~~ | ~~CastBar.lua~~ | ~~CASTBAR_DEBUG = true hardcoded~~ ✅ |
-| 9 | High | Loot.lua | issecretvalue(msg) guard silently drops loot toasts in combat |
-| 10 | ~~High~~ | ~~Misc.lua~~ | ~~keywordCache not wiped on auto-invite disable~~ ✅ |
-| 11 | High | MplusTimer.lua | Death attribution off-by-one for 5-player groups |
-| 12 | High | QueueTimer.lua | OnUpdate runs every frame when timer is stopped |
-| 13 | Med | Reagents.lua | Live bag scan on every tooltip hover — no cache |
-| 14 | Med | Vendor.lua | Bag range hardcoded 0-4, misses reagent bag |
-| 15 | Med | Loot.lua | Dead-code if/else in UpdateLayout |
-| 16 | Med | FPS.lua | Redundant sort of addonMemList on every tooltip open |
-| 17 | Med | Misc.lua | Three alert frames created unconditionally at load |
-| 18 | Med | Misc.lua | O(n BNet friends) scan on every party invite |
-| 19 | Med | SCT.lua | Linear scan of sctActive in RecycleSCTFrame |
-| 20 | Med | AddonVersions.lua | Bag scan for keystone on every roster update |
-| 21 | Med | MplusTimer.lua | Drag-stop saves raw GetPoint anchor, not CENTER-normalized |
-| 22 | Low | SessionStats.lua | SaveSessionData called on every loot event |
-| 23 | Low | Widgets.lua | GetInstanceInfo called redundantly per UpdateConditions pass |
-| 24 | Low | Core.lua | DEFAULTS defined inside event handler |
-| 25 | Low | Reagents.lua | bagList rebuilt on every scan call |
-| 26 | Low | Misc.lua | ApplyUIScale in-combat failure has no retry |
-| 27 | Low | Profiler.lua | sortedRows scratch table never trimmed past MAX_ROWS |
-| 28 | Low | Multiple | Frame positions not yet migrated to CENTER anchor (incl. MplusTimer) |
-
----
-
-## Known-Good Modules
-
-| Module | Status |
-|--------|--------|
-| DamageMeter.lua | ✅ Secret value handling thorough; no taint issues |
-| AddonComm.lua | ✅ HasRealGroupMembers check; rate limiting correct |
-| MinimapCustom.lua | ✅ QueueStatusButton taint fixed |
-| Loot.lua | ✅ Frame pool well-implemented (aside from closure per-acquire) |
-| Frames.lua | ✅ CENTER positioning correct |
-| EventBus.lua | ✅ Dispatch snapshot prevents mid-dispatch mutation (closure GC aside) |
-| Reagents.lua | ✅ Handles reagent bag slot correctly |
-| ChatSkin.lua | ✅ Global-form hooks only; no frame taint |
+The addon has a solid architecture — centralized EventBus, AddonComm rate limiting, frame pooling in Loot, and thorough secret-value handling in DamageMeter. However, several high-severity taint regressions are present in the current build. Memory notes from March 2026 recorded QueueStatusButton hooks, ActionBars frame-object hooks, and ChatSkin's ChatFrame1 hook as *fixed*, but all three remain in the live code (`MinimapCustom.lua:50,62,75`, `ActionBars.lua:362,1406–1428`, `ChatSkin.lua:681`). The `MinimapCluster.InstanceDifficulty` repositioning in `MinimapCustom.lua:146–168` is a confirmed Button-prototype taint source that should be removed entirely. CastBar's `hooksecurefunc` suppression of `PlayerCastingBarFrame` and ObjectiveTracker's `hooksecurefunc(ObjectiveTrackerFrame, "Show", ...)` are also active taint risks. Resolving these ~13 Critical items is the highest priority; the Warning-level `GetPoint()` position-save convention violations and the Minor performance items can follow.

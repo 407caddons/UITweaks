@@ -47,7 +47,19 @@
       "Bash(xargs wc -l)",
       "Bash(cat \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/LunaUITweaks.toc\")",
       "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/\"*.lua)",
-      "Bash(wc -l *.lua)"
+      "Bash(wc -l *.lua)",
+      "Bash(head -150 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Frames/Raid.lua\")",
+      "Bash(head -100 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Party.lua\")",
+      "Bash(head -100 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Raid.lua\")",
+      "Bash(head -80 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Core.lua\")",
+      "Bash(wc -l \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Core.lua\")",
+      "Bash(head -100 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Main.lua\")",
+      "Bash(head -50 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/LunaUITweaks_UnitFrames.toc\")",
+      "Bash(tail -80 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Frames/Party.lua\")",
+      "Bash(tail -120 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Frames/Raid.lua\")",
+      "Bash(tail -100 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Party.lua\")",
+      "Bash(wc -l \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Party.lua\")",
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/config/ConfigMain.lua\")"
     ]
   }
 }

@@ -13,7 +13,10 @@ local SetupTrackerEvents
 local UpdateContent
 local autoTrackFrame
 local distanceTicker
+local timerTicker
+local activeTimerBtns = {}   -- questID -> { btn, endTime }
 local trackerHiddenByKeybind = false
+local scenarioTimerEndTime = nil  -- set by WORLD_STATE_TIMER_START; used for scenario countdown
 
 -- Blizzard quest sound file IDs to mute when custom sounds are active
 local QUEST_SOUND_FILES = {
@@ -237,6 +240,7 @@ local function ReleaseItems()
         end
         if btn.ProgressBar then btn.ProgressBar:Hide() end
     end
+    wipe(activeTimerBtns)
 end
 
 local ucState = {}
@@ -329,6 +333,61 @@ local function GetTimeLeftString(questID)
         return string.format(" |cFF%s%s|r", color, timeStr)
     end
     return ""
+end
+
+local function BuildTimerBtn(displaySecs, color)
+    local btn = AcquireItem()
+    btn:Show()
+    btn.questID = nil
+    btn.achieID = nil
+    btn.perksActivityID = nil
+    btn.isSuperTrackedObjective = false
+    btn:SetScript("OnClick", nil)
+    btn:SetScript("OnEnter", nil)
+    btn:SetScript("OnLeave", nil)
+
+    local indent = ucState.indent or 0
+    btn:SetWidth(ucState.width - indent)
+    btn:SetPoint("TOPLEFT", indent, ucState.yOffset)
+
+    local timerFont = ucState.questNameFont or "Fonts\\FRIZQT__.TTF"
+    local timerSize = ucState.questNameSize or 14
+    btn.Text:SetFont(timerFont, timerSize, "OUTLINE")
+    btn.Icon:Hide()
+    btn.Text:SetPoint("LEFT", 19, 0)
+    btn:EnableMouse(false)
+    btn.ToggleBtn:Hide()
+
+    local m = math.floor(displaySecs / 60)
+    local s = math.floor(displaySecs % 60)
+    btn.Text:SetText(string.format("|cFF%s%02d:%02d|r", color, m, s))
+
+    local textHeight = btn.Text:GetStringHeight() or timerSize
+    local lineHeight = math.max(textHeight, timerSize)
+    btn:SetHeight(lineHeight + 2)
+    ucState.yOffset = ucState.yOffset - (lineHeight + (ucState.questPadding or 2))
+    return btn
+end
+
+-- Countdown (counts down to 0)
+local function PlaceTimerLine(key, secs)
+    local color = secs > 300 and "00FF00" or secs > 60 and "FFFF00" or "FF4444"
+    local btn = BuildTimerBtn(secs, color)
+    activeTimerBtns[key] = { btn = btn, endTime = GetTime() + secs, isElapsed = false }
+end
+
+-- Elapsed (counts up from initial value)
+local function PlaceElapsedLine(key, initialElapsed)
+    local btn = BuildTimerBtn(initialElapsed, "FFFFFF")
+    activeTimerBtns[key] = { btn = btn, startTime = GetTime() - initialElapsed, isElapsed = true }
+end
+
+local function AddTimerLine(questID)
+    if not UIThingsDB.tracker.showQuestCountdown then return end
+    if not (C_TaskQuest and C_TaskQuest.GetQuestTimeLeftSeconds) then return end
+    local secs = C_TaskQuest.GetQuestTimeLeftSeconds(questID)
+    if not secs or secs <= 0 or secs > 3600 then return end
+    PlaceTimerLine(questID, secs)
 end
 
 local useMetric = not (GetLocale() == "enUS" or GetLocale() == "enGB")
@@ -1087,6 +1146,33 @@ function addonTable.ObjectiveTracker.UpdateSettings()
         end)
     end
 
+    -- Quest countdown timer ticker (live MM:SS updates)
+    if timerTicker then
+        timerTicker:Cancel()
+        timerTicker = nil
+    end
+    if UIThingsDB.tracker.enabled and UIThingsDB.tracker.showQuestCountdown then
+        timerTicker = C_Timer.NewTicker(1.0, function()
+            for _, entry in pairs(activeTimerBtns) do
+                local btn = entry.btn
+                if btn and not btn.released and btn:IsShown() then
+                    local display, color
+                    if entry.isElapsed then
+                        display = GetTime() - entry.startTime
+                        color = "FFFFFF"
+                    else
+                        display = entry.endTime - GetTime()
+                        if display < 0 then display = 0 end
+                        color = display > 300 and "00FF00" or display > 60 and "FFFF00" or "FF4444"
+                    end
+                    local m = math.floor(display / 60)
+                    local s = math.floor(display % 60)
+                    btn.Text:SetText(string.format("|cFF%s%02d:%02d|r", color, m, s))
+                end
+            end
+        end)
+    end
+
     -- Mute/unmute default Blizzard quest sounds
     local shouldMute = UIThingsDB.tracker.enabled and UIThingsDB.tracker.muteDefaultQuestSounds
     if shouldMute and not questSoundsMuted then
@@ -1117,6 +1203,7 @@ local function RenderSingleWQ(questID, superTrackedQuestID)
             end
             AddLine(title, false, questID, nil, false, color)
             displayedIDs[questID] = true
+            AddTimerLine(questID)
             local objectives = C_QuestLog.GetQuestObjectives(questID)
             if objectives then
                 for _, obj in pairs(objectives) do
@@ -1278,6 +1365,7 @@ local function RenderQuests()
                     else color = GetCampaignColor(questID) end
                     AddLine(title, false, questID, nil, false, color)
                     displayedIDs[questID] = true
+                    AddTimerLine(questID)
                     local objectives = C_QuestLog.GetQuestObjectives(questID)
                     if objectives then
                         for _, obj in pairs(objectives) do
@@ -1500,6 +1588,66 @@ local function RenderScenarios()
             criteriaIndex = criteriaIndex + 1
         end
     end
+    -- Scenario timer
+    if UIThingsDB.tracker.showQuestCountdown then
+        local placed = false
+        -- Method 1: step countdown via C_Scenario.GetStepInfo (pre-TWW API, may still exist)
+        if not placed and C_Scenario and C_Scenario.GetStepInfo then
+            local ok, _, _, _, _, _, elap, dur = pcall(C_Scenario.GetStepInfo)
+            if ok and type(dur) == "number" and dur > 0 and type(elap) == "number" then
+                local remaining = dur - elap
+                if remaining > 0 and remaining <= 3600 then
+                    PlaceTimerLine("scenario", remaining)
+                    placed = true
+                end
+            end
+        end
+        -- Method 2: C_ScenarioInfo.GetScenarioStepInfo may carry elapsedTime/duration in TWW
+        if not placed and stepInfo then
+            local dur = stepInfo.duration or stepInfo.timeLimit
+            local elap = stepInfo.elapsedTime or stepInfo.elapsed
+            if type(dur) == "number" and dur > 0 and type(elap) == "number" then
+                local remaining = dur - elap
+                if remaining > 0 and remaining <= 3600 then
+                    PlaceTimerLine("scenario", remaining)
+                    placed = true
+                end
+            end
+        end
+        -- Method 3: ScenarioHeaderTimer widget (TWW widget system — timerValue is remaining seconds)
+        if not placed and stepInfo and stepInfo.widgetSetID and C_UIWidgetManager then
+            local widgets = C_UIWidgetManager.GetAllWidgetsBySetID(stepInfo.widgetSetID)
+            if widgets then
+                for _, w in ipairs(widgets) do
+                    local ti = C_UIWidgetManager.GetScenarioHeaderTimerWidgetVisualizationInfo(w.widgetID)
+                    if ti and ti.shownState == 1 and type(ti.timerValue) == "number"
+                        and ti.timerValue > (ti.timerMin or 0) then
+                        PlaceTimerLine("scenario", ti.timerValue)
+                        placed = true
+                        break
+                    end
+                end
+            end
+        end
+        -- Method 4: WORLD_STATE_TIMER_START cached end time (countdown)
+        if not placed and scenarioTimerEndTime then
+            local remaining = scenarioTimerEndTime - GetTime()
+            if remaining > 0 and remaining <= 3600 then
+                PlaceTimerLine("scenario", remaining)
+                placed = true
+            end
+        end
+        -- Method 5: world elapsed timer (fallback: count up when no total duration known)
+        if not placed and GetWorldElapsedTimers then
+            local numTimers = GetWorldElapsedTimers()
+            if type(numTimers) == "number" and numTimers > 0 then
+                local _, elap = GetWorldElapsedTimer(1)
+                if type(elap) == "number" and elap >= 0 then
+                    PlaceElapsedLine("scenario", elap)
+                end
+            end
+        end
+    end
     ucState.yOffset = ucState.yOffset - SECTION_SPACING
 end
 
@@ -1713,6 +1861,7 @@ local function RenderCampaignQuests()
             else color = UIThingsDB.tracker.campaignQuestColor end
             AddLine(title, false, questID, nil, false, color)
             displayedIDs[questID] = true
+            AddTimerLine(questID)
             local objectives = C_QuestLog.GetQuestObjectives(questID)
             if objectives then
                 for _, obj in pairs(objectives) do
@@ -2002,6 +2151,8 @@ local function RegisterTrackerEvents(frame)
     frame:RegisterEvent("SCENARIO_UPDATE")
     frame:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
     frame:RegisterEvent("SCENARIO_COMPLETED")
+    frame:RegisterEvent("WORLD_STATE_TIMER_START")
+    frame:RegisterEvent("WORLD_STATE_TIMER_STOP")
 end
 
 SetupTrackerEvents = function()
@@ -2041,6 +2192,13 @@ SetupTrackerEvents = function()
                 end
             end
             ScheduleUpdateContent()
+        elseif event == "WORLD_STATE_TIMER_START" then
+            local timerType, timeRemaining, totalTime = ...
+            if type(timeRemaining) == "number" and timeRemaining > 0 then
+                scenarioTimerEndTime = GetTime() + timeRemaining
+            end
+        elseif event == "WORLD_STATE_TIMER_STOP" then
+            scenarioTimerEndTime = nil
         elseif event == "QUEST_REMOVED" then
             local questID = ...
             if questID then

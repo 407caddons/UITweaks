@@ -301,6 +301,109 @@ function Misc.ApplyUIScale()
     ApplyUIScale()
 end
 
+-- == PREY ICON REPOSITIONER ==
+
+local preyMoverFrame = nil
+local preyPosTicker = nil
+
+local function ApplyPreyIconPosition()
+    local container = _G["UIWidgetPowerBarContainerFrame"]
+    if not container or not container:IsShown() then return end
+    local s = UIThingsDB.misc
+    if not s or not s.preyIconLocked then return end
+    local x, y = s.preyIconX or 0, s.preyIconY or 0
+    container:ClearAllPoints()
+    container:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    -- FrontModelScene and BackModelScene are anchored to UIParent by Blizzard's
+    -- widget system independently of the container, so move them too.
+    if container.FrontModelScene then
+        container.FrontModelScene:ClearAllPoints()
+        container.FrontModelScene:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    end
+    if container.BackModelScene then
+        container.BackModelScene:ClearAllPoints()
+        container.BackModelScene:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    end
+end
+
+local function EnsurePreyMover()
+    if preyMoverFrame then return end
+    preyMoverFrame = CreateFrame("Frame", "LunaPreyMoverFrame", UIParent, "BackdropTemplate")
+    preyMoverFrame:SetSize(80, 80)
+    preyMoverFrame:SetFrameStrata("HIGH")
+    preyMoverFrame:SetMovable(true)
+    preyMoverFrame:RegisterForDrag("LeftButton")
+    preyMoverFrame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    preyMoverFrame:SetBackdropColor(0.1, 0.5, 0.1, 0.8)
+    preyMoverFrame:SetBackdropBorderColor(0, 1, 0, 1)
+    local label = preyMoverFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("CENTER")
+    label:SetText("Prey\nIcon")
+    preyMoverFrame:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    preyMoverFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local fx, fy = self:GetCenter()
+        local px, py = UIParent:GetCenter()
+        UIThingsDB.misc.preyIconX = math.floor(fx - px + 0.5)
+        UIThingsDB.misc.preyIconY = math.floor(fy - py + 0.5)
+        ApplyPreyIconPosition()
+    end)
+    preyMoverFrame:Hide()
+end
+
+function Misc.UnlockPreyIcon()
+    UIThingsDB.misc.preyIconLocked = false
+    if preyPosTicker then
+        preyPosTicker:Cancel()
+        preyPosTicker = nil
+    end
+    EnsurePreyMover()
+    preyMoverFrame:ClearAllPoints()
+    preyMoverFrame:SetPoint("CENTER", UIParent, "CENTER",
+        UIThingsDB.misc.preyIconX or 0, UIThingsDB.misc.preyIconY or 0)
+    preyMoverFrame:EnableMouse(true)
+    preyMoverFrame:Show()
+end
+
+function Misc.LockPreyIcon()
+    if preyMoverFrame and preyMoverFrame:IsShown() then
+        local fx, fy = preyMoverFrame:GetCenter()
+        local px, py = UIParent:GetCenter()
+        UIThingsDB.misc.preyIconX = math.floor(fx - px + 0.5)
+        UIThingsDB.misc.preyIconY = math.floor(fy - py + 0.5)
+        preyMoverFrame:EnableMouse(false)
+        preyMoverFrame:Hide()
+    end
+    UIThingsDB.misc.preyIconLocked = true
+    ApplyPreyIconPosition()
+    -- Start ticker to re-apply whenever the widget system repositions the frame
+    if not preyPosTicker then
+        preyPosTicker = C_Timer.NewTicker(0.5, ApplyPreyIconPosition)
+    end
+end
+
+function Misc.ApplyPreyIconSettings()
+    if not UIThingsDB.misc then return end
+    if UIThingsDB.misc.preyIconLocked then
+        -- Ensure ticker is running to maintain position
+        if not preyPosTicker then
+            preyPosTicker = C_Timer.NewTicker(0.5, ApplyPreyIconPosition)
+        end
+    else
+        if preyPosTicker then
+            preyPosTicker:Cancel()
+            preyPosTicker = nil
+        end
+    end
+end
+
 -- == EVENTS ==
 
 -- Slash command for /rl
@@ -673,6 +776,7 @@ EventBus.Register("PLAYER_LOGIN", function()
             ApplyUIScale()
             RegisterMiscEvents()
         end
+        Misc.ApplyPreyIconSettings()
     end
 end, "Misc")
 

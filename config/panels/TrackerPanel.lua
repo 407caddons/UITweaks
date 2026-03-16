@@ -306,6 +306,17 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
         UpdateTracker()
     end)
 
+    local countdownCheckbox = CreateFrame("CheckButton", "UIThingsTrackerCountdownCheckbox", panel,
+        "ChatConfigCheckButtonTemplate")
+    countdownCheckbox:SetPoint("TOPLEFT", 300, -335)
+    countdownCheckbox:SetHitRectInsets(0, -180, 0, 0)
+    _G[countdownCheckbox:GetName() .. "Text"]:SetText("Show Quest Countdown (MM:SS)")
+    countdownCheckbox:SetChecked(UIThingsDB.tracker.showQuestCountdown)
+    countdownCheckbox:SetScript("OnClick", function(self)
+        UIThingsDB.tracker.showQuestCountdown = self:GetChecked()
+        UpdateTracker()
+    end)
+
     local wqRewardCheckbox = CreateFrame("CheckButton", "UIThingsTrackerWQRewardCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
     wqRewardCheckbox:SetPoint("TOPLEFT", 300, -360)

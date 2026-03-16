@@ -275,6 +275,7 @@ local function OnEvent(self, event, ...)
                 backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
                 strata = "LOW",
                 showWorldQuestTimer = true,
+                showQuestCountdown = true,
                 hideCompletedSubtasks = false,
                 groupQuestsByZone = false,
                 groupQuestsByCampaign = false,
@@ -417,6 +418,9 @@ local function OnEvent(self, event, ...)
                 deathTtsEnabled = true,
                 deathTtsMessage = "{name} died",
                 deathTtsVoice = 0,
+                preyIconLocked = true,
+                preyIconX = 0,
+                preyIconY = 0,
             },
             minimap = {
                 angle = 45,
