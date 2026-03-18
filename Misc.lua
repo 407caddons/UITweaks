@@ -108,9 +108,9 @@ local function ShowBoeAlert(itemName, quality)
     boeAlertFrame.text:SetTextColor(color.r, color.g, color.b, color.a or 1)
 
     if itemName then
-        local qualityColor = C_Item.GetItemQualityColor and C_Item.GetItemQualityColor(quality)
-        if qualityColor then
-            boeAlertFrame.text:SetText(string.format("|c%sBoE: %s|r", qualityColor.colorStr, itemName))
+        local r, g, b, hex = C_Item.GetItemQualityColor and C_Item.GetItemQualityColor(quality)
+        if hex then
+            boeAlertFrame.text:SetText(string.format("|c%sBoE: %s|r", hex, itemName))
         else
             boeAlertFrame.text:SetText("BoE: " .. itemName)
         end

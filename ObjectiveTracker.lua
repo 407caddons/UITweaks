@@ -942,7 +942,6 @@ local function HookBlizzardTracker()
     hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled then
             ObjectiveTrackerFrame:SetAlpha(0)
-            ObjectiveTrackerFrame:SetScale(0.00001)
             ObjectiveTrackerFrame:EnableMouse(false)
         end
     end)
@@ -1042,7 +1041,6 @@ function addonTable.ObjectiveTracker.UpdateSettings()
         HookBlizzardTracker()
         if ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetAlpha(0)
-            ObjectiveTrackerFrame:SetScale(0.00001)
             ObjectiveTrackerFrame:EnableMouse(false)
         end
     else
@@ -2262,7 +2260,6 @@ hookFrame:SetScript("OnEvent", function(self, event)
     if blizzardTrackerHooked then
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled and ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetAlpha(0)
-            ObjectiveTrackerFrame:SetScale(0.00001)
             ObjectiveTrackerFrame:EnableMouse(false)
         end
         self:UnregisterAllEvents()

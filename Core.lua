@@ -345,6 +345,9 @@ local function OnEvent(self, event, ...)
                 colorInCombat = { r = 1, g = 1, b = 1 },
                 colorOutCombat = { r = 0.5, g = 0.5, b = 0.5 },
                 pos = { point = "CENTER", x = 0, y = 0 },
+                ttdEnabled = true,
+                ttdLocked = true,
+                ttdPos = { x = 0, y = -30 },
                 combatLog = {
                     dungeonNormal = false,
                     dungeonHeroic = false,
@@ -563,6 +566,7 @@ local function OnEvent(self, event, ...)
             kick = {
                 enabled = false,
                 locked = true,
+                columns = 4,
                 attachToPartyFrames = false,
                 attachAnchorPoint = "BOTTOM", -- BOTTOM, TOP, LEFT, RIGHT
                 attachIconSize = 28,

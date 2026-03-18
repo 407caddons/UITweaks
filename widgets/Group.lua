@@ -327,7 +327,26 @@ table.insert(Widgets.moduleInits, function()
 
     -- Ready check state (must be declared before OnEnter closure)
     local readyCheckActive = false
-    local readyCheckResponses = {} -- unit -> "ready" | "notready" | "waiting"
+    local readyCheckResponses = {} -- name -> "ready" | "notready" | "waiting"
+
+    -- Combat-safe name cache: UnitName() returns secret strings during combat,
+    -- which cannot be used as table keys. Cache is refreshed on roster changes
+    -- outside combat and on PLAYER_REGEN_ENABLED.
+    local readyCheckNameCache = {} -- [unit] = name
+
+    local function RefreshReadyCheckNames()
+        if InCombatLockdown() then return end
+        wipe(readyCheckNameCache)
+        readyCheckNameCache["player"] = UnitName("player")
+        local members = GetNumGroupMembers()
+        if members > 0 then
+            for i = 1, members do
+                local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
+                local name = UnitName(unit)
+                if name then readyCheckNameCache[unit] = name end
+            end
+        end
+    end
 
     groupFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
@@ -495,23 +514,29 @@ table.insert(Widgets.moduleInits, function()
 
     local function OnGroupRosterUpdate()
         RefreshGroupCache()
+        RefreshReadyCheckNames()
     end
 
     local function OnReadyCheck()
         readyCheckActive = true
         wipe(readyCheckResponses)
-        -- Initialize all members as waiting
+        -- Refresh cache if possible (may be stale if roster changed mid-combat)
+        if not InCombatLockdown() then
+            RefreshReadyCheckNames()
+        end
+        -- Initialize all members as waiting using cached names
         local members = GetNumGroupMembers()
         if members > 0 then
             for i = 1, members do
                 local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
-                readyCheckResponses[UnitName(unit) or unit] = "waiting"
+                local name = readyCheckNameCache[unit] or unit
+                readyCheckResponses[name] = "waiting"
             end
         end
     end
 
     local function OnReadyCheckConfirm(event, unit, isReady)
-        local name = UnitName(unit)
+        local name = readyCheckNameCache[unit]
         if name then
             readyCheckResponses[name] = isReady and "ready" or "notready"
         end
@@ -530,6 +555,7 @@ table.insert(Widgets.moduleInits, function()
             EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "W:Group")
             EventBus.Register("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate, "W:Group")
             EventBus.Register("ROLE_CHANGED_INFORM", OnGroupRosterUpdate, "W:Group")
+            EventBus.Register("PLAYER_REGEN_ENABLED", RefreshReadyCheckNames, "W:Group")
             EventBus.Register("READY_CHECK", OnReadyCheck, "W:Group")
             EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckConfirm, "W:Group")
             EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:Group")
@@ -537,6 +563,7 @@ table.insert(Widgets.moduleInits, function()
             EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)
             EventBus.Unregister("ROLE_CHANGED_INFORM", OnGroupRosterUpdate)
+            EventBus.Unregister("PLAYER_REGEN_ENABLED", RefreshReadyCheckNames)
             EventBus.Unregister("READY_CHECK", OnReadyCheck)
             EventBus.Unregister("READY_CHECK_CONFIRM", OnReadyCheckConfirm)
             EventBus.Unregister("READY_CHECK_FINISHED", OnReadyCheckFinished)

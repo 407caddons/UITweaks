@@ -9,6 +9,9 @@ local startTime = 0
 local inCombat = false
 local timeElapsed = 0
 
+local TtdApplySettings   -- forward declaration; defined in TTD section below
+local TtdRefreshDisplay  -- forward declaration; defined in TTD section below
+
 local function SetFormattedTime(fontString, seconds)
     local m = math.floor(seconds / 60)
     local s = math.floor(seconds % 60)
@@ -69,6 +72,7 @@ function addonTable.Combat.UpdateSettings()
         })
         timerFrame:SetBackdropColor(0, 0, 0, 0.5)
     end
+    TtdApplySettings()
 end
 
 local function Init()
@@ -136,6 +140,215 @@ function addonTable.Combat.ApplyTimerEvents()
         timerFrame:SetScript("OnUpdate", nil)
         updateTimer = 0
     end
+end
+
+-- ============================================================
+-- Time to Die (TTD) Timer
+-- ============================================================
+
+local ttdFrame
+local ttdLabel
+local ttdText
+local ttdLockBtn
+
+local TTD_SAMPLE_INTERVAL = 0.5   -- seconds between health% samples
+local TTD_MIN_DATA_SECS   = 5     -- seconds of data required before showing
+local TTD_WINDOW_SECS     = 10    -- rolling window size in seconds
+
+-- UnitHealthPercent is secret during combat. Use a hidden StatusBar to extract a
+-- non-secret copy: SetValue accepts secret numbers; GetValue() returns a plain number.
+local ttdHealthBar = CreateFrame("StatusBar")
+ttdHealthBar:SetMinMaxValues(0, 100)
+
+local function TtdGetHealthPct()
+    ttdHealthBar:SetValue(UnitHealthPercent("target"))
+    return ttdHealthBar:GetValue()   -- non-secret copy
+end
+
+local ttdSamples     = {}   -- array of { pct=number (non-secret), t=number }
+local ttdSampleAccum = 0
+local ttdDispAccum   = 0
+
+local function TtdClear()
+    for i = #ttdSamples, 1, -1 do ttdSamples[i] = nil end
+    ttdSampleAccum = 0
+    ttdDispAccum   = 0
+end
+
+local function TtdPushSample()
+    if not UnitExists("target") then return end
+    if not UnitCanAttack("player", "target") then return end
+    local pct = TtdGetHealthPct()   -- non-secret via StatusBar extraction
+    local t   = GetTime()
+    ttdSamples[#ttdSamples + 1] = { pct = pct, t = t }
+    -- Trim entries older than the rolling window
+    local cutoff = t - TTD_WINDOW_SECS
+    while #ttdSamples > 1 and ttdSamples[1].t < cutoff do
+        table.remove(ttdSamples, 1)
+    end
+end
+
+local function TtdEstimate()
+    if #ttdSamples < 2 then return nil end
+    local oldest = ttdSamples[1]
+    local newest = ttdSamples[#ttdSamples]
+    local elapsed = newest.t - oldest.t
+    if elapsed < TTD_MIN_DATA_SECS then return nil end
+    local lost = oldest.pct - newest.pct
+    if lost <= 0 then return nil end            -- target not taking damage
+    local secs = newest.pct / (lost / elapsed)
+    if secs < 0 then return nil end
+    return secs
+end
+
+TtdApplySettings = function()
+    if not ttdFrame or not ttdLockBtn then return end
+    local s = UIThingsDB.combat
+    -- Font — same as combat timer
+    if s.font and s.fontSize then
+        local smallSize = math.max(8, math.floor(s.fontSize * 0.65))
+        ttdLabel:SetFont(s.font, smallSize, "OUTLINE")
+        ttdText:SetFont(s.font, s.fontSize, "OUTLINE")
+    end
+    -- Color — same in-combat color as combat timer
+    local c = s.colorInCombat or { r = 1, g = 1, b = 1 }
+    ttdText:SetTextColor(c.r, c.g, c.b)
+    ttdLabel:SetTextColor(c.r * 0.6, c.g * 0.6, c.b * 0.6)
+    -- Position (CENTER anchor, stored as x/y offsets from UIParent center)
+    ttdFrame:ClearAllPoints()
+    local pos = s.ttdPos
+    if pos then
+        ttdFrame:SetPoint("CENTER", UIParent, "CENTER", pos.x, pos.y)
+    else
+        ttdFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -30)
+    end
+    -- Lock
+    local locked = (s.ttdLocked ~= false)
+    if locked then
+        ttdFrame:EnableMouse(false)
+        ttdFrame:SetBackdrop(nil)
+        ttdLockBtn:SetAlpha(0.45)
+        ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+    else
+        ttdFrame:EnableMouse(true)
+        ttdFrame:SetBackdrop({
+            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        ttdFrame:SetBackdropColor(0, 0, 0, 0.5)
+        ttdLockBtn:SetAlpha(1)
+        ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+    end
+    TtdRefreshDisplay()
+end
+
+function addonTable.Combat.TtdApplySettings()
+    TtdApplySettings()
+    TtdRefreshDisplay()
+end
+
+TtdRefreshDisplay = function()
+    if not ttdFrame then return end
+    local s = UIThingsDB.combat
+    if not s.enabled or s.ttdEnabled == false then
+        ttdFrame:Hide(); return
+    end
+    -- Show anchor text when unlocked so the frame can be positioned out of combat
+    if not inCombat or not UnitExists("target") or not UnitCanAttack("player", "target") then
+        if s.ttdLocked == false then
+            ttdLabel:SetText("TTD")
+            ttdText:SetText("|cFF00FF00Anchor|r")
+            ttdFrame:Show()
+        else
+            ttdFrame:Hide()
+        end
+        return
+    end
+    ttdFrame:Show()
+    ttdLabel:SetText("TTD")
+    local secs = TtdEstimate()
+    if secs then
+        local m = math.floor(secs / 60)
+        local sec = math.floor(secs % 60)
+        ttdText:SetFormattedText("%02d:%02d", m, sec)
+    else
+        ttdText:SetText("--:--")
+    end
+end
+
+local ttdOnUpdateAccum = 0
+local function TtdOnUpdate(self, elapsed)
+    if not inCombat then return end
+    ttdSampleAccum = ttdSampleAccum + elapsed
+    if ttdSampleAccum >= TTD_SAMPLE_INTERVAL then
+        ttdSampleAccum = 0
+        TtdPushSample()
+    end
+    ttdOnUpdateAccum = ttdOnUpdateAccum + elapsed
+    if ttdOnUpdateAccum >= 1.0 then
+        ttdOnUpdateAccum = 0
+        TtdRefreshDisplay()
+    end
+end
+
+local function InitTTD()
+    ttdFrame = CreateFrame("Frame", "UIThingsTTDTimer", UIParent, "BackdropTemplate")
+    ttdFrame:SetSize(130, 42)
+    ttdFrame:SetMovable(true)
+    ttdFrame:SetClampedToScreen(true)
+    ttdFrame:RegisterForDrag("LeftButton")
+    ttdFrame:SetFrameStrata("MEDIUM")
+
+    ttdFrame:SetScript("OnDragStart", ttdFrame.StartMoving)
+    ttdFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local cx, cy = self:GetCenter()
+        local ux, uy = UIParent:GetCenter()
+        UIThingsDB.combat.ttdPos = {
+            x = math.floor(cx - ux + 0.5),
+            y = math.floor(cy - uy + 0.5),
+        }
+    end)
+    ttdFrame:SetScript("OnUpdate", TtdOnUpdate)
+
+    -- "TTD" label (small, dim — sits above the time value)
+    ttdLabel = ttdFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ttdLabel:SetPoint("TOPLEFT", 6, -4)
+    ttdLabel:SetText("TTD")
+
+    -- Time value (large, matches combat timer)
+    ttdText = ttdFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    ttdText:SetPoint("BOTTOMLEFT", 6, 6)
+    ttdText:SetPoint("BOTTOMRIGHT", -22, 6)
+    ttdText:SetJustifyH("CENTER")
+    ttdText:SetText("--:--")
+
+    -- Lock button (always interactive, even when frame mouse is disabled)
+    ttdLockBtn = CreateFrame("Button", nil, ttdFrame)
+    ttdLockBtn:SetSize(16, 16)
+    ttdLockBtn:SetPoint("RIGHT", ttdFrame, "RIGHT", -3, 0)
+    ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+    ttdLockBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    ttdLockBtn:SetScript("OnClick", function()
+        UIThingsDB.combat.ttdLocked = not UIThingsDB.combat.ttdLocked
+        TtdApplySettings()
+    end)
+    ttdLockBtn:EnableMouse(true)
+
+    -- Event frame: reset samples on target change or combat transitions
+    local evtFrame = CreateFrame("Frame")
+    evtFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+    evtFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    evtFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    evtFrame:SetScript("OnEvent", function(self, event)
+        TtdClear()
+        TtdRefreshDisplay()
+    end)
+
+    TtdApplySettings()
+    ttdFrame:Hide()
 end
 
 -- Combat Logging by Instance Difficulty
@@ -1209,10 +1422,12 @@ end
 EventBus.Register("PLAYER_LOGIN", function()
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(1, Init)
+        addonTable.Core.SafeAfter(1, InitTTD)
         addonTable.Core.SafeAfter(1, InitReminders)
         addonTable.Core.SafeAfter(1, ApplyLogFrameEvents)
     elseif C_Timer and C_Timer.After then
         C_Timer.After(1, Init)
+        C_Timer.After(1, InitTTD)
         C_Timer.After(1, InitReminders)
         C_Timer.After(1, ApplyLogFrameEvents)
     end

@@ -11,13 +11,42 @@ table.insert(Widgets.moduleInits, function()
     local groupSize = 0
     local cachedText = "|cFF888888Ready Check|r"
 
+    -- Combat-safe name cache: UnitName() returns secret strings during combat,
+    -- which cannot be used as table keys. Cache is refreshed on roster changes
+    -- outside combat and on PLAYER_REGEN_ENABLED.
+    local nameCache = {} -- [unit] = shortName
+    local cachedPlayerShort = nil
+
     local function GetShortName(name)
         if not name then return nil end
         return name:match("^([^%-]+)") or name
     end
 
+    local function RefreshNameCache()
+        if InCombatLockdown() then return end
+        wipe(nameCache)
+        cachedPlayerShort = GetShortName(UnitName("player"))
+        nameCache["player"] = cachedPlayerShort
+        local members = GetNumGroupMembers()
+        if IsInRaid() then
+            for i = 1, members do
+                local raidName = GetRaidRosterInfo(i)
+                if raidName then
+                    nameCache["raid" .. i] = GetShortName(raidName)
+                end
+            end
+        elseif IsInGroup() then
+            for i = 1, members - 1 do
+                local name = UnitName("party" .. i)
+                if name then
+                    nameCache["party" .. i] = GetShortName(name)
+                end
+            end
+        end
+    end
+
     local function GetPlayerShortName()
-        return GetShortName(UnitName("player"))
+        return cachedPlayerShort or GetShortName(UnitName("player"))
     end
 
     local function UpdateCachedText()
@@ -52,9 +81,14 @@ table.insert(Widgets.moduleInits, function()
         wipe(memberStatus)
         groupSize = GetNumGroupMembers()
         local playerName = GetPlayerShortName()
+        -- Refresh cache if possible (may be stale if roster changed mid-combat)
+        if not InCombatLockdown() then
+            RefreshNameCache()
+        end
 
         if IsInRaid() then
             for i = 1, groupSize do
+                -- GetRaidRosterInfo returns non-secret names from the roster cache
                 local name = GetRaidRosterInfo(i)
                 if name then
                     local short = GetShortName(name)
@@ -64,11 +98,11 @@ table.insert(Widgets.moduleInits, function()
         elseif IsInGroup() then
             -- Player is always ready
             memberStatus[playerName] = "ready"
-            -- party1..N (player counts in GetNumGroupMembers so loop to N-1)
+            -- Use cached names for party members (UnitName returns secrets in combat)
             for i = 1, groupSize - 1 do
-                local name = UnitName("party" .. i)
-                if name then
-                    memberStatus[GetShortName(name)] = "unknown"
+                local short = nameCache["party" .. i]
+                if short then
+                    memberStatus[short] = "unknown"
                 end
             end
         end
@@ -82,8 +116,8 @@ table.insert(Widgets.moduleInits, function()
 
     local function OnReadyCheckResponse(event, unit, isReady)
         if not checkActive then return end
-        local name = UnitName(unit)
-        local short = GetShortName(name)
+        -- Use cached name to avoid secret-value-as-table-key errors during combat
+        local short = nameCache[unit]
         if not short then return end
         -- Never override player's own "ready" status
         if short == GetPlayerShortName() then return end
@@ -98,15 +132,22 @@ table.insert(Widgets.moduleInits, function()
 
     rcFrame.ApplyEvents = function(enabled)
         if enabled then
+            EventBus.Register("GROUP_ROSTER_UPDATE", RefreshNameCache, "W:ReadyCheck")
+            EventBus.Register("PLAYER_ENTERING_WORLD", RefreshNameCache, "W:ReadyCheck")
+            EventBus.Register("PLAYER_REGEN_ENABLED", RefreshNameCache, "W:ReadyCheck")
             EventBus.Register("READY_CHECK", OnReadyCheck, "W:ReadyCheck")
             EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckResponse, "W:ReadyCheck")
             EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:ReadyCheck")
         else
+            EventBus.Unregister("GROUP_ROSTER_UPDATE", RefreshNameCache)
+            EventBus.Unregister("PLAYER_ENTERING_WORLD", RefreshNameCache)
+            EventBus.Unregister("PLAYER_REGEN_ENABLED", RefreshNameCache)
             EventBus.Unregister("READY_CHECK", OnReadyCheck)
             EventBus.Unregister("READY_CHECK_CONFIRM", OnReadyCheckResponse)
             EventBus.Unregister("READY_CHECK_FINISHED", OnReadyCheckFinished)
             checkActive = false
             wipe(memberStatus)
+            wipe(nameCache)
             groupSize = 0
             cachedText = "|cFF888888Ready Check|r"
         end

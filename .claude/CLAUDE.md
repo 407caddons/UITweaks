@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with LunaUITweaks.
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, talent change reminders, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, action bar skinning, custom cast bar, chat skinning, interrupt cooldown tracker, info widgets, damage meter, XP/rep bar, and addon version checking. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, loot checklist, combat timer, scrolling combat text (SCT), custom layout frames, personal order alerts, AH filtering, action bar skinning, custom cast bar, chat skinning, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
@@ -28,7 +28,7 @@ addonTable.ModuleName = {}
 
 The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** and on `ADDON_LOADED`:
 1. Applies default settings to `UIThingsDB` (recursive merge preserving existing user values)
-2. Calls `Initialize()` on Minimap, Frames, TalentReminder, Widgets, ChatSkin, QuestReminder
+2. Calls `Initialize()` on Minimap, Frames, TalentReminder, Widgets, ChatSkin, QuestReminder, DamageMeter
 3. Registers slash commands (`/luit`, `/luithings`) and Addon Compartment function
 4. **Does NOT call `Config.Initialize()`** — the config window is built lazily on first open so companion addons can register their panels first
 
@@ -37,7 +37,10 @@ The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** a
 - **`UIThingsDB`** — All module settings by module key
 - **`LunaUITweaks_TalentReminders`** — User talent reminder definitions
 - **`LunaUITweaks_ReagentData`** — Cross-character reagent inventory data
+- **`LunaUITweaks_QuestReminders`** — User quest reminder definitions
+- **`LunaUITweaks_WarehousingData`** — Bank/warehouse item tracking data
 - **`LunaUITweaks_CharacterData`** — Central character registry
+- **`LunaUITweaks_LootChecklist`** *(per-character)* — Loot checklist tracking
 
 Defaults in Core.lua's `DEFAULTS` table, merged via `ApplyDefaults()`. Tables with an `r` field are treated as color values (leaf, not recursed into).
 
@@ -56,30 +59,43 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | File | Module Key | Purpose |
 |---|---|---|
 | Core.lua | `Core` | Initialization, defaults, logging, timer utility |
+| EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
+| Profiler.lua | `Profiler` | Performance profiling and CPU usage tracking |
 | config/ConfigMain.lua | `Config` | Config window shell, tab navigation, panel wiring |
 | config/Helpers.lua | `ConfigHelpers` | Shared UI helpers (font dropdowns, section headers, color swatches) |
 | config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module |
+| Config.lua | — | Legacy stub entry point for config (delegates to ConfigMain) |
 | ObjectiveTracker.lua | `ObjectiveTracker` | Custom quest/WQ/achievement tracker with super-track restore |
+| QuestReminder.lua | `QuestReminder` | Quest reminder notifications |
+| QuestAuto.lua | — | Quest auto-accept and auto-turn-in |
 | MinimapButton.lua | `Minimap` | Draggable minimap button |
 | MinimapCustom.lua | — | Custom minimap frame (shape, border, zone text, clock) |
 | Vendor.lua | `Vendor` | Auto-repair, sell greys, durability warnings |
 | Loot.lua | `Loot` | Loot toast notifications with quality filtering and item level |
+| LootChecklist.lua | — | Per-character loot checklist tracking |
 | Combat.lua | `Combat` | In-combat duration display (MM:SS) |
-| Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, SCT, auto-invite |
+| SCT.lua | `SCT` | Scrolling combat text |
+| Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, auto-invite |
 | Frames.lua | `Frames` | User-created colored rectangles for UI layout |
 | TalentReminder.lua | `TalentReminder` | Zone-based talent/spec change alerts |
+| TalentManager.lua | `TalentManager` | Talent loadout management and switching |
 | ActionBars.lua | `ActionBars` | Action bar skinning, button spacing/sizing, bar offsets |
 | CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
 | ChatSkin.lua | `ChatSkin` | Chat frame skinning, keyword highlighting, timestamps |
 | Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
+| MplusTimer.lua | — | Mythic+ dungeon timer display |
+| Coordinates.lua | — | Map coordinates display |
 | XpBar.lua | `XpBar` | Custom XP bar with rested/pending fills and rep bar at max level |
 | DamageMeter.lua | `DamageMeter` | Session damage/healing meter using C_DamageMeter API |
-| EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
-| AddonComm.lua | `AddonComm` | Centralized addon communication message bus |
+| AddonComm.lua | `Comm` | Centralized addon communication message bus |
 | Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
+| Warehousing.lua | — | Bank/warehouse item management |
+| QueueTimer.lua | `QueueTimer` | Queue wait timer display |
 | AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
+| games/Games.lua | `Games` | Mini-game framework and launcher |
+| games/*.lua | — | Individual games (Snek, Bombs, Gems, Cards, Tiles, Boxes, Slide, Lights) |
 
 ## EventBus
 
@@ -122,7 +138,9 @@ Because the config window is built lazily on first open, companion registrations
 
 ## Config Navigation Order
 
-Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–27. Companion panels are inserted at 27, 28, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–26. Companion panels are inserted at 27, 28, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+
+Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6=SCT, 7=CastBar, 8=Kick, 9=MplusTimer, 10=ActionBars, 11=Minimap, 12=Coordinates, 13=Frames, 14=ChatSkin, 15=DamageMeter, 16=Vendor, 17=Loot, 18=Notifications, 19=Reagents, 20=TalentManager, 21=Talent, 22=Misc, 23=Widgets, 24=Warehousing, 25=QueueTimer, 26=LootChecklist, then companions, then AddonVersions (last).
 
 ## ObjectiveTracker Taint — Confirmed Root Cause
 

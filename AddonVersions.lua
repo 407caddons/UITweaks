@@ -9,6 +9,18 @@ local KEYSTONE_ITEM_ID = 158923
 -- Players without the addon get { version = nil }
 local playerData = {}
 
+-- Combat-safe name cache: UnitName() returns a secret string during combat,
+-- which cannot be used as a table key. Cache the player name once (never changes)
+-- and defer roster scans that use UnitName as keys until combat ends.
+local cachedPlayerName = nil
+
+local function GetPlayerName()
+    if not cachedPlayerName then
+        cachedPlayerName = UnitName("player")
+    end
+    return cachedPlayerName
+end
+
 -- Callback for when data changes (set by config panel)
 AddonVersions.onVersionsUpdated = nil
 
@@ -92,9 +104,13 @@ end
 
 -- Build the full party/raid list, marking members without the addon
 local function UpdatePartyList()
+    -- UnitName() returns secret strings during combat — cannot use as table keys.
+    -- Defer roster scan until combat ends.
+    if InCombatLockdown() then return end
+
     -- Collect current group member names
     local groupNames = {}
-    local playerName = UnitName("player")
+    local playerName = GetPlayerName()
     groupNames[playerName] = true
 
     if IsInGroup() then
@@ -167,7 +183,7 @@ end
 function AddonVersions.RefreshVersions()
     wipe(playerData)
     -- Add self
-    local playerName = UnitName("player")
+    local playerName = GetPlayerName()
     local keyName, keyLevel, keyMapID = GetPlayerKeystone()
     playerData[playerName] = {
         version = VERSION,
@@ -196,7 +212,7 @@ local function OnGroupRosterUpdate()
     else
         addonTable.Comm.CancelThrottle("VER_HELLO")
         wipe(playerData)
-        local playerName = UnitName("player")
+        local playerName = GetPlayerName()
         local keyName, keyLevel, keyMapID = GetPlayerKeystone()
         playerData[playerName] = {
             version = VERSION,
@@ -212,3 +228,14 @@ local function OnGroupRosterUpdate()
 end
 
 addonTable.EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "AddonVersions")
+
+-- Catch roster changes that were skipped during combat (UpdatePartyList returns early in combat)
+addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if IsInGroup() then
+        UpdatePartyList()
+        ScheduleBroadcast()
+        if AddonVersions.onVersionsUpdated then
+            AddonVersions.onVersionsUpdated()
+        end
+    end
+end, "AddonVersions")

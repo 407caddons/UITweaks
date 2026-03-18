@@ -17,7 +17,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(600, 700) -- Width will be adjusted, Height enough for content
+    child:SetSize(600, 850) -- Width will be adjusted, Height enough for content
     scrollFrame:SetScrollChild(child)
 
     -- Auto-adjust width
@@ -61,7 +61,36 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateCombat()
     end)
 
+    -- Time to Die Timer
+    Helpers.CreateSectionHeader(child, "Time to Die Timer", -98)
+
+    local ttdDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ttdDesc:SetPoint("TOPLEFT", 20, -120)
+    ttdDesc:SetText("Estimates time until your target dies based on incoming damage rate.")
+    ttdDesc:SetTextColor(0.7, 0.7, 0.7)
+
+    local enableTTDBtn = CreateFrame("CheckButton", "UIThingsTTDEnableCheck", child,
+        "ChatConfigCheckButtonTemplate")
+    enableTTDBtn:SetPoint("TOPLEFT", 20, -140)
+    _G[enableTTDBtn:GetName() .. "Text"]:SetText("Enable Time to Die Timer")
+    enableTTDBtn:SetChecked(UIThingsDB.combat.ttdEnabled ~= false)
+    enableTTDBtn:SetScript("OnClick", function(self)
+        UIThingsDB.combat.ttdEnabled = not not self:GetChecked()
+        UpdateCombat()
+    end)
+
+    local lockTTDBtn = CreateFrame("CheckButton", "UIThingsTTDLockCheck", child,
+        "ChatConfigCheckButtonTemplate")
+    lockTTDBtn:SetPoint("TOPLEFT", 20, -160)
+    _G[lockTTDBtn:GetName() .. "Text"]:SetText("Lock Time to Die Timer")
+    lockTTDBtn:SetChecked(UIThingsDB.combat.ttdLocked ~= false)
+    lockTTDBtn:SetScript("OnClick", function(self)
+        UIThingsDB.combat.ttdLocked = not not self:GetChecked()
+        UpdateCombat()
+    end)
+
     -- Font Selector (Simple Dropdown)
+    Helpers.CreateSectionHeader(child, "Timer Font & Color", -198)
     Helpers.CreateFontDropdown(
         child,
         "UIThingsFontDropdown",
@@ -72,12 +101,12 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
             UpdateCombat()
         end,
         20,
-        -110
+        -220
     )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsFontSizeSlider", child, "OptionsSliderTemplate")
-    fontSizeSlider:SetPoint("TOPLEFT", 20, -180)
+    fontSizeSlider:SetPoint("TOPLEFT", 20, -290)
     fontSizeSlider:SetMinMaxValues(10, 32)
     fontSizeSlider:SetValueStep(1)
     fontSizeSlider:SetObeyStepOnDrag(true)
@@ -103,7 +132,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
             UIThingsDB.combat.colorInCombat = { r = r, g = g, b = b }
             UpdateCombat()
         end,
-        -230
+        -340
     )
 
     Helpers.CreateColorPicker(child, "UIThingsCombatColorOut", "Out Combat Color",
@@ -115,20 +144,20 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
             UIThingsDB.combat.colorOutCombat = { r = r, g = g, b = b }
             UpdateCombat()
         end,
-        -260
+        -370
     )
 
     -- Auto Combat Logging Section
-    Helpers.CreateSectionHeader(child, "Auto Combat Logging", -295)
+    Helpers.CreateSectionHeader(child, "Auto Combat Logging", -405)
 
     -- Dungeons
     local clDungeonLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    clDungeonLabel:SetPoint("TOPLEFT", 20, -323)
+    clDungeonLabel:SetPoint("TOPLEFT", 20, -433)
     clDungeonLabel:SetText("Dungeons:")
 
     local clDNormalCheck = CreateFrame("CheckButton", "UIThingsCLDNormalCheck", child,
         "ChatConfigCheckButtonTemplate")
-    clDNormalCheck:SetPoint("TOPLEFT", 100, -320)
+    clDNormalCheck:SetPoint("TOPLEFT", 100, -430)
     clDNormalCheck:SetHitRectInsets(0, -60, 0, 0)
     _G[clDNormalCheck:GetName() .. "Text"]:SetText("Normal")
     clDNormalCheck:SetChecked(UIThingsDB.combat.combatLog.dungeonNormal)
@@ -180,12 +209,12 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     -- Raids
     local clRaidLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    clRaidLabel:SetPoint("TOPLEFT", 20, -353)
+    clRaidLabel:SetPoint("TOPLEFT", 20, -463)
     clRaidLabel:SetText("Raids:")
 
     local clRLFRCheck = CreateFrame("CheckButton", "UIThingsCLRLFRCheck", child,
         "ChatConfigCheckButtonTemplate")
-    clRLFRCheck:SetPoint("TOPLEFT", 100, -350)
+    clRLFRCheck:SetPoint("TOPLEFT", 100, -460)
     clRLFRCheck:SetHitRectInsets(0, -40, 0, 0)
     _G[clRLFRCheck:GetName() .. "Text"]:SetText("LFR")
     clRLFRCheck:SetChecked(UIThingsDB.combat.combatLog.raidLFR)
@@ -236,10 +265,10 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Combat Reminders Section
-    Helpers.CreateSectionHeader(child, "Combat Reminders", -395)
+    Helpers.CreateSectionHeader(child, "Combat Reminders", -505)
 
     local reminderDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    reminderDesc:SetPoint("TOPLEFT", 20, -418)
+    reminderDesc:SetPoint("TOPLEFT", 20, -528)
     reminderDesc:SetText("Show a reminder frame when loading in without these buffs:")
 
     local function UpdateReminders()
@@ -250,7 +279,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     local reminderLockBtn = CreateFrame("CheckButton", "UIThingsReminderLockCheck", child,
         "ChatConfigCheckButtonTemplate")
-    reminderLockBtn:SetPoint("TOPLEFT", 20, -438)
+    reminderLockBtn:SetPoint("TOPLEFT", 20, -548)
     _G[reminderLockBtn:GetName() .. "Text"]:SetText("Lock Reminder Frame")
     reminderLockBtn:SetChecked(UIThingsDB.combat.reminders.locked)
     reminderLockBtn:SetScript("OnClick", function(self)
@@ -260,7 +289,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     local reminderGroupCheck = CreateFrame("CheckButton", "UIThingsReminderGroupCheck", child,
         "ChatConfigCheckButtonTemplate")
-    reminderGroupCheck:SetPoint("TOPLEFT", 180, -438) -- Right of Lock
+    reminderGroupCheck:SetPoint("TOPLEFT", 180, -548) -- Right of Lock
     _G[reminderGroupCheck:GetName() .. "Text"]:SetText("Only in Group")
     reminderGroupCheck:SetChecked(UIThingsDB.combat.reminders.onlyInGroup)
     reminderGroupCheck:SetScript("OnClick", function(self)
@@ -295,12 +324,12 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
             UpdateReminders()
         end,
         20,
-        -468
+        -578
     )
 
     -- Reminder Font Size Slider
     local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", child, "OptionsSliderTemplate")
-    reminderFontSizeSlider:SetPoint("TOPLEFT", 20, -530)
+    reminderFontSizeSlider:SetPoint("TOPLEFT", 20, -640)
     reminderFontSizeSlider:SetMinMaxValues(8, 24)
     reminderFontSizeSlider:SetValueStep(1)
     reminderFontSizeSlider:SetObeyStepOnDrag(true)
@@ -319,7 +348,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     -- Reminder Icon Size Slider
     local reminderIconSizeSlider = CreateFrame("Slider", "UIThingsReminderIconSizeSlider", child, "OptionsSliderTemplate")
-    reminderIconSizeSlider:SetPoint("TOPLEFT", 20, -565)
+    reminderIconSizeSlider:SetPoint("TOPLEFT", 20, -675)
     reminderIconSizeSlider:SetMinMaxValues(16, 48)
     reminderIconSizeSlider:SetValueStep(1)
     reminderIconSizeSlider:SetObeyStepOnDrag(true)
@@ -338,7 +367,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     local flaskCheck = CreateFrame("CheckButton", "UIThingsReminderFlaskCheck", child,
         "ChatConfigCheckButtonTemplate")
-    flaskCheck:SetPoint("TOPLEFT", 20, -595)
+    flaskCheck:SetPoint("TOPLEFT", 20, -705)
     flaskCheck:SetHitRectInsets(0, -60, 0, 0)
     _G[flaskCheck:GetName() .. "Text"]:SetText("Flask")
     flaskCheck:SetChecked(UIThingsDB.combat.reminders.flask)
@@ -394,7 +423,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     -- Clear Consumable Usage Button
     local clearUsageBtn = CreateFrame("Button", "UIThingsClearUsageBtn", child, "UIPanelButtonTemplate")
     clearUsageBtn:SetSize(180, 24)
-    clearUsageBtn:SetPoint("TOPLEFT", 20, -625)
+    clearUsageBtn:SetPoint("TOPLEFT", 20, -735)
     clearUsageBtn:SetText("Clear Consumable Usage")
     clearUsageBtn:SetScript("OnClick", function()
         if addonTable.Combat and addonTable.Combat.ClearConsumableUsage then

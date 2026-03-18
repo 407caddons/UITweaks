@@ -491,6 +491,8 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
     end)
 end
 
+local ImportStringMatchesCurrent  -- forward declaration; defined after DecodeImportString
+
 function TalentManager.RefreshBuildList()
     if not scrollContent then return end
 
@@ -538,6 +540,8 @@ function TalentManager.RefreshBuildList()
                                 if reminder.talents and addonTable.TalentReminder and addonTable.TalentReminder.CompareTalents then
                                     local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
                                     isMatch = (#mismatches == 0)
+                                elseif reminder.importString then
+                                    isMatch = ImportStringMatchesCurrent(reminder.importString)
                                 end
 
                                 if tonumber(instanceID) == 0 then
@@ -1563,6 +1567,64 @@ local function DecodeImportString(importString)
     return loadoutEntryInfo, nil
 end
 
+-- Compare an import string against the player's current talents node-by-node.
+-- Returns true only if every node in the import string matches the current config
+-- AND the current config has no extra user-purchased nodes beyond what the string specifies.
+ImportStringMatchesCurrent = function(importString)
+    if not importString or not C_ClassTalents or not C_Traits then return false end
+    local configID = C_ClassTalents.GetActiveConfigID()
+    if not configID then return false end
+    local specID = PlayerUtil.GetCurrentSpecID and PlayerUtil.GetCurrentSpecID()
+    if not specID then return false end
+    local treeID = C_ClassTalents.GetTraitTreeForSpec(specID)
+    if not treeID then return false end
+
+    -- Decode the saved import string
+    local loadoutEntryInfo, err = DecodeImportString(importString)
+    if not loadoutEntryInfo then return false end
+
+    -- Build a map of what the import string expects: nodeID -> {entryID, rank}
+    local expected = {}
+    for _, entry in ipairs(loadoutEntryInfo) do
+        expected[entry.nodeID] = {
+            entryID = entry.selectionEntryID or entry.entryID,
+            rank    = entry.ranksPurchased or 1,
+        }
+    end
+
+    -- Build current talent map from the live tree
+    local current = {}
+    for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID)) do
+        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+        if nodeInfo and nodeInfo.activeEntry and (nodeInfo.currentRank or 0) > 0 then
+            current[nodeID] = {
+                entryID = nodeInfo.activeEntry.entryID,
+                rank    = nodeInfo.currentRank or 0,
+            }
+        end
+    end
+
+    -- Every node in expected must match current
+    for nodeID, exp in pairs(expected) do
+        local cur = current[nodeID]
+        if not cur then return false end
+        if exp.entryID and cur.entryID ~= exp.entryID then return false end
+        if cur.rank < exp.rank then return false end
+    end
+
+    -- No extra user-purchased nodes beyond what the import expects.
+    -- Use CanRefundRank to distinguish user-purchased nodes from auto-granted ones.
+    for nodeID, cur in pairs(current) do
+        if not expected[nodeID] then
+            if C_Traits.CanRefundRank(configID, nodeID) then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
 -- ============================================================
 -- Load Build
 -- ============================================================
@@ -1636,6 +1698,11 @@ function TalentManager.LoadBuild(reminder)
         else
             Log("TalentManager", "Applied imported build: " .. (reminder.name or "Unknown"), LogLevel.INFO)
         end
+        addonTable.Core.SafeAfter(0.5, function()
+            if mainPanel and mainPanel:IsShown() then
+                TalentManager.RefreshBuildList()
+            end
+        end)
         return
     end
 
@@ -1649,6 +1716,11 @@ function TalentManager.LoadBuild(reminder)
         local success = addonTable.TalentReminder.ApplyTalents(reminder)
         if success then
             Log("TalentManager", "Applied build: " .. (reminder.name or "Unknown"), LogLevel.INFO)
+            addonTable.Core.SafeAfter(0.5, function()
+                if mainPanel and mainPanel:IsShown() then
+                    TalentManager.RefreshBuildList()
+                end
+            end)
         else
             Log("TalentManager", "Failed to apply build - may need to be out of combat", LogLevel.WARN)
         end

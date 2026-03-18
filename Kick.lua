@@ -945,18 +945,26 @@ end
 function Kick.UpdatePartyLayout()
     local container = CreatePartyContainer()
 
-    local yOffset = -30
+    local FRAME_W = 180
+    local FRAME_H = 40
+    local PAD_X = 4
+    local PAD_Y = 4
+    local HEADER_H = 30
+    local columns = math.max(1, UIThingsDB.kick.columns or 4)
+
     local index = 0
 
     local function PlaceFrame(guid)
         local f = partyFrames[guid]
         if not f then return end
+        local col = index % columns
+        local row = math.floor(index / columns)
         f:ClearAllPoints()
-        f:SetPoint("TOPLEFT", container, "TOPLEFT", 5, yOffset)
-        f:SetPoint("RIGHT", container, "RIGHT", -5, 0)
+        f:SetPoint("TOPLEFT", container, "TOPLEFT",
+            5 + col * (FRAME_W + PAD_X),
+            -(HEADER_H + row * (FRAME_H + PAD_Y)))
         f:Show()
         index = index + 1
-        yOffset = yOffset - (f:GetHeight() + 4)
     end
 
     -- Always show player first
@@ -982,8 +990,11 @@ function Kick.UpdatePartyLayout()
         end
     end
 
-    -- Resize container based on actual content
-    container:SetHeight(math.abs(yOffset) + 10)
+    -- Resize container to fit grid
+    local rows = math.ceil(index / columns)
+    local totalW = columns * FRAME_W + (columns - 1) * PAD_X + 10
+    local totalH = HEADER_H + rows * FRAME_H + (rows - 1) * PAD_Y + 10
+    container:SetSize(totalW, totalH)
 
     if index > 0 and UIThingsDB.kick.enabled then
         container:Show()

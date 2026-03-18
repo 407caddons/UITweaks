@@ -59,7 +59,10 @@
       "Bash(tail -120 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Frames/Raid.lua\")",
       "Bash(tail -100 \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Party.lua\")",
       "Bash(wc -l \"/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks_UnitFrames/Config/Party.lua\")",
-      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/config/ConfigMain.lua\")"
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/config/ConfigMain.lua\")",
+      "Bash(while read:*)",
+      "Bash(do wc:*)",
+      "Bash(done)"
     ]
   }
 }

@@ -240,8 +240,14 @@ local function FetchSpellEntries(sessKey, mtype, guid)
                 else
                     local spellName = sp.name
                     if not spellName or spellName == "" then
+                        -- C_Spell.GetSpellName uses async data; returns "" if not yet cached.
+                        -- Fall back to legacy synchronous GetSpellInfo which always resolves.
                         local ok2, n = pcall(C_Spell.GetSpellName, sp.spellID)
-                        spellName = (ok2 and n) or ("Spell " .. sp.spellID)
+                        if ok2 and n and n ~= "" then
+                            spellName = n
+                        else
+                            spellName = GetSpellInfo(sp.spellID) or ("Spell " .. sp.spellID)
+                        end
                     end
                     bySpell[sp.spellID] = { spellId = sp.spellID, name = spellName, total = amt }
                 end
@@ -332,16 +338,16 @@ local function AcquireRow(pool, parent)
     row.bar:SetStatusBarTexture("Interface/Buttons/WHITE8x8")
     row.bar:SetPoint("TOPLEFT")
     row.bar:SetPoint("BOTTOMRIGHT")
-    row.nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.nameFS:SetPoint("LEFT", 4, 0)
-    row.nameFS:SetPoint("RIGHT", -50, 0)
+    row.nameFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.nameFS:SetPoint("LEFT", row.bar, "LEFT", 4, 0)
+    row.nameFS:SetPoint("RIGHT", row.bar, "RIGHT", -50, 0)
     row.nameFS:SetJustifyH("LEFT")
     row.nameFS:SetWordWrap(false)
-    row.valFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.valFS:SetPoint("RIGHT", -4, 0)
+    row.valFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.valFS:SetPoint("RIGHT", row.bar, "RIGHT", -4, 0)
     row.valFS:SetJustifyH("RIGHT")
-    row.dpsFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.dpsFS:SetPoint("BOTTOMRIGHT", -4, 2)
+    row.dpsFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.dpsFS:SetPoint("BOTTOMRIGHT", row.bar, "BOTTOMRIGHT", -4, 2)
     row.dpsFS:SetJustifyH("RIGHT")
     row.dpsFS:Hide()
     pool[#pool + 1] = row
