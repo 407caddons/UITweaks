@@ -336,6 +336,7 @@ local function OnEvent(self, event, ...)
                 minGoldAmount = 10000, -- copper (1 gold = 10000 copper)
                 showItemLevel = true,
                 highlightBagUpgrades = false,
+                autoGreed = false,
             },
             combat = {
                 enabled = false,
@@ -462,23 +463,6 @@ local function OnEvent(self, event, ...)
                 minimapDrawerBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
                 minimapDrawerBorderSize = 2,
                 minimapDrawerBgColor = { r = 0, g = 0, b = 0, a = 0.7 },
-            },
-            sct = {
-                enabled = false,
-                captureToFrames = false,
-                showDamage = true,
-                showHealing = true,
-                showTargetDamage = false,
-                showTargetHealing = false,
-                fontSize = 24,
-                duration = 1.5,
-                critScale = 1.5,
-                scrollDistance = 100,
-                damageColor = { r = 1, g = 0.2, b = 0.2 },
-                healingColor = { r = 0.2, g = 1, b = 0.2 },
-                damageAnchor = { point = "CENTER", x = 150, y = 0 },
-                healingAnchor = { point = "CENTER", x = -150, y = 0 },
-                locked = true,
             },
             talentReminders = {
                 enabled = false,

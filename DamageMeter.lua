@@ -70,7 +70,8 @@ local sessionDurations    = {}  -- durations (seconds) of all fights after last 
 local sessionDurationByID = {}  -- [sessionID] = duration in seconds
 local sessionNameByID     = {}  -- [sessionID] = encounter/combat name (if readable)
 
-local DPS_TYPES = { damage = true, healing = true, damageTaken = true }
+local DPS_TYPES   = { damage = true, healing = true, damageTaken = true }
+local COUNT_TYPES = { interrupts = true, deaths = true, dispels = true }
 
 local function GetOverallDuration()
     local total = 0
@@ -117,6 +118,8 @@ local function FetchEntries(sessKey, mtype)
             -- Only totalAmount needs SafeVal (arithmetic on secret numbers returns garbage).
             if guid and name then
                 local amt      = SafeVal(src.totalAmount)
+                -- Count-based types (interrupts/dispels/deaths) may store count in casts, not totalAmount
+                if amt == 0 and COUNT_TYPES[mtype] then amt = SafeVal(src.casts) end
                 local existing = byGuid[guid]
                 if existing then
                     existing.total = existing.total + amt
@@ -142,20 +145,26 @@ local function FetchEntries(sessKey, mtype)
             if ok and sessData and sessData.combatSources then
                 liveMode = true
                 for i, src in ipairs(sessData.combatSources) do
-                    if type(src.totalAmount) == "number" then
-                        -- UnitName() accepts a secret name string and returns the real display name.
+                    -- All live combat fields are secret — never compare, copy to table only for
+                    -- C-level calls (SetValue/SetMinMaxValues/SetText/string.format).
+                    -- type() is safe on secrets; comparison operators are NOT.
+                    if type(src.totalAmount) == "number" or (COUNT_TYPES[mtype] and type(src.casts) == "number") then
                         local displayName
                         if src.isLocalPlayer then
                             displayName = UnitName("player")
                         else
                             displayName = UnitName(src.name) or src.classFilename or "Unknown"
                         end
+                        -- For count-based types, prefer casts over totalAmount.
+                        -- We store the source ref directly so the render path can read the
+                        -- original secret fields without any Lua-level comparison.
                         byGuid[i] = {
                             guid     = src.sourceGUID,
                             name     = displayName,
                             class    = src.classFilename,
-                            total    = src.totalAmount,
-                            maxTotal = sessData.maxAmount,
+                            src      = src,          -- original API source (secret fields)
+                            sessMax  = sessData.maxAmount, -- secret, for SetMinMaxValues
+                            isCount  = COUNT_TYPES[mtype] or false,
                         }
                     end
                 end
@@ -208,7 +217,7 @@ local function FetchEntries(sessKey, mtype)
         -- Secret values can't be compared so we skip re-sorting.
         for i = 1, #byGuid do
             local d = byGuid[i]
-            if d and type(d.total) == "number" then list[#list + 1] = d end
+            if d then list[#list + 1] = d end
         end
     else
         for _, d in pairs(byGuid) do
@@ -437,10 +446,20 @@ local function RenderPane(idx)
                     row:SetSize(paneW, barH)
                     row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
 
+                    -- All live combat values are secret — use C-level calls only (no Lua comparisons).
+                    -- For count-based types, prefer casts; for DPS types, use totalAmount.
+                    local srcAmt, srcMax
+                    if COUNT_TYPES[mtype] and type(src.casts) == "number" then
+                        srcAmt = src.casts
+                    else
+                        srcAmt = src.totalAmount
+                    end
+                    srcMax = sessData.maxAmount
+
                     -- Bar: SetMinMaxValues/SetValue accept secret values (C-level calls).
                     -- This taints StatusBar geometry but we never call UpdateScrollChildRect.
-                    row.bar:SetMinMaxValues(0, sessData.maxAmount)
-                    row.bar:SetValue(src.totalAmount)
+                    row.bar:SetMinMaxValues(0, srcMax)
+                    row.bar:SetValue(srcAmt)
                     if useClass and src.classFilename then
                         local r, g, b = GetClassColor(src.classFilename)
                         row.bar:SetStatusBarColor(r, g, b, 0.65)
@@ -462,8 +481,8 @@ local function RenderPane(idx)
                     -- handles secret/tainted values. string.format("%d") also safe for counts.
                     -- Concatenate into valFS (same as post-combat path) to avoid overlap with dpsFS.
                     local valText
-                    if mtype == "interrupts" or mtype == "deaths" or mtype == "dispels" then
-                        valText = string.format("%d", src.totalAmount)
+                    if COUNT_TYPES[mtype] then
+                        valText = string.format("%d", srcAmt)
                     else
                         valText = AbbreviateNumbers(src.totalAmount)
                         if DPS_TYPES[mtype] then

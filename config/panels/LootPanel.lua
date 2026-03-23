@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 760)
+    child:SetSize(650, 785)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -269,13 +269,28 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         end
     end)
 
+    -- Auto Greed Checkbox
+    local autoGreedBtn = CreateFrame("CheckButton", "UIThingsLootAutoGreedCheck", child, "ChatConfigCheckButtonTemplate")
+    autoGreedBtn:SetPoint("TOPLEFT", 20, -490)
+    _G[autoGreedBtn:GetName() .. "Text"]:SetText("Auto Greed / Transmog Roll")
+    autoGreedBtn:SetChecked(UIThingsDB.loot.autoGreed)
+    autoGreedBtn:SetScript("OnClick", function(self)
+        UIThingsDB.loot.autoGreed = self:GetChecked()
+        LootUpdateSettings()
+    end)
+
+    local autoGreedHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    autoGreedHelp:SetPoint("TOPLEFT", 45, -513)
+    autoGreedHelp:SetTextColor(0.5, 0.5, 0.5)
+    autoGreedHelp:SetText("When you can't need on an item, automatically rolls greed or transmog so you only click for need")
+
     -- == Currency & Gold Notifications ==
-    Helpers.CreateSectionHeader(child, "Currency & Gold Notifications", -510)
+    Helpers.CreateSectionHeader(child, "Currency & Gold Notifications", -535)
 
     -- Show Currency Checkbox
     local currencyBtn = CreateFrame("CheckButton", "UIThingsLootCurrencyCheck", child,
         "ChatConfigCheckButtonTemplate")
-    currencyBtn:SetPoint("TOPLEFT", 20, -535)
+    currencyBtn:SetPoint("TOPLEFT", 20, -560)
     _G[currencyBtn:GetName() .. "Text"]:SetText("Show Currency Gain Toasts")
     currencyBtn:SetChecked(UIThingsDB.loot.showCurrency)
     currencyBtn:SetScript("OnClick", function(self)
@@ -284,14 +299,14 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local currencyHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    currencyHelp:SetPoint("TOPLEFT", 45, -558)
+    currencyHelp:SetPoint("TOPLEFT", 45, -583)
     currencyHelp:SetTextColor(0.5, 0.5, 0.5)
     currencyHelp:SetText("Shows a toast when you gain currency (Valorstones, Crests, Conquest, etc.)")
 
     -- Show Gold Checkbox
     local goldBtn = CreateFrame("CheckButton", "UIThingsLootGoldCheck", child,
         "ChatConfigCheckButtonTemplate")
-    goldBtn:SetPoint("TOPLEFT", 20, -580)
+    goldBtn:SetPoint("TOPLEFT", 20, -605)
     _G[goldBtn:GetName() .. "Text"]:SetText("Show Gold Loot Toasts")
     goldBtn:SetChecked(UIThingsDB.loot.showGold)
     goldBtn:SetScript("OnClick", function(self)
@@ -302,7 +317,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     -- Min Gold Slider
     local minGoldValue = (UIThingsDB.loot.minGoldAmount or 10000) / 10000 -- Convert copper to gold
     local minGoldSlider = CreateFrame("Slider", "UIThingsLootMinGoldSlider", child, "OptionsSliderTemplate")
-    minGoldSlider:SetPoint("TOPLEFT", 20, -625)
+    minGoldSlider:SetPoint("TOPLEFT", 20, -650)
     minGoldSlider:SetMinMaxValues(0, 100)
     minGoldSlider:SetValueStep(1)
     minGoldSlider:SetObeyStepOnDrag(true)
@@ -344,14 +359,14 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local goldHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    goldHelp:SetPoint("TOPLEFT", 45, -602)
+    goldHelp:SetPoint("TOPLEFT", 45, -627)
     goldHelp:SetTextColor(0.5, 0.5, 0.5)
     goldHelp:SetText("Shows a toast when you loot gold above the minimum threshold")
 
     -- Show Item Level Checkbox
     local ilvlBtn = CreateFrame("CheckButton", "UIThingsLootIlvlCheck", child,
         "ChatConfigCheckButtonTemplate")
-    ilvlBtn:SetPoint("TOPLEFT", 20, -660)
+    ilvlBtn:SetPoint("TOPLEFT", 20, -685)
     _G[ilvlBtn:GetName() .. "Text"]:SetText("Show Item Level & Upgrade Indicator")
     ilvlBtn:SetChecked(UIThingsDB.loot.showItemLevel)
     ilvlBtn:SetScript("OnClick", function(self)
@@ -359,14 +374,14 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local ilvlHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ilvlHelp:SetPoint("TOPLEFT", 45, -683)
+    ilvlHelp:SetPoint("TOPLEFT", 45, -708)
     ilvlHelp:SetTextColor(0.5, 0.5, 0.5)
     ilvlHelp:SetText("Shows item level on gear toasts with green +X for upgrades")
 
     -- Highlight Bag Upgrades Checkbox
     local bagUpgradeBtn = CreateFrame("CheckButton", "UIThingsLootBagUpgradeCheck", child,
         "ChatConfigCheckButtonTemplate")
-    bagUpgradeBtn:SetPoint("TOPLEFT", 20, -700)
+    bagUpgradeBtn:SetPoint("TOPLEFT", 20, -725)
     _G[bagUpgradeBtn:GetName() .. "Text"]:SetText("Highlight ilvl Upgrades in Bags")
     bagUpgradeBtn:SetChecked(UIThingsDB.loot.highlightBagUpgrades)
     bagUpgradeBtn:SetScript("OnClick", function(self)
@@ -375,7 +390,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local bagUpgradeHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bagUpgradeHelp:SetPoint("TOPLEFT", 45, -723)
+    bagUpgradeHelp:SetPoint("TOPLEFT", 45, -748)
     bagUpgradeHelp:SetTextColor(0.5, 0.5, 0.5)
     bagUpgradeHelp:SetText("Highlights bag items with a green overlay when they beat your equipped ilvl (checks both ring/trinket slots)")
 end

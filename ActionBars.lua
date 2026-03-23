@@ -13,7 +13,8 @@ local function HasConflictAddon()
         conflictAddonChecked = true
         if C_AddOns.IsAddOnLoaded("Dominos")
             or C_AddOns.IsAddOnLoaded("Bartender4")
-            or C_AddOns.IsAddOnLoaded("ElvUI") then
+            or C_AddOns.IsAddOnLoaded("ElvUI")
+            or C_AddOns.IsAddOnLoaded("LunaUITweaks_ActionBars") then
             conflictAddonFound = true
         end
     end

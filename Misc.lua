@@ -607,6 +607,7 @@ local function OnChatMsgWhisper(event, msg, sender)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     local settings = UIThingsDB.misc
     if not settings.autoInviteEnabled or not keywordCache or #keywordCache == 0 then return end
+    if issecretvalue(msg) then return end
     local lowerMsg = msg:trim():lower()
     local match = false
     for _, kw in ipairs(keywordCache) do

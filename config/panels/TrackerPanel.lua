@@ -12,8 +12,13 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     local fonts = Helpers.fonts
 
     local function UpdateTracker()
-        if addonTable.ObjectiveTracker and addonTable.ObjectiveTracker.UpdateSettings then
-            addonTable.ObjectiveTracker.UpdateSettings()
+        if addonTable.ObjectiveTracker then
+            if addonTable.ObjectiveTracker.UpdateSettings then
+                addonTable.ObjectiveTracker.UpdateSettings()
+            end
+            if addonTable.ObjectiveTracker.UpdateContent then
+                addonTable.Core.SafeAfter(0.05, addonTable.ObjectiveTracker.UpdateContent)
+            end
         end
     end
 
@@ -247,9 +252,6 @@ function addonTable.ConfigSetup.Tracker(panel, tab, configWindow)
     wqActiveCheckbox:SetScript("OnClick", function(self)
         UIThingsDB.tracker.onlyActiveWorldQuests = self:GetChecked()
         UpdateTracker()
-        if addonTable.ObjectiveTracker and addonTable.ObjectiveTracker.UpdateContent then
-            addonTable.ObjectiveTracker.UpdateContent()
-        end
     end)
 
     local wqSortLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

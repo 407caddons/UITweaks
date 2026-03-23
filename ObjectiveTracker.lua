@@ -935,6 +935,37 @@ end
 -- ============================================================
 -- Blizzard tracker suppression
 -- ============================================================
+
+-- EnableMouse(false) on the parent doesn't propagate to children — quest buttons
+-- and module frames are still clickable even when invisible. Recursively disable
+-- mouse on all Frame children so clicks pass through the hidden tracker.
+local function DisableTrackerMouse(frame, depth)
+    depth = depth or 0
+    if depth > 10 then return end
+    frame:EnableMouse(false)
+    for i = 1, frame:GetNumChildren() do
+        DisableTrackerMouse(select(i, frame:GetChildren()), depth + 1)
+    end
+end
+
+-- Ticker: re-applies the disable after Blizzard dynamically adds new children
+-- (e.g. when quest objectives update). Cancelled when the custom tracker is off.
+local trackerMouseTicker = nil
+local function StartTrackerMouseTicker()
+    if trackerMouseTicker then return end
+    trackerMouseTicker = C_Timer.NewTicker(2.0, function()
+        if ObjectiveTrackerFrame and UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled then
+            DisableTrackerMouse(ObjectiveTrackerFrame)
+        end
+    end)
+end
+local function StopTrackerMouseTicker()
+    if trackerMouseTicker then
+        trackerMouseTicker:Cancel()
+        trackerMouseTicker = nil
+    end
+end
+
 local blizzardTrackerHooked = false
 local function HookBlizzardTracker()
     if blizzardTrackerHooked or not ObjectiveTrackerFrame then return end
@@ -943,6 +974,8 @@ local function HookBlizzardTracker()
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled then
             ObjectiveTrackerFrame:SetAlpha(0)
             ObjectiveTrackerFrame:EnableMouse(false)
+            DisableTrackerMouse(ObjectiveTrackerFrame)
+            StartTrackerMouseTicker()
         end
     end)
 end
@@ -1042,8 +1075,11 @@ function addonTable.ObjectiveTracker.UpdateSettings()
         if ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetAlpha(0)
             ObjectiveTrackerFrame:EnableMouse(false)
+            DisableTrackerMouse(ObjectiveTrackerFrame)
+            StartTrackerMouseTicker()
         end
     else
+        StopTrackerMouseTicker()
         if ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetAlpha(1)
             ObjectiveTrackerFrame:SetScale(1)
@@ -1553,36 +1589,36 @@ local function RenderScenarios()
         AddLine(string.format("|cFF%s%d%% Complete|r", color, pct), false, nil, nil, true)
     end
     local numCriteria = stepInfo and stepInfo.numCriteria or 0
+    local seenCriteriaIDs = {}
+    local function RenderCriteriaInfo(criteriaInfo)
+        local cid = criteriaInfo.criteriaID or criteriaInfo.description
+        if cid and seenCriteriaIDs[cid] then return false end
+        if cid then seenCriteriaIDs[cid] = true end
+        local text = criteriaInfo.description or ""
+        if text == "" then return true end
+        if criteriaInfo.isWeightedProgress then
+            if criteriaInfo.quantity then text = text .. " " .. criteriaInfo.quantity .. "%" end
+        elseif criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
+            text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
+        end
+        if criteriaInfo.failed then text = "|cFFFF0000" .. text .. " (Failed)|r"
+        elseif criteriaInfo.completed then text = FormatCompletedObjective(text) end
+        if criteriaInfo.isWeightedProgress then text = "|cFF00FFFF[Bonus]|r " .. text end
+        AddLine(text, false, nil, nil, true)
+        return true
+    end
     if numCriteria > 0 then
         for i = 1, numCriteria do
             local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(i)
             if not criteriaInfo then break end
-            local text = criteriaInfo.description or ""
-            if criteriaInfo.isWeightedProgress then
-                if criteriaInfo.quantity then text = text .. " " .. criteriaInfo.quantity .. "%" end
-            elseif criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
-                text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
-            end
-            if criteriaInfo.failed then text = "|cFFFF0000" .. text .. " (Failed)|r"
-            elseif criteriaInfo.completed then text = FormatCompletedObjective(text) end
-            if criteriaInfo.isWeightedProgress then text = "|cFF00FFFF[Bonus]|r " .. text end
-            AddLine(text, false, nil, nil, true)
+            RenderCriteriaInfo(criteriaInfo)
         end
     elseif C_ScenarioInfo.GetCriteriaInfo then
         local criteriaIndex = 1
         while criteriaIndex <= 50 do
             local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
             if not criteriaInfo then break end
-            local text = criteriaInfo.description or ""
-            if criteriaInfo.isWeightedProgress then
-                if criteriaInfo.quantity then text = text .. " " .. criteriaInfo.quantity .. "%" end
-            elseif criteriaInfo.quantity and criteriaInfo.totalQuantity and criteriaInfo.totalQuantity > 1 then
-                text = text .. " (" .. criteriaInfo.quantity .. "/" .. criteriaInfo.totalQuantity .. ")"
-            end
-            if criteriaInfo.failed then text = "|cFFFF0000" .. text .. " (Failed)|r"
-            elseif criteriaInfo.completed then text = FormatCompletedObjective(text) end
-            if criteriaInfo.isWeightedProgress then text = "|cFF00FFFF[Bonus]|r " .. text end
-            AddLine(text, false, nil, nil, true)
+            RenderCriteriaInfo(criteriaInfo)
             criteriaIndex = criteriaIndex + 1
         end
     end
@@ -2261,6 +2297,8 @@ hookFrame:SetScript("OnEvent", function(self, event)
         if UIThingsDB and UIThingsDB.tracker and UIThingsDB.tracker.enabled and ObjectiveTrackerFrame then
             ObjectiveTrackerFrame:SetAlpha(0)
             ObjectiveTrackerFrame:EnableMouse(false)
+            DisableTrackerMouse(ObjectiveTrackerFrame)
+            StartTrackerMouseTicker()
         end
         self:UnregisterAllEvents()
     end

@@ -446,6 +446,7 @@ end
 -- Event Handler
 local EventBus = addonTable.EventBus
 local lastMoney = 0 -- Tracks previous gold amount for locale-independent gold change detection
+local recentToasts = {} -- Dedup: itemLink -> expiry time
 
 -- Named callbacks for EventBus
 local function OnGroupRosterUpdate()
@@ -492,6 +493,50 @@ local function OnLootReady()
     end
 end
 
+-- Dedup helper: returns true if this item was already toasted recently
+local function IsDuplicate(itemLink)
+    if not itemLink then return false end
+    local now = GetTime()
+    -- Clean expired entries
+    for k, v in pairs(recentToasts) do
+        if v < now then recentToasts[k] = nil end
+    end
+    if recentToasts[itemLink] then return true end
+    recentToasts[itemLink] = now + 2 -- 2 second dedup window
+    return false
+end
+
+local function OnShowLootToast(event, typeIdentifier, itemLink, quantity, specID, sex, personalLootToast, toastMethod)
+    if not UIThingsDB.loot.enabled then return end
+    if typeIdentifier ~= "item" then return end
+    if not itemLink then return end
+
+    local _, _, quality = GetItemInfo(itemLink)
+    if not quality then return end
+    if quality < UIThingsDB.loot.minQuality then return end
+    if IsDuplicate(itemLink) then return end
+
+    local looterName = UnitName("player")
+    local looterClass = rosterCache[looterName]
+    local count = quantity or 1
+    SpawnToast(itemLink, nil, count, looterName, looterClass)
+end
+
+local function OnShowLootToastUpgrade(event, itemLink, quantity, specID, sex, baseQuality, isPersonal, lessAwesome)
+    if not UIThingsDB.loot.enabled then return end
+    if not itemLink then return end
+
+    local _, _, quality = GetItemInfo(itemLink)
+    if not quality then return end
+    if quality < UIThingsDB.loot.minQuality then return end
+    if IsDuplicate(itemLink) then return end
+
+    local looterName = UnitName("player")
+    local looterClass = rosterCache[looterName]
+    local count = quantity or 1
+    SpawnToast(itemLink, nil, count, looterName, looterClass)
+end
+
 local function OnChatMsgLoot(event, msg)
     if not UIThingsDB.loot.enabled then return end
     if issecretvalue(msg) then return end
@@ -516,12 +561,23 @@ local function OnChatMsgLoot(event, msg)
             if not UIThingsDB.loot.showAll then
                 if looterName ~= UnitName("player") then return end
             end
+            if IsDuplicate(itemLink) then return end
             local count = 1
             local matchCount = string.match(msg, "x(%d+)")
             if matchCount then count = tonumber(matchCount) end
             SpawnToast(itemLink, nil, count, looterName, looterClass)
         end
     end
+end
+
+local function OnStartLootRoll(event, rollID)
+    if not UIThingsDB.loot.autoGreed then return end
+    local _, _, _, _, _, canNeed, canGreed = GetLootRollItemInfo(rollID)
+    if canNeed then return end -- player can need — let them decide
+    if canGreed then
+        RollOnLoot(rollID, 2) -- greed
+    end
+    -- if can't greed either, pass silently (WoW auto-passes when the window closes)
 end
 
 local function OnPlayerLogin()
@@ -533,8 +589,16 @@ end
 function Loot.ApplyEvents()
     if UIThingsDB.loot.enabled then
         EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot, "Loot")
+        EventBus.Register("SHOW_LOOT_TOAST", OnShowLootToast, "Loot")
+        EventBus.Register("SHOW_LOOT_TOAST_UPGRADE", OnShowLootToastUpgrade, "Loot")
         EventBus.Register("LOOT_READY", OnLootReady, "Loot")
         EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "Loot")
+
+        if UIThingsDB.loot.autoGreed then
+            EventBus.Register("START_LOOT_ROLL", OnStartLootRoll, "Loot")
+        else
+            EventBus.Unregister("START_LOOT_ROLL", OnStartLootRoll)
+        end
 
         if UIThingsDB.loot.showCurrency then
             EventBus.Register("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate, "Loot")
@@ -550,10 +614,13 @@ function Loot.ApplyEvents()
         end
     else
         EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLoot)
+        EventBus.Unregister("SHOW_LOOT_TOAST", OnShowLootToast)
+        EventBus.Unregister("SHOW_LOOT_TOAST_UPGRADE", OnShowLootToastUpgrade)
         EventBus.Unregister("LOOT_READY", OnLootReady)
         EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
         EventBus.Unregister("CURRENCY_DISPLAY_UPDATE", OnCurrencyDisplayUpdate)
         EventBus.Unregister("PLAYER_MONEY", OnPlayerMoney)
+        EventBus.Unregister("START_LOOT_ROLL", OnStartLootRoll)
     end
 end
 

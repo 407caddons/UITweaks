@@ -662,8 +662,13 @@ function Warehousing.RefreshPopup()
         AddDepositSection("Personal Bank", "Personal")
 
         -- Section: Withdraw (deficit items from open bank)
+        -- Skip tradeskill reagents (classID 7) — accessible from warband bank during crafting
         local hasWithdraw = false
         for itemID, data in pairs(deficit) do
+            local defItemData = LunaUITweaks_WarehousingData.items[itemID]
+            if defItemData and defItemData.classID == 7 then
+                -- skip reagents
+            else
             local bankHas = bankCounts[itemID] or 0
             if bankHas > 0 then
                 local withdrawCount = math.min(data.count, bankHas)
@@ -694,6 +699,7 @@ function Warehousing.RefreshPopup()
                 row:Show()
                 yOffset = yOffset + ROW_HEIGHT
             end
+            end -- classID ~= 7
         end
 
         if not hasAnyAction then
@@ -739,6 +745,10 @@ local function IsGameReady()
     return true
 end
 
+local QUEUE_STUCK_TIMEOUT = 5  -- seconds before declaring stuck
+local queueLastProgress = 0
+local queueLastCount = 0
+
 local function ProcessQueueStep()
     if #workQueue == 0 then
         queueProcessor:SetScript("OnUpdate", nil)
@@ -751,7 +761,37 @@ local function ProcessQueueStep()
         return
     end
 
-    if not IsGameReady() then return end
+    -- Peek at next task: place_in_empty EXPECTS the cursor to hold an item,
+    -- so skip the IsGameReady() check (which blocks on GetCursorInfo).
+    local nextTask = workQueue[1]
+    if nextTask.action ~= "place_in_empty" then
+        if not IsGameReady() then
+            -- Stuck detection: if no progress for QUEUE_STUCK_TIMEOUT seconds, abort
+            if queueLastCount == #workQueue then
+                if GetTime() - queueLastProgress > QUEUE_STUCK_TIMEOUT then
+                    Log("Queue stuck for " .. QUEUE_STUCK_TIMEOUT .. "s — clearing cursor and aborting.", 2)
+                    ClearCursor()
+                    StopQueueProcessor()
+                    bankSyncing = false
+                    if popupFrame and popupFrame.actionBtn then
+                        popupFrame.actionBtn:SetText("Sync")
+                        popupFrame.actionBtn:Enable()
+                    end
+                    if popupFrame and popupFrame.statusText then
+                        popupFrame.statusText:SetText("Sync stalled — try again.")
+                    end
+                end
+            else
+                queueLastCount = #workQueue
+                queueLastProgress = GetTime()
+            end
+            return
+        end
+    end
+
+    -- Progress: we're about to execute a task
+    queueLastCount = #workQueue
+    queueLastProgress = GetTime()
 
     local task = table.remove(workQueue, 1)
 
@@ -767,7 +807,8 @@ local function ProcessQueueStep()
                 table.insert(workQueue, 1, { action = "use", bag = emptyBag, slot = emptySlot, bankType = task.bankType })
             end
         else
-            Log("No empty bag slot found for split!", 2)
+            Log("No empty bag slot for split — clearing cursor.", 2)
+            ClearCursor()
         end
 
     elseif task.action == "use" then
@@ -789,6 +830,8 @@ local function StartQueueProcessor(onComplete)
     if isProcessing then return end
     isProcessing = true
     queueOnComplete = onComplete
+    queueLastCount = #workQueue
+    queueLastProgress = GetTime()
     queueProcessor:SetScript("OnUpdate", ProcessQueueStep)
 end
 
@@ -943,6 +986,12 @@ local function StartBankSync(continuationPass)
 
     local bankCounts = ScanOpenBank()
     for itemID, data in pairs(deficit) do
+        -- Tradeskill reagents (classID 7) are accessible directly from the warband bank
+        -- during crafting, so never pull them out to fill a bag deficit.
+        local itemData = LunaUITweaks_WarehousingData.items[itemID]
+        if itemData and itemData.classID == 7 then
+            -- skip: reagents stay in bank, auto-buy from vendor instead
+        else
         local bankHas = bankCounts[itemID] or 0
         if bankHas > 0 then
             local withdrawCount = math.min(data.count, bankHas)
@@ -958,6 +1007,7 @@ local function StartBankSync(continuationPass)
                 end
             end
         end
+        end -- classID ~= 7
     end
 
     Log("Total work items: " .. #workQueue, 0)
@@ -1064,10 +1114,11 @@ function Warehousing.AddItem(itemLink)
     end
 
     -- Determine if this item can go to the warband (account) bank.
-    -- bindType == 1 is Soulbound; however Warbound items may also return bindType == 1
-    -- via GetItemInfo (Blizzard's Enum.ItemBind.Warbound is not reliably returned yet).
-    -- Instead, find the item in bags and ask C_Bank directly.
+    -- Try C_Bank.IsItemAllowedInBankType first (most reliable when bank is open),
+    -- but it can error/return false when the bank is closed. Fall back to bindType:
+    -- only BoP (bindType == 1) items are truly restricted from the warband bank.
     local warbandAllowed = false
+    local bankChecked = false
     if C_Bank and C_Bank.IsItemAllowedInBankType and ItemLocation then
         for _, bag in ipairs(BAG_LIST) do
             local numSlots = C_Container.GetContainerNumSlots(bag)
@@ -1076,14 +1127,20 @@ function Warehousing.AddItem(itemLink)
                 if info and info.itemID == itemID then
                     local loc = ItemLocation:CreateFromBagAndSlot(bag, slot)
                     local ok, result = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Account, loc)
-                    if ok and result then
-                        warbandAllowed = true
+                    if ok then
+                        bankChecked = true
+                        warbandAllowed = result
                     end
                     break
                 end
             end
-            if warbandAllowed then break end
+            if bankChecked then break end
         end
+    end
+    -- Fallback: if C_Bank check failed (bank not open, item not in bags, API error),
+    -- assume warband-allowed for anything that isn't Bind on Pickup.
+    if not bankChecked then
+        warbandAllowed = (bindType ~= 1)
     end
 
     LunaUITweaks_WarehousingData.items[itemID] = {
@@ -1364,9 +1421,36 @@ local function OnMailFailed()
     end
 end
 
+-- Re-check warbandAllowed for all tracked items using C_Bank (reliable when bank is open).
+local function RecheckWarbandFlags()
+    EnsureDB()
+    if not (C_Bank and C_Bank.IsItemAllowedInBankType and ItemLocation) then return end
+    for itemID, itemData in pairs(LunaUITweaks_WarehousingData.items) do
+        for _, bag in ipairs(BAG_LIST) do
+            local numSlots = C_Container.GetContainerNumSlots(bag)
+            for slot = 1, numSlots do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                if info and info.itemID == itemID then
+                    local loc = ItemLocation:CreateFromBagAndSlot(bag, slot)
+                    local ok, result = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Account, loc)
+                    if ok and result and not itemData.warbandAllowed then
+                        itemData.warbandAllowed = true
+                        if itemData.destination == "Personal Bank" then
+                            itemData.destination = "Warband Bank"
+                        end
+                        Log("Updated " .. (itemData.name or itemID) .. " to warband-allowed.", 0)
+                    end
+                    break
+                end
+            end
+        end
+    end
+end
+
 local function OnBankShow()
     if not UIThingsDB.warehousing.enabled then return end
     atBank = true
+    RecheckWarbandFlags()
     CreatePopupFrame()
     popupMode = "bank"
     popupFrame.actionBtn:SetScript("OnClick", function()

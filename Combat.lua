@@ -152,17 +152,27 @@ local ttdText
 local ttdLockBtn
 
 local TTD_SAMPLE_INTERVAL = 0.5   -- seconds between health% samples
-local TTD_MIN_DATA_SECS   = 5     -- seconds of data required before showing
+local TTD_MIN_DATA_SECS   = 3     -- seconds of data required before showing
 local TTD_WINDOW_SECS     = 10    -- rolling window size in seconds
 
--- UnitHealthPercent is secret during combat. Use a hidden StatusBar to extract a
--- non-secret copy: SetValue accepts secret numbers; GetValue() returns a plain number.
-local ttdHealthBar = CreateFrame("StatusBar")
-ttdHealthBar:SetMinMaxValues(0, 100)
+-- Hidden StatusBar used as a desecretization bridge for UnitHealth values.
+-- SetValue() accepts secret numbers; GetValue() returns the stored C++ double (plain).
+local _ttdHpBar
 
 local function TtdGetHealthPct()
-    ttdHealthBar:SetValue(UnitHealthPercent("target"))
-    return ttdHealthBar:GetValue()   -- non-secret copy
+    if not UnitExists("target") then return 0 end
+    local hp    = UnitHealth("target")
+    local hpMax = UnitHealthMax("target")
+    if not hp or not hpMax then return 0 end
+    -- Desecretize hpMax via string.format (works on both plain and secret numbers).
+    local hpMaxN = tonumber(string.format("%.10g", hpMax)) or 0
+    if hpMaxN <= 0 then return 0 end
+    -- Desecretize hp via StatusBar bridge: SetValue accepts secrets,
+    -- GetValue returns the internally-stored C++ double as a plain Lua number.
+    _ttdHpBar:SetMinMaxValues(0, hpMaxN)
+    _ttdHpBar:SetValue(hp)
+    local hpN = _ttdHpBar:GetValue()
+    return hpN / hpMaxN * 100
 end
 
 local ttdSamples     = {}   -- array of { pct=number (non-secret), t=number }
@@ -178,7 +188,7 @@ end
 local function TtdPushSample()
     if not UnitExists("target") then return end
     if not UnitCanAttack("player", "target") then return end
-    local pct = TtdGetHealthPct()   -- non-secret via StatusBar extraction
+    local pct = TtdGetHealthPct()
     local t   = GetTime()
     ttdSamples[#ttdSamples + 1] = { pct = pct, t = t }
     -- Trim entries older than the rolling window
@@ -344,8 +354,19 @@ local function InitTTD()
     evtFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     evtFrame:SetScript("OnEvent", function(self, event)
         TtdClear()
-        TtdRefreshDisplay()
+        if event == "PLAYER_REGEN_DISABLED" then
+            -- Defer: timerFrame also handles this event (sets inCombat = true).
+            -- Event processing order between frames is not guaranteed, so defer
+            -- TtdRefreshDisplay to the next timer tick to ensure inCombat is set.
+            C_Timer.After(0, TtdRefreshDisplay)
+        else
+            TtdRefreshDisplay()
+        end
     end)
+
+    -- StatusBar bridge for desecretizing UnitHealth values (see TtdGetHealthPct)
+    _ttdHpBar = CreateFrame("StatusBar")
+    _ttdHpBar:Hide()
 
     TtdApplySettings()
     ttdFrame:Hide()

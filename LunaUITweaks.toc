@@ -35,7 +35,6 @@ config\panels\CombatPanel.lua
 config\panels\FramesPanel.lua
 config\panels\LootPanel.lua
 config\panels\MiscPanel.lua
-config\panels\SCTPanel.lua
 config\panels\MinimapPanel.lua
 config\panels\TalentPanel.lua
 config\panels\TalentManagerPanel.lua
@@ -65,7 +64,6 @@ Vendor.lua
 Loot.lua
 Combat.lua
 Misc.lua
-SCT.lua
 MinimapCustom.lua
 Frames.lua
 TalentReminder.lua

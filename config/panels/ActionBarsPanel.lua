@@ -99,6 +99,8 @@ function addonTable.ConfigSetup.ActionBars(panel, navButton, configWindow)
         conflictAddon = "Bartender4"
     elseif C_AddOns.IsAddOnLoaded("ElvUI") then
         conflictAddon = "ElvUI"
+    elseif C_AddOns.IsAddOnLoaded("LunaUITweaks_ActionBars") then
+        conflictAddon = "LunaUITweaks Action Bars"
     end
 
     local yPos = -10

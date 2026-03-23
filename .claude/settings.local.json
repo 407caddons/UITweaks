@@ -62,7 +62,8 @@
       "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/config/ConfigMain.lua\")",
       "Bash(while read:*)",
       "Bash(do wc:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/ObjectiveTracker.lua\")"
     ]
   }
 }

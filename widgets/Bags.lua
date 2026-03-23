@@ -21,6 +21,7 @@ table.insert(Widgets.moduleInits, function()
     local function OnGoldUpdate()
         if UIThingsDB.widgets.bags.enabled then
             SaveCurrentGold()
+            bagFrame:UpdateContent()
         end
     end
 
@@ -126,10 +127,15 @@ table.insert(Widgets.moduleInits, function()
     end)
 
     bagFrame.UpdateContent = function(self)
-        local free = 0
-        for i = 0, NUM_BAG_SLOTS do
-            free = free + C_Container.GetContainerNumFreeSlots(i)
+        local copper = GetMoney()
+        local gold = math.floor(copper / 10000)
+        local silver = math.floor((copper % 10000) / 100)
+        if gold >= 10000 then
+            self.text:SetFormattedText("%sg", addonTable.Core.AbbreviateNumber(gold))
+        elseif gold >= 1 then
+            self.text:SetFormattedText("%d|cFFFFD700g|r %d|cFFC0C0C0s|r", gold, silver)
+        else
+            self.text:SetFormattedText("%d|cFFC0C0C0s|r %d|cFFB87333c|r", silver, copper % 100)
         end
-        self.text:SetFormattedText("Bags: %d", free)
     end
 end)
