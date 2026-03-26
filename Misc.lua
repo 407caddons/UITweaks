@@ -225,9 +225,12 @@ local function OnUnitHealth(event, unitTarget)
     local isRaid  = unitTarget:match("^raid%d+$")
     if not isParty and not isRaid then return end
 
+    local guid = UnitGUID(unitTarget)
+    if not guid then return end
+
     if UnitIsDead(unitTarget) then
-        if not deathAnnounced[unitTarget] then
-            deathAnnounced[unitTarget] = true
+        if not deathAnnounced[guid] then
+            deathAnnounced[guid] = true
             if UIThingsDB.misc.deathTtsEnabled then
                 local name = UnitName(unitTarget) or "Unknown"
                 local role = GetRoleLabel(unitTarget)
@@ -239,7 +242,7 @@ local function OnUnitHealth(event, unitTarget)
         end
     else
         -- Unit is alive again — reset so the next death fires TTS again
-        deathAnnounced[unitTarget] = nil
+        deathAnnounced[guid] = nil
     end
 end
 
@@ -279,6 +282,27 @@ local function ApplyAHFilter()
         end)
         hookSet = true
     end
+end
+
+-- == WORK ORDER FILTER ==
+
+local function ApplyWorkOrderFilter()
+    if not UIThingsDB.misc.workOrderFilter then return end
+
+    if not ProfessionsCustomerOrdersFrame then return end
+
+    local function SetFilter()
+        if not UIThingsDB.misc.workOrderFilter then return end
+        local browseOrders = ProfessionsCustomerOrdersFrame.BrowseOrders
+        if not browseOrders or not browseOrders.SearchBar then return end
+        local filterDropdown = browseOrders.SearchBar.FilterDropdown
+        if filterDropdown and filterDropdown.filters then
+            filterDropdown.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
+        end
+    end
+
+    -- Apply with slight delay for ensuring frame is ready
+    addonTable.Core.SafeAfter(0, SetFilter)
 end
 
 -- == UI SCALING ==
@@ -539,6 +563,11 @@ local function OnAuctionHouseShow()
     addonTable.Core.SafeAfter(0.5, ApplyAHFilter)
 end
 
+local function OnWorkOrderShow()
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    addonTable.Core.SafeAfter(0.5, ApplyWorkOrderFilter)
+end
+
 local function OnChatMsgSystem(event, msg)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.personalOrders then return end
@@ -686,6 +715,7 @@ end
 ApplyMiscEvents = function()
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+        EventBus.Unregister("CRAFTINGORDERS_SHOW_CUSTOMER", OnWorkOrderShow)
         EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
         EventBus.Unregister("MAIL_CLOSED", OnMailClosedMisc)
@@ -702,6 +732,12 @@ ApplyMiscEvents = function()
         EventBus.Register("AUCTION_HOUSE_SHOW", OnAuctionHouseShow, "Misc")
     else
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+    end
+
+    if UIThingsDB.misc.workOrderFilter then
+        EventBus.Register("CRAFTINGORDERS_SHOW_CUSTOMER", OnWorkOrderShow, "Misc")
+    else
+        EventBus.Unregister("CRAFTINGORDERS_SHOW_CUSTOMER", OnWorkOrderShow)
     end
 
     if UIThingsDB.misc.personalOrders then

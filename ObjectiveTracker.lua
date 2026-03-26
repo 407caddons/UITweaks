@@ -1,4 +1,16 @@
 local addonName, addonTable = ...
+
+-- If the standalone companion addon is enabled, skip this module entirely.
+-- Use GetAddOnInfo (loadable) rather than IsAddOnLoaded, because the companion
+-- loads AFTER us (due to OptionalDeps) and isn't loaded at this point yet.
+if C_AddOns and C_AddOns.GetAddOnInfo then
+    local _, _, _, loadable = C_AddOns.GetAddOnInfo("LunaUITweaks_ObjectiveTracker")
+    if loadable then
+        addonTable.ObjectiveTracker = nil
+        return
+    end
+end
+
 addonTable.ObjectiveTracker = {}
 
 local SafeAfter = addonTable.Core and addonTable.Core.SafeAfter or function(delay, func)

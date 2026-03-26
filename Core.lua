@@ -390,6 +390,7 @@ local function OnEvent(self, event, ...)
             misc = {
                 enabled = false,
                 ahFilter = false,
+                workOrderFilter = true,
                 personalOrders = false,
                 personalOrdersCheckAtLogon = false,
                 ttsEnabled = true,

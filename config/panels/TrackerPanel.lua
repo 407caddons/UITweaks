@@ -1,5 +1,11 @@
 local addonName, addonTable = ...
 
+-- If the standalone companion addon is enabled, skip this panel (it registers its own).
+if C_AddOns and C_AddOns.GetAddOnInfo then
+    local _, _, _, loadable = C_AddOns.GetAddOnInfo("LunaUITweaks_ObjectiveTracker")
+    if loadable then return end
+end
+
 -- Create setup table if it doesn't exist
 addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 

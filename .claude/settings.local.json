@@ -63,7 +63,16 @@
       "Bash(while read:*)",
       "Bash(do wc:*)",
       "Bash(done)",
-      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/ObjectiveTracker.lua\")"
+      "Bash(wc -l \"C:/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns/LunaUITweaks/ObjectiveTracker.lua\")",
+      "Bash(sed -i 's/UIThingsDB\\\\.tracker/addonTable.db/g' ObjectiveTracker.lua)",
+      "Bash(sed -i 's/UIThingsDB and UIThingsDB\\\\.tracker/addonTable.db/g' ObjectiveTracker.lua)",
+      "WebFetch(domain:wago.tools)",
+      "WebSearch",
+      "Bash(find '/c/Program Files \\(x86\\)/World of Warcraft/_retail_/Interface/AddOns' -type f \\\\\\(-name *.lua -o -name *.xml \\\\\\))",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:wago.io)",
+      "WebFetch(domain:www.curseforge.com)",
+      "WebFetch(domain:www.wowhead.com)"
     ]
   }
 }
