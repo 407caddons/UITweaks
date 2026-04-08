@@ -415,6 +415,7 @@ local function OnEvent(self, event, ...)
                 quickDestroy = false,
                 classColorTooltips = false,
                 showSpellID = false,
+                plumeAlert = false,
                 boeAlert = false,
                 boeMinQuality = 4, -- 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary
                 boeAlertDuration = 5,
@@ -423,9 +424,7 @@ local function OnEvent(self, event, ...)
                 deathTtsEnabled = true,
                 deathTtsMessage = "{name} died",
                 deathTtsVoice = 0,
-                preyIconLocked = true,
-                preyIconX = 0,
-                preyIconY = 0,
+
             },
             minimap = {
                 angle = 45,
@@ -562,24 +561,6 @@ local function OnEvent(self, event, ...)
                 barBgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.9 },
                 barBorderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 }
             },
-            chatSkin = {
-                enabled = false,
-                borderColor = { r = 0, g = 0, b = 0, a = 1 },
-                borderSize = 2,
-                bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.7 },
-                activeTabColor = { r = 0, g = 0.8, b = 0.4, a = 1 },
-                inactiveTabColor = { r = 0.3, g = 0.3, b = 0.3, a = 0.8 },
-                tabBgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
-                hideButtons = true,
-                locked = true,
-                chatWidth = 430,
-                chatHeight = 200,
-                timestamps = "none",
-                pos = { point = "CENTER", x = 0, y = -200 },
-                highlightKeywords = {},
-                highlightColor = { r = 1, g = 1, b = 0 },
-                highlightSound = false,
-            },
             castBar = {
                 enabled = false,
                 locked = true,
@@ -601,30 +582,12 @@ local function OnEvent(self, event, ...)
                 nonInterruptibleColor = { r = 0.7, g = 0.7, b = 0.7, a = 1 },
                 failedColor = { r = 1, g = 0, b = 0, a = 1 },
                 channelColor = { r = 0, g = 0.6, b = 1, a = 1 },
-            },
-            actionBars = {
-                enabled = false,
-                locked = true,
-                pos = { point = "BOTTOM", relPoint = "BOTTOM", x = 0, y = 30 },
-                buttonSize = 32,
-                padding = 4,
-                borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
-                borderSize = 2,
-                bgColor = { r = 0, g = 0, b = 0, a = 0.7 },
-                skinEnabled = false,
-                skinButtonBorderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
-                skinButtonBorderSize = 1,
-                skinBarBorderColor = { r = 0.2, g = 0.2, b = 0.2, a = 1 },
-                skinBarBorderSize = 2,
-                skinBarBgColor = { r = 0, g = 0, b = 0, a = 0.5 },
-                hideMacroText = false,
-                hideKeybindText = false,
-                hideBarScroll = false,
-                hideBagsBar = false,
-                skinButtonSpacing = 2,
-                skinButtonSize = 0,
-                barOffsets = {},
-                barPositions = {},
+                targetBar = {
+                    enabled = false,
+                    locked = true,
+                    pos = { point = "CENTER", x = 0, y = -230 },
+                    barColor = { r = 1, g = 0.3, b = 0.3, a = 1 },
+                },
             },
             addonComm = {
                 hideFromWorld = false,
@@ -722,20 +685,6 @@ local function OnEvent(self, event, ...)
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
             },
-            lootChecklist = {
-                enabled         = false,
-                locked          = false,
-                hideInCombat    = false,
-                pos             = nil,
-                width           = 220,
-                height          = 280,
-                backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.9 },
-                borderColor     = { r = 0.4,  g = 0.4,  b = 0.4,  a = 1   },
-                showBorder      = true,
-                showBackground  = true,
-                font            = "Fonts\\FRIZQT__.TTF",
-                fontSize        = 12,
-            },
             queueTimer = {
                 enabled = false,
                 showText = true,
@@ -817,44 +766,6 @@ local function OnEvent(self, event, ...)
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
 
-        -- One-time migration: BOTTOMLEFT → CENTER for damageMeter and chatSkin
-        local function MigrateBottomLeftToCenter(pos, defaultX, defaultY)
-            if pos and pos.point and pos.point ~= "CENTER" then
-                local sw = UIParent:GetWidth()
-                local sh = UIParent:GetHeight()
-                local oldPoint = pos.point
-                local ox, oy = pos.x or 0, pos.y or 0
-                -- Convert anchor-relative coords to BOTTOMLEFT-relative first
-                local blX, blY = ox, oy
-                if oldPoint == "TOPRIGHT" or oldPoint == "RIGHT" or oldPoint == "BOTTOMRIGHT" then
-                    blX = sw - ox
-                elseif oldPoint == "TOP" or oldPoint == "CENTER" or oldPoint == "BOTTOM" then
-                    blX = sw / 2 + ox
-                end
-                if oldPoint == "TOPLEFT" or oldPoint == "TOP" or oldPoint == "TOPRIGHT" then
-                    blY = sh - oy
-                elseif oldPoint == "LEFT" or oldPoint == "CENTER" or oldPoint == "RIGHT" then
-                    blY = sh / 2 + oy
-                end
-                -- Convert BOTTOMLEFT coords to CENTER-relative
-                pos.x = math.floor(blX - sw / 2 + 0.5)
-                pos.y = math.floor(blY - sh / 2 + 0.5)
-                pos.point = "CENTER"
-                pos.relPoint = nil
-            elseif not pos or not pos.point then
-                -- Legacy damageMeter had no point field — treat as BOTTOMLEFT
-                if pos then
-                    local sw = UIParent:GetWidth()
-                    local sh = UIParent:GetHeight()
-                    pos.x = math.floor((pos.x or 0) - sw / 2 + 0.5)
-                    pos.y = math.floor((pos.y or 0) - sh / 2 + 0.5)
-                    pos.point = "CENTER"
-                end
-            end
-        end
-        if UIThingsDB.chatSkin and UIThingsDB.chatSkin.pos then
-            MigrateBottomLeftToCenter(UIThingsDB.chatSkin.pos, 0, -200)
-        end
         -- Apply debug mode from saved settings
         if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then
             addonTable.Core.currentLogLevel = addonTable.Core.LogLevel.DEBUG
@@ -880,10 +791,6 @@ local function OnEvent(self, event, ...)
 
         if addonTable.Widgets and addonTable.Widgets.Initialize then
             addonTable.Widgets.Initialize()
-        end
-
-        if addonTable.ChatSkin and addonTable.ChatSkin.Initialize then
-            addonTable.ChatSkin.Initialize()
         end
 
         if addonTable.QuestReminder and addonTable.QuestReminder.Initialize then

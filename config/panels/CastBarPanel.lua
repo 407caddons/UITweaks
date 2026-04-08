@@ -10,7 +10,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 700)
+    child:SetSize(650, 900)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -302,4 +302,78 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
         UIThingsDB.castBar.showSpark = not not self:GetChecked()
         UpdateCastBar()
     end)
+
+    -- == Target Cast Bar ==
+    Helpers.CreateSectionHeader(child, "Target Cast Bar", -590)
+
+    local targetEnableBtn = CreateFrame("CheckButton", "UIThingsTargetCastBarEnable", child, "ChatConfigCheckButtonTemplate")
+    targetEnableBtn:SetPoint("TOPLEFT", 20, -620)
+    _G[targetEnableBtn:GetName() .. "Text"]:SetText("Enable Target Cast Bar")
+    targetEnableBtn:SetChecked(UIThingsDB.castBar.targetBar.enabled)
+    targetEnableBtn:SetScript("OnClick", function(self)
+        UIThingsDB.castBar.targetBar.enabled = not not self:GetChecked()
+        UpdateCastBar()
+    end)
+
+    local targetLockBtn = CreateFrame("CheckButton", "UIThingsTargetCastBarLock", child, "ChatConfigCheckButtonTemplate")
+    targetLockBtn:SetPoint("TOPLEFT", 260, -620)
+    _G[targetLockBtn:GetName() .. "Text"]:SetText("Lock Target Cast Bar")
+    targetLockBtn:SetChecked(UIThingsDB.castBar.targetBar.locked)
+    targetLockBtn:SetScript("OnClick", function(self)
+        UIThingsDB.castBar.targetBar.locked = not not self:GetChecked()
+        UpdateCastBar()
+    end)
+
+    -- Target X Position
+    local txLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    txLabel:SetPoint("TOPLEFT", 20, -655)
+    txLabel:SetText("X Position:")
+
+    local txEditBox = CreateFrame("EditBox", "UIThingsTargetCastBarPosX", child, "InputBoxTemplate")
+    txEditBox:SetSize(60, 20)
+    txEditBox:SetPoint("LEFT", txLabel, "RIGHT", 8, 0)
+    txEditBox:SetAutoFocus(false)
+    txEditBox:SetNumeric(false)
+    txEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.targetBar.pos.x or 0)))
+    txEditBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val then
+            UIThingsDB.castBar.targetBar.pos.x = RoundCoord(val)
+            self:SetText(tostring(UIThingsDB.castBar.targetBar.pos.x))
+            UpdateCastBar()
+        end
+        self:ClearFocus()
+    end)
+    txEditBox:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(RoundCoord(UIThingsDB.castBar.targetBar.pos.x or 0)))
+        self:ClearFocus()
+    end)
+
+    -- Target Y Position
+    local tyLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    tyLabel:SetPoint("TOPLEFT", 200, -655)
+    tyLabel:SetText("Y Position:")
+
+    local tyEditBox = CreateFrame("EditBox", "UIThingsTargetCastBarPosY", child, "InputBoxTemplate")
+    tyEditBox:SetSize(60, 20)
+    tyEditBox:SetPoint("LEFT", tyLabel, "RIGHT", 8, 0)
+    tyEditBox:SetAutoFocus(false)
+    tyEditBox:SetNumeric(false)
+    tyEditBox:SetText(tostring(RoundCoord(UIThingsDB.castBar.targetBar.pos.y or 0)))
+    tyEditBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val then
+            UIThingsDB.castBar.targetBar.pos.y = RoundCoord(val)
+            self:SetText(tostring(UIThingsDB.castBar.targetBar.pos.y))
+            UpdateCastBar()
+        end
+        self:ClearFocus()
+    end)
+    tyEditBox:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(RoundCoord(UIThingsDB.castBar.targetBar.pos.y or 0)))
+        self:ClearFocus()
+    end)
+
+    -- Target bar color
+    Helpers.CreateColorSwatch(child, "Target Bar Color", UIThingsDB.castBar.targetBar.barColor, UpdateCastBar, 20, -685)
 end

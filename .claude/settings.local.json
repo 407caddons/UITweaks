@@ -72,7 +72,10 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:wago.io)",
       "WebFetch(domain:www.curseforge.com)",
-      "WebFetch(domain:www.wowhead.com)"
+      "WebFetch(domain:www.wowhead.com)",
+      "Bash(wc -l \"C:\\\\Program Files \\(x86\\)\\\\World of Warcraft\\\\_retail_\\\\Interface\\\\AddOns\\\\MythicDungeonCasts\\\\MythicDungeonCasts.lua\")",
+      "Bash(xxd)",
+      "WebFetch(domain:wowwiki-archive.fandom.com)"
     ]
   }
 }

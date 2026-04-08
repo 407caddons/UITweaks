@@ -204,14 +204,19 @@ end
 
 -- == DEATH NOTIFICATION ==
 
-local deathAnnounced = {}  -- [unitToken] = true while dead, cleared on resurrection
+local deathAnnounced = {} -- [unitToken] = true while dead, cleared on resurrection
 
 local function GetRoleLabel(unit)
     local role = UnitGroupRolesAssigned(unit)
-    if role == "TANK"    then return "Tank"
-    elseif role == "HEALER"  then return "Healer"
-    elseif role == "DAMAGER" then return "DPS"
-    else return "" end
+    if role == "TANK" then
+        return "Tank"
+    elseif role == "HEALER" then
+        return "Healer"
+    elseif role == "DAMAGER" then
+        return "DPS"
+    else
+        return ""
+    end
 end
 
 -- UNIT_HEALTH passes non-secret unit tokens; handles both death detection and
@@ -220,6 +225,8 @@ local function OnUnitHealth(event, unitTarget)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.deathNotify then return end
     if not unitTarget or issecretvalue(unitTarget) then return end
+
+    if UnitIsDead("player") then return end
 
     local isParty = unitTarget:match("^party%d+$")
     local isRaid  = unitTarget:match("^raid%d+$")
@@ -323,109 +330,6 @@ end
 -- Expose ApplyUIScale
 function Misc.ApplyUIScale()
     ApplyUIScale()
-end
-
--- == PREY ICON REPOSITIONER ==
-
-local preyMoverFrame = nil
-local preyPosTicker = nil
-
-local function ApplyPreyIconPosition()
-    local container = _G["UIWidgetPowerBarContainerFrame"]
-    if not container or not container:IsShown() then return end
-    local s = UIThingsDB.misc
-    if not s or not s.preyIconLocked then return end
-    local x, y = s.preyIconX or 0, s.preyIconY or 0
-    container:ClearAllPoints()
-    container:SetPoint("CENTER", UIParent, "CENTER", x, y)
-    -- FrontModelScene and BackModelScene are anchored to UIParent by Blizzard's
-    -- widget system independently of the container, so move them too.
-    if container.FrontModelScene then
-        container.FrontModelScene:ClearAllPoints()
-        container.FrontModelScene:SetPoint("CENTER", UIParent, "CENTER", x, y)
-    end
-    if container.BackModelScene then
-        container.BackModelScene:ClearAllPoints()
-        container.BackModelScene:SetPoint("CENTER", UIParent, "CENTER", x, y)
-    end
-end
-
-local function EnsurePreyMover()
-    if preyMoverFrame then return end
-    preyMoverFrame = CreateFrame("Frame", "LunaPreyMoverFrame", UIParent, "BackdropTemplate")
-    preyMoverFrame:SetSize(80, 80)
-    preyMoverFrame:SetFrameStrata("HIGH")
-    preyMoverFrame:SetMovable(true)
-    preyMoverFrame:RegisterForDrag("LeftButton")
-    preyMoverFrame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    preyMoverFrame:SetBackdropColor(0.1, 0.5, 0.1, 0.8)
-    preyMoverFrame:SetBackdropBorderColor(0, 1, 0, 1)
-    local label = preyMoverFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    label:SetPoint("CENTER")
-    label:SetText("Prey\nIcon")
-    preyMoverFrame:SetScript("OnDragStart", function(self)
-        self:StartMoving()
-    end)
-    preyMoverFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local fx, fy = self:GetCenter()
-        local px, py = UIParent:GetCenter()
-        UIThingsDB.misc.preyIconX = math.floor(fx - px + 0.5)
-        UIThingsDB.misc.preyIconY = math.floor(fy - py + 0.5)
-        ApplyPreyIconPosition()
-    end)
-    preyMoverFrame:Hide()
-end
-
-function Misc.UnlockPreyIcon()
-    UIThingsDB.misc.preyIconLocked = false
-    if preyPosTicker then
-        preyPosTicker:Cancel()
-        preyPosTicker = nil
-    end
-    EnsurePreyMover()
-    preyMoverFrame:ClearAllPoints()
-    preyMoverFrame:SetPoint("CENTER", UIParent, "CENTER",
-        UIThingsDB.misc.preyIconX or 0, UIThingsDB.misc.preyIconY or 0)
-    preyMoverFrame:EnableMouse(true)
-    preyMoverFrame:Show()
-end
-
-function Misc.LockPreyIcon()
-    if preyMoverFrame and preyMoverFrame:IsShown() then
-        local fx, fy = preyMoverFrame:GetCenter()
-        local px, py = UIParent:GetCenter()
-        UIThingsDB.misc.preyIconX = math.floor(fx - px + 0.5)
-        UIThingsDB.misc.preyIconY = math.floor(fy - py + 0.5)
-        preyMoverFrame:EnableMouse(false)
-        preyMoverFrame:Hide()
-    end
-    UIThingsDB.misc.preyIconLocked = true
-    ApplyPreyIconPosition()
-    -- Start ticker to re-apply whenever the widget system repositions the frame
-    if not preyPosTicker then
-        preyPosTicker = C_Timer.NewTicker(0.5, ApplyPreyIconPosition)
-    end
-end
-
-function Misc.ApplyPreyIconSettings()
-    if not UIThingsDB.misc then return end
-    if UIThingsDB.misc.preyIconLocked then
-        -- Ensure ticker is running to maintain position
-        if not preyPosTicker then
-            preyPosTicker = C_Timer.NewTicker(0.5, ApplyPreyIconPosition)
-        end
-    else
-        if preyPosTicker then
-            preyPosTicker:Cancel()
-            preyPosTicker = nil
-        end
-    end
 end
 
 -- == EVENTS ==
@@ -533,13 +437,55 @@ if UIThingsDB and UIThingsDB.misc and UIThingsDB.misc.quickDestroy then
 end
 
 local EventBus = addonTable.EventBus
-local ApplyMiscEvents -- forward declaration
-local HookTooltipClassColors -- forward declaration
-local HookTooltipSpellID -- forward declaration
+local ApplyMiscEvents                          -- forward declaration
+local HookTooltipClassColors                   -- forward declaration
+local HookTooltipSpellID                       -- forward declaration
 local RegisterMiscEvents, UnregisterMiscEvents -- forward declarations (defined below)
 local miscEventsRegistered = false
 
 -- Named event callbacks
+-- == PLUME BUFF ALERT ==
+
+local plumeAlertFrame = CreateFrame("Frame", "UIThingsPlumeAlert", UIParent, "BackdropTemplate")
+plumeAlertFrame:SetSize(400, 50)
+plumeAlertFrame:SetPoint("TOP", 0, -380)
+plumeAlertFrame:SetFrameStrata("DIALOG")
+plumeAlertFrame:Hide()
+
+plumeAlertFrame.text = plumeAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+plumeAlertFrame.text:SetPoint("CENTER")
+plumeAlertFrame.text:SetTextColor(1, 0.2, 0.2, 1)
+
+local function CheckPlumeBuff()
+    if InCombatLockdown() then return end
+    if not UIThingsDB.misc.plumeAlert then return end
+
+    for i = 1, 40 do
+        local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if not auraData then break end
+        local name = auraData.name
+        if name and (name == "Umbral Plume" or name == "Radiant Plume") then
+            local data = C_TooltipInfo.GetUnitAura("player", i, "HELPFUL")
+            if data and data.lines then
+                for _, line in ipairs(data.lines) do
+                    local text = line.leftText
+                    if text and text:match("increased by") then
+                        local value = tonumber(text:match("increased by (%d+)"))
+                        if value and value < 100 then
+                            plumeAlertFrame.text:SetText(string.format("%s: %d (below 100!)", name, value))
+                            plumeAlertFrame:Show()
+                            addonTable.Core.SafeAfter(10, function()
+                                plumeAlertFrame:Hide()
+                            end)
+                        end
+                        return
+                    end
+                end
+            end
+        end
+    end
+end
+
 local function OnPlayerEnteringWorld()
     if not UIThingsDB.misc then return end
     ApplyMiscEvents()
@@ -555,6 +501,7 @@ local function OnPlayerEnteringWorld()
             HookTooltipSpellID()
         end
         addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
+        addonTable.Core.SafeAfter(2, CheckPlumeBuff)
     end
 end
 
@@ -803,7 +750,7 @@ UnregisterMiscEvents = function()
     if not miscEventsRegistered then return end
     miscEventsRegistered = false
     EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
-    ApplyMiscEvents()  -- unregisters all sub-feature events
+    ApplyMiscEvents() -- unregisters all sub-feature events
 end
 
 -- PLAYER_LOGIN fires once per session; bootstrap registration if enabled
@@ -813,7 +760,6 @@ EventBus.Register("PLAYER_LOGIN", function()
             ApplyUIScale()
             RegisterMiscEvents()
         end
-        Misc.ApplyPreyIconSettings()
     end
 end, "Misc")
 

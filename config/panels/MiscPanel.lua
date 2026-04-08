@@ -250,43 +250,16 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
 
-    -- Prey Icon Section
-    Helpers.CreateSectionHeader(panel, "Prey Icon Position", -490)
+    -- Debug Section
+    Helpers.CreateSectionHeader(panel, "Debug", -480)
 
-    local preyInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    preyInfo:SetPoint("TOPLEFT", 20, -520)
-    preyInfo:SetText("Unlock to drag the prey hunt icon to your preferred position.")
-    preyInfo:SetTextColor(0.8, 0.8, 0.8)
-
-    local preyUnlockBtn = CreateFrame("Button", "UIThingsMiscPreyUnlock", panel, "UIPanelButtonTemplate")
-    preyUnlockBtn:SetSize(120, 24)
-    preyUnlockBtn:SetPoint("TOPLEFT", 20, -545)
-
-    local preyLockBtn = CreateFrame("Button", "UIThingsMiscPreyLock", panel, "UIPanelButtonTemplate")
-    preyLockBtn:SetSize(120, 24)
-    preyLockBtn:SetPoint("LEFT", preyUnlockBtn, "RIGHT", 8, 0)
-
-    local function UpdatePreyButtons()
-        local locked = UIThingsDB.misc.preyIconLocked
-        preyUnlockBtn:SetEnabled(locked)
-        preyLockBtn:SetEnabled(not locked)
-    end
-
-    preyUnlockBtn:SetText("Unlock")
-    preyUnlockBtn:SetScript("OnClick", function()
-        if addonTable.Misc and addonTable.Misc.UnlockPreyIcon then
-            addonTable.Misc.UnlockPreyIcon()
-        end
-        UpdatePreyButtons()
+    -- Plume Buff Alert
+    local plumeBtn = CreateFrame("CheckButton", "UIThingsMiscPlumeAlert", panel, "ChatConfigCheckButtonTemplate")
+    plumeBtn:SetPoint("TOPLEFT", 20, -510)
+    _G[plumeBtn:GetName() .. "Text"]:SetText("Alert if Plume Buff Below 100 (Umbral/Radiant)")
+    plumeBtn:SetChecked(UIThingsDB.misc.plumeAlert)
+    plumeBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.plumeAlert = self:GetChecked()
     end)
 
-    preyLockBtn:SetText("Lock")
-    preyLockBtn:SetScript("OnClick", function()
-        if addonTable.Misc and addonTable.Misc.LockPreyIcon then
-            addonTable.Misc.LockPreyIcon()
-        end
-        UpdatePreyButtons()
-    end)
-
-    UpdatePreyButtons()
 end

@@ -24,6 +24,16 @@ local function FormatTimeSigned(seconds)
     return string.format("%s%d:%02d", sign, m, s)
 end
 
+-- Death penalty per death in seconds, based on key level:
+-- +2 to +5:  0s (Lindormi's Guidance removes penalty)
+-- +6 to +11: 5s (Challenger's Burden)
+-- +12+:      15s (Xal'atath's Guile)
+local function GetDeathPenaltySecs()
+    if state.level < 6 then return 0 end
+    if state.level < 12 then return 5 end
+    return 15
+end
+
 -- ============================================================
 -- State
 -- ============================================================
@@ -790,9 +800,9 @@ local function EnableChallengeMode()
 
     LoadKeyDetails()
 
-    local deathCount, timeLost = C_ChallengeMode.GetDeathCount()
+    local deathCount = C_ChallengeMode.GetDeathCount()
     state.deathCount = deathCount or 0
-    state.deathTimeLost = timeLost or 0
+    state.deathTimeLost = state.deathCount * GetDeathPenaltySecs() * 1000
 
     UpdateObjectives()
     RenderDeaths()
@@ -885,10 +895,10 @@ OnChallengeEvent = function(self, event, ...)
     if event == "CHALLENGE_MODE_COMPLETED" then
         CompleteChallenge()
     elseif event == "CHALLENGE_MODE_DEATH_COUNT_UPDATED" then
-        local deathCount, timeLost = C_ChallengeMode.GetDeathCount()
+        local deathCount = C_ChallengeMode.GetDeathCount()
         local prevCount = state.deathCount
         state.deathCount = deathCount or 0
-        state.deathTimeLost = timeLost or 0
+        state.deathTimeLost = state.deathCount * GetDeathPenaltySecs() * 1000
         -- If death count increased, scan for who is dead
         if state.deathCount > prevCount then
             local members = GetNumGroupMembers()

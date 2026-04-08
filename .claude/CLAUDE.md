@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with LunaUITweaks.
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, loot checklist, combat timer, scrolling combat text (SCT), custom layout frames, personal order alerts, AH filtering, action bar skinning, custom cast bar, chat skinning, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, loot checklist, combat timer, scrolling combat text (SCT), custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
@@ -72,16 +72,13 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | MinimapCustom.lua | — | Custom minimap frame (shape, border, zone text, clock) |
 | Vendor.lua | `Vendor` | Auto-repair, sell greys, durability warnings |
 | Loot.lua | `Loot` | Loot toast notifications with quality filtering and item level |
-| LootChecklist.lua | — | Per-character loot checklist tracking |
 | Combat.lua | `Combat` | In-combat duration display (MM:SS) |
 | SCT.lua | `SCT` | Scrolling combat text |
 | Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, auto-invite |
 | Frames.lua | `Frames` | User-created colored rectangles for UI layout |
 | TalentReminder.lua | `TalentReminder` | Zone-based talent/spec change alerts |
 | TalentManager.lua | `TalentManager` | Talent loadout management and switching |
-| ActionBars.lua | `ActionBars` | Action bar skinning, button spacing/sizing, bar offsets |
 | CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
-| ChatSkin.lua | `ChatSkin` | Chat frame skinning, keyword highlighting, timestamps |
 | Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
 | MplusTimer.lua | — | Mythic+ dungeon timer display |
 | Coordinates.lua | — | Map coordinates display |
@@ -138,9 +135,9 @@ Because the config window is built lazily on first open, companion registrations
 
 ## Config Navigation Order
 
-Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–26. Companion panels are inserted at 27, 28, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–23. Companion panels are inserted at 24, 25, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
 
-Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6=SCT, 7=CastBar, 8=Kick, 9=MplusTimer, 10=ActionBars, 11=Minimap, 12=Coordinates, 13=Frames, 14=ChatSkin, 15=DamageMeter, 16=Vendor, 17=Loot, 18=Notifications, 19=Reagents, 20=TalentManager, 21=Talent, 22=Misc, 23=Widgets, 24=Warehousing, 25=QueueTimer, 26=LootChecklist, then companions, then AddonVersions (last).
+Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6=CastBar, 7=Kick, 8=MplusTimer, 9=Minimap, 10=Coordinates, 11=Frames, 12=DamageMeter, 13=Vendor, 14=Loot, 15=Notifications, 16=Reagents, 17=TalentManager, 18=Talent, 19=Misc, 20=Widgets, 21=Warehousing, 22=QueueTimer, then companions, then AddonVersions (last=23+companions).
 
 ## ObjectiveTracker Taint — Confirmed Root Cause
 
