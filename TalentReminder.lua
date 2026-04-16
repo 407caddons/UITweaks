@@ -511,12 +511,13 @@ function TalentReminder.CompareTalents(savedTalents)
         end
     end
 
-    -- Find extra talents (talents you have but aren't in the saved build)
+    -- Find extra talents (talents you have but aren't in the saved build).
+    -- Skip auto-granted nodes (CanRefundRank = false): those can't be changed
+    -- by the player, so they should never block a match.
     local extraCount = 0
     for nodeID, current in pairs(currentTalents) do
         if not savedTalents[nodeID] then
-            -- Only count as extra if rank > 0
-            if current.rank > 0 then
+            if current.rank > 0 and C_Traits.CanRefundRank(configID, nodeID) then
                 extraCount = extraCount + 1
 
                 -- Get node info for the extra talent
@@ -1131,52 +1132,77 @@ function TalentReminder.ApplyTalents(reminder)
     end
     table.sort(sortedNodes, function(a, b) return a.posY < b.posY end)
 
-    for _, entry in ipairs(sortedNodes) do
-        local nodeID = entry.nodeID
-        local savedData = entry.savedData
-        local nodeInfo = entry.nodeInfo
-        local current = currentTalents[nodeID]
+    -- Retry loop: some nodes fail on the first pass because a lateral dependency at
+    -- the same posY wasn't yet purchased. Keep retrying while progress is made.
+    local pending = sortedNodes
+    for _ = 1, 10 do
+        if #pending == 0 then break end
+        local stillPending = {}
+        local passChanges = 0
 
-        -- Check if this is a choice node (has multiple entries)
-        if nodeInfo.type == 2 then -- TYPE_CHOICE
-            -- Use SetSelection for choice nodes
-            if not current or current.entryID ~= savedData.entryID or current.rank == 0 then
-                local success = C_Traits.SetSelection(configID, nodeID, savedData.entryID)
-                if success then
-                    changes = changes + 1
-                else
-                    errors = errors + 1
-                    addonTable.Core.Log("TalentReminder",
-                        string.format("Failed to set selection for node %d", nodeID), 2)
+        for _, entry in ipairs(pending) do
+            local nodeID = entry.nodeID
+            local savedData = entry.savedData
+            local nodeInfo = entry.nodeInfo
+
+            -- Read live rank from API (don't rely on stale currentTalents snapshot)
+            local liveInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            local currentRank = liveInfo and liveInfo.currentRank or 0
+            local liveEntryID = liveInfo and liveInfo.activeEntry and liveInfo.activeEntry.entryID
+
+            local nodeFailed = false
+
+            if nodeInfo.type == 2 then -- TYPE_CHOICE / Selection
+                if not liveEntryID or liveEntryID ~= savedData.entryID or currentRank == 0 then
+                    if C_Traits.SetSelection(configID, nodeID, savedData.entryID) then
+                        changes = changes + 1
+                        passChanges = passChanges + 1
+                        -- Re-read rank after selection so the purchase loop below starts correctly
+                        liveInfo = C_Traits.GetNodeInfo(configID, nodeID)
+                        currentRank = liveInfo and liveInfo.currentRank or 0
+                    else
+                        nodeFailed = true
+                    end
+                end
+                if not nodeFailed then
+                    for i = currentRank + 1, savedData.rank do
+                        if C_Traits.PurchaseRank(configID, nodeID) then
+                            changes = changes + 1
+                            passChanges = passChanges + 1
+                        else
+                            nodeFailed = true
+                            break
+                        end
+                    end
+                end
+            else
+                for i = currentRank + 1, savedData.rank do
+                    if C_Traits.PurchaseRank(configID, nodeID) then
+                        changes = changes + 1
+                        passChanges = passChanges + 1
+                    else
+                        nodeFailed = true
+                        break
+                    end
                 end
             end
 
-            -- After setting selection, purchase ranks if needed
-            local currentRank = current and current.rank or 0
-            for i = currentRank + 1, savedData.rank do
-                local success = C_Traits.PurchaseRank(configID, nodeID)
-                if success then
-                    changes = changes + 1
-                else
-                    errors = errors + 1
-                    addonTable.Core.Log("TalentReminder",
-                        string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
-                end
-            end
-        else
-            -- Regular node - just purchase ranks
-            local currentRank = current and current.rank or 0
-            for i = currentRank + 1, savedData.rank do
-                local success = C_Traits.PurchaseRank(configID, nodeID)
-                if success then
-                    changes = changes + 1
-                else
-                    errors = errors + 1
-                    addonTable.Core.Log("TalentReminder",
-                        string.format("Failed to purchase rank %d for node %d", i, nodeID), 2)
-                end
+            if nodeFailed then
+                table.insert(stillPending, entry)
             end
         end
+
+        if passChanges == 0 then
+            -- No progress this pass; remaining nodes are truly blocked
+            errors = errors + #stillPending
+            for _, entry in ipairs(stillPending) do
+                addonTable.Core.Log("TalentReminder",
+                    string.format("Failed to purchase node %d after all retries", entry.nodeID), 2)
+            end
+            break
+        end
+
+        pending = stillPending
     end
 
     -- Step 3: Commit the changes

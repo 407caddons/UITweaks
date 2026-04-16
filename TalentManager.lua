@@ -540,8 +540,25 @@ function TalentManager.RefreshBuildList()
                                 if reminder.talents and addonTable.TalentReminder and addonTable.TalentReminder.CompareTalents then
                                     local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
                                     isMatch = (#mismatches == 0)
+                                    -- DEBUG: log match details for each build
+                                    local buildName = reminder.name or "Unnamed"
+                                    if #mismatches > 0 then
+                                        Log("TalentManager", string.format("BUILD '%s' (snapshot): %d mismatches", buildName, #mismatches), LogLevel.DEBUG)
+                                        for mi, mm in ipairs(mismatches) do
+                                            Log("TalentManager", string.format("  mismatch %d: type=%s node=%s name=%s",
+                                                mi, tostring(mm.type), tostring(mm.nodeID), tostring(mm.name)), LogLevel.DEBUG)
+                                        end
+                                    else
+                                        Log("TalentManager", string.format("BUILD '%s' (snapshot): MATCH", buildName), LogLevel.DEBUG)
+                                    end
                                 elseif reminder.importString then
                                     isMatch = ImportStringMatchesCurrent(reminder.importString)
+                                    -- DEBUG: log match result for import-string builds
+                                    local buildName = reminder.name or "Unnamed"
+                                    Log("TalentManager", string.format("BUILD '%s' (import): match=%s", buildName, tostring(isMatch)), LogLevel.DEBUG)
+                                else
+                                    -- DEBUG: no talent data at all
+                                    Log("TalentManager", string.format("BUILD '%s': no talents and no importString", reminder.name or "Unnamed"), LogLevel.DEBUG)
                                 end
 
                                 if tonumber(instanceID) == 0 then
@@ -1716,14 +1733,16 @@ function TalentManager.LoadBuild(reminder)
         local success = addonTable.TalentReminder.ApplyTalents(reminder)
         if success then
             Log("TalentManager", "Applied build: " .. (reminder.name or "Unknown"), LogLevel.INFO)
-            addonTable.Core.SafeAfter(0.5, function()
-                if mainPanel and mainPanel:IsShown() then
-                    TalentManager.RefreshBuildList()
-                end
-            end)
         else
             Log("TalentManager", "Failed to apply build - may need to be out of combat", LogLevel.WARN)
         end
+        -- Always refresh the list after an apply attempt so the checkmark
+        -- reflects the actual post-load talent state, even on partial success.
+        addonTable.Core.SafeAfter(0.5, function()
+            if mainPanel and mainPanel:IsShown() then
+                TalentManager.RefreshBuildList()
+            end
+        end)
     else
         Log("TalentManager", "TalentReminder module not available", LogLevel.ERROR)
     end

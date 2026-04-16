@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with LunaUITweaks.
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, loot checklist, combat timer, scrolling combat text (SCT), custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
@@ -28,7 +28,7 @@ addonTable.ModuleName = {}
 
 The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** and on `ADDON_LOADED`:
 1. Applies default settings to `UIThingsDB` (recursive merge preserving existing user values)
-2. Calls `Initialize()` on Minimap, Frames, TalentReminder, Widgets, ChatSkin, QuestReminder, DamageMeter
+2. Calls `Initialize()` on Minimap, Frames, TalentReminder, Widgets, QuestReminder, DamageMeter
 3. Registers slash commands (`/luit`, `/luithings`) and Addon Compartment function
 4. **Does NOT call `Config.Initialize()`** — the config window is built lazily on first open so companion addons can register their panels first
 
@@ -40,7 +40,6 @@ The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** a
 - **`LunaUITweaks_QuestReminders`** — User quest reminder definitions
 - **`LunaUITweaks_WarehousingData`** — Bank/warehouse item tracking data
 - **`LunaUITweaks_CharacterData`** — Central character registry
-- **`LunaUITweaks_LootChecklist`** *(per-character)* — Loot checklist tracking
 
 Defaults in Core.lua's `DEFAULTS` table, merged via `ApplyDefaults()`. Tables with an `r` field are treated as color values (leaf, not recursed into).
 
@@ -61,6 +60,7 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | Core.lua | `Core` | Initialization, defaults, logging, timer utility |
 | EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
 | Profiler.lua | `Profiler` | Performance profiling and CPU usage tracking |
+| MplusData.lua | — | Static M+ dungeon data (mob force counts) for the M+ timer |
 | config/ConfigMain.lua | `Config` | Config window shell, tab navigation, panel wiring |
 | config/Helpers.lua | `ConfigHelpers` | Shared UI helpers (font dropdowns, section headers, color swatches) |
 | config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module |
@@ -73,7 +73,6 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | Vendor.lua | `Vendor` | Auto-repair, sell greys, durability warnings |
 | Loot.lua | `Loot` | Loot toast notifications with quality filtering and item level |
 | Combat.lua | `Combat` | In-combat duration display (MM:SS) |
-| SCT.lua | `SCT` | Scrolling combat text |
 | Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, auto-invite |
 | Frames.lua | `Frames` | User-created colored rectangles for UI layout |
 | TalentReminder.lua | `TalentReminder` | Zone-based talent/spec change alerts |
@@ -159,7 +158,7 @@ Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6
 
 **Frame positioning migration status:**
 
-Migrated to CENTER anchor ✓: `DamageMeter`, `ChatSkin`, `Frames`, `Widgets`
+Migrated to CENTER anchor ✓: `DamageMeter`, `Frames`, `Widgets`
 
 Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`
 

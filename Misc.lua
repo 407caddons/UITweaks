@@ -459,6 +459,7 @@ plumeAlertFrame.text:SetTextColor(1, 0.2, 0.2, 1)
 local function CheckPlumeBuff()
     if InCombatLockdown() then return end
     if not UIThingsDB.misc.plumeAlert then return end
+    if C_ChallengeMode.IsChallengeModeActive() then return end
 
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)

@@ -24,16 +24,6 @@ local function FormatTimeSigned(seconds)
     return string.format("%s%d:%02d", sign, m, s)
 end
 
--- Death penalty per death in seconds, based on key level:
--- +2 to +5:  0s (Lindormi's Guidance removes penalty)
--- +6 to +11: 5s (Challenger's Burden)
--- +12+:      15s (Xal'atath's Guile)
-local function GetDeathPenaltySecs()
-    if state.level < 6 then return 0 end
-    if state.level < 12 then return 5 end
-    return 15
-end
-
 -- ============================================================
 -- State
 -- ============================================================
@@ -52,6 +42,7 @@ local state = {
     deathCount = 0,
     deathTimeLost = 0, -- milliseconds
     deathLog = {},     -- { [playerName] = count }
+    knownDead = {},    -- { [playerName] = true } units currently dead, to avoid double-counting ghosts
     currentCount = 0,
     totalCount = 100,
     objectives = {}, -- { name, time, completed }
@@ -77,6 +68,7 @@ local function ResetState()
     state.deathCount = 0
     state.deathTimeLost = 0
     wipe(state.deathLog)
+    wipe(state.knownDead)
     state.currentCount = 0
     state.totalCount = 100
     state.objectives = {}
@@ -84,6 +76,16 @@ local function ResetState()
     state.forcesCompletionTime = nil
     state.completedOnTime = nil
     state.completionTimeMs = nil
+end
+
+-- Death penalty per death in seconds, based on key level:
+-- +2 to +5:  0s (Lindormi's Guidance removes penalty)
+-- +6 to +11: 5s (Challenger's Burden)
+-- +12+:      15s (Xal'atath's Guile)
+local function GetDeathPenaltySecs()
+    if state.level < 6 then return 0 end
+    if state.level < 12 then return 5 end
+    return 15
 end
 
 -- ============================================================
@@ -899,15 +901,26 @@ OnChallengeEvent = function(self, event, ...)
         local prevCount = state.deathCount
         state.deathCount = deathCount or 0
         state.deathTimeLost = state.deathCount * GetDeathPenaltySecs() * 1000
-        -- If death count increased, scan for who is dead
+        -- If death count increased, scan for who is newly dead
         if state.deathCount > prevCount then
             local members = GetNumGroupMembers()
+            -- Remove resurrected players from knownDead first
             for i = 1, members do
                 local unit = "party" .. i
                 if i == members then unit = "player" end
                 local name = GetUnitName(unit, false)
-                if name and UnitIsDeadOrGhost(unit) then
+                if name and not UnitIsDeadOrGhost(unit) then
+                    state.knownDead[name] = nil
+                end
+            end
+            -- Count only units that are newly dead (not already known ghosts)
+            for i = 1, members do
+                local unit = "party" .. i
+                if i == members then unit = "player" end
+                local name = GetUnitName(unit, false)
+                if name and UnitIsDeadOrGhost(unit) and not state.knownDead[name] then
                     state.deathLog[name] = (state.deathLog[name] or 0) + 1
+                    state.knownDead[name] = true
                 end
             end
         end

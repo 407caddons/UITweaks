@@ -265,9 +265,22 @@ local function FetchSpellEntries(sessKey, mtype, guid)
     end
 
     if sessKey == "current" then
-        local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
-        if ok and srcData then
-            AccumulateSpells(srcData.combatSpells)
+        if InCombatLockdown() then
+            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
+            if ok and srcData then
+                AccumulateSpells(srcData.combatSpells)
+            end
+        else
+            -- Post-combat: use the last finalized session by ID, same as FetchEntries does.
+            -- GetCombatSessionSourceFromType(1, ...) is empty after combat ends.
+            local sessions = GetSessions()
+            if #sessions > 0 then
+                local sid = sessions[#sessions].sessionID
+                local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sid, enumType, guid)
+                if ok and srcData then
+                    AccumulateSpells(srcData.combatSpells)
+                end
+            end
         end
     elseif sessKey == "overall" then
         local sessions = GetSessions()
