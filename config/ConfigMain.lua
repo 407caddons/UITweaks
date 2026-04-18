@@ -52,14 +52,6 @@ function addonTable.Config.Initialize()
                 end
             end
 
-            -- Tracker
-            if UIThingsDB.tracker then
-                UIThingsDB.tracker.locked = true
-                if addonTable.ObjectiveTracker and addonTable.ObjectiveTracker.UpdateSettings then
-                    addonTable.ObjectiveTracker.UpdateSettings()
-                end
-            end
-
             -- Combat Timer
             if UIThingsDB.combat then
                 UIThingsDB.combat.locked = true
@@ -179,29 +171,28 @@ function addonTable.Config.Initialize()
 
         -- List of Modules
         local modules = {
-            { id = 1,  name = "Tracker",          key = "tracker",       icon = "Interface\\Icons\\Inv_Misc_Book_09" },
-            { id = 2,  name = "Quest Reminders",  key = "questReminder", icon = "Interface\\Icons\\Inv_Misc_Book_08" },
-            { id = 3,  name = "Quest Auto",       key = "questAuto",     icon = "Interface\\Icons\\Inv_Misc_Book_08" },
-            { id = 4,  name = "XP Bar",           key = "xpBar",         icon = "Interface\\Icons\\XP_Icon" },
-            { id = 5,  name = "Combat",           key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
-            { id = 6,  name = "Cast Bar",         key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
-            { id = 7,  name = "Kick CDs",         key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
-            { id = 8,  name = "M+ Timer",         key = "mplusTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
-            { id = 9,  name = "Minimap",          key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
-            { id = 10, name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
-            { id = 11, name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
-            { id = 12, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
-            { id = 13, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
-            { id = 14, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
-            { id = 15, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
-            { id = 16, name = "Reagents",         key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
-            { id = 17, name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 18, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = 19, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
-            { id = 20, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
-            { id = 21, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
-            { id = 22, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
-            { id = 23, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 1,  name = "Quest Reminders",  key = "questReminder", icon = "Interface\\Icons\\Inv_Misc_Book_08" },
+            { id = 2,  name = "Quest Auto",       key = "questAuto",     icon = "Interface\\Icons\\Inv_Misc_Book_08" },
+            { id = 3,  name = "XP Bar",           key = "xpBar",         icon = "Interface\\Icons\\XP_Icon" },
+            { id = 4,  name = "Combat",           key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
+            { id = 5,  name = "Cast Bar",         key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = 6,  name = "Kick CDs",         key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
+            { id = 7,  name = "M+ Timer",         key = "mplusTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
+            { id = 8,  name = "Minimap",          key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
+            { id = 9,  name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
+            { id = 10, name = "Frames",           key = "frames",        icon = "Interface\\Icons\\Inv_Box_01" },
+            { id = 11, name = "Damage Meter",     key = "damageMeter",   icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
+            { id = 12, name = "Vendor",           key = "vendor",        icon = "Interface\\Icons\\Inv_Misc_Coin_02" },
+            { id = 13, name = "Loot",             key = "loot",          icon = "Interface\\Icons\\Inv_Box_02" },
+            { id = 14, name = "Notifications",    key = "notifications", icon = "Interface\\Icons\\Inv_Misc_Bell_01" },
+            { id = 15, name = "Reagents",         key = "reagents",      icon = "Interface\\Icons\\Inv_Misc_Herb_01" },
+            { id = 16, name = "Talent Builds",    key = "talentManager", icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 17, name = "Talent Reminders", key = "talent",        icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = 18, name = "General UI",       key = "misc",          icon = "Interface\\Icons\\Inv_Misc_Gear_01" },
+            { id = 19, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
+            { id = 20, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
+            { id = 21, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
+            { id = 22, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         -- Insert companion addon panels before AddonVersions (always last)
@@ -234,9 +225,6 @@ function addonTable.Config.Initialize()
         ----------------------------------------------------
         -- Create Sub-Panels (parented to contentContainer)
         ----------------------------------------------------
-        local trackerPanel = CreateFrame("Frame", nil, contentContainer)
-        trackerPanel:SetAllPoints()
-
         local vendorPanel = CreateFrame("Frame", nil, contentContainer)
         vendorPanel:SetAllPoints()
         vendorPanel:Hide()
@@ -326,7 +314,6 @@ function addonTable.Config.Initialize()
         queueTimerPanel:Hide()
 
         -- Store panels
-        addonTable.ConfigPanels.tracker       = trackerPanel
         addonTable.ConfigPanels.vendor        = vendorPanel
         addonTable.ConfigPanels.combat        = combatPanel
         addonTable.ConfigPanels.frames        = framesPanel
@@ -352,41 +339,42 @@ function addonTable.Config.Initialize()
 
         -- Map IDs to Panels
         local idToPanel                       = {
-            [1]  = trackerPanel,
-            [2]  = questReminderPanel,
-            [3]  = questAutoPanel,
-            [4]  = xpBarPanel,
-            [5]  = combatPanel,
-            [6]  = castBarPanel,
-            [7]  = kickPanel,
-            [8]  = mplusTimerPanel,
-            [9]  = minimapPanel,
-            [10] = coordinatesPanel,
-            [11] = framesPanel,
-            [12] = damageMeterPanel,
-            [13] = vendorPanel,
-            [14] = lootPanel,
-            [15] = notificationsPanel,
-            [16] = reagentsPanel,
-            [17] = talentManagerPanel,
-            [18] = talentPanel,
-            [19] = miscPanel,
-            [20] = widgetsPanel,
-            [21] = warehousingPanel,
-            [22] = queueTimerPanel,
-            [23] = addonVersionsPanel,
+            [1]  = questReminderPanel,
+            [2]  = questAutoPanel,
+            [3]  = xpBarPanel,
+            [4]  = combatPanel,
+            [5]  = castBarPanel,
+            [6]  = kickPanel,
+            [7]  = mplusTimerPanel,
+            [8]  = minimapPanel,
+            [9]  = coordinatesPanel,
+            [10] = framesPanel,
+            [11] = damageMeterPanel,
+            [12] = vendorPanel,
+            [13] = lootPanel,
+            [14] = notificationsPanel,
+            [15] = reagentsPanel,
+            [16] = talentManagerPanel,
+            [17] = talentPanel,
+            [18] = miscPanel,
+            [19] = widgetsPanel,
+            [20] = warehousingPanel,
+            [21] = queueTimerPanel,
+            [22] = addonVersionsPanel,
         }
 
-        -- Create companion panels and shift AddonVersions to its new slot
+        -- Create companion panels and shift AddonVersions to its new slot.
+        -- Built-ins fill slots 1..22; AddonVersions was placed at 22. With N
+        -- companions, companions take 22..21+N and AddonVersions moves to 22+N.
         if #companionPanels > 0 then
             local numCompanions = #companionPanels
-            idToPanel[23 + numCompanions] = idToPanel[23]
-            idToPanel[23] = nil
+            idToPanel[22 + numCompanions] = idToPanel[22]
+            idToPanel[22] = nil
             for i, entry in ipairs(companionPanels) do
                 local panel = CreateFrame("Frame", nil, contentContainer)
                 panel:SetAllPoints()
                 panel:Hide()
-                idToPanel[22 + i] = panel
+                idToPanel[21 + i] = panel
                 addonTable.ConfigPanels[entry.key] = panel
                 entry._panelFrame = panel
             end
@@ -482,74 +470,71 @@ function addonTable.Config.Initialize()
         if addonTable.ConfigSetup then
             -- Setup all panels
             -- Pass 'navButtons[i]' as the 'tab' argument for visual compatibility
-            if addonTable.ConfigSetup.Tracker then
-                addonTable.ConfigSetup.Tracker(trackerPanel, navButtons[1], configWindow)
-            end
             if addonTable.ConfigSetup.QuestReminder then
-                addonTable.ConfigSetup.QuestReminder(questReminderPanel, navButtons[2], configWindow)
+                addonTable.ConfigSetup.QuestReminder(questReminderPanel, navButtons[1], configWindow)
             end
             if addonTable.ConfigSetup.QuestAuto then
-                addonTable.ConfigSetup.QuestAuto(questAutoPanel, navButtons[3], configWindow)
+                addonTable.ConfigSetup.QuestAuto(questAutoPanel, navButtons[2], configWindow)
             end
             if addonTable.ConfigSetup.XpBar then
-                addonTable.ConfigSetup.XpBar(xpBarPanel, navButtons[4], configWindow)
+                addonTable.ConfigSetup.XpBar(xpBarPanel, navButtons[3], configWindow)
             end
             if addonTable.ConfigSetup.Combat then
-                addonTable.ConfigSetup.Combat(combatPanel, navButtons[5], configWindow)
+                addonTable.ConfigSetup.Combat(combatPanel, navButtons[4], configWindow)
             end
             if addonTable.ConfigSetup.CastBar then
-                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[6], configWindow)
+                addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[5], configWindow)
             end
             if addonTable.ConfigSetup.Kick then
-                addonTable.ConfigSetup.Kick(kickPanel, navButtons[7], configWindow)
+                addonTable.ConfigSetup.Kick(kickPanel, navButtons[6], configWindow)
             end
             if addonTable.ConfigSetup.MplusTimer then
-                addonTable.ConfigSetup.MplusTimer(mplusTimerPanel, navButtons[8], configWindow)
+                addonTable.ConfigSetup.MplusTimer(mplusTimerPanel, navButtons[7], configWindow)
             end
             if addonTable.ConfigSetup.Minimap then
-                addonTable.ConfigSetup.Minimap(minimapPanel, navButtons[9], configWindow)
+                addonTable.ConfigSetup.Minimap(minimapPanel, navButtons[8], configWindow)
             end
             if addonTable.ConfigSetup.Coordinates then
-                addonTable.ConfigSetup.Coordinates(coordinatesPanel, navButtons[10], configWindow)
+                addonTable.ConfigSetup.Coordinates(coordinatesPanel, navButtons[9], configWindow)
             end
             if addonTable.ConfigSetup.Frames then
-                addonTable.ConfigSetup.Frames(framesPanel, navButtons[11], configWindow)
+                addonTable.ConfigSetup.Frames(framesPanel, navButtons[10], configWindow)
             end
             if addonTable.ConfigSetup.DamageMeter then
-                addonTable.ConfigSetup.DamageMeter(damageMeterPanel, navButtons[12], configWindow)
+                addonTable.ConfigSetup.DamageMeter(damageMeterPanel, navButtons[11], configWindow)
             end
             if addonTable.ConfigSetup.Vendor then
-                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[13], configWindow)
+                addonTable.ConfigSetup.Vendor(vendorPanel, navButtons[12], configWindow)
             end
             if addonTable.ConfigSetup.Loot then
-                addonTable.ConfigSetup.Loot(lootPanel, navButtons[14], configWindow)
+                addonTable.ConfigSetup.Loot(lootPanel, navButtons[13], configWindow)
             end
             if addonTable.ConfigSetup.Notifications then
-                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[15], configWindow)
+                addonTable.ConfigSetup.Notifications(notificationsPanel, navButtons[14], configWindow)
             end
             if addonTable.ConfigSetup.Reagents then
-                addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[16], configWindow)
+                addonTable.ConfigSetup.Reagents(reagentsPanel, navButtons[15], configWindow)
             end
             if addonTable.ConfigSetup.TalentManager then
-                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[17], configWindow)
+                addonTable.ConfigSetup.TalentManager(talentManagerPanel, navButtons[16], configWindow)
             end
             if addonTable.ConfigSetup.Talent then
-                addonTable.ConfigSetup.Talent(talentPanel, navButtons[18], configWindow)
+                addonTable.ConfigSetup.Talent(talentPanel, navButtons[17], configWindow)
             end
             if addonTable.ConfigSetup.Misc then
-                addonTable.ConfigSetup.Misc(miscPanel, navButtons[19], configWindow)
+                addonTable.ConfigSetup.Misc(miscPanel, navButtons[18], configWindow)
             end
             if addonTable.ConfigSetup.Widgets then
-                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[20], configWindow)
+                addonTable.ConfigSetup.Widgets(widgetsPanel, navButtons[19], configWindow)
             end
             if addonTable.ConfigSetup.Warehousing then
-                addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[21], configWindow)
+                addonTable.ConfigSetup.Warehousing(warehousingPanel, navButtons[20], configWindow)
             end
             if addonTable.ConfigSetup.QueueTimer then
-                addonTable.ConfigSetup.QueueTimer(queueTimerPanel, navButtons[22], configWindow)
+                addonTable.ConfigSetup.QueueTimer(queueTimerPanel, navButtons[21], configWindow)
             end
             if addonTable.ConfigSetup.AddonVersions then
-                local avIdx = 23 + #companionPanels
+                local avIdx = 22 + #companionPanels
                 addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[avIdx], configWindow)
             end
         end
@@ -557,7 +542,7 @@ function addonTable.Config.Initialize()
         -- Call companion addon panel setup functions
         for i, entry in ipairs(companionPanels) do
             if entry._panelFrame and entry.setup then
-                entry.setup(entry._panelFrame, navButtons[22 + i], configWindow)
+                entry.setup(entry._panelFrame, navButtons[21 + i], configWindow)
             end
         end
         ----------------------------------------------------

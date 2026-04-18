@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.25.1
+## Version: 1.25.2
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## SavedVariablesPerCharacter:
@@ -29,7 +29,6 @@ Profiler.lua
 # Modular Configuration System
 # Load order: Helpers -> All Panels -> Main Window
 config\Helpers.lua
-config\panels\TrackerPanel.lua
 config\panels\VendorPanel.lua
 config\panels\CombatPanel.lua
 config\panels\FramesPanel.lua
@@ -56,7 +55,6 @@ config\ConfigMain.lua
 
 # Feature modules
 MplusData.lua
-ObjectiveTracker.lua
 MinimapButton.lua
 Vendor.lua
 Loot.lua
@@ -129,6 +127,7 @@ games\Tiles.lua
 games\Boxes.lua
 games\Slide.lua
 games\Lights.lua
+games\Blocks.lua
 
 # Config entry point (now just a stub)
 Config.lua

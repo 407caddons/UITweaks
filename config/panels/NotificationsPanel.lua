@@ -7,7 +7,8 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     Helpers.CreateResetButton(panel, "misc")
     local function UpdateNavColor()
-        local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification or UIThingsDB.misc.boeAlert
+        local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification
+            or UIThingsDB.misc.boeAlert or UIThingsDB.misc.deathNotify or UIThingsDB.misc.whisperAlert
         Helpers.UpdateModuleVisuals(panel, navButton, anyEnabled)
     end
     UpdateNavColor()
@@ -22,7 +23,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 1200)
+    scrollChild:SetSize(panel:GetWidth() - 30, 1400)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -533,4 +534,169 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
         end
     end)
     UIDropDownMenu_SetSelectedValue(deathVoiceDropdown, UIThingsDB.misc.deathTtsVoice or 0)
+
+    -- Max Deaths Slider: stop reading TTS when concurrent dead count exceeds this
+    local deathMaxSlider = CreateFrame("Slider", "UIThingsNotifDeathMax", panel, "OptionsSliderTemplate")
+    deathMaxSlider:SetPoint("TOPLEFT", 40, -1000)
+    deathMaxSlider:SetMinMaxValues(0, 10)
+    deathMaxSlider:SetValueStep(1)
+    deathMaxSlider:SetObeyStepOnDrag(true)
+    deathMaxSlider:SetWidth(200)
+    _G[deathMaxSlider:GetName() .. 'Text']:SetText("Max Deaths Announced: " .. (UIThingsDB.misc.deathMaxCount or 3))
+    _G[deathMaxSlider:GetName() .. 'Low']:SetText("0")
+    _G[deathMaxSlider:GetName() .. 'High']:SetText("10")
+    deathMaxSlider:SetValue(UIThingsDB.misc.deathMaxCount or 3)
+    deathMaxSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.misc.deathMaxCount = value
+        _G[self:GetName() .. 'Text']:SetText("Max Deaths Announced: " .. value)
+    end)
+
+    -- == Whisper Notification Section ==
+    Helpers.CreateSectionHeader(panel, "Whisper Notification", -1050)
+
+    local whisperBtn = CreateFrame("CheckButton", "UIThingsNotifWhisperCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    whisperBtn:SetPoint("TOPLEFT", 20, -1080)
+    _G[whisperBtn:GetName() .. "Text"]:SetText("Alert on whisper received (out of combat)")
+    whisperBtn:SetChecked(UIThingsDB.misc.whisperAlert)
+    whisperBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.whisperAlert = self:GetChecked()
+        if addonTable.Misc and addonTable.Misc.ApplyEvents then
+            addonTable.Misc.ApplyEvents()
+        end
+        UpdateNavColor()
+    end)
+
+    -- Whisper Alert Duration Slider
+    local whisperDurSlider = CreateFrame("Slider", "UIThingsNotifWhisperAlertDur", panel, "OptionsSliderTemplate")
+    whisperDurSlider:SetPoint("TOPLEFT", 40, -1120)
+    whisperDurSlider:SetMinMaxValues(1, 10)
+    whisperDurSlider:SetValueStep(1)
+    whisperDurSlider:SetObeyStepOnDrag(true)
+    whisperDurSlider:SetWidth(200)
+    _G[whisperDurSlider:GetName() .. 'Text']:SetText("Alert Duration: " .. UIThingsDB.misc.whisperAlertDuration .. "s")
+    _G[whisperDurSlider:GetName() .. 'Low']:SetText("1s")
+    _G[whisperDurSlider:GetName() .. 'High']:SetText("10s")
+    whisperDurSlider:SetValue(UIThingsDB.misc.whisperAlertDuration)
+    whisperDurSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.misc.whisperAlertDuration = value
+        _G[self:GetName() .. 'Text']:SetText("Alert Duration: " .. value .. "s")
+    end)
+
+    -- Whisper Alert Color Picker
+    local whisperColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    whisperColorLabel:SetPoint("TOPLEFT", 40, -1160)
+    whisperColorLabel:SetText("Alert Color:")
+
+    local whisperColorSwatch = CreateFrame("Button", nil, panel)
+    whisperColorSwatch:SetSize(20, 20)
+    whisperColorSwatch:SetPoint("LEFT", whisperColorLabel, "RIGHT", 10, 0)
+
+    whisperColorSwatch.tex = whisperColorSwatch:CreateTexture(nil, "OVERLAY")
+    whisperColorSwatch.tex:SetAllPoints()
+    local wc = UIThingsDB.misc.whisperAlertColor
+    whisperColorSwatch.tex:SetColorTexture(wc.r, wc.g, wc.b, wc.a or 1)
+
+    Mixin(whisperColorSwatch, BackdropTemplateMixin)
+    whisperColorSwatch:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    whisperColorSwatch:SetBackdropBorderColor(1, 1, 1)
+
+    whisperColorSwatch:SetScript("OnClick", function()
+        local prevR, prevG, prevB, prevA = wc.r, wc.g, wc.b, wc.a
+        if ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = wc.r,
+                g = wc.g,
+                b = wc.b,
+                opacity = wc.a,
+                hasOpacity = true,
+                swatchFunc = function()
+                    local r, g, b = ColorPickerFrame:GetColorRGB()
+                    local a = ColorPickerFrame:GetColorAlpha()
+                    wc.r, wc.g, wc.b, wc.a = r, g, b, a
+                    whisperColorSwatch.tex:SetColorTexture(r, g, b, a)
+                    UIThingsDB.misc.whisperAlertColor = wc
+                end,
+                cancelFunc = function()
+                    wc.r, wc.g, wc.b, wc.a = prevR, prevG, prevB, prevA
+                    whisperColorSwatch.tex:SetColorTexture(wc.r, wc.g, wc.b, wc.a)
+                    UIThingsDB.misc.whisperAlertColor = wc
+                end
+            })
+        end
+    end)
+
+    -- Whisper TTS Enable Checkbox
+    local whisperTtsEnableBtn = CreateFrame("CheckButton", "UIThingsNotifWhisperTTSEnable", panel,
+        "ChatConfigCheckButtonTemplate")
+    whisperTtsEnableBtn:SetPoint("TOPLEFT", 20, -1200)
+    _G[whisperTtsEnableBtn:GetName() .. "Text"]:SetText("Enable Text-To-Speech")
+    whisperTtsEnableBtn:SetChecked(UIThingsDB.misc.whisperTtsEnabled)
+    whisperTtsEnableBtn:SetScript("OnClick", function(self)
+        UIThingsDB.misc.whisperTtsEnabled = self:GetChecked()
+    end)
+
+    -- Whisper TTS Message
+    local whisperTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    whisperTtsLabel:SetPoint("TOPLEFT", 40, -1240)
+    whisperTtsLabel:SetText("TTS Message:")
+
+    local whisperTtsEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    whisperTtsEdit:SetSize(250, 20)
+    whisperTtsEdit:SetPoint("LEFT", whisperTtsLabel, "RIGHT", 10, 0)
+    whisperTtsEdit:SetAutoFocus(false)
+    whisperTtsEdit:SetText(UIThingsDB.misc.whisperTtsMessage)
+    whisperTtsEdit:SetScript("OnEnterPressed", function(self)
+        UIThingsDB.misc.whisperTtsMessage = self:GetText()
+        self:ClearFocus()
+    end)
+
+    -- Whisper Test Button
+    local testWhisperBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    testWhisperBtn:SetSize(60, 22)
+    testWhisperBtn:SetPoint("LEFT", whisperTtsEdit, "RIGHT", 5, 0)
+    testWhisperBtn:SetText("Test")
+    testWhisperBtn:SetScript("OnClick", function()
+        UIThingsDB.misc.whisperTtsMessage = whisperTtsEdit:GetText()
+        if addonTable.Misc and addonTable.Misc.TestWhisperAlert then
+            addonTable.Misc.TestWhisperAlert()
+        end
+    end)
+
+    -- Placeholder hint
+    local whisperHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    whisperHint:SetPoint("TOPLEFT", 40, -1268)
+    whisperHint:SetTextColor(0.5, 0.5, 0.5)
+    whisperHint:SetText("Placeholder: {name} = whisperer's name")
+
+    -- Whisper TTS Voice Dropdown
+    local whisperVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    whisperVoiceLabel:SetPoint("TOPLEFT", 40, -1300)
+    whisperVoiceLabel:SetText("Voice Type:")
+
+    local whisperVoiceDropdown = CreateFrame("Frame", "UIThingsNotifWhisperVoiceDropdown", panel, "UIDropDownMenuTemplate")
+    whisperVoiceDropdown:SetPoint("LEFT", whisperVoiceLabel, "RIGHT", -15, -3)
+
+    local whisperVoiceOptions = {
+        { text = "Standard",    value = 0 },
+        { text = "Alternate 1", value = 1 },
+    }
+
+    UIDropDownMenu_SetWidth(whisperVoiceDropdown, 120)
+    UIDropDownMenu_Initialize(whisperVoiceDropdown, function(self, level)
+        for _, option in ipairs(whisperVoiceOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.func = function(btn)
+                UIThingsDB.misc.whisperTtsVoice = btn.value
+                UIDropDownMenu_SetSelectedValue(whisperVoiceDropdown, btn.value)
+            end
+            info.checked = (UIThingsDB.misc.whisperTtsVoice == option.value)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(whisperVoiceDropdown, UIThingsDB.misc.whisperTtsVoice or 0)
 end

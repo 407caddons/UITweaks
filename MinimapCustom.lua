@@ -17,10 +17,11 @@ local clockTicker = nil
 local coordsTicker = nil
 
 -- == QueueStatusButton (Dungeon Finder Eye) Persistent Anchor ==
--- Blizzard repositions the eye via UpdatePosition when queuing for content.
--- We hook SetPoint and OnShow to always move it back to the minimap.
-local queueHooked = false
-local suppressQueueHook = false
+-- Frame-object hooks on QueueStatusButton (HookScript / hooksecurefunc(btn, ...))
+-- taint the shared Button prototype, which breaks Button:SetPassThroughButtons
+-- on map pins. Poll on a 2s ticker instead. SetPoint/SetParent on the button
+-- still taints layout context, but not the prototype — map pins stay clean.
+local queueEyeTicker = nil
 
 -- Expose shape for other addons that call GetMinimapShape().
 -- Defined once at file scope so it is never recreated on repeated calls to ApplyMinimapShape().
@@ -28,63 +29,31 @@ local currentMinimapShape = "ROUND"
 function GetMinimapShape() return currentMinimapShape end
 
 local function AnchorQueueEyeToMinimap()
-    if not QueueStatusButton then return end
+    if not QueueStatusButton or not QueueStatusButton:IsShown() then return end
     if not minimapFrame then return end
     if InCombatLockdown() then return end
 
-    suppressQueueHook = true
+    -- Skip if already in place — avoids re-invoking SetPoint on every tick.
+    local left, bottom = QueueStatusButton:GetLeft(), QueueStatusButton:GetBottom()
+    local mr, mb = Minimap:GetRight(), Minimap:GetBottom()
+    local w = QueueStatusButton:GetWidth()
+    if left and bottom and mr and mb and w
+       and math.abs((left + w) - (mr + 2)) < 1
+       and math.abs(bottom - (mb + 4)) < 1 then
+        return
+    end
+
     QueueStatusButton:ClearAllPoints()
     QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
     QueueStatusButton:SetParent(Minimap)
     QueueStatusButton:SetFrameStrata("HIGH")
     QueueStatusButton:SetFrameLevel(100)
-    suppressQueueHook = false
 end
 
-local function HookQueueEye()
-    if queueHooked or not QueueStatusButton then return end
-
-    -- Hook OnShow: fires when Blizzard shows the eye after queuing.
-    -- Use a frame-delayed callback so we run after the entire Blizzard
-    -- OnShow -> Layout -> UpdatePosition chain finishes.
-    QueueStatusButton:HookScript("OnShow", function()
-        if minimapFrame then
-            C_Timer.After(0, function()
-                if minimapFrame then
-                    AnchorQueueEyeToMinimap()
-                end
-            end)
-        end
-    end)
-
-    -- Hook SetPoint: catches any Blizzard code that repositions the eye
-    -- (e.g., UpdatePosition, UpdateQueueStatusAnchors).
-    hooksecurefunc(QueueStatusButton, "SetPoint", function()
-        if suppressQueueHook then return end
-        if minimapFrame then
-            C_Timer.After(0, function()
-                if minimapFrame then
-                    AnchorQueueEyeToMinimap()
-                end
-            end)
-        end
-    end)
-
-    -- Hook UpdatePosition if it exists (Blizzard's method on the button itself).
-    if QueueStatusButton.UpdatePosition then
-        hooksecurefunc(QueueStatusButton, "UpdatePosition", function()
-            if suppressQueueHook then return end
-            if minimapFrame then
-                C_Timer.After(0, function()
-                    if minimapFrame then
-                        AnchorQueueEyeToMinimap()
-                    end
-                end)
-            end
-        end)
-    end
-
-    queueHooked = true
+local function StartQueueEyeTicker()
+    if queueEyeTicker then return end
+    AnchorQueueEyeToMinimap()
+    queueEyeTicker = C_Timer.NewTicker(2.0, AnchorQueueEyeToMinimap)
 end
 
 local deferShapeCb
@@ -605,9 +574,8 @@ local function SetupMinimap()
     -- Position any enabled minimap icons on the right side
     PositionMinimapIcons()
 
-    -- Hook the dungeon finder eye so it stays on the minimap when queuing
-    HookQueueEye()
-    AnchorQueueEyeToMinimap()
+    -- Start the polling ticker that keeps the dungeon finder eye on the minimap
+    StartQueueEyeTicker()
 end
 
 -- == Exported Functions ==

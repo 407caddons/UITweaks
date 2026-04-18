@@ -5,16 +5,16 @@ Scope: all `.lua` files under the project root (top-level, `widgets/`, `games/`,
 ## Critical (would cause errors or taint in-game)
 
 ### Button prototype taint — `ADDON_ACTION_BLOCKED` on map pins / secure buttons
-- **MinimapCustom.lua:36-40** — `QueueStatusButton:ClearAllPoints()`, `SetPoint()`, `SetParent(Minimap)`, `SetFrameLevel(100)` on the Blizzard Button. The `InCombatLockdown()` guard at line 33 prevents combat-lockdown errors but does *not* prevent Button-prototype taint. MEMORY.md documents the fix: swap the frame-object hooks below for a `C_Timer.NewTicker(2.0, AnchorQueueEyeToMinimap)` and keep these positioning calls in the ticker — they taint layout context but empirically do not taint the Button prototype, so `SetPassThroughButtons()` errors go away once the hooks below are removed.
-- **MinimapCustom.lua:50** — `QueueStatusButton:HookScript("OnShow", ...)` — HookScript on a Blizzard Button taints the Button prototype. Remove and replace with the 2-second ticker.
-- **MinimapCustom.lua:62** — `hooksecurefunc(QueueStatusButton, "SetPoint", ...)` frame-object form on the Blizzard Button. Remove.
-- **MinimapCustom.lua:75** — `hooksecurefunc(QueueStatusButton, "UpdatePosition", ...)` frame-object form. Remove.
+- ~~**MinimapCustom.lua:36-40** — `QueueStatusButton:ClearAllPoints()`, `SetPoint()`, `SetParent(Minimap)`, `SetFrameLevel(100)` on the Blizzard Button.~~ **FIXED 2026-04-16.** Positioning calls kept but moved into a 2-second `C_Timer.NewTicker` with an early-return if already in place. Per MEMORY.md, these calls taint layout context but not the Button prototype — safe to keep.
+- ~~**MinimapCustom.lua:50** — `QueueStatusButton:HookScript("OnShow", ...)`~~ **FIXED 2026-04-16.** Hook removed; polling replaces it.
+- ~~**MinimapCustom.lua:62** — `hooksecurefunc(QueueStatusButton, "SetPoint", ...)` frame-object form.~~ **FIXED 2026-04-16.** Hook removed.
+- ~~**MinimapCustom.lua:75** — `hooksecurefunc(QueueStatusButton, "UpdatePosition", ...)` frame-object form.~~ **FIXED 2026-04-16.** Hook removed.
 
 ### Frame-object `hooksecurefunc` / `HookScript` on Blizzard frames
-- **ObjectiveTracker.lua:985** — `hooksecurefunc(ObjectiveTrackerFrame, "Show", ...)` frame-object form on the Blizzard tracker. MEMORY.md flags any suppression attempts on `ObjectiveTrackerFrame` as known-fragile ("all fixes reduce functionality and have been reverted"). If this hook isn't load-bearing, delete it and drive visibility via event registration instead.
-- **CastBar.lua:518** — `hooksecurefunc(frame, "Show", ...)` where `frame == PlayerCastingBarFrame`. Frame-object form taints the cast bar. The inline comment claiming "fires in caller's security context, so Hide/SetAlpha are safe" conflates combat-lockdown safety with taint safety — this is taint. Prefer `RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")` via a `SecureHandlerStateTemplate` proxy, registered once out of combat.
-- **CastBar.lua:521** — `hooksecurefunc(frame, "SetShown", ...)` same frame. Same fix.
-- **CastBar.lua:525** — `hooksecurefunc(frame, "SetAlpha", ...)` same frame. Same fix.
+- ~~**ObjectiveTracker.lua:985** — `hooksecurefunc(ObjectiveTrackerFrame, "Show", ...)` frame-object form on the Blizzard tracker.~~ **RESOLVED 2026-04-16.** Entire ObjectiveTracker module removed — functionality moved to a separate companion addon.
+- ~~**CastBar.lua:518** — `hooksecurefunc(frame, "Show", ...)` where `frame == PlayerCastingBarFrame`.~~ **FIXED 2026-04-16.** Replaced with `RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")`; combat-time toggles defer to `PLAYER_REGEN_ENABLED`.
+- ~~**CastBar.lua:521** — `hooksecurefunc(frame, "SetShown", ...)` same frame.~~ **FIXED 2026-04-16.** Same state-driver replacement.
+- ~~**CastBar.lua:525** — `hooksecurefunc(frame, "SetAlpha", ...)` same frame.~~ **FIXED 2026-04-16.** Same state-driver replacement.
 - **TalentManager.lua:250** — `PlayerSpellsFrame:HookScript("OnShow", OnTalentFrameShow)` on a Blizzard frame. Taints the talent window. Replace with a global-form hook: `hooksecurefunc("ToggleTalentFrame", ...)` (or `EventRegistry:RegisterFrameEvent("PLAYER_TALENT_UPDATE")`), reading `PlayerSpellsFrame:IsShown()` to decide whether to show the addon panel.
 - **TalentManager.lua:251** — `PlayerSpellsFrame:HookScript("OnHide", OnTalentFrameHide)` — same fix.
 
@@ -33,7 +33,7 @@ Scope: all `.lua` files under the project root (top-level, `widgets/`, `games/`,
 - **TalentManager.lua:222-224** — `mainPanel:SetPoint("TOPLEFT", PlayerSpellsFrame, "TOPRIGHT", 2, 0)` anchors the addon panel to a Blizzard frame. This direction (reading the Blizzard frame as an anchor) does not taint, but the panel becomes unreachable if `PlayerSpellsFrame` is unloaded. Guard at line 221 (`if not mainPanel or not PlayerSpellsFrame then return end`) handles the unload case — acceptable.
 
 ### Frame positioning not migrated to CENTER convention
-- **Coordinates.lua, MplusTimer.lua, QueueTimer.lua, XpBar.lua, CastBar.lua, Kick.lua, ObjectiveTracker.lua, MinimapCustom.lua** — Per CLAUDE.md these modules are tracked as "not yet migrated (dynamic GetPoint)". Position is saved as whatever anchor the user dragged from rather than CENTER-from-UIParent, so positions drift on UI scale / resolution changes between sessions. Tracking item, not an immediate bug.
+- **Coordinates.lua, MplusTimer.lua, QueueTimer.lua, XpBar.lua, CastBar.lua, Kick.lua, MinimapCustom.lua** — Per CLAUDE.md these modules are tracked as "not yet migrated (dynamic GetPoint)". Position is saved as whatever anchor the user dragged from rather than CENTER-from-UIParent, so positions drift on UI scale / resolution changes between sessions. Tracking item, not an immediate bug.
 
 ### Secret-value hygiene (currently correct — document for future edits)
 - **DamageMeter.lua:474-562** — `StatusBar:SetValue(src.totalAmount)` and sibling calls pass secret values directly into C-level methods (correct — avoids any Lua arithmetic or comparison on secrets). The design works because `totalAmount` / `amountPerSecond` / `name` / `sourceGUID` are never assigned to a Lua local or table field. Any future edit that does so will break immediately — consider a top-of-file comment pinning this contract.
@@ -85,8 +85,10 @@ None found — no `\xNN` hex escapes, no bitwise operators, no `//`, no `goto`, 
 
 ## Summary
 
-Six critical findings from the previous review (all in the deleted `ActionBars.lua` and `ChatSkin.lua`) are gone as of this session's cleanup. The remaining Critical surface is six items concentrated in four files: `MinimapCustom.lua` (QueueStatusButton prototype taint), `ObjectiveTracker.lua` (one frame-object hook on `ObjectiveTrackerFrame`), `CastBar.lua` (three frame-object hooks on `PlayerCastingBarFrame`), `TalentManager.lua` (two `HookScript` calls on `PlayerSpellsFrame`), and `Misc.lua` (`deleteButton:SetParent(dialog)` on a StaticPopup). All are tractable — the fix pattern is the same in each case: replace frame-object hooks with global-form hooks or tickers, and keep any positioning calls gated on `InCombatLockdown()`.
+Six critical findings from the previous review (in the deleted `ActionBars.lua` and `ChatSkin.lua`) are gone as of this session's cleanup, and the four `MinimapCustom.lua` QueueStatusButton items were fixed by replacing the frame-object hooks with a 2-second polling ticker — `SetPassThroughButtons` errors on map pins should now be gone.
+
+The remaining Critical surface is two items in three files: `ObjectiveTracker.lua` (one frame-object hook on `ObjectiveTrackerFrame`), `CastBar.lua` (three frame-object hooks on `PlayerCastingBarFrame`), `TalentManager.lua` (two `HookScript` calls on `PlayerSpellsFrame`), and `Misc.lua` (`deleteButton:SetParent(dialog)` on a StaticPopup). All share the same fix pattern: replace frame-object hooks with global-form hooks or tickers, and keep any positioning calls gated on `InCombatLockdown()`.
 
 The codebase otherwise remains in solid hygiene: no `COMBAT_LOG_EVENT_UNFILTERED`, no Lua 5.1 violations, no hex escapes, DamageMeter's secret-value handling is correct, and `issecretvalue` is used defensively in TalentReminder, Loot, Keystone, and SessionStats. The one combat-lockdown regression is `Combat.lua:1419` (`UnregisterStateDriver` reachable without a guard), which needs an `InCombatLockdown()` check at the top of `ApplyReminderEvents`.
 
-Addressing the `MinimapCustom.lua` QueueStatusButton cluster and the `CastBar.lua` trio would eliminate the two most user-visible taint categories (`SetPassThroughButtons` errors on map pins, and cast-bar-related addon-action-blocked messages during combat).
+Remaining Critical surface: `TalentManager.lua` (two `HookScript` calls on `PlayerSpellsFrame`) and `Misc.lua` (one `SetParent` on a StaticPopup). Both are low-frequency (only fire when the user opens the talent window or deletes a rare item), so they're lower impact than the items cleared this session.

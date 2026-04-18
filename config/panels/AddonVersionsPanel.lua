@@ -508,6 +508,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Lights.ShowGame()
                 end
             end)
+            rootDescription:CreateButton("Blocks", function()
+                if addonTable.Blocks and addonTable.Blocks.ShowGame then
+                    addonTable.Blocks.ShowGame()
+                end
+            end)
         end)
     end)
 

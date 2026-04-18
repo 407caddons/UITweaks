@@ -239,12 +239,17 @@ local function OnUnitHealth(event, unitTarget)
         if not deathAnnounced[guid] then
             deathAnnounced[guid] = true
             if UIThingsDB.misc.deathTtsEnabled then
-                local name = UnitName(unitTarget) or "Unknown"
-                local role = GetRoleLabel(unitTarget)
-                local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
-                msg = msg:gsub("{name}", name)
-                msg = msg:gsub("{role}", role)
-                addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
+                local deadCount = 0
+                for _ in pairs(deathAnnounced) do deadCount = deadCount + 1 end
+                local maxCount = UIThingsDB.misc.deathMaxCount or 3
+                if deadCount <= maxCount then
+                    local name = UnitName(unitTarget) or "Unknown"
+                    local role = GetRoleLabel(unitTarget)
+                    local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
+                    msg = msg:gsub("{name}", name)
+                    msg = msg:gsub("{role}", role)
+                    addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
+                end
             end
         end
     else
@@ -253,11 +258,81 @@ local function OnUnitHealth(event, unitTarget)
     end
 end
 
+-- Drop entries for GUIDs no longer in the group, so stale deaths don't inflate the count
+local function OnGroupRosterUpdate()
+    if not next(deathAnnounced) then return end
+    if not IsInGroup() then
+        wipe(deathAnnounced)
+        return
+    end
+    local present = {}
+    local prefix, count
+    if IsInRaid() then
+        prefix, count = "raid", GetNumGroupMembers()
+    else
+        prefix, count = "party", GetNumGroupMembers() - 1
+    end
+    for i = 1, count do
+        local guid = UnitGUID(prefix .. i)
+        if guid then present[guid] = true end
+    end
+    for guid in pairs(deathAnnounced) do
+        if not present[guid] then
+            deathAnnounced[guid] = nil
+        end
+    end
+end
+
 function Misc.TestDeathTTS()
     local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
     msg = msg:gsub("{name}", UnitName("player") or "Player")
     msg = msg:gsub("{role}", GetRoleLabel("player"))
     addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
+end
+
+-- == WHISPER ALERT ==
+
+local whisperAlertFrame = CreateFrame("Frame", "UIThingsWhisperAlert", UIParent, "BackdropTemplate")
+whisperAlertFrame:SetSize(400, 50)
+whisperAlertFrame:SetPoint("TOP", 0, -440)
+whisperAlertFrame:SetFrameStrata("DIALOG")
+whisperAlertFrame:Hide()
+
+whisperAlertFrame.text = whisperAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+whisperAlertFrame.text:SetPoint("CENTER")
+
+local function ShowWhisperAlert(senderName)
+    if not UIThingsDB.misc.whisperAlert then return end
+
+    local color = UIThingsDB.misc.whisperAlertColor
+    whisperAlertFrame.text:SetTextColor(color.r, color.g, color.b, color.a or 1)
+    whisperAlertFrame.text:SetText("Whisper from " .. (senderName or "?"))
+    whisperAlertFrame:Show()
+
+    if UIThingsDB.misc.whisperTtsEnabled then
+        local msg = UIThingsDB.misc.whisperTtsMessage or "Whisper from {name}"
+        msg = msg:gsub("{name}", senderName or "unknown")
+        addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.whisperTtsVoice or 0)
+    end
+
+    local duration = UIThingsDB.misc.whisperAlertDuration or 5
+    addonTable.Core.SafeAfter(duration, function()
+        whisperAlertFrame:Hide()
+    end)
+end
+
+function Misc.TestWhisperAlert()
+    ShowWhisperAlert(UnitName("player") or "Player")
+end
+
+local function OnChatMsgWhisperAlert(event, msg, sender)
+    if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
+    if not UIThingsDB.misc.whisperAlert then return end
+    if InCombatLockdown() then return end
+    if not sender or issecretvalue(sender) then return end
+
+    local displayName = sender:match("^([^%-]+)") or sender
+    ShowWhisperAlert(displayName)
 end
 
 -- == AH FILTER ==
@@ -672,6 +747,9 @@ ApplyMiscEvents = function()
         EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisper)
         EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLootBoE)
         EventBus.Unregister("UNIT_HEALTH", OnUnitHealth)
+        EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
+        EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisperAlert)
+        EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisperAlert)
         wipe(deathAnnounced)
         return
     end
@@ -728,9 +806,19 @@ ApplyMiscEvents = function()
 
     if UIThingsDB.misc.deathNotify then
         EventBus.Register("UNIT_HEALTH", OnUnitHealth, "Misc")
+        EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "Misc")
     else
         EventBus.Unregister("UNIT_HEALTH", OnUnitHealth)
+        EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
         wipe(deathAnnounced)
+    end
+
+    if UIThingsDB.misc.whisperAlert then
+        EventBus.Register("CHAT_MSG_WHISPER", OnChatMsgWhisperAlert, "Misc")
+        EventBus.Register("CHAT_MSG_BN_WHISPER", OnChatMsgWhisperAlert, "Misc")
+    else
+        EventBus.Unregister("CHAT_MSG_WHISPER", OnChatMsgWhisperAlert)
+        EventBus.Unregister("CHAT_MSG_BN_WHISPER", OnChatMsgWhisperAlert)
     end
 
     if UIThingsDB.misc.classColorTooltips then

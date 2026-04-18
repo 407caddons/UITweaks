@@ -492,72 +492,56 @@ end
 
 -- == Blizzard Cast Bar ==
 
--- Hook-based suppression: intercept Show, SetShown, and SetAlpha on the frame so
--- Blizzard's cast animation can never make it visible while we're active.
--- Side-table tracks hook/lock state to avoid writing onto Blizzard's frame table.
-local blizzBarHidden = false
-local blizzBarState = {
-    hooked = false,      -- hooks installed
-    suppressing = false, -- re-entry guard for our own SetAlpha(0) call
-}
+-- State-driver suppression: registers "visibility=hide" on PlayerCastingBarFrame
+-- when enabled, unregisters when disabled. Blizzard's secure state machine keeps
+-- the bar hidden even during combat once registered. Register/Unregister itself
+-- must happen outside combat; combat-time toggles defer to PLAYER_REGEN_ENABLED.
+local blizzBarHidden = false      -- desired state: true = keep hidden
+local blizzBarApplied = false     -- tracks whether state driver is currently registered
+local blizzBarPending = false     -- waiting for PLAYER_REGEN_ENABLED to re-apply
 
-local function ForceBlizzBarHide(frame)
-    if not frame then return end
-    if blizzBarState.suppressing then return end
-    if not blizzBarHidden then return end
-    blizzBarState.suppressing = true
-    pcall(frame.SetAlpha, frame, 0)
-    blizzBarState.suppressing = false
+local function ApplyBlizzBarVisibility()
+    if not PlayerCastingBarFrame then return end
+    if InCombatLockdown() then
+        blizzBarPending = true
+        return
+    end
+    blizzBarPending = false
+
+    if blizzBarHidden then
+        if not blizzBarApplied then
+            RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")
+            blizzBarApplied = true
+        end
+    else
+        if blizzBarApplied then
+            UnregisterStateDriver(PlayerCastingBarFrame, "visibility")
+            blizzBarApplied = false
+            -- Only restore if actively casting so we don't flash a stale bar.
+            local isActive = UnitCastingInfo("player") or UnitChannelInfo("player")
+            if isActive then
+                PlayerCastingBarFrame:Show()
+            end
+        end
+    end
 end
 
-local function InstallBlizzBarHooks(frame)
-    if blizzBarState.hooked then return end
-
-    -- Show hook: fires in caller's security context, so Hide/SetAlpha are safe
-    -- even when called from Blizzard's protected code during combat.
-    hooksecurefunc(frame, "Show", function(self)
-        ForceBlizzBarHide(self)
-    end)
-    hooksecurefunc(frame, "SetShown", function(self, shown)
-        if shown then ForceBlizzBarHide(self) end
-    end)
-    -- SetAlpha hook: catches the fade-in animation stepping alpha up each frame.
-    hooksecurefunc(frame, "SetAlpha", function(self, alpha)
-        if alpha ~= 0 then ForceBlizzBarHide(self) end
-    end)
-
-    blizzBarState.hooked = true
-end
+EventBus.Register("PLAYER_REGEN_ENABLED", function()
+    if blizzBarPending then ApplyBlizzBarVisibility() end
+end, "CastBar:BlizzBarDefer")
 
 function CastBar.HideBlizzardCastBar()
     if not UIThingsDB.castBar.enabled then
         CastBar.RestoreBlizzardCastBar()
         return
     end
-    if not PlayerCastingBarFrame then return end
-    if blizzBarHidden then return end
-
     blizzBarHidden = true
-    InstallBlizzBarHooks(PlayerCastingBarFrame)
-
-    -- Direct hide outside combat; hooks will handle all future Show/SetAlpha calls.
-    if not InCombatLockdown() then
-        ForceBlizzBarHide(PlayerCastingBarFrame)
-    end
+    ApplyBlizzBarVisibility()
 end
 
 function CastBar.RestoreBlizzardCastBar()
-    if not PlayerCastingBarFrame then return end
-    if not blizzBarHidden then return end
-
     blizzBarHidden = false
-    -- Only restore if actively casting so we don't flash a stale bar.
-    -- Blizzard's own cast start logic will set alpha=1 and Show() on the next cast.
-    local isActive = UnitCastingInfo("player") or UnitChannelInfo("player")
-    if isActive and not InCombatLockdown() then
-        PlayerCastingBarFrame:SetAlpha(1)
-        PlayerCastingBarFrame:Show()
-    end
+    ApplyBlizzBarVisibility()
 end
 
 -- == Event Registration ==

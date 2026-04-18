@@ -31,8 +31,6 @@ LunaUITweaksAPI = {
 -- Key Binding display names (read by WoW's Key Bindings UI)
 -- ============================================================
 BINDING_HEADER_LUNAUITWEAKS                             = "Luna's UI Tweaks"
-_G["BINDING_NAME_CLICK LunaQuestItemButton:LeftButton"] = "Use Quest Item (Super Tracked)"
-_G["BINDING_NAME_LUNAUITWEAKS_TOGGLE_TRACKER"]          = "Toggle Objective Tracker"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]               = "Game: Left"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]              = "Game: Right"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]           = "Game: Up"
@@ -210,7 +208,7 @@ local LOG_COLORS = {
 }
 
 --- Centralized logging function
--- @param module string Module name (e.g., "Tracker", "Vendor")
+-- @param module string Module name (e.g., "Vendor", "Combat")
 -- @param msg string Message to log
 -- @param level number Optional. Log level (default: INFO)
 function addonTable.Core.Log(module, msg, level)
@@ -231,77 +229,6 @@ local function OnEvent(self, event, ...)
 
         -- Default Settings Table
         local DEFAULTS = {
-            tracker = {
-                locked = true,
-                enabled = false,
-                width = 300,
-                height = 500,
-                font = "Fonts\\FRIZQT__.TTF",
-                fontSize = 12,
-                headerFont = "Fonts\\FRIZQT__.TTF",
-                headerFontSize = 14,
-                detailFont = "Fonts\\FRIZQT__.TTF",
-                detailFontSize = 12,
-                sectionHeaderFont = "Fonts\\FRIZQT__.TTF",
-                sectionHeaderFontSize = 14,
-                sectionHeaderColor = { r = 1, g = 0.82, b = 0, a = 1 },
-                questPadding = 2,
-                sectionSpacing = 10,
-                itemSpacing = 5,
-                sectionOrderList = {
-                    "scenarios",
-                    "tempObjectives",
-                    "travelersLog",
-                    "worldQuests",
-                    "quests",
-                    "achievements"
-                },
-                onlyActiveWorldQuests = false,
-                activeQuestColor = { r = 0, g = 1, b = 0, a = 1 },
-                x = -20,
-                y = -250,
-                point = "TOPRIGHT",
-                showBorder = false,
-                borderColor = { r = 0, g = 0, b = 0, a = 1 },
-                showBackground = false,
-                hideInCombat = false,
-                hideInMPlus = false,
-                autoTrackQuests = false,
-                rightClickSuperTrack = true,
-                shiftClickUntrack = true,
-                clickOpenQuest = true,
-                shiftClickLink = true,
-                middleClickShare = true,
-                backgroundColor = { r = 0, g = 0, b = 0, a = 0.5 },
-                strata = "LOW",
-                showWorldQuestTimer = true,
-                showQuestCountdown = true,
-                hideCompletedSubtasks = false,
-                groupQuestsByZone = false,
-                groupQuestsByCampaign = false,
-                worldQuestSortBy = "time",
-                showQuestDistance = true,
-                sortQuestsByDistance = false,
-                showTooltipPreview = true,
-                hideHeader = false,
-                questNameColor = { r = 1, g = 1, b = 1, a = 1 },
-                objectiveColor = { r = 0.8, g = 0.8, b = 0.8, a = 1 },
-                completedObjectiveCheckmark = true,
-                highlightCampaignQuests = true,
-                campaignQuestColor = { r = 0.9, g = 0.7, b = 0.2, a = 1 },
-                showQuestTypeIndicators = true,
-                showQuestLineProgress = true,
-                questCompletionSound = true,
-                questCompletionSoundID = 6199,
-                objectiveCompletionSound = false,
-                objectiveCompletionSoundID = 6197,
-                showWQRewardIcons = true,
-                distanceUpdateInterval = 0,
-                soundChannel = "Master",
-                muteDefaultQuestSounds = false,
-                restoreSuperTrack = true,
-                collapsed = {}
-            },
             vendor = {
                 enabled = false,
                 autoRepair = true,
@@ -424,6 +351,13 @@ local function OnEvent(self, event, ...)
                 deathTtsEnabled = true,
                 deathTtsMessage = "{name} died",
                 deathTtsVoice = 0,
+                deathMaxCount = 3,
+                whisperAlert = false,
+                whisperAlertDuration = 5,
+                whisperAlertColor = { r = 1, g = 0, b = 0, a = 1 },
+                whisperTtsEnabled = false,
+                whisperTtsMessage = "Whisper from {name}",
+                whisperTtsVoice = 0,
 
             },
             minimap = {

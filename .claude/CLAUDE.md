@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with LunaUITweaks.
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: custom objective tracker, quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
@@ -65,7 +65,6 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | config/Helpers.lua | `ConfigHelpers` | Shared UI helpers (font dropdowns, section headers, color swatches) |
 | config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module |
 | Config.lua | — | Legacy stub entry point for config (delegates to ConfigMain) |
-| ObjectiveTracker.lua | `ObjectiveTracker` | Custom quest/WQ/achievement tracker with super-track restore |
 | QuestReminder.lua | `QuestReminder` | Quest reminder notifications |
 | QuestAuto.lua | — | Quest auto-accept and auto-turn-in |
 | MinimapButton.lua | `Minimap` | Draggable minimap button |
@@ -134,19 +133,9 @@ Because the config window is built lazily on first open, companion registrations
 
 ## Config Navigation Order
 
-Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–23. Companion panels are inserted at 24, 25, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–22. Companion panels are inserted at 23, 24, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
 
-Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6=CastBar, 7=Kick, 8=MplusTimer, 9=Minimap, 10=Coordinates, 11=Frames, 12=DamageMeter, 13=Vendor, 14=Loot, 15=Notifications, 16=Reagents, 17=TalentManager, 18=Talent, 19=Misc, 20=Widgets, 21=Warehousing, 22=QueueTimer, then companions, then AddonVersions (last=23+companions).
-
-## ObjectiveTracker Taint — Confirmed Root Cause
-
-**Never call `UpdateContent()` synchronously from `UpdateSettings()`.**
-
-`UpdateSettings()` is called directly from the `PLAYER_LOGIN` event handler (not deferred). If it calls `UpdateContent()` synchronously, that runs `ClearAllPoints()`/`SetPoint()` on addon-created `SecureActionButtonTemplate` pool buttons (`btn.ItemBtn`) while the game is still in its login initialization phase. This taints the shared Button prototype, causing `ADDON_ACTION_BLOCKED: Button:SetPassThroughButtons()` / `Frame:SetPropagateMouseClicks()` when Blizzard's map pin code runs later.
-
-**Why deferred is safe:** All other `UpdateContent()` calls go through `ScheduleUpdateContent()` → `SafeAfter()` → `C_Timer.After()`. Timer callbacks run in a fresh, clean execution context — login-phase taint does not carry into them.
-
-**Rule:** `UpdateSettings()` must not call `UpdateContent()` at all. Content updates happen through the event/timer system only.
+Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 6=Kick, 7=MplusTimer, 8=Minimap, 9=Coordinates, 10=Frames, 11=DamageMeter, 12=Vendor, 13=Loot, 14=Notifications, 15=Reagents, 16=TalentManager, 17=Talent, 18=Misc, 19=Widgets, 20=Warehousing, 21=QueueTimer, then companions, then AddonVersions (last=22+companions).
 
 ## LunaUITweaks-Specific Conventions
 
@@ -160,7 +149,7 @@ Current tab order: 1=Tracker, 2=QuestReminder, 3=QuestAuto, 4=XpBar, 5=Combat, 6
 
 Migrated to CENTER anchor ✓: `DamageMeter`, `Frames`, `Widgets`
 
-Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `Kick`, `ObjectiveTracker`, `MinimapCustom`
+Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `Kick`, `MinimapCustom`
 
 ## API Documentation
 
