@@ -330,6 +330,95 @@ local function GetClassColor(class)
 end
 
 -- ============================================================
+-- Row Icon / Tooltip Helpers
+-- ============================================================
+
+-- mode: "none", "class" (data=classFilename), "player" (self spec), "spell" (data=spellID)
+-- classFilename may be secret during live combat — avoid using it as a table key in that case.
+local function ApplyRowIcon(row, mode, data)
+    local s        = UIThingsDB.damageMeter
+    local barH     = s.barHeight or 18
+    local iconSize = math.max(12, barH - 2)
+
+    local function anchorNoIcon()
+        row.icon:Hide()
+        row.nameFS:ClearAllPoints()
+        row.nameFS:SetPoint("LEFT",  row.bar, "LEFT",  4, 0)
+        row.nameFS:SetPoint("RIGHT", row.bar, "RIGHT", -50, 0)
+    end
+
+    if not s.showIcons or mode == "none" then
+        anchorNoIcon()
+        return
+    end
+
+    row.icon:SetSize(iconSize, iconSize)
+    local shown = false
+
+    if mode == "player" then
+        local specIdx = GetSpecialization and GetSpecialization()
+        if specIdx then
+            local _, _, _, ic = GetSpecializationInfo(specIdx)
+            if ic then
+                row.icon:SetTexture(ic)
+                row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                shown = true
+            end
+        end
+    elseif mode == "class" and data and type(data) == "string"
+            and not (issecretvalue and issecretvalue(data))
+            and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[data] then
+        row.icon:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+        local l, r, t, b = unpack(CLASS_ICON_TCOORDS[data])
+        row.icon:SetTexCoord(l, r, t, b)
+        shown = true
+    elseif mode == "spell" and data then
+        local ic = GetSpellTexture and GetSpellTexture(data)
+        if not ic and C_Spell and C_Spell.GetSpellTexture then
+            ic = C_Spell.GetSpellTexture(data)
+        end
+        if ic then
+            row.icon:SetTexture(ic)
+            row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            shown = true
+        end
+    end
+
+    if shown then
+        row.icon:Show()
+        row.nameFS:ClearAllPoints()
+        row.nameFS:SetPoint("LEFT",  row.icon, "RIGHT", 4, 0)
+        row.nameFS:SetPoint("RIGHT", row.bar,  "RIGHT", -50, 0)
+    else
+        anchorNoIcon()
+    end
+end
+
+-- Attach a GameTooltip showing the top 5 abilities for the source at `guid`.
+-- Skipped during combat to avoid secret-value arithmetic/sort failures.
+local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey)
+    row:SetScript("OnEnter", function(self)
+        if not UIThingsDB.damageMeter.showTooltip then return end
+        if InCombatLockdown() then return end
+        if not guid then return end
+
+        local spells = FetchSpellEntries(sessKey, mtype, guid)
+        if not spells or #spells == 0 then return end
+
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine((displayName or "?") .. " — Top Abilities", 1, 1, 1)
+        local n = math.min(5, #spells)
+        for i = 1, n do
+            local sp = spells[i]
+            local valText = COUNT_TYPES[mtype] and tostring(sp.total) or AbbreviateNumbers(sp.total)
+            GameTooltip:AddDoubleLine(i .. ". " .. (sp.name or "?"), valText, 0.9, 0.9, 0.9, 1, 0.82, 0)
+        end
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+-- ============================================================
 -- UI State
 -- ============================================================
 
@@ -360,8 +449,12 @@ local function AcquireRow(pool, parent)
     row.bar:SetStatusBarTexture("Interface/Buttons/WHITE8x8")
     row.bar:SetPoint("TOPLEFT")
     row.bar:SetPoint("BOTTOMRIGHT")
+    row.icon = row.bar:CreateTexture(nil, "OVERLAY")
+    row.icon:SetPoint("LEFT", row.bar, "LEFT", 2, 0)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.icon:Hide()
     row.nameFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.nameFS:SetPoint("LEFT", row.bar, "LEFT", 4, 0)
+    row.nameFS:SetPoint("LEFT",  row.bar, "LEFT",  4, 0)
     row.nameFS:SetPoint("RIGHT", row.bar, "RIGHT", -50, 0)
     row.nameFS:SetJustifyH("LEFT")
     row.nameFS:SetWordWrap(false)
@@ -381,6 +474,8 @@ local function HideAllRows(pool)
         if row:IsShown() then
             row:Hide()
             row:SetScript("OnClick", nil)
+            row:SetScript("OnEnter", nil)
+            row:SetScript("OnLeave", nil)
         end
     end
 end
@@ -438,6 +533,99 @@ local function RenderPane(idx)
     local txtCol   = s.barTextColor or { r = 1, g = 1, b = 1, a = 1 }
     local paneW    = pane.scrollFrame:GetWidth()
     if not paneW or paneW <= 0 then paneW = 200 end
+
+    -- ── Live combat drilldown path ──────────────────────────────────────────
+    -- Drilldown (spell view) during combat. FetchSpellEntries would sort a table
+    -- of secret totals (> comparison on secrets fails), and the post-combat render
+    -- path calls scrollContent:SetSize which registers a scroll range while child
+    -- StatusBars are tainted by SetValue(secret) — that taint later propagates to
+    -- UIPanelScrollFrameTemplate's secure SetEnabled call and errors on scroll.
+    -- Render directly from live C_DamageMeter data, keeping secrets as direct
+    -- locals and skipping scrollContent:SetSize entirely.
+    -- ─────────────────────────────────────────────────────────────────────────
+    if sess == "current" and dd and InCombatLockdown() then
+        local enumType = GetEnumType(mtype)
+        local yOff = 0
+        local hasRows = false
+        if enumType then
+            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, dd.guid)
+            if ok and srcData and srcData.combatSpells then
+                -- Keep srcMax as a direct local (secret); never store in a table.
+                local srcMax = srcData.totalAmount
+                for _, sp in ipairs(srcData.combatSpells) do
+                    if sp.spellID then
+                        local row = AcquireRow(pane.rowPool, pane.scrollContent)
+                        row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
+                        row:SetSize(paneW, barH)
+                        row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
+
+                        local amt
+                        if COUNT_TYPES[mtype] and type(sp.casts) == "number" then
+                            amt = sp.casts
+                        else
+                            amt = sp.totalAmount
+                        end
+
+                        row.bar:SetMinMaxValues(0, srcMax)
+                        row.bar:SetValue(amt)
+                        row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
+
+                        local spellName = sp.name
+                        if not spellName or spellName == "" then
+                            local ok2, n = pcall(C_Spell.GetSpellName, sp.spellID)
+                            if ok2 and n and n ~= "" then
+                                spellName = n
+                            else
+                                spellName = GetSpellInfo(sp.spellID) or ("Spell " .. sp.spellID)
+                            end
+                        end
+                        row.nameFS:SetText(spellName or "?")
+                        row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
+
+                        local valText
+                        if COUNT_TYPES[mtype] then
+                            valText = string.format("%d", amt)
+                        else
+                            valText = AbbreviateNumbers(amt)
+                        end
+                        row.valFS:SetText(valText)
+                        row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
+                        if row.dpsFS then row.dpsFS:Hide() end
+
+                        ApplyRowIcon(row, "spell", sp.spellID)
+
+                        local captIdx = idx
+                        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                        row:SetScript("OnClick", function(_, btn)
+                            if btn == "RightButton" then
+                                drilldown[captIdx] = nil
+                                RenderPane(captIdx)
+                            end
+                        end)
+
+                        yOff = yOff + barH + 1
+                        hasRows = true
+                    end
+                end
+            end
+        end
+        if not hasRows then
+            local row = AcquireRow(pane.rowPool, pane.scrollContent)
+            row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
+            row:SetSize(paneW, barH)
+            row.bg:SetColorTexture(0, 0, 0, 0)
+            row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
+            row.bar:SetStatusBarColor(0, 0, 0, 0)
+            row.nameFS:SetText("|cff555555No data|r")
+            row.valFS:SetText("")
+            if row.dpsFS then row.dpsFS:Hide() end
+            ApplyRowIcon(row, "none")
+        end
+        -- Intentionally no scrollContent:SetSize — user can't scroll during combat
+        -- drilldown, matching non-drilldown combat behavior. Post-combat renders
+        -- restore proper scrolling.
+        return
+    end
 
     -- ── Live combat path ────────────────────────────────────────────────────
     -- For sess=="current" during combat: render directly from sessData so that
@@ -506,6 +694,12 @@ local function RenderPane(idx)
                     row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
                     if row.dpsFS then row.dpsFS:Hide() end
 
+                    if src.isLocalPlayer then
+                        ApplyRowIcon(row, "player")
+                    else
+                        ApplyRowIcon(row, "class", src.classFilename)
+                    end
+
                     -- Drilldown: store src reference so guid stays as a table value
                     local captSrc = src
                     local captName = displayName
@@ -536,6 +730,7 @@ local function RenderPane(idx)
             row.nameFS:SetText("|cff555555No data|r")
             row.valFS:SetText("")
             if row.dpsFS then row.dpsFS:Hide() end
+            ApplyRowIcon(row, "none")
             yOff = barH
         end
         -- Do NOT call scrollContent:SetSize() here — it triggers OnSizeChanged on the
@@ -588,6 +783,18 @@ local function RenderPane(idx)
         row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
         if row.dpsFS then row.dpsFS:Hide() end
 
+        if dd then
+            ApplyRowIcon(row, "spell", entry.spellId)
+        elseif entry.name and UnitName("player") == entry.name then
+            ApplyRowIcon(row, "player")
+        else
+            ApplyRowIcon(row, "class", entry.class)
+        end
+
+        if not dd then
+            ApplyRowTooltip(row, entry.guid, entry.name, mtype, sess)
+        end
+
         local captEntry = entry
         local captIdx   = idx
         local captDd    = dd
@@ -616,6 +823,7 @@ local function RenderPane(idx)
         row.nameFS:SetText("|cff555555No data|r")
         row.valFS:SetText("")
         if row.dpsFS then row.dpsFS:Hide() end
+        ApplyRowIcon(row, "none")
         yOff = barH
     end
 

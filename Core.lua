@@ -672,6 +672,8 @@ local function OnEvent(self, event, ...)
                 barColor       = { r = 0.2,  g = 0.5,  b = 0.9,  a = 1    },
                 barTextColor   = { r = 1,    g = 1,    b = 1,    a = 1    },
                 showDps        = false,
+                showTooltip    = false,
+                showIcons      = false,
                 meter1         = { type = "damage",  session = "current" },
                 meter2         = { type = "healing", session = "current" },
             },

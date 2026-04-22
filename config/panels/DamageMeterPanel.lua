@@ -384,6 +384,28 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         UIThingsDB.damageMeter.showDps = self:GetChecked()
         Refresh()
     end)
+    yBase = yBase - 28
+
+    -- Show Tooltip (top 5 abilities for source rows)
+    local tipCB = CreateFrame("CheckButton", "UIThingsDMShowTooltip", child, "ChatConfigCheckButtonTemplate")
+    tipCB:SetPoint("TOPLEFT", 20, yBase)
+    _G[tipCB:GetName() .. "Text"]:SetText("Show tooltip with top 5 abilities on hover (post-combat only)")
+    tipCB:SetChecked(UIThingsDB.damageMeter.showTooltip)
+    tipCB:SetScript("OnClick", function(self)
+        UIThingsDB.damageMeter.showTooltip = self:GetChecked()
+        Refresh()
+    end)
+    yBase = yBase - 28
+
+    -- Show Icons (class icon for sources, spell icon for drilldown)
+    local iconCB = CreateFrame("CheckButton", "UIThingsDMShowIcons", child, "ChatConfigCheckButtonTemplate")
+    iconCB:SetPoint("TOPLEFT", 20, yBase)
+    _G[iconCB:GetName() .. "Text"]:SetText("Show icons on bars (class/spec for sources, spell for drilldown)")
+    iconCB:SetChecked(UIThingsDB.damageMeter.showIcons)
+    iconCB:SetScript("OnClick", function(self)
+        UIThingsDB.damageMeter.showIcons = self:GetChecked()
+        Refresh()
+    end)
     yBase = yBase - 34
 
     -- ============================================================

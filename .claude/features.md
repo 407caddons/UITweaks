@@ -1,279 +1,303 @@
-# Feature Suggestions — LunaUITweaks
-Date: 2026-02-26 (updated 2026-03-01, 2026-03-02, 2026-03-02 pass 2, 2026-03-06)
+# LunaUITweaks — Future Feature Ideas
 
-**Update 2026-03-01:** Several widget suggestions from the companion widgets.md have been implemented: Clock/Server Time (→ `widgets/Time.lua` ✓), FPS/Latency (→ `widgets/FPS.lua` ✓), Weekly Reset Countdown (→ `widgets/WeeklyReset.lua` ✓), Spec Display (→ `widgets/Spec.lua` ✓). A new module not previously suggested has also shipped: `QueueTimer.lua` — a progress bar that counts down the LFG proposal acceptance window. Three more widgets also shipped that were not in the original suggestions: `Speed` (movement speed %), `Volume` (sound toggle/cycle), `BattleRes` (battle resurrection charge tracker). Feature suggestions below are updated with implemented/pending status.
+Date: 2026-04-19
+Status: Initial draft (no prior `features.md` existed at the project root; this is a fresh
+baseline. Future passes should mark entries as Kept / Shipped / Revised / Removed.)
 
-**Update 2026-03-02 (pass 2):** BoE Item Alert (**feature #19**) and Death Notification shipped in Misc.lua with full config panel support (NotificationsPanel.lua). BoE alert detects Bind-on-Equip loot via `CHAT_MSG_LOOT`, filters by item quality (Uncommon/Rare/Epic/Legendary), and shows a coloured overlay with TTS. Death Notification announces party/raid member deaths via TTS with configurable message (`{name}`, `{role}` placeholders) and voice type. Two new code review issues (#46 UNIT_HEALTH too broad, #48 GetItemInfo nil race) found in the new code.
+Scope guardrails considered while compiling this list:
+- WoW 12.0 retail, Lua 5.1, no external libraries, no build step.
+- Must not duplicate existing modules (see TOC + File Responsibilities table in
+  `.claude/CLAUDE.md`).
+- Taint-sensitive surfaces to avoid: `ObjectiveTrackerFrame`, `DamageMeter*`, action-bar
+  buttons, `QueueStatusButton`, `PlayerSpellsFrame`, `StaticPopup*`.
+- Positioning convention: CENTER-of-UIParent anchor; `x, y` offsets.
+- Any "show/hide in combat" must use `RegisterStateDriver`.
 
-**Update 2026-03-02:** Per-widget clickthrough toggle shipped in Widgets config panel. XP bar tooltip fix (mouse always enabled, drag gated by lock). Warband Mentor XP bonus is now auto-detected via `GetAchievementInfo` (achievements 42328–42332). DMF WHEE widget spell ID corrected (71968 → 136583).
-
-**Update 2026-03-06:** Full codebase re-read revealed many new modules that shipped since the last features update. All are documented as confirmed-implemented below. Twelve new pending suggestions (25–36) added based on gaps observed in the live code.
-
----
-
-## New Modules Confirmed Shipped (2026-03-06)
-
-| Module | Summary |
-|---|---|
-| `TalentManager.lua` | Side panel showing saved talent builds from Encounter Journal, per-difficulty filtered, attached to Spells UI |
-| `QuestAuto.lua` | Auto-accept / auto-turn-in quests via `C_GossipInfo`, smart single-gossip-option selection, shift-to-pause |
-| `LootChecklist.lua` | Per-character loot wishlist from Encounter Journal browser, per-boss/slot/difficulty tracking + full browser UI |
-| `MplusTimer.lua` | Full M+ timer: forces tracking, boss splits, affix display, death counter, +1/+2/+3 brackets, run history, demo mode |
-| `Coordinates.lua` | Waypoint manager with zone-name resolution, distance ticker, paste dialog (`/luit paste`), nearest-waypoint highlight |
-| `SCT.lua` | Scrolling Combat Text for player damage/healing with crit scaling, configurable anchors, capture-to-frames mode |
-| `QuestReminder.lua` | Popup + TTS + chat notification when the player has available quests, triggered on zone changes |
-| `Warehousing.lua` | Cross-character reagent/supply manager with auto-buy from vendor, per-item min-keep thresholds, gold reserve, confirm-above safety |
-| `Profiler.lua` | Developer performance profiler, toggled via `/luit perf` |
-| `games/` | Nine mini-games: Snake, Minesweeper, Match-3, Solitaire, Slide Puzzle, Sokoban, Lights Out, 2048, shared framework |
-| Many new widgets | Lockouts, PvP, MythicRating, Vault, DarkmoonFaire, Mail, PullCounter, Hearthstone, Currency, SessionStats, ReadyCheck, XPRep, Haste, Crit, Mastery, Vers, WaypointDistance, AddonComm, PullTimer, Keystone, Guild, Zone, WheeCheck, ItemLevel |
+Ease key: **Easy** (≤ half day, one file) · **Medium** (1–3 days, multi-file) ·
+**Hard** (week+, cross-cutting or taint-heavy).
 
 ---
 
-## Introduction
+## Quality-of-Life
 
-LunaUITweaks is already a mature, self-contained addon covering a wide range of quality-of-life improvements for WoW 12.0. The suggestions below build naturally on the existing EventBus, AddonComm, and widget framework and are grouped by category with honest difficulty ratings and notes on WoW API or taint constraints.
+### 1. Auto-decline duels / pet battles / party invites from strangers
+One-line: Auto-decline duel, pet-battle, and party invite popups from non-guild / non-friend
+players (whitelist-configurable).
+Motivation: The existing Misc auto-invite accepts from the whitelist; the reverse (auto-decline
+outside it) is a frequent complaint, especially for streamers and farmers.
+Ease: **Easy** — hook `DUEL_REQUESTED`, `PET_BATTLE_PVP_DUEL_REQUESTED`,
+`PARTY_INVITE_REQUEST` via EventBus; call `CancelDuel()` / `DeclineGroup()` before the popup
+shows. No secure surface involved.
+Taint: None — these are unprotected APIs.
 
----
+### 2. /reload reminder after settings change
+One-line: Track settings that require a reload and show a yellow "Reload recommended" banner
+in the config window until the user clicks it (runs `ReloadUI()`).
+Motivation: Several modules (CastBar hide-Blizzard, Minimap shape, StateDriver switches) only
+fully apply after reload; users get inconsistent results without it.
+Ease: **Easy** — add a `reloadPending` flag to `Config.lua` and a banner row in
+`ConfigMain.lua`.
+Taint: None.
 
-## Combat Features
+### 3. Bag search / highlight
+One-line: Text box that highlights bag slots matching a substring of item name.
+Motivation: Built-in search exists but clears constantly; an addon-owned overlay that persists
+between bag toggles is handy for cleanup / vendor runs.
+Ease: **Medium** — iterate `C_Container.GetContainerItemInfo` on `BAG_UPDATE_DELAYED`,
+draw borders on matching slots via a secondary overlay frame (do NOT write to the Blizzard
+bag buttons — parent overlay frames to `UIParent` and anchor via `SetPoint` reads).
+Taint: Low if using overlay frames; avoid `hooksecurefunc(ContainerFrame*, ...)`.
 
-### 1. Boss Ability Timers (Clock-Based)
-**Difficulty:** Medium
-**Description:** Clock-based countdown timers that arm on `ENCOUNTER_START` for manually configured boss abilities. No combat log access required. Fits the existing module pattern.
-**Notes:** Fully feasible without COMBAT_LOG_EVENT_UNFILTERED. User configures spell IDs and durations manually.
+### 4. Reagent-bank deposit shortcut
+One-line: One-click "deposit all reagents" button added next to the bank window when it's
+open (using an addon overlay frame, not reparenting Blizzard buttons).
+Motivation: Reagent bank deposit is a deep click path and a common flow.
+Ease: **Medium** — global-form hook on `ToggleAllBags` / bank-shown event; iterate bag
+slots and `C_Bank.DepositReagentBankItem`. Avoid `HookScript` on Blizzard's bank frame.
+Taint: Low if overlay-only; DO NOT reparent the deposit button into the bank frame (same
+class of bug as the `StaticPopup` issue in `Misc.lua:422`).
 
-### 2. Interrupt Assignment / Rotation
-**Difficulty:** Medium
-**Description:** Extend the Kick module via AddonComm to assign and cycle interrupt responsibilities in a group. The existing Kick frame, AddonComm bus, and roster cache are already in place.
-**Notes:** Cannot confirm actual interrupter due to `issecretvalue()` on the GUID from `UNIT_SPELLCAST_INTERRUPTED`. Assignment/cycling is fully feasible; confirmation is not.
+### 5. Screenshot-on-event
+One-line: Auto-screenshot on configurable events: boss kill, achievement earned, M+ completion,
+level-up.
+Motivation: Common QoL; most players forget to screenshot the big moments.
+Ease: **Easy** — EventBus-subscribe to `BOSS_KILL`, `ACHIEVEMENT_EARNED`,
+`CHALLENGE_MODE_COMPLETED`, `PLAYER_LEVEL_UP`; call `Screenshot()`. Guard with a
+debounce.
+Taint: None.
 
-### 3. Wipe Recovery Checklist
-**Difficulty:** Easy
-**Description:** After a group wipe (`PLAYER_DEAD` + group context), show a brief checklist of pre-pull tasks (flask, food, pet, class buff) reusing existing consumable detection from Combat.lua. Dismisses on next `ENCOUNTER_START`.
-**Notes:** All needed events and APIs are available. Simple UI overlay.
+### 6. "Don't pull yet" auto-respond chat macro
+One-line: Slash `/luit nopull <seconds>` posts a party message, pings the minimap, and shows
+a PullTimer-style bar.
+Motivation: Currently PullCounter / PullTimer widgets exist, but no easy way to *initiate*
+a pre-pull countdown without MRT.
+Ease: **Easy** — reuses existing PullTimer widget; adds a slash handler and a `SendChatMessage`
+to `PARTY`/`RAID`.
+Taint: None.
 
-### 4. Encounter Pull Log
-**Difficulty:** Easy
-**Description:** Record start time, duration, and outcome (wipe/kill) per boss using `ENCOUNTER_START`/`ENCOUNTER_END` — both fully available to third-party addons. Integrates with SessionStats as a tooltip section.
-**Notes:** No API restrictions. Natural extension of SessionStats widget.
-
-### 5. Defensive Cooldown Tracker
-**Difficulty:** Hard
-**Description:** Track major party/raid defensive cooldowns (Darkness, AMZ, Barrier, etc.) using `UNIT_SPELLCAST_SUCCEEDED` on group units plus duration timers. AddonComm sharing (as Kick already does) extends coverage.
-**Notes:** Requires managing many unit event registrations and a large spell ID database. High value but high maintenance as spells change each patch.
-
----
-
-## UI/UX Features
-
-### 6. Nameplate Aura Tracker
-**Difficulty:** Hard
-**Description:** Icons for a user-defined spell ID list displayed on enemy nameplates. Uses `NAME_PLATE_UNIT_ADDED`/`REMOVED` and `C_UnitAuras`. High player demand feature.
-**Notes:** Performance care needed with many nameplates active. No taint concerns for addon-created frames anchored to nameplate frames.
-
-### 7. GCD Bar
-**Difficulty:** Medium
-**Description:** A thin bar showing the current Global Cooldown fill, driven by `SPELL_UPDATE_COOLDOWN` and `C_Spell.GetSpellCooldown`. Fits alongside the existing CastBar module.
-**Notes:** Straightforward API usage. Main challenge is detecting GCD vs. spell-specific cooldowns.
-
-### 8. Screen Edge Alerts
-**Difficulty:** Medium
-**Description:** Coloured screen-edge vignette overlay for configurable triggers: low health, low mana, missing flask, or a specific debuff. Uses existing `C_UnitAuras` detection.
-**Notes:** Overlay textures anchored to UIParent edges. No taint. OnUpdate polling or event-driven, depending on trigger type.
-
-### 9. Personal Cooldown Tracking Bar
-**Difficulty:** Medium
-**Description:** A row of user-defined spell/item icons showing cooldown state. Drives off `SPELL_UPDATE_COOLDOWN`/`BAG_UPDATE_COOLDOWN`. Reuses the icon button pool pattern from Combat.lua.
-**Notes:** Configuration UI (adding/removing spells) is the most complex part. Core display is straightforward.
-
-### 10. Font Profile System
-**Difficulty:** Easy
-**Description:** Named presets storing global or per-module font/size/colour. A dropdown in config applies the profile to all modules via their `UpdateSettings()` functions.
-**Notes:** Pure saved-variable work. No WoW API constraints. Very user-friendly improvement.
-
-### 11. Minimap Drawer Auto-Hide in Combat
-**Difficulty:** Easy
-**Description:** Use `RegisterStateDriver` on the existing minimap drawer frame to hide it during combat automatically.
-**Notes:** Requires `SecureHandlerStateTemplate` on the frame. The minimap module already manages this frame, so it's a small addition.
+### 7. Hearthstone auto-use on slash command
+One-line: `/luit hs` uses the currently-set hearthstone toy/item (respects the Hearthstone
+widget's selection).
+Motivation: Widget already tracks selection; a slash binding removes a click.
+Ease: **Easy** — `UseItemByName` or `C_Item.UseToy`; non-secure so must be hand-triggered
+from a /click keybinding (not automated).
+Taint: None (user-initiated).
 
 ---
 
-## Social & Group Features
+## Combat & Encounter
 
-### 12. Group Role Composition Widget
-**Difficulty:** Easy
-**Description:** Display tank/healer/DPS counts using `UnitGroupRolesAssigned`. Natural extension of the existing Group widget and Kick roster tracking.
-**Notes:** All APIs freely available. Low complexity, high utility for group leaders.
+### 8. Interrupt announcements
+One-line: Post a party/say message when the player (or optionally any party member) lands an
+interrupt — with spell name and target.
+Motivation: Complements the existing Kick module (cooldowns) with output; popular in M+.
+Ease: **Easy** — EventBus-subscribe to `UNIT_SPELLCAST_INTERRUPTED`.
+Taint: `interruptedBy` GUID is a secret value during combat (already documented in CLAUDE.md)
+— can't read source GUID; use `sourceGUID` from the event's arg0 unit only if non-secret, or
+announce only the *target* and interrupted spell.
 
-### 13. Ready Check History
-**Difficulty:** Easy
-**Description:** Record results of recent ready checks using `READY_CHECK`, `READY_CHECK_RESPONSE`, `READY_CHECK_FINISHED`. Session-only table, tooltip or list display.
-**Notes:** No taint. Who wasn't ready is always useful information after a wipe.
+### 9. Combat-start / combat-end sound
+One-line: Play a configurable sound cue on `PLAYER_REGEN_DISABLED` / `_ENABLED`.
+Motivation: Useful for tanks checking pulls, or healers distinguishing combat states audibly.
+Ease: **Easy** — EventBus + `PlaySoundFile`. Add a file picker to the Combat panel.
+Taint: None.
 
-### 14. Raid Announcement Templates
-**Difficulty:** Easy
-**Description:** User-configurable chat template messages with `{name}`, `{spec}`, `{ilvl}`, `{dungeon}` variables, sent via `SendChatMessage`. Simple string replacement + list UI in config.
-**Notes:** No API constraints. Useful for raid leaders who send the same messages repeatedly.
+### 10. Personal DPS/HPS overlay under the player frame
+One-line: Tiny text overlay showing your live DPS/HPS pulled from `C_DamageMeter` without
+opening the session window.
+Motivation: DamageMeter is great but requires the window open; a one-line overlay is what
+people copy from ElvUI / Details miniview.
+Ease: **Medium** — polling `C_DamageMeter.GetPlayerStats` (if available) or reading the
+non-secret aggregate fields. Position via widget framework (already supports it).
+Taint: **Serious caveat** — per CLAUDE.md the live combat fields are secret. Any copy into a
+Lua local/table breaks. Must pass values *directly* into `SetText`/`SetValue` and never
+compare. Already a solved pattern in `DamageMeter.lua:474-562` — reuse it.
 
----
+### 11. Taunt / Defensive CD tracker for group frames
+One-line: Track tank taunts and defensive CDs on the party/raid frames (similar to the Kick
+module's UI but for defensives).
+Motivation: Natural companion to the existing Kick tracker.
+Ease: **Medium** — reuse Kick.lua's group-frame attachment pattern; maintain a static table
+of defensive/taunt spell IDs per class. EventBus: `UNIT_SPELLCAST_SUCCEEDED` + combat log
+replacements via encounter events (not CLEU — that's forbidden).
+Taint: Must attach overlays to unit-frame positions via `SetPoint` reads, not writes; same
+pattern Kick.lua already uses safely.
 
-## Quality of Life Features
-
-### 15. Smart Vendor Price Tooltip
-**Difficulty:** Easy
-**Description:** Add vendor sell price to item tooltips using `TooltipDataProcessor.AddTooltipPostCall` (hook already used in Misc.lua). `C_Item.GetItemInfo` provides the sell value.
-**Notes:** Very small addition to existing tooltip infrastructure.
-
-### 16. Alt Character Summary Panel
-**Difficulty:** Medium
-**Description:** A panel reading `LunaUITweaks_CharacterData`, `LunaUITweaks_ReagentData`, and `LunaUITweaks_WarehousingData` to display a cross-character overview of alts, their reagents, and currency totals.
-**Notes:** Pure display layer on existing saved variables. Main work is the UI layout for multiple characters.
-
-### 17. Auto Group Loot Threshold Setter
-**Difficulty:** Easy
-**Description:** On becoming group leader (`PARTY_LEADER_CHANGED`), automatically call `SetLootThreshold(quality)` to a configured value.
-**Notes:** Two-function feature for the Misc module. Zero API restrictions.
-
-### 18. Crafting Order Expiry Timer
-**Difficulty:** Medium
-**Description:** Extend the personal order notification with expiry countdown display using data from `C_CraftingOrders.GetPersonalOrdersInfo()` (already called in Misc.lua).
-**Notes:** Needs a ticker since no expiry events fire. The data is already being fetched, so it's an extension of existing work.
-
-### 19. BoE Item Alert ✅ Implemented (Misc.lua)
-**Difficulty:** Easy
-**Description:** When a looted item is BoE (`CHAT_MSG_LOOT` + `GetItemInfo` bind type check), shows a coloured alert overlay with the item name and quality colour. Configurable minimum quality (Uncommon → Legendary), alert duration, and alert colour. No TTS for BoE (silent alert only). Quality filtering uses `boeMinQuality` (default: Epic+).
-**Notes:** One minor issue (#48 in codereview.md): `GetItemInfo` may return nil for items not yet in the client cache when the loot event fires. Silent drop — no retry. Consider queuing a `SafeAfter(0.3, ...)` retry.
-
----
-
-## Integration Features
-
-### 20. Lightweight Aura Display
-**Difficulty:** Hard
-**Description:** Persistent, positioned icons for a user-defined watch list of spell IDs on "player" or "target". Uses `C_UnitAuras.GetAuraDataBySpellID` and `UNIT_AURA`. Supports cooldown spiral and duration text.
-**Notes:** Main complexity is icon layout, cooldown spiral rendering, and configuration UI. No taint for addon-created frames. High demand feature that many players currently use WeakAuras for simple cases.
-
-### 21. Death Recap Overlay
-**Difficulty:** Very Hard (API-blocked)
-**Description:** Display last few damage sources on death. Fully blocked by the `COMBAT_LOG_EVENT_UNFILTERED` restriction for third-party addons.
-**Notes:** A partial implementation (debuffs active at death from `C_UnitAuras` snapshot on `PLAYER_DEAD`) is possible but not a true damage recap. Not recommended without a future Blizzard API addition.
+### 12. Group Buff / consumable checker
+One-line: On encounter start (or ready check) scan for missing buffs (flask, food, rune,
+weapon enchant) and whisper / raid-warn offenders.
+Motivation: Every guild reinvents this; simple version fits.
+Ease: **Medium** — `UnitAura` iteration on `READY_CHECK` / `ENCOUNTER_START`; static list
+of season flask/food/rune spellIDs stored similar to `MplusData.lua`.
+Taint: None. Unit names in combat are secret — either fire only outside combat (ready check
+always is) or use `issecretvalue` guard (pattern exists in `TalentReminder.lua:227`).
 
 ---
 
-## Features Added/Fixed Since Last Review (2026-03-02 pass 2)
+## Social & Group
 
-### 24. Death Notification ✅ Implemented (Misc.lua + NotificationsPanel.lua)
-**Difficulty:** Easy *(shipped)*
-**Description:** Announces party and raid member deaths via TTS. Triggers on `UNIT_HEALTH` events, checks `UnitIsDead(unitTarget)` for party/raid unit tokens, and speaks a configurable message with `{name}` and `{role}` placeholder substitution. Deduplicated via a `deathAnnounced` table — each death fires TTS once and resets when the unit is resurrected. Voice type (Standard / Alternate 1) is configurable. Full config panel UI in Notifications tab.
-**Notes:** Performance concern: uses `UNIT_HEALTH` (extremely frequent) rather than `UNIT_DIED` (fires once on death). Recommend switching to `UNIT_DIED` for detection.
+### 13. Group ready-check summary
+One-line: After a ready check, print a one-line summary ("Ready: 5 / 10, AFK: 2, Declined: 3")
+with color-coded names.
+Motivation: The default `READY_CHECK_CONFIRM` toasts fade fast; a persistent summary is nicer
+for raid leads.
+Ease: **Easy** — track `READY_CHECK`, `READY_CHECK_CONFIRM`, `READY_CHECK_FINISHED`;
+print via `Core.Log`.
+Taint: None.
 
-### BoE Item Alert — see feature #19 above ✅ Implemented
+### 14. Loot roll announcer
+One-line: Announce group loot rolls with item link and roll value to the party chat, or filter
+them into a private addon frame.
+Motivation: Loot roll chat is a firehose; compact summary is QoL.
+Ease: **Easy** — EventBus: `CHAT_MSG_LOOT`, `CHAT_MSG_SYSTEM` for rolls.
+Taint: None.
 
----
+### 15. Whisper-to-popup window
+One-line: Pop up a small movable frame for each incoming whisper (with auto-dismiss on reply).
+Motivation: Old WIM-lite feature; useful for streamers and raiders who miss whispers.
+Ease: **Medium** — `CHAT_MSG_WHISPER` handler; pool reusable frames via a small framework
+similar to Frames.lua.
+Taint: None — addon-owned frames.
 
-## Features Added Since Last Review (2026-03-01)
-
-### 22. LFG Queue Pop Timer ✅ Implemented (`QueueTimer.lua`)
-**Difficulty:** Easy *(was not previously suggested — shipped)*
-**Description:** A progress bar that counts down the LFG dungeon-finder proposal window. Anchors below the Blizzard `LFGDungeonReadyDialog` when visible; falls back to a configurable CENTER position. Reads the actual expiration timestamp from `GetLFGProposal()` and supports dynamic green→yellow→red color, optional text countdown, and configurable size. Starts on `LFG_PROPOSAL_SHOW`, stops on `LFG_PROPOSAL_FAILED`/`LFG_PROPOSAL_SUCCEEDED` or when entering an instance.
-
----
-
-## Features Added/Fixed Since Last Review (2026-03-02)
-
-### 23. Per-Widget Clickthrough Toggle ✅ Implemented (Widgets config panel)
-**Difficulty:** Easy *(new micro-feature)*
-**Description:** A "CT" (clickthrough) checkbox added per widget in the Widgets config panel. When enabled and widgets are locked, `EnableMouse(false)` is set on that widget so clicks pass through to the UI underneath.
-**Notes:** Small, clean addition to the widget framework. No taint concerns.
-
-### XP Bar Tooltip Fix ✅ Fixed
-**Description:** Mouse always enabled; drag eligibility gated separately by the lock state. Tooltip visible regardless of lock status.
-
-### XP Bar Warband Mentor Auto-Detection ✅ Improved
-**Description:** Warband Mentor: Midnight XP bonus auto-detected via `GetAchievementInfo` (achievements 42328–42332) instead of requiring manual configuration.
-
-### DMF WHEE Widget Spell ID Fix ✅ Fixed
-**Description:** Corrected spell ID from 71968 to 136583.
+### 16. Guild online / login / logout feed
+One-line: Small movable feed showing guild member logins/logouts with timestamp, toggleable.
+Motivation: Guild roster chatter is useful for social guilds and raid recruits.
+Ease: **Easy** — `GUILD_ROSTER_UPDATE` diffing via side-table cache.
+Taint: None.
 
 ---
 
-## New Pending Suggestions (2026-03-06)
+## Economy & Vendoring
 
-### 25. MplusTimer: Projected Final Score — Easy
-During an active M+ run, display the estimated score gain using `Widgets.EstimateTimedScore(level)` — the function already exists in `widgets/Widgets.lua` and is unused inside the timer. Display as a small suffix next to the key level.
+### 17. Gold log / session gold tracker
+One-line: Widget showing gold earned/spent this session, broken into vendor / quest / loot
+sources if possible.
+Motivation: Nice snapshot similar to the SessionStats widget but for currency.
+Ease: **Easy-Medium** — `PLAYER_MONEY` diffing + categorize by most-recent event (vendor
+open, quest complete, etc.). Imperfect categorization but good enough.
+Taint: None.
 
-### 26. MplusTimer: Per-Player Death Breakdown Tooltip — Easy
-`MplusTimer.lua` already tracks `state.deathLog = { [playerName] = count }` but never displays it. An `OnEnter` tooltip on the death count FontString would expose this data. Pure display addition, zero new state.
+### 18. Auto-sell item list (not just greys)
+One-line: Extend Vendor.lua to auto-sell a user-maintained item blacklist (by itemID or
+item name substring) on vendor open.
+Motivation: Common QoL — sell known junk BoPs, low-ilvl greens, reagents the user never uses.
+Ease: **Easy** — extends existing Vendor.lua; add list editor in VendorPanel.
+Taint: None.
 
-### 27. QuestAuto: Quest ID Blacklist/Whitelist — Easy
-Two arrays in `UIThingsDB.questAuto` (blacklist and whitelist) plus a check in `ShouldAcceptQuest()`. Lets players permanently skip story quests or force-accept quests that fail the trivial check.
+### 19. AH undercut scanner (read-only)
+One-line: When player's posted auctions are shown, mark which are currently undercut.
+Motivation: Simple visual; AH price tracking is a massive category but even a simple "you've
+been undercut" flag is useful.
+Ease: **Medium** — `C_AuctionHouse` events; compare owned item queries with the lowest
+scan result.
+Taint: None. AH events are not combat-secret.
 
-### 28. CastBar: Target Cast Bar — Medium
-Duplicate the existing player cast bar logic for `"target"` with separate position, color, and size settings. Most-requested castbar feature; the existing module is clean enough that duplication is mechanical.
-
-### 29. ObjectiveTracker: Verify Collapse State Persistence — Easy
-`UIThingsDB.tracker.collapsed` exists and is updated on interaction, but it is unclear whether the state survives a `/reload` end-to-end. Verify; if broken the fix is a one-line read in the deferred `UpdateContent` path.
-
-### 30. AddonComm: Shared Loot Checklist Sync — Medium
-Broadcast each player's `LootChecklist` wishlist items via AddonComm. In the MplusTimer boss view or a dedicated panel, show whose items drop off the current boss. All three subsystems (AddonComm, LootChecklist, MplusTimer boss tracking) are in place; the integration is the new work.
-
-### 31. Warehousing: Shopping List Export — Easy
-Iterate `LunaUITweaks_WarehousingData.items` and format a chat-printable or copyable list of items needed and quantities deficit across characters. Warehousing already knows exactly what is needed.
-
-### 32. Warehousing: TSM/Auctionator Price Estimate — Medium
-If TSM or Auctionator is loaded (`C_AddOns.IsAddOnLoaded()`), query their public price APIs to show an estimated total gold cost for a full restock. Guard with nil checks.
-
-### 33. LootChecklist: Priority Sorting — Easy
-Add a 1–5 priority field to each checklist item. Sort rows by priority descending before rendering. The row pool and scroll frame are already written; this is a data field + sort step.
-
-### 34. Profiler: Persistent Performance Snapshots — Easy
-Persist the top-N memory/CPU consumers to `UIThingsDB` as a timestamped ring buffer so players can review performance trends across sessions. Low-risk extension with no UI changes needed.
-
-### 35. AddonVersions: Spec + Item Level Broadcast — Easy
-Append `|specName|ilvl` to the existing pipe-delimited broadcast message (backward-compatible; old clients ignore extra fields). `GetSpecializationInfo()` and `GetAverageItemLevel()` are freely available.
-
-### 36. Games: Group High Score Leaderboard via AddonComm — Medium
-When entering a group, broadcast each player's high scores for Snake/Gems/2048 via AddonComm. Display a session-scoped leaderboard in the Games panel. AddonComm bus, game high score storage, and group detection are all in place.
+### 20. Mail auto-open / collect
+One-line: When the mailbox is opened, auto-collect attachments and gold from all messages
+(with configurable filters).
+Motivation: Current Mail widget only counts unread mail; auto-open is the next logical step.
+Ease: **Medium** — `C_Mail.OpenMail` iteration; throttle between calls to avoid server kick.
+Taint: None.
 
 ---
 
-## Difficulty Summary
+## UI & Layout
 
-| # | Feature | Difficulty | Status |
-|---|---------|-----------|--------|
-| 1 | Boss Ability Timers | Medium | Pending |
-| 2 | Interrupt Assignment / Rotation | Medium | Pending |
-| 3 | Wipe Recovery Checklist | Easy | Pending |
-| 4 | Encounter Pull Log | Easy | Pending |
-| 5 | Defensive Cooldown Tracker | Hard | Pending |
-| 6 | Nameplate Aura Tracker | Hard | Pending |
-| 7 | GCD Bar | Medium | Pending |
-| 8 | Screen Edge Alerts | Medium | Pending |
-| 9 | Personal Cooldown Tracking Bar | Medium | Pending |
-| 10 | Font Profile System | Easy | Pending |
-| 11 | Minimap Drawer Auto-Hide in Combat | Easy | Pending |
-| 12 | Group Role Composition Widget | Easy | Pending |
-| 13 | Ready Check History | Easy | Pending |
-| 14 | Raid Announcement Templates | Easy | Pending |
-| 15 | Smart Vendor Price Tooltip | Easy | Pending |
-| 16 | Alt Character Summary Panel | Medium | Pending |
-| 17 | Auto Group Loot Threshold Setter | Easy | Pending |
-| 18 | Crafting Order Expiry Timer | Medium | Pending |
-| 19 | BoE Item Alert | Easy | ✅ Implemented |
-| 20 | Lightweight Aura Display | Hard | Pending |
-| 21 | Death Recap Overlay | Very Hard (API-blocked) | Pending |
-| 22 | LFG Queue Pop Timer | Easy | ✅ Implemented |
-| 23 | Per-Widget Clickthrough Toggle | Easy | ✅ Implemented |
-| 24 | Death Notification (TTS) | Easy | ✅ Implemented |
-| 25 | MplusTimer: Projected Final Score | Easy | Pending |
-| 26 | MplusTimer: Per-Player Death Breakdown | Easy | Pending |
-| 27 | QuestAuto: Blacklist/Whitelist Quests | Easy | Pending |
-| 28 | CastBar: Target Cast Bar | Medium | Pending |
-| 29 | ObjectiveTracker: Collapse Persistence | Easy | Pending |
-| 30 | AddonComm: Shared Loot Checklist Sync | Medium | Pending |
-| 31 | Warehousing: Shopping List Export | Easy | Pending |
-| 32 | Warehousing: TSM/Auctionator Price | Medium | Pending |
-| 33 | LootChecklist: Priority Sorting | Easy | Pending |
-| 34 | Profiler: Persistent Performance History | Easy | Pending |
-| 35 | AddonVersions: Spec + Item Level Broadcast | Easy | Pending |
-| 36 | Games: Group High Score Leaderboard | Medium | Pending |
+### 21. Tooltip item-source display
+One-line: Append "Source: <dungeon / raid / vendor>" to item tooltips using a static lookup
+table.
+Motivation: Common feature in DBM-Core / HandyNotes-style addons; nice on gear inspection.
+Ease: **Medium** — requires a curated source table per item (large data burden), but
+hookup is trivial via `TooltipDataProcessor.AddTooltipPostCall`.
+Taint: None.
+
+### 22. Chat frame timestamp format override
+One-line: Let the user pick 12h/24h, with/without seconds, colored or plain.
+Motivation: Blizzard's timestamp options are minimal; common request.
+Ease: **Easy** — global-form `hooksecurefunc("ChatFrame_OnEvent", ...)` or
+`TooltipDataProcessor`-equivalent for chat. Actually simpler: replace `BCTimestampFormat` via
+`_G["CHAT_TIMESTAMP_FORMAT"]` setting — non-secure, safe.
+Taint: None when using the global constant, not frame-object hooks.
+
+### 23. Minimap zoom step memory
+One-line: Remember and restore the player's preferred minimap zoom level on login / zone change.
+Motivation: Minimap zoom resets constantly, especially after boss encounters.
+Ease: **Easy** — poll `Minimap:GetZoom()` on save; `Minimap:SetZoom(saved)` on restore.
+Taint: `SetZoom` on Blizzard Minimap — unclear if safe. Test carefully; fall back to
+`Minimap:GetZoomLevels()` logic. If it taints, abandon.
+
+### 24. Raid Warning / Boss Emote capture frame
+One-line: A separate movable frame that mirrors raid warnings and boss emotes in a larger
+font.
+Motivation: Blizzard's RW is easy to miss mid-fight; a dedicated large frame is a staple for
+raid leads.
+Ease: **Easy** — EventBus: `CHAT_MSG_RAID_WARNING`, `CHAT_MSG_RAID_BOSS_EMOTE`,
+`CHAT_MSG_RAID_BOSS_WHISPER`. Addon-owned frame.
+Taint: None.
+
+### 25. Custom action-bar cooldown text
+One-line: Replace default cooldown text on action buttons with configurable size / color /
+decimal precision.
+Motivation: OmniCC's core feature; small standalone version is well-scoped.
+Ease: **Hard** — touches action buttons, which are the exact taint-heavy surface
+CLAUDE.md warns about. Any frame-object hook or field write on a Blizzard action button taints
+the shared prototype → `ADDON_ACTION_BLOCKED`. Would need to walk action buttons with
+global-form hooks only (`hooksecurefunc("CooldownFrame_Set", ...)` etc.) and keep state in
+side-tables.
+Taint: **HIGH RISK.** Only attempt if willing to accept possible regressions; document
+carefully.
+
+---
+
+## Quality-of-Life (continued)
+
+### 26. Instance portal countdown
+One-line: When you step into an instance portal, show a 10-second cancel-window timer so you
+can back out.
+Motivation: The lockout system is cruel; a visual countdown prevents accidental saves.
+Ease: **Easy** — hook `LFG_PROPOSAL_SHOW` equivalent / `ZONE_CHANGED_NEW_AREA` transition;
+just a timer widget.
+Taint: None.
+
+### 27. Portable inspect / quick armory
+One-line: `/luit inspect <name>` opens the inspect window on a target if they're in range,
+with a persistent history of the last 10 inspected characters (name, ilvl, spec).
+Motivation: Built-in inspect is flow-heavy; remembering who you inspected is useful.
+Ease: **Medium** — `NotifyInspect`, `INSPECT_READY`; cache `GetInspectSpecialization`,
+`C_PaperDollInfo.GetInspectItemLevel`. History in `UIThingsDB`.
+Taint: None.
+
+---
+
+## Flagged high-taint-risk ideas (listed so they're considered, not recommended)
+
+These were brainstormed but are NOT recommended given the addon's commitment to being
+taint-clean:
+
+- **Objective tracker replacement / skinning** — extensively documented as untouchable in
+  MEMORY.md. Leave Blizzard's tracker alone.
+- **DamageMeter skinning / repositioning** — protected frame, any positioning call taints.
+  MEMORY.md marks this as no-op.
+- **Action button skinning / keybind text** — taints Button prototype (see MEMORY.md
+  ActionBars section). Only the 2-second polling ticker approach is safe, and it's fragile.
+- **Player / target unit frame reskins** — secure frames; the companion addon
+  `LunaUITweaks_UnitFrames` is where any such work should live.
+- **Macro / spell auto-cast automation** — all protected; not feasible from addon code.
+- **Automatic bag sort** — Blizzard's `C_Container.SortBags` works but triggers taint when
+  called in combat; needs a combat-lockdown guard at minimum.
+
+---
+
+## Summary of counts
+
+- Quality-of-Life: 9 ideas (entries 1–7, 26, 27)
+- Combat & Encounter: 5 ideas (8–12)
+- Social & Group: 4 ideas (13–16)
+- Economy & Vendoring: 4 ideas (17–20)
+- UI & Layout: 5 ideas (21–25)
+- Total feasible: 27 (exceeds the 15–25 target; trim/defer as needed)
+- High-risk flagged for avoidance: 6
+
+Next-pass instructions: keep this file's structure; when an idea ships, change the heading
+to "### N. [SHIPPED vX.Y] …" and keep the entry for history. When an idea is abandoned (e.g.
+taint risk proven), mark "### N. [ABANDONED] …" with a one-line reason.
