@@ -63,7 +63,7 @@ table.insert(Widgets.moduleInits, function()
 
     vaultFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Great Vault Progress", 1, 1, 1)
 
         local tierLabels = { "1st Slot", "2nd Slot", "3rd Slot" }

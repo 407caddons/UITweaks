@@ -6,7 +6,7 @@ table.insert(Widgets.moduleInits, function()
 
     timeFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         local calendarTime = C_DateAndTime.GetCurrentCalendarTime()
         local hour, minute = GetGameTime()
         GameTooltip:SetText("Time Info", 1, 1, 1)

@@ -45,7 +45,7 @@ table.insert(Widgets.moduleInits, function()
     commFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
         if not IsInGroup() then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
 
         local playerData = addonTable.AddonVersions and addonTable.AddonVersions.GetPlayerData()
         local ownVersion = addonTable.AddonVersions and addonTable.AddonVersions.GetOwnVersion() or "?"

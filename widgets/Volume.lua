@@ -31,7 +31,7 @@ table.insert(Widgets.moduleInits, function()
 
     volumeFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Volume Control")
 
         local enabled = GetCVar("Sound_EnableAllSound") == "1"

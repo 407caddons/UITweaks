@@ -65,7 +65,7 @@ table.insert(Widgets.moduleInits, function()
 
     wpFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
 
         local wp, idx = GetActiveWaypoint()
         if not wp then

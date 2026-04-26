@@ -1,133 +1,114 @@
-# WoW Lua Code Review — 2026-04-19
+# WoW Lua Code Review — 2026-04-23
 
-## Changes since 2026-04-16
-
-Since the previous review there has been one commit (`cdcc567 "Updates"`) plus currently-pending working-tree changes:
-
-- **`MinimapCustom.lua`** — QueueStatusButton frame-object hooks replaced by a 2s `C_Timer.NewTicker` polling the button position (`StartQueueEyeTicker`). Early-return added to `AnchorQueueEyeToMinimap` when already in place. `HookQueueEye` deleted.
-- **`CastBar.lua`** — `hooksecurefunc(PlayerCastingBarFrame, ...)` / `HookScript` calls replaced by `RegisterStateDriver(PlayerCastingBarFrame, "visibility", "hide")` with a combat-deferral path (`blizzBarPending` flag + `PLAYER_REGEN_ENABLED` handler).
-- **`ObjectiveTracker.lua`** — 2317-line file deleted; functionality moved to a companion addon. `TrackerPanel.lua` likewise deleted. Tracker DB defaults removed from `Core.lua`.
-- **`Misc.lua`** — New features added (death notification TTS cap `deathMaxCount`, whisper alert frame + TTS). Pending change adds `MAIL_SHOW` handler so `mailAlertShown` flag self-heals on mailbox open (today's edit). Also adds `UNIT_HEALTH` / `GROUP_ROSTER_UPDATE` handlers for death notifications.
-- **`DamageMeter.lua`** — Pending changes: added `showTooltip` and `showIcons` settings, `ApplyRowIcon` / `ApplyRowTooltip` helpers, a drilldown-during-combat render path, and icon texture on each row. Matching panel checkboxes in `config/panels/DamageMeterPanel.lua`. New defaults added in `Core.lua`.
-- **`games/Blocks.lua`** — New 1561-line multiplayer block-drop game file.
-- **`config/ConfigMain.lua`**, **`config/panels/NotificationsPanel.lua`**, **`config/panels/AddonVersionsPanel.lua`** — UI adjustments for the new notification features and companion-tab handling.
-
-Scope: all `.lua` files under the project root (top-level, `widgets/`, `games/`, `config/`), excluding `libs/`. Findings below reflect the post-commit and post-pending-change state and are verified by direct file reads.
+Scope: every `.lua` file in `LunaUITweaks/` (excluding `libs/`). Focus on TWW 12.0 secret values, Button prototype taint, combat lockdown, Lua 5.1 portability, frame anchoring, memory/perf, and general quality.
 
 ## Critical (would cause errors or taint in-game)
 
-### Frame-object `hooksecurefunc` / `HookScript` on Blizzard frames
-- **TalentManager.lua:250** [STILL APPLIES] — `PlayerSpellsFrame:HookScript("OnShow", OnTalentFrameShow)` on a Blizzard frame. Taints the talent window. Replace with a global-form hook: `hooksecurefunc("ToggleTalentFrame", ...)` (or `EventRegistry:RegisterFrameEvent("PLAYER_TALENT_UPDATE")`), reading `PlayerSpellsFrame:IsShown()` to decide whether to show the addon panel.
-- **TalentManager.lua:251** [STILL APPLIES] — `PlayerSpellsFrame:HookScript("OnHide", OnTalentFrameHide)` — same fix.
-- **Combat.lua:1111** [NEW] — `hooksecurefunc(C_Container, "UseContainerItem", TryTrackContainerItem)` — frame-object form on the `C_Container` namespace table. `C_Container` is not a Frame (no Button prototype), but hooking onto the namespace can still taint the wrapped function. Lower severity than hooking a Frame's method, but safer to use the global `UseContainerItem` path (already present at line 1115) exclusively and drop the `C_Container` variant if both resolve to the same underlying function in 12.0. Verify at runtime whether dropping it loses any usage tracking before removing.
+### Blizzard Button prototype taint (`SetPoint` / `SetParent` / `ClearAllPoints` on Blizzard Buttons)
 
-### Button parented to secure popup
-- **Misc.lua:497** [STILL APPLIES] — `deleteButton:SetParent(dialog)` where `dialog` is a Blizzard `StaticPopup` resolved from `StaticPopup_Visible()` + `_G[dialogName]`. Addon-created Button writes itself into the StaticPopup's child list; subsequent `StaticPopup_Show` calls walk that list from protected code, pulling taint into Blizzard flow. Safer: parent `deleteButton` to `UIParent` and anchor to `editBox` via `SetPoint` without reparenting (SetPoint reads from the Blizzard frame; reparenting writes onto it).
-- **Misc.lua:492** [NEW] — `button1:Click()` calls a Blizzard StaticPopup button's `:Click()` method from inside an addon OnClick handler. Click invokes Blizzard's secure click path which may error when the addon execution context is tainted. The preceding `editBox:SetText(DELETE_ITEM_CONFIRM_STRING)` is enough to enable button1 — consider relying on the user's own confirmation click instead of programmatically clicking the Blizzard button, which would both remove the taint risk and avoid accidentally skipping Blizzard's own guards.
+Per the project memory, *any* of these calls on a Blizzard Button frame taints the shared Button prototype, producing `ADDON_ACTION_BLOCKED: Button:SetPassThroughButtons()` and similar errors on map pins, party frames, and other secure UI.
 
-### Combat-lockdown guard missing
-- **Combat.lua:1419** [STILL APPLIES] — `UnregisterStateDriver(reminderFrame, "visibility")` inside `ApplyReminderEvents()`, which has no `InCombatLockdown()` guard. `reminderFrame` is a `SecureHandlerStateTemplate` — the call requires the combat guard even on an addon-owned frame. In practice the function is reached from settings panels (out of combat) and from the enable/disable toggle, but there is no structural guarantee — if a settings change fires during combat the call will fail. Add `if InCombatLockdown() then return end` at the top of `ApplyReminderEvents`, or defer the else-branch to `PLAYER_REGEN_ENABLED`.
+- **MinimapCustom.lua:46–50** — `QueueStatusButton:ClearAllPoints/SetPoint/SetParent/SetFrameStrata/SetFrameLevel` inside `AnchorQueueEyeToMinimap()`. The combat guard at line 34 prevents the lockdown error but does not prevent prototype taint. Memory entry "QueueStatusButton fix (TODO)" already flags this.
+- **MinimapCustom.lua:115–119, 122–128, 132–138, 141–145** — `QueueStatusButton`, `MinimapCluster.InstanceDifficulty`: `ClearAllPoints/SetPoint/SetParent`. Guarded by `InCombatLockdown` via `ApplyMinimapShape`, but still taints the Button prototype.
+- **MinimapCustom.lua:212–218** — `mailFrame:SetParent/ClearAllPoints/SetPoint/SetScale/SetFrameStrata/SetFrameLevel`. `mailFrame` is `MinimapCluster.IndicatorFrame.MailFrame` (Blizzard-owned). **No `InCombatLockdown` guard on `PositionMinimapIcons()`**.
+- **MinimapCustom.lua:236–243** — Same pattern on `MinimapCluster.IndicatorFrame.CraftingOrderFrame`. No combat guard.
+- **MinimapCustom.lua:257–268** — Same pattern on `MinimapCluster.Tracking`. No combat guard.
+- **MinimapCustom.lua:273–284** — Same pattern on `AddonCompartmentFrame`. No combat guard.
+- **MinimapCustom.lua:220, 243** — `mailFrame:SetScript("OnHide", nil)` and `craftFrame:SetScript("OnHide", nil)` — clearing Blizzard frame handlers; taints the parent frame's script context.
+- **MinimapCustom.lua:192, 196** — `Minimap.ZoomIn:SetScript("OnShow", ...)` / `Minimap.ZoomOut:SetScript("OnShow", ...)` — overriding script handlers on Blizzard Button frames.
+- **MinimapCustom.lua:331–333** — `Minimap:SetParent/ClearAllPoints/SetPoint`. Runs at `PLAYER_ENTERING_WORLD` (typically OOC) but reparents the actual `Minimap` frame; this one is structurally hard to avoid given the wrapper-frame design.
+- **MinimapCustom.lua:1016–1021** — `btn:ClearAllPoints/SetPoint/SetSize/SetParent/SetFrameStrata/SetFrameLevel` in `LayoutDrawerButtons()`, where `btn` is a collected LibDBIcon-style Blizzard Button. Called from `CollectMinimapButtons()` and a 3-second `C_Timer.After`. **No combat guard anywhere in the call chain**.
+- **MinimapCustom.lua:1081–1086** — `btn:SetParent/ClearAllPoints/SetSize/SetPoint(unpack(pt))` in `ReleaseDrawerButtons()`. Same Blizzard-button risk.
+
+Recommended fix: leave QueueStatusButton, InstanceDifficulty, Tracking, AddonCompartment, and the IndicatorFrame children at their default Blizzard positions; or anchor the addon's `minimapFrame` to them rather than the reverse. The drawer's button collection is the deepest offender — collected buttons belong to other addons and may still be Blizzard-derived; treat them all as untouchable.
+
+### Secret-value `UnitName()` used as a table key, in `string.format`, or in `string.gsub`
+
+`UnitName()` returns a secret string during combat in TWW. Using it as a table key throws *"table index is secret"*; using it in `string.format`, concat, or `string.gsub` replacement throws or silently fails.
+
+- **Loot.lua:410** — `local playerName = UnitName("player")` then `rosterCache[playerName] = playerClass` at 413. Called from `UpdateRosterCache()`. Use `Secret.SafeUnitName("player", "Unknown")` and bail if name is the fallback.
+- **Loot.lua:432** — `local name = UnitName(unit)` then `rosterCache[name] = classFileName` at 435. Same risk.
+- **Loot.lua:519** — `local looterName = UnitName("player")` then `rosterCache[looterName]` at 520. Fires on `SHOW_LOOT_TOAST` which can fire mid-combat (boss kills, world-quest loot during combat).
+- **Loot.lua:534** — Same pattern in `OnShowLootToastUpgrade`.
+- **Loot.lua:550, 562** — `UnitName("player")` in `OnChatMsgLoot`. Line 562 directly compares with `~=` and line 551 uses the result as a key via `rosterCache[looterName]`. `CHAT_MSG_LOOT` fires constantly during combat.
+- **Misc.lua:246–251** — `local name = UnitName(unitTarget)` then `msg:gsub("{name}", name)` then `Core.SpeakTTS(msg, ...)`. `OnUnitHealth` runs during combat (deaths happen in combat by definition). `string.gsub` with a secret replacement string is unsafe. Use `Secret.SafeUnitName(unitTarget, "Someone")`.
+- **Kick.lua:1380, 1397, 1422, 1431, 1436, 1545, 1550** — `UnitName(unit)` inside `string.format(...)` for debug logging. The format call happens before the level filter inside `Log`, so the error fires whether the log is shown or not. Replace with `Secret.SafeUnitName`.
+- **Kick.lua:1484** — `local ownerName = UnitName(ownerUnit)` then concatenated/formatted at 1487. Pet spell-cast handler runs in combat.
+- **Kick.lua:233, 241** — `UnitName(unit) == senderShort` in `FindSenderGUID`. Equality on secret strings sometimes works but is unreliable in TWW; the comparison may silently fail.
+
+### Combat-lockdown `UnregisterStateDriver` without guard
+
+- **Combat.lua:1419** — `UnregisterStateDriver(reminderFrame, "visibility")` inside `ApplyReminderEvents()`. Reachable from `addonTable.Combat.ApplyReminderEvents()` → `addonTable.Combat.UpdateSettings()`, which the config panel calls on every checkbox toggle. If the user disables `combat.reminders` while in combat, this raises `ADDON_ACTION_BLOCKED`. Add `if InCombatLockdown() then ... defer until PLAYER_REGEN_ENABLED ... return end` at the top of the disable branch.
+
+### Object-form `hooksecurefunc` on a Blizzard table
+
+- **Combat.lua:1111** — `hooksecurefunc(C_Container, "UseContainerItem", TryTrackContainerItem)`. Object-form hook on a Blizzard global table taints that table's method dispatch. The legacy global-form fallback at line 1115 already covers this case correctly; drop the C_Container variant or replace it with a global-form hook on a wrapping function.
 
 ## Warning (likely bugs or violations)
 
-### Forward reference / missing local
-- **games/Boxes.lua:1599** [STILL APPLIES] — `function UpdateHUD()` declared without `local`, leaking into `_G`. Calls at 1559, 1592, 1631 precede the definition lexically. Fix: forward-declare `local UpdateHUD` at the top of the file, then define as `UpdateHUD = function() ... end`.
+### Combat-safety / taint surface area
 
-### High-frequency event handlers
-- **Misc.lua:224 `OnUnitHealth`** [NEW] — Registered against the raw `UNIT_HEALTH` event (EventBus does not filter by unit for this registration). `UNIT_HEALTH` fires for every unit in the group on every health tick — this is one of the highest-frequency events in WoW. The handler is cheap (pattern match on `unitTarget` and early return for non-party/raid), but it still runs `:match("^party%d+$")` twice on every single tick of every group member. Consider:
-  1. Cache the two patterns as precompiled regex-free checks (e.g. `if unitTarget:sub(1,5) == "party" or unitTarget:sub(1,4) == "raid" then ...`),
-  2. Or (better) register per-unit filtered `UNIT_HEALTH` via `RegisterUnitEvent("UNIT_HEALTH", "party1", "party2", ...)` plus a re-register on `GROUP_ROSTER_UPDATE` — far less dispatch volume. EventBus currently only offers `RegisterUnit` for a single unit; adding a variadic `RegisterUnits` would help if this pattern recurs elsewhere.
-- **Misc.lua:262 `OnGroupRosterUpdate`** [NEW] — Allocates a fresh `present` table per call and iterates group members each time. `GROUP_ROSTER_UPDATE` fires at moderate frequency (join/leave/role changes), so not a hot path — acceptable. Early return when `deathAnnounced` is empty (line 263) is a good short-circuit.
-- **Misc.lua:603 `OnUpdatePendingMail`** [STILL APPLIES] — Trivial guard: checks settings + `HasNewMail()` + flag; no leaks or cost concerns.
-- **Misc.lua:612 `OnMailShowMisc`** [NEW, today's edit] — Single-line reset of `mailAlertShown = false`. Logic is correct: opening a mailbox is a natural point to reset stale alert state, complementing the existing `MAIL_CLOSED` reset. No leak risk; one function reference reused across register/unregister.
+- **MinimapCustom.lua:200–285** — `PositionMinimapIcons()` makes ~5 separate `ClearAllPoints/SetPoint/SetParent/SetScale` calls on Blizzard frames. Add `if InCombatLockdown() then return end` at function entry and re-call from a `PLAYER_REGEN_ENABLED` deferred handler if combat blocked the run.
+- **MinimapCustom.lua:1091, 1152, 1155–1159** — `SetupDrawer()` and the `C_Timer.After(3, …)` re-collect path call `CollectMinimapButtons()` → `LayoutDrawerButtons()` without any combat check. The 3-second deferred re-collect can absolutely fire mid-combat.
+- **Kick.lua:469–477, 498–503, 508–513** — Iterates `header:GetChildren()` / `CompactPartyFrame:GetChildren()` / `CompactRaidFrameContainer:GetChildren()` and reads `child.unit`. `child.unit` is set by Blizzard's secure code on these frames; reading it can return a secret string and taint the addon's call context. Prefer `SecureButton_GetUnit(child)` or build the lookup from unit tokens directly.
+- **Kick.lua:593** — `frame:SetParent(blizzFrame)` where `blizzFrame` is a Blizzard `CompactPartyFrame`/`CompactRaidFrame`/`PartyFrame.MemberFrameN`. Reparenting an addon frame *into* a Blizzard secure frame can break that secure frame's child-traversal logic. Prefer SetPoint anchoring without SetParent.
+- **Kick.lua:559–565** — `frame:SetPoint("…", blizzFrame, "…", …)` is safe in itself, but called from `RebuildPartyFrames()` which has no combat guard at the SetPoint sites (only inside `OnPartySpellCast` at 1460). A spec change in combat triggers this path.
+- **CastBar.lua:523** — `PlayerCastingBarFrame:Show()` inside the `else` branch of `ApplyBlizzBarVisibility()`. Combat guarded at line 505 ✓ — flag is to verify regression in future edits.
 
-### Positioning coupling to Blizzard frames
-- **TalentManager.lua:222-224** [STILL APPLIES] — `mainPanel:SetPoint("TOPLEFT", PlayerSpellsFrame, "TOPRIGHT", 2, 0)` anchors the addon panel to a Blizzard frame. Reading the Blizzard frame as an anchor target does not taint. Guarded — acceptable.
+### Secret-value handling (lower-risk paths)
 
-### Frame positioning not migrated to CENTER convention
-- **Coordinates.lua, MplusTimer.lua, QueueTimer.lua, XpBar.lua, CastBar.lua, Kick.lua, MinimapCustom.lua** [STILL APPLIES] — Per CLAUDE.md these modules are tracked as "not yet migrated (dynamic GetPoint)". Position is saved as whatever anchor the user dragged from. Tracking item, not an immediate bug.
+- **Misc.lua:288** — `Misc.TestDeathTTS` uses `UnitName("player")` in `gsub`. User-triggered test button; runs in config UI (OOC), so low risk, but consistent fix recommended (`Secret.SafeUnitName`).
+- **Misc.lua:325** — `Misc.TestWhisperAlert` calls `UnitName("player")`. Same; low risk.
+- **Warehousing.lua:1242** — `item.vendorName = UnitName("target") or "Unknown"` runs while interacting with a vendor (OOC). Fine in practice; consider `Secret.SafeUnitName` for defense in depth.
+- **widgets/AddonComm.lua:65, widgets/Keystone.lua:305, widgets/MythicRating.lua:125, widgets/SessionStats.lua:13** — `UnitName("player")` outside combat-sensitive paths (`PLAYER_LOGIN`/`PLAYER_ENTERING_WORLD`). Low risk but unguarded; switch to `addonTable.Secret.SafeUnitName` for consistency.
+- **widgets/ReadyCheck.lua:28, 49** — `cachedPlayerShort = GetShortName(UnitName("player"))`. The cache pattern is correct (line 14 comment); the only concern is whether `GetShortName` uses `string.match`/`string.sub` on the secret string — verify in that helper.
+- **widgets/Group.lua:340, 345** — Cached on `PLAYER_REGEN_ENABLED` + roster updates with explicit `InCombatLockdown` guard at 338. ✓ Good pattern; mirror this in Loot.lua and Kick.lua.
 
-### Secret-value hygiene
-- **DamageMeter.lua:336-395 `ApplyRowIcon`** [NEW] — Handles class-filename secret correctly: `mode == "class"` branch gates `CLASS_ICON_TCOORDS[data]` indexing on `not (issecretvalue and issecretvalue(data))` and `type(data) == "string"`. Good pattern. The player-spec branch calls `GetSpecialization()` / `GetSpecializationInfo()` — these return non-secret values for the local player. The spell branch uses `GetSpellTexture(spellID)`; the spellID here comes from post-combat `entry.spellId` (non-secret) or from the new live combat drilldown path at line 550 (`sp.spellID` pulled from `C_DamageMeter.GetCombatSessionSourceFromType`, which returns secret values during live combat). `GetSpellTexture` with a secret spellID may fail — consider gating the spell branch on `not issecretvalue(data)` for symmetry with the class branch.
-- **DamageMeter.lua:548-592** [NEW] — Live combat drilldown path. Comments document that `srcMax = srcData.totalAmount` is kept as a direct local (secret value) and never stored in a table; passed through `SetMinMaxValues` / `SetValue` which accept secret numbers via C. The `pcall` wrap around `GetCombatSessionSourceFromType` is defensive. One concern: `sp.totalAmount` is iterated from `srcData.combatSpells`, and each `amt` value is then passed to `row.bar:SetValue(amt)` and `string.format("%d", amt)`. Arithmetic on secret values is allowed, but `string.format("%d", secret)` is not documented as safe in MEMORY.md — verify this doesn't throw "numeric conversion on secret number value" in live-combat testing. If it fails, the count-type path needs to use `tostring(sp.casts)` only (sp.casts is a direct number, not secret) and skip `%d`.
-- **DamageMeter.lua:788** [NEW] — `UnitName("player") == entry.name` comparison in the post-combat render path. `UnitName("player")` returns the player's own name (not secret); `entry.name` is also post-combat-snapshotted by upstream code, so both sides are plain strings. Safe as long as the render path stays post-combat-only. Hoist the `UnitName("player")` call out of the per-row loop for clarity.
-- **Kick.lua:233, 288** [STILL APPLIES] — `UnitName(unit)` / `UnitName("player")` without explicit combat guard. Add an `issecretvalue` short-circuit on the `UnitName(unit)` case.
-- **TalentReminder.lua:227, 242** [STILL APPLIES] — Correctly uses `issecretvalue(unitTarget)` before `UnitName(unitTarget)` concatenation. Good pattern.
-- **Misc.lua:227** [NEW] — `if not unitTarget or issecretvalue(unitTarget) then return end` at the top of `OnUnitHealth`. Correct — `unitTarget` can theoretically be secret on some unit events. Good defensive pattern.
+### Misc
 
-### `COMBAT_LOG_EVENT_UNFILTERED`
-None found — the codebase correctly avoids this event across all remaining files.
-
-### Lua 5.1 compatibility
-None found — no `\xNN` hex escapes, no bitwise operators, no `//`, no `goto`, no `<const>`/`<close>`. `games/Cards.lua:20-24` suit glyphs correctly encoded as `\226\153\165` etc.
+- **MinimapCustom.lua:557** — Reads `minimapFrame:GetPoint()` and persists into `UIThingsDB.minimap.minimapPos`. `minimapFrame` is addon-owned, but if it has been tainted by reparenting to or from a Blizzard frame elsewhere, the saved position can become a secret value persisted into SavedVariables. Consider a `Secret.CanAccessValue` check before persisting.
+- **MinimapCustom.lua:362–376, 425–441, 478–490** — Drag-stop handlers read `Minimap:GetCenter()`, `Minimap:GetBottom()`, `Minimap:GetTop()` (safe per project rules) and persist offsets. Fine.
+- **Coordinates.lua:826** — `EventBus.Unregister("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)` from inside the handler. EventBus tolerates this, but verify the dispatch loop iterates on a copy or the next subscriber is skipped.
+- **DamageMeter.lua:807** — Stores `entry.guid = UnitGUID(...)` and uses it as a table key downstream. `UnitGUID` is generally non-secret; the existing memory entry about secret values in `C_DamageMeter` fields is unrelated. ✓
+- **Combat.lua:1091** — `hooksecurefunc("UseAction", ...)` global form. Safe. ✓
+- **TalentManager.lua:253, 256** — Already correctly migrated to global-form `hooksecurefunc("ShowUIPanel"/"HideUIPanel", ...)`. The earlier review note about `PlayerSpellsFrame:HookScript` is no longer present. ✓
+- **AddonVersions.lua:109, 121** — `UnitName(unit)` reachable but exits early on `InCombatLockdown()` at line 109. ✓
+- **CastBar.lua:505–527** — `RegisterStateDriver`/`UnregisterStateDriver`/`Show` on `PlayerCastingBarFrame` all gated by `InCombatLockdown()` with a `PLAYER_REGEN_ENABLED` deferral. ✓
+- **XpBar.lua:301** — `RegisterStateDriver`/`UnregisterStateDriver` on `MainStatusTrackingBarContainer` correctly gated by `InCombatLockdown()`. ✓ (Earlier reviewer flagged as missing — verified present.)
 
 ## Minor (style, performance, clarity)
 
-### Hot-path allocations
-- **DamageMeter.lua:399-419 `ApplyRowTooltip`** [NEW] — Creates two new closure instances per row per render (OnEnter + OnLeave). For 10 rows rendered at ~1Hz, that's ~20 closures/sec when hovered. The `HideAllRows` clears the scripts on row release, so no leak. Consider moving the OnEnter/OnLeave bodies to file-scope functions that look up per-row tooltip state in a side-table keyed by the row frame, so only one function reference is ever set per script slot.
-- **DamageMeter.lua:788** [NEW] — `UnitName("player")` called per row in the render loop. Hoist to a local before the loop.
-- **games/Snek.lua:88** [STILL APPLIES] — `local colStr = r..","..g..","..b` creates a fresh string per tick.
-- **games/Cards.lua:582-587** [STILL APPLIES] — Drag `OnUpdate` handler created fresh on each `dragFrame:SetScript("OnUpdate", function...)`. If once per drag-start, fine.
-- **games/Bombs.lua:181-184** [STILL APPLIES] — Verify `if timerTicker then timerTicker:Cancel() end` runs on every path before reassignment.
-- **widgets/Widgets.lua:70, 94** [STILL APPLIES] — `string.format("(%.0f, %.0f)", x, y)` during drag `OnUpdate`. Transient UI, acceptable.
-- **games/Blocks.lua** [NEW, reviewed] — Uses a `bufBlocks` reusable block buffer (line 174 comment), a `oppFramePool` for opponent panels (line 153), and careful `:Cancel()` + `nil` reset on all tickers (`gravityTicker`, `flashTicker`, `watchdogTicker`, `promptTimer`, `inviteTimer`). Memory hygiene looks good.
-
-### `HookScript` on addon-created frames (safe — not taint)
-- **widgets/Speed.lua:51** — `speedFrame:HookScript("OnUpdate", ...)` on an addon-owned frame. No action.
-- **games/Blocks.lua:1414** [NEW] — `gameFrame:HookScript("OnShow", RefreshBindings)` on addon-owned frame. Safe.
-- **games/Snek.lua:514** — Same pattern. Safe.
-- **Coordinates.lua:698** — `scrollFrame:HookScript("OnSizeChanged", ...)` — check whether `scrollFrame` is addon-owned. It is (created at Coordinates.lua CreateFrame calls). Safe.
-
-### Global leaks / style
-- **Misc.lua:413** — `SLASH_LUNAUIRELOAD1` / `SlashCmdList["LUNAUIRELOAD"]`. Must be globals — not a leak.
-- **Core.lua:741-742** — `SLASH_UITHINGS1` / `SLASH_UITHINGS2`. Same.
-- **games/Boxes.lua:1599** — (see Warning above) missing `local`.
-- **config/Helpers.lua:26-33** [STILL APPLIES] — `DeepCopy()` lacks cycle detection. Add cycle guard before anyone ever deep-copies a frame reference.
-- **config/Helpers.lua:447** [STILL APPLIES] — `CreateFont("LunaFontPreview_" .. i)` registers FontObjects globally by deterministic name. Low count. Acceptable.
-- **config/ConfigMain.lua** [STILL APPLIES] — Repeated `if addonTable.X and addonTable.X.UpdateSettings then addonTable.X.UpdateSettings() end` pattern (~20 copies). Factor to a `SafeCallUpdateSettings(moduleKey)` helper. Still not done.
-
-### Magic numbers
-- **XpBar.lua:289** [STILL APPLIES] — `SetWidth(1)` as collapsed state. Name it.
-- **games/Tiles.lua:255-256** [STILL APPLIES] — Hardcoded 1000-value font-switch threshold.
-- **games/Bombs.lua:177, 218** [STILL APPLIES] — `0.3` gravity delay.
-- **games/Blocks.lua:147-149** [NEW] — `OPPONENT_TIMEOUT = 4.0`, `WATCHDOG_INTERVAL = 1.0` — already named. Good.
-
-### Correctly-flagged non-issues
-- **config/panels/TrackerPanel.lua** — file was deleted in this commit. No longer applies.
-- **Warehousing.lua:422-425** — `popupFrame` is addon-owned.
-- **games/Snek.lua:231** — High-score write gated on new-high, not per-tick.
-- **games/Boxes.lua:1559** — Real concern is the missing `local`.
-
-### Style
-- **TalentReminder.lua:76** [STILL APPLIES] — Prefer `string.format` over `"Migrated " .. migrated .. " talent builds"`.
-- **TalentManager.lua:813** [STILL APPLIES] — `C_Traits.GenerateImportString(configID)` result used without `if exportString then` nil-check.
-- **TalentReminder.lua:1343** [STILL APPLIES] — `GetTalentName` dereferences `C_Traits` without the guard present elsewhere.
-- **Warehousing.lua:702, 1010** [STILL APPLIES] — Mismatched-looking `end -- classID ~= 7` comments.
+- **Core.lua:187** — `if type(value) == "table" and not value.r then` — uses truthiness of `value.r` to detect color tables. Works because `r=0` is still truthy, but `value.r == nil` is more explicit and survives a future color-table refactor that includes a sentinel `r = false`.
+- **MinimapButton.lua:38** — Anchors the minimap button to `Minimap` rather than `UIParent`. Acceptable for a button that orbits the minimap, but inconsistent with the project's CENTER-of-UIParent positioning convention. Document the exception.
+- **MinimapCustom.lua:11** — `local minimapLocked = true -- Runtime-only` is set but only read by `SetMinimapLocked`; the var is never read externally. Dead state — drop it or persist it.
+- **MinimapCustom.lua:67–72** — `deferShapeCb` closure captures the `shape` arg of the original call. Multiple combat-time shape changes will only execute the last one (because the previous closure is unregistered at line 65). Acceptable but worth a comment.
+- **MinimapCustom.lua:365–366** — `select(2, Minimap:GetTop(), Minimap:GetTop())` then immediately reassigns `mapTop = Minimap:GetTop()`. The `select` line is dead code; delete it.
+- **MinimapCustom.lua:1053** — `local sources = { Minimap:GetChildren() }` allocates a new table per call. Cold path, not a real concern.
+- **CastBar.lua:599–602** — `string.format` runs even when `CASTBAR_DEBUG` is false; only the `print` is skipped (inside `DBG`). Move the format inside `DBG` or guard the whole block on the flag.
+- **widgets/Speed.lua:51** — `speedFrame:HookScript("OnUpdate", ...)` on an addon-owned frame. Safe but unnecessary — there is no prior `OnUpdate` to preserve. Use `SetScript`.
+- **widgets/Coordinates.lua:53** — Hardcoded em-dash escape `"\226\128\148"`. Lift to a named local for readability: `local EM_DASH = "\226\128\148"`.
+- **MinimapCustom.lua:513** — `coordsText:SetText("\226\128\148, \226\128\148")` — same em-dash literal. Use a shared constant.
+- **MplusTimer.lua:187, 911, 920** — Uses `GetUnitName(unit, false)` (global form). Returns the same secret-string risk as `UnitName`. Audit which paths are combat-reachable.
+- **Kick.lua:1085–1086** — `partyFrames` rebuild always runs from scratch; framePool reuse is a nice touch, but a 40-person raid means ~80 `ClearAllPoints` calls per `GROUP_ROSTER_UPDATE`. Already throttled at 0.5s — acceptable.
+- **Loot.lua:497–507** — `IsDuplicate` iterates the entire `recentToasts` table on every check to clean expired entries. Cheap because the table is small, but consider a `lastCleanup = GetTime()` gate so the prune runs at most once per second.
+- **Coordinates.lua:698** — `scrollFrame:HookScript("OnSizeChanged", ...)` on addon-owned scroll frame. Safe; could be `SetScript`.
+- **games/Blocks.lua:1414, games/Snek.lua:514** — `gameFrame:HookScript("OnShow", RefreshBindings)` on addon-owned frames. Safe; no action.
+- **Combat.lua:1402–1421** — `ApplyReminderEvents()` is defined as a file-local *and* exposed via `addonTable.Combat.ApplyReminderEvents` at 1424. The two-layer wrapper adds nothing — call the local directly from `UpdateSettings` and skip the public alias unless companion addons consume it.
+- **DamageMeter.lua:830–836** — Comment correctly explains why `UpdateScrollChildRect` is omitted. Good documentation. ✓
+- **TalentReminder.lua:12–13** — Forward declarations of update functions; clear. ✓
+- **widgets/Hearthstone.lua:129–130, widgets/Keystone.lua:139–140** — `ClearAllPoints/SetPoint` on `hearthFrame`/`keystoneFrame` inside `OnDragStop` handlers. These frames are addon-created; safe.
+- **MplusData.lua** — Static data file; not reviewed for runtime issues. ✓
 
 ## Summary
 
-**Fixed since 2026-04-16:**
-- `MinimapCustom.lua` QueueStatusButton hooks → 2s polling ticker (previously fixed in the 04-16 pass; confirmed clean in current code).
-- `CastBar.lua` `PlayerCastingBarFrame` frame-object hooks → `RegisterStateDriver` with combat-deferral (previously fixed; confirmed clean).
-- `ObjectiveTracker.lua` — entire module removed from the addon (moved to a companion addon). All 2317 lines and its frame-object hook on `ObjectiveTrackerFrame:Show` are gone.
+Overall the codebase is mature, defensive, and clearly aware of TWW's secure-execution rules. The Secret helper, EventBus, combat-deferral pattern in CastBar, and the global-form `hooksecurefunc` migration in TalentManager are all examples of solid engineering. Most modules are clean.
 
-**New this review:**
-- **Critical:** `Combat.lua:1111` hook on `C_Container` namespace — medium-severity, non-Frame hook; monitor.
-- **Critical:** `Misc.lua:492` `button1:Click()` invoked from addon OnClick inside a Blizzard StaticPopup dialog — potential taint propagation path.
-- **Warning:** `Misc.lua:224` `OnUnitHealth` registered against the unfiltered `UNIT_HEALTH` event — high-frequency handler; consider per-unit filtering via `RegisterUnitEvent` variadic or a pattern-free unit-token check.
-- **Minor:** `DamageMeter.lua:788` hoist `UnitName("player")` out of per-row loop.
-- **Minor:** `DamageMeter.lua:399-419` per-render closure allocation in `ApplyRowTooltip`.
-- **Minor:** `DamageMeter.lua:375-384` spell branch of `ApplyRowIcon` should gate on `issecretvalue(data)` for symmetry with class branch.
-- **Minor:** `DamageMeter.lua:548-592` verify `string.format("%d", amt)` works with secret numbers in live combat (if not, restrict to count-type with `tostring` only).
+The two real exposure surfaces are concentrated in **MinimapCustom.lua** and **Loot.lua / Kick.lua / Misc.lua**:
 
-**Remaining from last review:**
-- `TalentManager.lua:250-251` `PlayerSpellsFrame:HookScript` (critical).
-- `Misc.lua:497` `deleteButton:SetParent(dialog)` (critical).
-- `Combat.lua:1419` missing `InCombatLockdown()` guard on `UnregisterStateDriver`.
-- `games/Boxes.lua:1599` `UpdateHUD` missing `local`.
-- CENTER-anchor migration for `XpBar`, `CastBar`, `Combat`, `Kick`, `MinimapCustom`, `Coordinates`, `MplusTimer`, `QueueTimer`.
-- `Kick.lua:233, 288` — add `issecretvalue` guards on `UnitName(unit)` calls.
-- `config/ConfigMain.lua` — factor the repeated `UpdateSettings` pattern.
-- Various magic-number constants and minor style items.
+1. **MinimapCustom.lua** writes to many Blizzard Button frames (`QueueStatusButton`, `MinimapCluster.*`, `AddonCompartmentFrame`, `Minimap.ZoomIn/Out`, the entire collected drawer button set) without `InCombatLockdown` guards on `PositionMinimapIcons` and the drawer code, and these calls taint the shared Button prototype regardless of combat state. The project memory already tracks this as a TODO; it remains unresolved and is the highest-priority cleanup.
 
-Today's `Misc.lua` edit (adding `MAIL_SHOW` to reset `mailAlertShown`) is correct and clean: single-line reset with symmetric register/unregister across both the feature-enabled branch and the master-disable branch. No leaks, no taint, no concerns.
+2. **Loot/Kick/Misc** read `UnitName()` results into table keys, `string.format`, `string.gsub`, and ordered comparisons. These were safe pre-12.0 but now silently fail or error out during combat. The `Secret.SafeUnitName` helper exists and is used correctly in `DamageMeter.lua` and `Core.lua`; the same pattern should be propagated to every UnitName call reachable from `CHAT_MSG_LOOT`, `SHOW_LOOT_TOAST`, `UNIT_HEALTH`, `UNIT_SPELLCAST_*`, and addon-comm handlers.
+
+3. **Combat.lua:1419** is a single missing `InCombatLockdown()` guard before `UnregisterStateDriver`; trivial to fix.
+
+No Lua 5.1 portability issues, no `COMBAT_LOG_EVENT_UNFILTERED` use, no `\xNN` escapes, no integer division, no global leaks, and no `goto`/`<const>`/`<close>` were found. Frame-positioning conventions are followed consistently in the modules already migrated to CENTER-of-UIParent. Memory and performance are reasonable; ticker lifecycles correctly start/stop with feature toggles.

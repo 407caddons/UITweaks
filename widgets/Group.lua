@@ -350,7 +350,7 @@ table.insert(Widgets.moduleInits, function()
 
     groupFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Group Composition")
 
         local members = GetNumGroupMembers()
@@ -517,7 +517,7 @@ table.insert(Widgets.moduleInits, function()
         RefreshReadyCheckNames()
     end
 
-    local function OnReadyCheck()
+    local function OnReadyCheck(event, initiatedBy)
         readyCheckActive = true
         wipe(readyCheckResponses)
         -- Refresh cache if possible (may be stale if roster changed mid-combat)
@@ -531,6 +531,17 @@ table.insert(Widgets.moduleInits, function()
                 local unit = IsInRaid() and "raid" .. i or (i == members and "player" or "party" .. i)
                 local name = readyCheckNameCache[unit] or unit
                 readyCheckResponses[name] = "waiting"
+            end
+        end
+        -- Initiator is auto-ready and never fires READY_CHECK_CONFIRM
+        if initiatedBy then
+            local initShort = initiatedBy:match("^([^%-]+)") or initiatedBy
+            for name in pairs(readyCheckResponses) do
+                local nameShort = name:match("^([^%-]+)") or name
+                if nameShort == initShort then
+                    readyCheckResponses[name] = "ready"
+                    break
+                end
             end
         end
     end

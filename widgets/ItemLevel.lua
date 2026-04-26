@@ -41,7 +41,7 @@ table.insert(Widgets.moduleInits, function()
 
     ilvlFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Item Level")
 
         local avgItemLevel, avgItemLevelEquipped = GetAverageItemLevel()

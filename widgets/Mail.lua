@@ -95,7 +95,7 @@ table.insert(Widgets.moduleInits, function()
 
     mailFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Mail")
         if cachedCount > 0 then
             GameTooltip:AddLine("Total messages: " .. cachedCount, 1, 1, 1)

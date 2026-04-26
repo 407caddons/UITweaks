@@ -6,7 +6,7 @@ table.insert(Widgets.moduleInits, function()
 
     coordFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
 
         local mapID = C_Map.GetBestMapForUnit("player")
         if mapID then

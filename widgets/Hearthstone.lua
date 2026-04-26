@@ -138,7 +138,7 @@ table.insert(Widgets.moduleInits, function()
     -- Tooltip on the secure overlay
     secureBtn:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(hearthFrame)
+        if not Widgets.SmartAnchorTooltip(hearthFrame) then return end
         GameTooltip:SetText("Hearth")
 
         local dest = GetBindLocation()

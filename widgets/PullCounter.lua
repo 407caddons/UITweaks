@@ -91,7 +91,7 @@ table.insert(Widgets.moduleInits, function()
 
     pullFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Pull Counter", 1, 1, 1)
         GameTooltip:AddDoubleLine("Total Pulls:", tostring(sessionData.totalPulls), 1, 1, 1, 1, 1, 1)
 

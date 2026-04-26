@@ -101,7 +101,7 @@ function Widgets.CreateWidgetFrame(name, configKey)
 end
 
 function Widgets.ShowStatTooltip(frame)
-    Widgets.SmartAnchorTooltip(frame)
+    if not Widgets.SmartAnchorTooltip(frame) then return end
     GameTooltip:SetText("Secondary Stats", 1, 0.82, 0)
     local haste = GetHaste()
     local crit = GetCritChance()
@@ -118,9 +118,11 @@ function Widgets.ShowStatTooltip(frame)
     GameTooltip:Show()
 end
 
+-- Returns true if the tooltip is ready for content, false if GameTooltip is
+-- forbidden (another addon's secure code has locked it). Callers MUST gate
+-- their subsequent GameTooltip:* calls on the return value to avoid taint.
 function Widgets.SmartAnchorTooltip(owner)
-    -- Ensure using correct tooltip, usually GameTooltip
-    -- If owner provides GetCenter, use it.
+    if GameTooltip:IsForbidden() then return false end
     GameTooltip:SetOwner(owner, "ANCHOR_NONE")
     local _, cy = owner:GetCenter()
     local screenHeight = UIParent:GetHeight()
@@ -130,6 +132,7 @@ function Widgets.SmartAnchorTooltip(owner)
     else
         GameTooltip:SetPoint("TOP", owner, "BOTTOM", 0, -5)
     end
+    return true
 end
 
 local function StartWidgetTicker()

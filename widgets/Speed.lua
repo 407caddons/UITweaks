@@ -16,7 +16,7 @@ table.insert(Widgets.moduleInits, function()
 
     speedFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Movement Speed")
 
         local isGliding, _, forwardSpeed = C_PlayerInfo.GetGlidingInfo()

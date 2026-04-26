@@ -68,7 +68,10 @@ end
 local characterKey
 function addonTable.Core.GetCharacterKey()
     if not characterKey then
-        characterKey = UnitName("player") .. " - " .. GetRealmName()
+        -- SafeUnitName short-circuits the concat if UnitName returns a secret
+        -- string (can happen under TWW 12.0 secure code paths).
+        local name = addonTable.Secret.SafeUnitName("player", "Unknown")
+        characterKey = name .. " - " .. GetRealmName()
     end
     return characterKey
 end

@@ -4,6 +4,8 @@ This file provides guidance to Claude Code when working with LunaUITweaks.
 
 @../.claude/CLAUDE.md
 
+Be surgical with updates and only change the specific section of code required and no other.
+
 ## Project Overview
 
 LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).

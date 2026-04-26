@@ -50,7 +50,7 @@ table.insert(Widgets.moduleInits, function()
 
     ratingFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Mythic+ Rating")
 
         -- Current rating

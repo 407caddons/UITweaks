@@ -247,8 +247,15 @@ local function HookTalentFrame()
     if hooked then return end
     if not PlayerSpellsFrame then return end
 
-    PlayerSpellsFrame:HookScript("OnShow", OnTalentFrameShow)
-    PlayerSpellsFrame:HookScript("OnHide", OnTalentFrameHide)
+    -- Global-form hooksecurefunc keeps us off the Blizzard frame's method
+    -- table; frame-object HookScript on PlayerSpellsFrame taints the frame
+    -- context and propagates to secure code that touches talent UI.
+    hooksecurefunc("ShowUIPanel", function(frame)
+        if frame == PlayerSpellsFrame then OnTalentFrameShow() end
+    end)
+    hooksecurefunc("HideUIPanel", function(frame)
+        if frame == PlayerSpellsFrame then OnTalentFrameHide() end
+    end)
     hooked = true
 
     Log("TalentManager", "Hooked PlayerSpellsFrame", LogLevel.DEBUG)

@@ -111,6 +111,13 @@ table.insert(Widgets.moduleInits, function()
     local function OnReadyCheck(event, initiatedBy, waitTime)
         checkActive = true
         PopulateGroupMembers()
+        -- Initiator is auto-ready and never fires READY_CHECK_CONFIRM
+        if initiatedBy then
+            local initShort = GetShortName(initiatedBy)
+            if initShort and memberStatus[initShort] then
+                memberStatus[initShort] = "ready"
+            end
+        end
         UpdateCachedText()
     end
 
@@ -155,7 +162,7 @@ table.insert(Widgets.moduleInits, function()
 
     rcFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Ready Check", 1, 0.82, 0)
 
         if not next(memberStatus) then

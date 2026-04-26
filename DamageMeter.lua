@@ -8,6 +8,7 @@ addonTable.DamageMeter = {}
 local EventBus  = addonTable.EventBus
 local SafeAfter = addonTable.Core.SafeAfter
 local Abbrev    = addonTable.Core.AbbreviateNumber
+local Secret    = addonTable.Secret
 
 -- ============================================================
 -- Constants
@@ -151,9 +152,9 @@ local function FetchEntries(sessKey, mtype)
                     if type(src.totalAmount) == "number" or (COUNT_TYPES[mtype] and type(src.casts) == "number") then
                         local displayName
                         if src.isLocalPlayer then
-                            displayName = UnitName("player")
+                            displayName = Secret.SafeUnitName("player", "You")
                         else
-                            displayName = UnitName(src.name) or src.classFilename or "Unknown"
+                            displayName = Secret.SafeUnitName(src.name, src.name) or src.classFilename or "Unknown"
                         end
                         -- For count-based types, prefer casts over totalAmount.
                         -- We store the source ref directly so the render path can read the
@@ -668,12 +669,11 @@ local function RenderPane(idx)
                         row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
                     end
 
-                    -- Name: resolve via UnitName (accepts secret strings)
                     local displayName
                     if src.isLocalPlayer then
-                        displayName = UnitName("player")
+                        displayName = Secret.SafeUnitName("player", "You")
                     else
-                        displayName = UnitName(src.name) or src.classFilename or "?"
+                        displayName = Secret.SafeUnitName(src.name, src.name) or src.classFilename or "?"
                     end
                     row.nameFS:SetText(displayName or "?")
                     row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
@@ -785,7 +785,7 @@ local function RenderPane(idx)
 
         if dd then
             ApplyRowIcon(row, "spell", entry.spellId)
-        elseif entry.name and UnitName("player") == entry.name then
+        elseif entry.guid and entry.guid == UnitGUID("player") then
             ApplyRowIcon(row, "player")
         else
             ApplyRowIcon(row, "class", entry.class)

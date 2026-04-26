@@ -116,7 +116,7 @@ table.insert(Widgets.moduleInits, function()
     -- --------------------------------------------------------
     pullFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Pull Timer", 1, 0.82, 0)
         GameTooltip:AddDoubleLine("Timer backend:", GetBackendLabel(GetBackend()),
             1, 1, 1, 0.8, 0.8, 0.8)

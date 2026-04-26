@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.25.3
+## Version: 1.26.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## SavedVariablesPerCharacter:
@@ -25,6 +25,9 @@
 Core.lua
 EventBus.lua
 Profiler.lua
+
+# Secret-value helpers for TWW 12.0+ (must load before feature modules)
+utils\Secret.lua
 
 # Modular Configuration System
 # Load order: Helpers -> All Panels -> Main Window

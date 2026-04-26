@@ -235,7 +235,7 @@ table.insert(Widgets.moduleInits, function()
     keystoneFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.keystone.enabled then return end
 
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Keystone Tracker", 1, 1, 1)
 
         local keyName, keyLevel, keyMapID = GetPlayerKeystone()

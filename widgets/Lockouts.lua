@@ -64,7 +64,7 @@ table.insert(Widgets.moduleInits, function()
 
     lockoutFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Instance Lockouts", 1, 1, 1)
 
         local numInstances = GetNumSavedInstances()

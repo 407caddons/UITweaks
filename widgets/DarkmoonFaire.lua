@@ -97,7 +97,7 @@ table.insert(Widgets.moduleInits, function()
 
     dmfFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Darkmoon Faire", 1, 1, 1)
 
         local isActive, remaining = GetDMFInfo()

@@ -64,7 +64,7 @@ table.insert(Widgets.moduleInits, function()
     resetFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.weeklyReset.enabled then return end
 
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Reset Timers", 1, 1, 1)
 
         -- Weekly reset

@@ -49,7 +49,7 @@ table.insert(Widgets.moduleInits, function()
     bagFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.bags.enabled then return end
 
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Bags & Currency", 1, 1, 1)
 
         -- Show current toon gold

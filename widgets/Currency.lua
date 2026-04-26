@@ -257,7 +257,7 @@ table.insert(Widgets.moduleInits, function()
     currencyFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.currency.enabled then return end
 
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Currency Tracker", 1, 1, 1)
 
         local list = GetActiveCurrencyList()

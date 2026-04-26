@@ -2,13 +2,24 @@ local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
 
+-- Reverse lookup: localized class name -> class token ("Mage" -> "MAGE").
+-- BNet game account info exposes gameAccount.className (localized) but not
+-- classFileName, so we translate back to the token that C_ClassColor expects.
+local CLASS_TOKEN_BY_NAME = {}
+for token, localName in pairs(LOCALIZED_CLASS_NAMES_MALE or {}) do
+    CLASS_TOKEN_BY_NAME[localName] = token
+end
+for token, localName in pairs(LOCALIZED_CLASS_NAMES_FEMALE or {}) do
+    CLASS_TOKEN_BY_NAME[localName] = token
+end
+
 table.insert(Widgets.moduleInits, function()
     local friendsFrame = Widgets.CreateWidgetFrame("Friends", "friends")
     friendsFrame:SetScript("OnClick", function() ToggleFriendsFrame() end)
 
     friendsFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Online Friends")
 
         -- WoW Friends
@@ -53,7 +64,18 @@ table.insert(Widgets.moduleInits, function()
 
                     local nameText = accountInfo.accountName
                     if gameAccount.characterName then
-                        nameText = nameText .. " (" .. gameAccount.characterName .. ")"
+                        local charName = gameAccount.characterName
+                        local classToken = gameAccount.classFileName
+                        if not classToken and gameAccount.className then
+                            classToken = CLASS_TOKEN_BY_NAME[gameAccount.className]
+                        end
+                        if classToken then
+                            local classColor = C_ClassColor.GetClassColor(classToken)
+                            if classColor and classColor.WrapTextInColorCode then
+                                charName = classColor:WrapTextInColorCode(charName)
+                            end
+                        end
+                        nameText = nameText .. " (" .. charName .. ")"
                     end
 
                     local rightText = ""
@@ -65,15 +87,7 @@ table.insert(Widgets.moduleInits, function()
                         rightText = gameAccount.richPresence
                     end
 
-                    local r, g, b = 0.51, 0.77, 1 -- BNet Blue
-                    if gameAccount.classFileName then
-                        local classColor = C_ClassColor.GetClassColor(gameAccount.classFileName)
-                        if classColor then
-                            r, g, b = classColor.r, classColor.g, classColor.b
-                        end
-                    end
-
-                    GameTooltip:AddDoubleLine(nameText, rightText, r, g, b, 0.7, 0.7, 0.7)
+                    GameTooltip:AddDoubleLine(nameText, rightText, 0.51, 0.77, 1, 0.7, 0.7, 0.7)
                 end
             end
         end

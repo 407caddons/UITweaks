@@ -679,10 +679,13 @@ local tooltipHooked = false
 HookTooltipClassColors = function()
     if tooltipHooked then return end
     tooltipHooked = true
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, tooltipData)
         if tooltip ~= GameTooltip then return end
         if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
         if not UIThingsDB.misc.classColorTooltips then return end
+        -- Bail out if guid is secret — tooltip:GetUnit() internally calls UnitName()
+        -- on a unit token derived from the guid, which errors on secret values.
+        if tooltipData and tooltipData.guid and issecretvalue(tooltipData.guid) then return end
         local _, unit = tooltip:GetUnit()
         if not unit or issecretvalue(unit) or not UnitIsPlayer(unit) then return end
         local _, classFile = UnitClass(unit)

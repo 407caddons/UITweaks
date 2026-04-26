@@ -8,7 +8,7 @@ table.insert(Widgets.moduleInits, function()
 
     bresFrame:SetScript("OnEnter", function(self)
         if not UIThingsDB.widgets.locked then return end
-        Widgets.SmartAnchorTooltip(self)
+        if not Widgets.SmartAnchorTooltip(self) then return end
 
         GameTooltip:SetText("Battle Res Pool")
 
