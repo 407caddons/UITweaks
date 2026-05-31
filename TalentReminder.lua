@@ -1152,7 +1152,10 @@ function TalentReminder.ApplyTalents(reminder)
 
             local nodeFailed = false
 
-            if nodeInfo.type == 2 then -- TYPE_CHOICE / Selection
+            -- TYPE_CHOICE (2) and TYPE_SUBTREE_SELECTION (3) both use SetSelection.
+            -- Without handling type 3, switching hero talent trees leaves the new
+            -- subtree inactive and its nodes unpurchaseable.
+            if nodeInfo.type == 2 or nodeInfo.type == 3 then
                 if not liveEntryID or liveEntryID ~= savedData.entryID or currentRank == 0 then
                     if C_Traits.SetSelection(configID, nodeID, savedData.entryID) then
                         changes = changes + 1
@@ -1164,7 +1167,9 @@ function TalentReminder.ApplyTalents(reminder)
                         nodeFailed = true
                     end
                 end
-                if not nodeFailed then
+                -- TYPE_CHOICE has rank purchasing on the chosen entry; TYPE_SUBTREE_SELECTION
+                -- only needs the subtree activated — its rank is implicit.
+                if not nodeFailed and nodeInfo.type == 2 then
                     for i = currentRank + 1, savedData.rank do
                         if C_Traits.PurchaseRank(configID, nodeID) then
                             changes = changes + 1
