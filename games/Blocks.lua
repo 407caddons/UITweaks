@@ -533,7 +533,8 @@ end
 local StartFlash, GameOver, StartMPGame, EndMPGame, StartGame, AddScore, RestartGravity, BuildUI, CheckMPWinner
 
 local function AnnounceGameStart()
-    local channel = IsInRaid() and "RAID" or "PARTY"
+    local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
+    if not channel then return end
     local names = {}
     for name in pairs(MP.accepted) do table.insert(names, name) end
     local playerList = #names > 0 and (" with " .. table.concat(names, ", ")) or ""

@@ -36,11 +36,10 @@ table.insert(Widgets.moduleInits, function()
     -- --------------------------------------------------------
     local function DoChatCountdown()
         pullCancelled = false
-        local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
-
         local count = PULL_DURATION
         local function Tick()
             if pullCancelled then return end
+            local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
             if count <= 0 then
                 if channel then SendChatMessage("PULL!", channel) end
                 return

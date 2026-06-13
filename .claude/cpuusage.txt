@@ -1,0 +1,8 @@
+/console scriptProfile 1
+/reload
+```
+
+Then after reload:
+
+```
+/run UpdateAddOnCPUUsage(); for i=1,C_AddOns.GetNumAddOns() do local n=C_AddOns.GetAddOnInfo(i) if C_AddOns.IsAddOnLoaded(i) then print(n, GetAddOnCPUUsage(n)) end end
