@@ -66,10 +66,14 @@ function Comm.IsAllowed()
 end
 
 --- Get the channel to use for group communication
--- @return string|nil  "RAID", "PARTY", or nil if not in group
+-- @return string|nil  "RAID", "PARTY", "INSTANCE_CHAT", or nil if not in group
 function Comm.GetChannel()
-    if not IsInGroup() then return nil end
-    return IsInRaid() and "RAID" or "PARTY"
+    if IsInRaid(LE_PARTY_CATEGORY_HOME) then return "RAID" end
+    if IsInGroup(LE_PARTY_CATEGORY_HOME) then return "PARTY" end
+    -- LFG/dungeon-finder groups are instance-category only; "PARTY" generates
+    -- "You aren't in a party" for these groups — use INSTANCE_CHAT instead.
+    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
+    return nil
 end
 
 --- Send a message to the group

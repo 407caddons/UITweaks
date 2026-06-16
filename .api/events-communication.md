@@ -79,9 +79,11 @@ Must be called before sending or receiving addon messages with that prefix. WoW 
 ```lua
 C_ChatInfo.SendAddonMessage(prefix, message, channel [, target])
 ```
-- `channel` — `"RAID"`, `"PARTY"`, `"WHISPER"`, `"GUILD"`, `"BATTLEGROUND"`, `"SAY"`
+- `channel` — `"RAID"`, `"PARTY"`, `"INSTANCE_CHAT"`, `"WHISPER"`, `"GUILD"`, `"BATTLEGROUND"`, `"SAY"`
 - `target` — required for `"WHISPER"`, ignored for group channels
 - Returns `false` if the message could not be sent (not in group, throttled, etc.)
+
+**⚠️ Instance group caveat:** LFG/dungeon-finder groups are `LE_PARTY_CATEGORY_INSTANCE`, not `LE_PARTY_CATEGORY_HOME`. Using `"PARTY"` channel with these groups generates a visible "You aren't in a party" chat error even though `IsInGroup()` returns true. Use `"INSTANCE_CHAT"` for instance groups. `Comm.GetChannel()` handles this automatically — always use it instead of constructing the channel string directly.
 
 **Rate limit:** WoW has internal throttling. The addon adds its own 1.0s minimum send interval per `module:action` key in AddonComm.lua.
 
