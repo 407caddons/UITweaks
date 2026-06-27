@@ -121,15 +121,23 @@ local function FetchEntries(sessKey, mtype)
                 local amt      = SafeVal(src.totalAmount)
                 -- Count-based types (interrupts/dispels/deaths) may store count in casts, not totalAmount
                 if amt == 0 and COUNT_TYPES[mtype] then amt = SafeVal(src.casts) end
+                -- Deaths: totalAmount is 0; deathRecapID (NeverSecret) signals an actual death
+                if amt == 0 and mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0 then
+                    amt = 1
+                end
                 local existing = byGuid[guid]
                 if existing then
                     existing.total = existing.total + amt
+                    if mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0 then
+                        existing.deathRecapID = src.deathRecapID
+                    end
                 else
                     byGuid[guid] = {
-                        guid  = guid,
-                        name  = name,
-                        class = src.classFilename,
-                        total = amt,
+                        guid         = guid,
+                        name         = name,
+                        class        = src.classFilename,
+                        total        = amt,
+                        deathRecapID = (mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0) and src.deathRecapID or nil,
                     }
                 end
             end
@@ -149,7 +157,8 @@ local function FetchEntries(sessKey, mtype)
                     -- All live combat fields are secret — never compare, copy to table only for
                     -- C-level calls (SetValue/SetMinMaxValues/SetText/string.format).
                     -- type() is safe on secrets; comparison operators are NOT.
-                    if type(src.totalAmount) == "number" or (COUNT_TYPES[mtype] and type(src.casts) == "number") then
+                    if type(src.totalAmount) == "number" or (COUNT_TYPES[mtype] and type(src.casts) == "number")
+                       or (mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0) then
                         local displayName
                         if src.isLocalPlayer then
                             displayName = Secret.SafeUnitName("player", "You")
@@ -419,6 +428,46 @@ local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
+local function ApplyDeathTooltip(row, entry)
+    row:SetScript("OnEnter", function(self)
+        if not UIThingsDB.damageMeter.showTooltip then return end
+        local recapID = entry.deathRecapID
+        if not recapID or not C_DeathRecap.HasRecapEvents(recapID) then return end
+        local events = C_DeathRecap.GetRecapEvents(recapID)
+        if not events or #events == 0 then return end
+        local maxHealth = C_DeathRecap.GetRecapMaxHealth(recapID)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local title = (entry.name or "?")
+        if entry.total > 1 then title = title .. " (" .. entry.total .. " deaths)" end
+        GameTooltip:AddLine(title, 1, 0.4, 0.4)
+        local n = math.min(8, #events)
+        for i = 1, n do
+            local ev = events[i]
+            local isHeal = ev.event and ev.event:find("HEAL")
+            local spellStr = ev.spellName or ev.event or "?"
+            local caster = (not ev.hideCaster and ev.sourceName and ev.sourceName ~= "") and ev.sourceName or nil
+            local leftText = i == 1 and ("|cffff4444[!]|r " .. spellStr) or spellStr
+            if caster then leftText = leftText .. " |cffaaaaaa(" .. caster .. ")|r" end
+            local rightText = ""
+            if ev.amount then
+                local amt = AbbreviateNumbers(ev.amount)
+                rightText = isHeal and ("|cff44ff44+" .. amt .. "|r") or ("|cffff7777-" .. amt .. "|r")
+            end
+            if ev.currentHP and maxHealth and maxHealth > 0 then
+                local pct = math.floor(ev.currentHP / maxHealth * 100)
+                rightText = rightText ~= "" and (rightText .. "  |cff888888" .. pct .. "%|r") or ("|cff888888" .. pct .. "%|r")
+            end
+            GameTooltip:AddDoubleLine(leftText, rightText, 0.9, 0.9, 0.9, 1, 1, 1)
+        end
+        if #events > n then
+            GameTooltip:AddLine("|cff888888+" .. (#events - n) .. " earlier events|r")
+        end
+        GameTooltip:AddLine("|cff888888Click to open full death recap|r")
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
 -- ============================================================
 -- UI State
 -- ============================================================
@@ -642,7 +691,23 @@ local function RenderPane(idx)
         if enumType then
             local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
             if ok and sessData and sessData.combatSources then
-                for i, src in ipairs(sessData.combatSources) do
+                local srcList = sessData.combatSources
+                local renderOrder = {}
+                if UIThingsDB.damageMeter.pinSelf then
+                    local selfI = nil
+                    for ri = 1, #srcList do
+                        if srcList[ri].isLocalPlayer then selfI = ri break end
+                    end
+                    if selfI then renderOrder[1] = selfI end
+                    for ri = 1, #srcList do
+                        if ri ~= selfI then renderOrder[#renderOrder + 1] = ri end
+                    end
+                else
+                    for ri = 1, #srcList do renderOrder[ri] = ri end
+                end
+                for _, srcIdx in ipairs(renderOrder) do
+                    local src = srcList[srcIdx]
+                    local i = srcIdx
                     local row = AcquireRow(pane.rowPool, pane.scrollContent)
                     row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
                     row:SetSize(paneW, barH)
@@ -650,8 +715,11 @@ local function RenderPane(idx)
 
                     -- All live combat values are secret — use C-level calls only (no Lua comparisons).
                     -- For count-based types, prefer casts; for DPS types, use totalAmount.
+                    -- Deaths: totalAmount is 0; deathRecapID (NeverSecret) is the death signal.
                     local srcAmt, srcMax
-                    if COUNT_TYPES[mtype] and type(src.casts) == "number" then
+                    if mtype == "deaths" then
+                        srcAmt = (src.deathRecapID and src.deathRecapID ~= 0) and 1 or 0
+                    elseif COUNT_TYPES[mtype] and type(src.casts) == "number" then
                         srcAmt = src.casts
                     else
                         srcAmt = src.totalAmount
@@ -675,7 +743,11 @@ local function RenderPane(idx)
                     else
                         displayName = Secret.SafeUnitName(src.name, src.name) or src.classFilename or "?"
                     end
-                    row.nameFS:SetText(displayName or "?")
+                    local nameText = displayName or "?"
+                    if UIThingsDB.damageMeter.showRank then
+                        nameText = i .. ". " .. nameText
+                    end
+                    row.nameFS:SetText(nameText)
                     row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
 
                     -- Values: AbbreviateNumbers is a C-level WoW function — no Lua comparison,
@@ -745,8 +817,24 @@ local function RenderPane(idx)
     -- Non-secret values; arithmetic and comparison work normally.
     local maxVal = (#entries > 0 and entries[1].total) or 1
 
+    local orderedIndices = {}
+    if UIThingsDB.damageMeter.pinSelf and not dd then
+        local selfI = nil
+        local playerGUID = UnitGUID("player")
+        for i, entry in ipairs(entries) do
+            if entry.guid and entry.guid == playerGUID then selfI = i break end
+        end
+        if selfI then orderedIndices[1] = selfI end
+        for i = 1, #entries do
+            if i ~= selfI then orderedIndices[#orderedIndices + 1] = i end
+        end
+    else
+        for i = 1, #entries do orderedIndices[i] = i end
+    end
+
     local yOff = 0
-    for _, entry in ipairs(entries) do
+    for _, rankIdx in ipairs(orderedIndices) do
+        local entry = entries[rankIdx]
         local row = AcquireRow(pane.rowPool, pane.scrollContent)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
         row:SetSize(paneW, barH)
@@ -762,7 +850,11 @@ local function RenderPane(idx)
             row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
         end
 
-        row.nameFS:SetText(entry.name or "?")
+        local entryName = entry.name or "?"
+        if UIThingsDB.damageMeter.showRank and not dd then
+            entryName = rankIdx .. ". " .. entryName
+        end
+        row.nameFS:SetText(entryName)
         row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
 
         local valText = FormatVal(entry.total, mtype)
@@ -792,7 +884,11 @@ local function RenderPane(idx)
         end
 
         if not dd then
-            ApplyRowTooltip(row, entry.guid, entry.name, mtype, sess)
+            if mtype == "deaths" and entry.deathRecapID then
+                ApplyDeathTooltip(row, entry)
+            else
+                ApplyRowTooltip(row, entry.guid, entry.name, mtype, sess)
+            end
         end
 
         local captEntry = entry
@@ -804,8 +900,12 @@ local function RenderPane(idx)
                 drilldown[captIdx] = nil
                 RenderPane(captIdx)
             elseif btn == "LeftButton" and not captDd then
-                drilldown[captIdx] = { guid = captEntry.guid, name = captEntry.name }
-                RenderPane(captIdx)
+                if mtype == "deaths" and captEntry.deathRecapID then
+                    OpenDeathRecapUI(captEntry.deathRecapID)
+                else
+                    drilldown[captIdx] = { guid = captEntry.guid, name = captEntry.name }
+                    RenderPane(captIdx)
+                end
             end
         end)
 

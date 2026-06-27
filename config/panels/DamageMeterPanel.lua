@@ -406,6 +406,28 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         UIThingsDB.damageMeter.showIcons = self:GetChecked()
         Refresh()
     end)
+    yBase = yBase - 28
+
+    -- Show Rank
+    local rankCB = CreateFrame("CheckButton", "UIThingsDMShowRank", child, "ChatConfigCheckButtonTemplate")
+    rankCB:SetPoint("TOPLEFT", 20, yBase)
+    _G[rankCB:GetName() .. "Text"]:SetText("Show rank number before name (1. 2. 3. ...)")
+    rankCB:SetChecked(UIThingsDB.damageMeter.showRank)
+    rankCB:SetScript("OnClick", function(self)
+        UIThingsDB.damageMeter.showRank = self:GetChecked()
+        Refresh()
+    end)
+    yBase = yBase - 28
+
+    -- Pin self to top
+    local pinCB = CreateFrame("CheckButton", "UIThingsDMPinSelf", child, "ChatConfigCheckButtonTemplate")
+    pinCB:SetPoint("TOPLEFT", 20, yBase)
+    _G[pinCB:GetName() .. "Text"]:SetText("Pin yourself to the top (rank number still reflects actual position)")
+    pinCB:SetChecked(UIThingsDB.damageMeter.pinSelf)
+    pinCB:SetScript("OnClick", function(self)
+        UIThingsDB.damageMeter.pinSelf = self:GetChecked()
+        Refresh()
+    end)
     yBase = yBase - 34
 
     -- ============================================================

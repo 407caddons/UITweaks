@@ -677,6 +677,8 @@ local function OnEvent(self, event, ...)
                 showDps        = false,
                 showTooltip    = false,
                 showIcons      = false,
+                showRank       = false,
+                pinSelf        = false,
                 meter1         = { type = "damage",  session = "current" },
                 meter2         = { type = "healing", session = "current" },
             },
