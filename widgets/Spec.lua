@@ -21,6 +21,48 @@ table.insert(Widgets.moduleInits, function()
                         end
                     end
                 end
+
+                rootDescription:CreateDivider()
+                rootDescription:CreateTitle("Talent Loadouts")
+
+                local _, _, playerClassID = UnitClass("player")
+                local currentSpecId = currentSpecIndex and select(1, GetSpecializationInfo(currentSpecIndex))
+                local inCombat = InCombatLockdown()
+                local anyBuilds = false
+
+                if LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders then
+                    for _, diffs in pairs(LunaUITweaks_TalentReminders.reminders) do
+                        for _, zones in pairs(diffs) do
+                            for _, builds in pairs(zones) do
+                                if type(builds) == "table" then
+                                    for _, reminder in ipairs(builds) do
+                                        local classOk = not reminder.classID or reminder.classID == playerClassID
+                                        local specOk = not reminder.specID or reminder.specID == currentSpecId
+                                        if classOk and specOk then
+                                            anyBuilds = true
+                                            local label = reminder.name or "Unnamed"
+                                            if reminder.instanceName and reminder.instanceName ~= "" then
+                                                label = label .. "  |cff888888(" .. reminder.instanceName .. ")|r"
+                                            end
+                                            local btn = rootDescription:CreateButton(label, function()
+                                                addonTable.TalentManager.LoadBuild(reminder)
+                                            end)
+                                            if inCombat then
+                                                btn:SetEnabled(false)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if not anyBuilds then
+                    local btn = rootDescription:CreateButton("No saved builds", function() end)
+                    btn:SetEnabled(false)
+                end
+
                 rootDescription:CreateButton("Cancel", function() end)
             end)
         elseif button == "RightButton" then

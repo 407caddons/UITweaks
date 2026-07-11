@@ -499,6 +499,15 @@ function Misc.ToggleQuickDestroy(enabled)
                     deleteButton:SetPoint("CENTER", editBox, "CENTER", 0, 0)
                     deleteButton:SetFrameLevel(editBox:GetFrameLevel() + 5)
                     deleteButton:Show()
+
+                    -- StaticPopup frames are reused for unrelated dialogs later; hide our
+                    -- button once this dialog closes so it doesn't linger on the next one.
+                    if not dialog.luitQuickDestroyHideHooked then
+                        dialog.luitQuickDestroyHideHooked = true
+                        dialog:HookScript("OnHide", function()
+                            if deleteButton then deleteButton:Hide() end
+                        end)
+                    end
                 end)
             end
         end)

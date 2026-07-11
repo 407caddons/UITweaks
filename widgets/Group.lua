@@ -22,6 +22,101 @@ end
 
 local sortTicker = nil
 
+-- Precompute the full sequence of moves/swaps needed to reach `assignments`
+-- against a simulated snapshot of the roster. Swap partners are only ever
+-- picked from people who are still misplaced in the simulation, so a
+-- correctly-placed person is never evicted just to make room for someone
+-- else -- that was the source of the endless back-and-forth swapping.
+local function PlanRaidMoves(assignments)
+    local currentGroup = {}
+    for j = 1, GetNumGroupMembers() do
+        local name, _, sub = GetRaidRosterInfo(j)
+        if name then currentGroup[name] = sub end
+    end
+
+    local groupSize = {}
+    for g = 1, 8 do groupSize[g] = 0 end
+    for _, sub in pairs(currentGroup) do
+        groupSize[sub] = (groupSize[sub] or 0) + 1
+    end
+
+    local resolved = {}
+    local function GetMisplaced()
+        local list = {}
+        for name, target in pairs(assignments) do
+            if not resolved[name] and currentGroup[name] and currentGroup[name] ~= target then
+                table.insert(list, name)
+            end
+        end
+        return list
+    end
+
+    local ops = {}
+
+    -- Phase 1: direct moves into any group that already has room. Each move
+    -- frees up a slot, which can open the door for the next misplaced person.
+    local progress = true
+    while progress do
+        progress = false
+        for _, name in ipairs(GetMisplaced()) do
+            local target = assignments[name]
+            if groupSize[target] < 5 then
+                local from = currentGroup[name]
+                table.insert(ops, { kind = "move", name = name, group = target })
+                groupSize[from] = groupSize[from] - 1
+                groupSize[target] = groupSize[target] + 1
+                currentGroup[name] = target
+                resolved[name] = true
+                progress = true
+            end
+        end
+    end
+
+    -- Phase 2: everyone left needs a swap because every relevant group is
+    -- full. Only swap with someone still in the misplaced list, and prefer a
+    -- "perfect swap" partner (who wants our old group) so both people finish
+    -- in a single move.
+    local remaining = GetMisplaced()
+    while #remaining > 0 do
+        local name = remaining[1]
+        local target = assignments[name]
+
+        local partner = nil
+        for _, n2 in ipairs(remaining) do
+            if n2 ~= name and currentGroup[n2] == target and assignments[n2] == currentGroup[name] then
+                partner = n2
+                break
+            end
+        end
+        if not partner then
+            for _, n2 in ipairs(remaining) do
+                if n2 ~= name and currentGroup[n2] == target then
+                    partner = n2
+                    break
+                end
+            end
+        end
+
+        if partner then
+            table.insert(ops, { kind = "swap", name = name, partner = partner })
+            currentGroup[name], currentGroup[partner] = currentGroup[partner], currentGroup[name]
+            resolved[name] = true -- name always lands on its target by construction
+            if currentGroup[partner] == assignments[partner] then
+                resolved[partner] = true
+            end
+        else
+            -- Target group has no misplaced occupant to trade with (assignment
+            -- counts are inconsistent) -- give up on this entry instead of
+            -- looping forever.
+            resolved[name] = true
+        end
+
+        remaining = GetMisplaced()
+    end
+
+    return ops
+end
+
 local function ApplyRaidAssignments(assignments)
     if InCombatLockdown() then return end
     if sortTicker then
@@ -29,7 +124,22 @@ local function ApplyRaidAssignments(assignments)
         sortTicker = nil
     end
 
-    local function DoNextMove()
+    local ops = PlanRaidMoves(assignments)
+    if #ops == 0 then
+        addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
+        return
+    end
+
+    local function FindPlayerByName(n)
+        for j = 1, GetNumGroupMembers() do
+            local name = GetRaidRosterInfo(j)
+            if name == n then return j end
+        end
+        return nil
+    end
+
+    local opIndex = 0
+    local function DoNextOp()
         if InCombatLockdown() then
             if sortTicker then
                 sortTicker:Cancel()
@@ -38,93 +148,28 @@ local function ApplyRaidAssignments(assignments)
             return
         end
 
-        local function GetGroupSize(g)
-            local count = 0
-            for j = 1, GetNumGroupMembers() do
-                local _, _, sub = GetRaidRosterInfo(j)
-                if sub == g then count = count + 1 end
+        opIndex = opIndex + 1
+        local op = ops[opIndex]
+        if not op then
+            if sortTicker then
+                sortTicker:Cancel()
+                sortTicker = nil
             end
-            return count
+            addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
+            return
         end
 
-        local function FindPlayerByName(n)
-            for j = 1, GetNumGroupMembers() do
-                local name, _, _, _, _, _, _, _, _, _, _, role = GetRaidRosterInfo(j)
-                if name == n then return j end
-            end
-            return nil
+        if op.kind == "move" then
+            local idx = FindPlayerByName(op.name)
+            if idx then SetRaidSubgroup(idx, op.group) end
+        else
+            local idxA = FindPlayerByName(op.name)
+            local idxB = FindPlayerByName(op.partner)
+            if idxA and idxB then SwapRaidSubgroup(idxA, idxB) end
         end
-
-        -- Scan for anyone in wrong group
-        for name, targetGroup in pairs(assignments) do
-            local index = FindPlayerByName(name)
-
-            if index then
-                local _, _, subgroup = GetRaidRosterInfo(index)
-                if subgroup ~= targetGroup then
-                    -- Needs moving
-                    local destSize = GetGroupSize(targetGroup)
-
-                    if destSize < 5 then
-                        SetRaidSubgroup(index, targetGroup)
-                        return -- Wait for next tick
-                    else
-                        -- Swap needed
-                        local swapTargetIdx = nil
-
-                        -- Priority scan in targetGroup: PERFECT SWAP
-                        for j = 1, GetNumGroupMembers() do
-                            local n, _, sub = GetRaidRosterInfo(j)
-                            if sub == targetGroup then
-                                if assignments[n] and assignments[n] == subgroup then
-                                    swapTargetIdx = j
-                                    break
-                                end
-                            end
-                        end
-
-                        -- Secondary scan
-                        if not swapTargetIdx then
-                            for j = 1, GetNumGroupMembers() do
-                                local n, _, sub = GetRaidRosterInfo(j)
-                                if sub == targetGroup then
-                                    if assignments[n] and assignments[n] ~= targetGroup then
-                                        swapTargetIdx = j
-                                        break
-                                    end
-                                end
-                            end
-                        end
-
-                        -- Fallback
-                        if not swapTargetIdx then
-                            for j = 1, GetNumGroupMembers() do
-                                local _, _, sub = GetRaidRosterInfo(j)
-                                if sub == targetGroup then
-                                    swapTargetIdx = j
-                                    break
-                                end
-                            end
-                        end
-
-                        if swapTargetIdx then
-                            SwapRaidSubgroup(index, swapTargetIdx)
-                            return -- Wait for next tick
-                        end
-                    end
-                end
-            end
-        end
-
-        -- Done
-        if sortTicker then
-            sortTicker:Cancel()
-            sortTicker = nil
-        end
-        addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
     end
 
-    sortTicker = C_Timer.NewTicker(0.2, DoNextMove)
+    sortTicker = C_Timer.NewTicker(0.2, DoNextOp)
 end
 
 local function SortHealersToLast()
