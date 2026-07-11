@@ -622,6 +622,14 @@ local function OnEvent(self, event, ...)
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
             },
+            destroy = {
+                enabled = false,
+                autoShow = true,
+                includeBoE = false,
+                framePos = { point = "CENTER", x = 0, y = 0 },
+                bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.9 },
+                borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+            },
             queueTimer = {
                 enabled = false,
                 showText = true,

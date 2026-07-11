@@ -88,6 +88,7 @@ Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared fac
 | Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
 | Warehousing.lua | — | Bank/warehouse item management |
 | QueueTimer.lua | `QueueTimer` | Queue wait timer display |
+| Destroy.lua | `Destroy` | Disenchant helper: lists unusable/low-ilvl bag gear while resting with one-click disenchant |
 | AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
@@ -135,9 +136,9 @@ Because the config window is built lazily on first open, companion registrations
 
 ## Config Navigation Order
 
-Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–22. Companion panels are inserted at 23, 24, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–23. Companion panels are inserted at 24, 25, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
 
-Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 6=Kick, 7=MplusTimer, 8=Minimap, 9=Coordinates, 10=Frames, 11=DamageMeter, 12=Vendor, 13=Loot, 14=Notifications, 15=Reagents, 16=TalentManager, 17=Talent, 18=Misc, 19=Widgets, 20=Warehousing, 21=QueueTimer, then companions, then AddonVersions (last=22+companions).
+Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 6=Kick, 7=MplusTimer, 8=Minimap, 9=Coordinates, 10=Frames, 11=DamageMeter, 12=Vendor, 13=Loot, 14=Notifications, 15=Reagents, 16=TalentManager, 17=Talent, 18=Misc, 19=Widgets, 20=Warehousing, 21=QueueTimer, 22=Destroy, then companions, then AddonVersions (last=23+companions).
 
 ## LunaUITweaks-Specific Conventions
 

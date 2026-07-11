@@ -192,7 +192,8 @@ function addonTable.Config.Initialize()
             { id = 19, name = "Widgets",          key = "widgets",       icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01" },
             { id = 20, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
             { id = 21, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
-            { id = 22, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 22, name = "Destroy",          key = "destroy",       icon = "Interface\\Icons\\Inv_Enchant_Disenchant" },
+            { id = 23, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         -- Insert companion addon panels before AddonVersions (always last)
@@ -313,6 +314,10 @@ function addonTable.Config.Initialize()
         queueTimerPanel:SetAllPoints()
         queueTimerPanel:Hide()
 
+        local destroyPanel = CreateFrame("Frame", nil, contentContainer)
+        destroyPanel:SetAllPoints()
+        destroyPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.vendor        = vendorPanel
         addonTable.ConfigPanels.combat        = combatPanel
@@ -336,6 +341,7 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.warehousing   = warehousingPanel
         addonTable.ConfigPanels.xpBar         = xpBarPanel
         addonTable.ConfigPanels.queueTimer    = queueTimerPanel
+        addonTable.ConfigPanels.destroy       = destroyPanel
 
         -- Map IDs to Panels
         local idToPanel                       = {
@@ -360,21 +366,22 @@ function addonTable.Config.Initialize()
             [19] = widgetsPanel,
             [20] = warehousingPanel,
             [21] = queueTimerPanel,
-            [22] = addonVersionsPanel,
+            [22] = destroyPanel,
+            [23] = addonVersionsPanel,
         }
 
         -- Create companion panels and shift AddonVersions to its new slot.
-        -- Built-ins fill slots 1..22; AddonVersions was placed at 22. With N
-        -- companions, companions take 22..21+N and AddonVersions moves to 22+N.
+        -- Built-ins fill slots 1..23; AddonVersions was placed at 23. With N
+        -- companions, companions take 23..22+N and AddonVersions moves to 23+N.
         if #companionPanels > 0 then
             local numCompanions = #companionPanels
-            idToPanel[22 + numCompanions] = idToPanel[22]
-            idToPanel[22] = nil
+            idToPanel[23 + numCompanions] = idToPanel[23]
+            idToPanel[23] = nil
             for i, entry in ipairs(companionPanels) do
                 local panel = CreateFrame("Frame", nil, contentContainer)
                 panel:SetAllPoints()
                 panel:Hide()
-                idToPanel[21 + i] = panel
+                idToPanel[22 + i] = panel
                 addonTable.ConfigPanels[entry.key] = panel
                 entry._panelFrame = panel
             end
@@ -533,8 +540,11 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.QueueTimer then
                 addonTable.ConfigSetup.QueueTimer(queueTimerPanel, navButtons[21], configWindow)
             end
+            if addonTable.ConfigSetup.Destroy then
+                addonTable.ConfigSetup.Destroy(destroyPanel, navButtons[22], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                local avIdx = 22 + #companionPanels
+                local avIdx = 23 + #companionPanels
                 addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[avIdx], configWindow)
             end
         end
@@ -542,7 +552,7 @@ function addonTable.Config.Initialize()
         -- Call companion addon panel setup functions
         for i, entry in ipairs(companionPanels) do
             if entry._panelFrame and entry.setup then
-                entry.setup(entry._panelFrame, navButtons[21 + i], configWindow)
+                entry.setup(entry._panelFrame, navButtons[22 + i], configWindow)
             end
         end
         ----------------------------------------------------
