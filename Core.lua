@@ -24,7 +24,7 @@ LunaUITweaksAPI = {
             setup = setupFunc,
         })
     end,
-    Helpers = nil, -- populated by Helpers.lua after it loads
+    Helpers = nil, -- populated by SharedHelpers.lua after it loads
 }
 
 -- ============================================================
@@ -35,6 +35,8 @@ _G["BINDING_NAME_LUNAUITWEAKS_GAME_LEFT"]               = "Game: Left"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_RIGHT"]              = "Game: Right"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECW"]           = "Game: Up"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_ROTATECCW"]          = "Game: Down"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_SOFTDROP"]           = "Game: Soft Drop"
+_G["BINDING_NAME_LUNAUITWEAKS_GAME_HARDDROP"]           = "Game: Hard Drop"
 _G["BINDING_NAME_LUNAUITWEAKS_GAME_PAUSE"]              = "Game: Pause"
 
 -- Centralized Safe Timer Wrapper
@@ -178,19 +180,62 @@ function CharacterRegistry.Delete(key)
     end
 end
 
---- Recursively applies default values to a settings table
--- Only sets values that are currently nil (preserves existing user settings)
+--- Return a recursively independent copy of a saved-data value.
+local function DeepCopy(value, seen)
+    if type(value) ~= "table" then return value end
+
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+        copy[DeepCopy(key, seen)] = DeepCopy(child, seen)
+    end
+    return copy
+end
+
+--- Recursively applies independent default values to a settings table.
+-- Missing tables are copied rather than shared with DEFAULTS. If an older or
+-- corrupted setting has the wrong type, the default shape replaces it.
 -- @param db table The settings table to populate
 -- @param defaults table The default values to apply
 local function ApplyDefaults(db, defaults)
     for key, value in pairs(defaults) do
-        if type(value) == "table" and not value.r then -- Not a color table
-            db[key] = db[key] or {}
-            ApplyDefaults(db[key], value)
+        if type(value) == "table" then
+            if db[key] == nil then
+                db[key] = DeepCopy(value)
+            elseif type(db[key]) ~= "table" then
+                db[key] = DeepCopy(value)
+            else
+                ApplyDefaults(db[key], value)
+            end
         elseif db[key] == nil then
             db[key] = value
         end
     end
+end
+
+-- Saved-data migrations run before defaults are merged. Add migrations as
+-- migrations[oldVersion] = function(db) ... end, where the function upgrades
+-- oldVersion to oldVersion + 1.
+local CURRENT_SCHEMA_VERSION = 1
+local migrations = {}
+
+local function RunMigrations(db)
+    local version = tonumber(db.schemaVersion) or 0
+    if version < 0 then version = 0 end
+
+    -- Never stamp a database created by a newer addon version as older.
+    if version > CURRENT_SCHEMA_VERSION then return end
+
+    while version < CURRENT_SCHEMA_VERSION do
+        local migrate = migrations[version]
+        if migrate then migrate(db) end
+        version = version + 1
+    end
+
+    db.schemaVersion = CURRENT_SCHEMA_VERSION
 end
 
 -- Logging System
@@ -229,6 +274,7 @@ end
 local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" and ... == addonName then
         UIThingsDB = UIThingsDB or {}
+        RunMigrations(UIThingsDB)
 
         -- Default Settings Table
         local DEFAULTS = {
@@ -629,6 +675,8 @@ local function OnEvent(self, event, ...)
                 framePos = { point = "CENTER", x = 0, y = 0 },
                 bgColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.9 },
                 borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
+                frameStrata = "BACKGROUND",
+                excludedItems = {}, -- itemID -> true; protected from disenchant actions
             },
             queueTimer = {
                 enabled = false,
@@ -754,7 +802,7 @@ local function OnEvent(self, event, ...)
         SLASH_UITHINGS1 = "/luit"
         SLASH_UITHINGS2 = "/luithings"
 
-        -- LunaUITweaks_OpenConfig is defined in ConfigMain.lua (used by Addon Compartment)
+        -- LunaUITweaks_OpenConfig is a lightweight loader defined in Loaders.lua.
         SlashCmdList["UITHINGS"] = function(msg)
             local cmd = msg and msg:lower():match("^(%S+)") or ""
             if cmd == "paste" then

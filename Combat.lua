@@ -155,24 +155,26 @@ local TTD_SAMPLE_INTERVAL = 0.5   -- seconds between health% samples
 local TTD_MIN_DATA_SECS   = 3     -- seconds of data required before showing
 local TTD_WINDOW_SECS     = 10    -- rolling window size in seconds
 
--- Hidden StatusBar used as a desecretization bridge for UnitHealth values.
--- SetValue() accepts secret numbers; GetValue() returns the stored C++ double (plain).
-local _ttdHpBar
-
+-- Returns health percent (0-100) as a plain number, or nil when the value is
+-- secret and cannot be read. Secret values cannot be laundered: a StatusBar
+-- SetValue/GetValue round-trip returns the value STILL SECRET, and arithmetic
+-- on a secret in addon-tainted execution is a Lua error. When Blizzard marks
+-- target health secret there is no way to compute TTD -- skip the sample.
 local function TtdGetHealthPct()
-    if not UnitExists("target") then return 0 end
+    if not UnitExists("target") then return nil end
+    -- Native percent first: C-level, may stay readable in more contexts
+    if UnitHealthPercent then
+        local pct = UnitHealthPercent("target")
+        if type(pct) == "number" and not issecretvalue(pct) then
+            return pct
+        end
+    end
     local hp    = UnitHealth("target")
     local hpMax = UnitHealthMax("target")
-    if not hp or not hpMax then return 0 end
-    -- Desecretize hpMax via string.format (works on both plain and secret numbers).
-    local hpMaxN = tonumber(string.format("%.10g", hpMax)) or 0
-    if hpMaxN <= 0 then return 0 end
-    -- Desecretize hp via StatusBar bridge: SetValue accepts secrets,
-    -- GetValue returns the internally-stored C++ double as a plain Lua number.
-    _ttdHpBar:SetMinMaxValues(0, hpMaxN)
-    _ttdHpBar:SetValue(hp)
-    local hpN = _ttdHpBar:GetValue()
-    return hpN / hpMaxN * 100
+    if not hp or not hpMax then return nil end
+    if issecretvalue(hp) or issecretvalue(hpMax) then return nil end
+    if hpMax <= 0 then return nil end
+    return hp / hpMax * 100
 end
 
 local ttdSamples     = {}   -- array of { pct=number (non-secret), t=number }
@@ -189,6 +191,7 @@ local function TtdPushSample()
     if not UnitExists("target") then return end
     if not UnitCanAttack("player", "target") then return end
     local pct = TtdGetHealthPct()
+    if not pct then return end -- health is secret or unavailable; no sample
     local t   = GetTime()
     ttdSamples[#ttdSamples + 1] = { pct = pct, t = t }
     -- Trim entries older than the rolling window
@@ -363,10 +366,6 @@ local function InitTTD()
             TtdRefreshDisplay()
         end
     end)
-
-    -- StatusBar bridge for desecretizing UnitHealth values (see TtdGetHealthPct)
-    _ttdHpBar = CreateFrame("StatusBar")
-    _ttdHpBar:Hide()
 
     TtdApplySettings()
     ttdFrame:Hide()

@@ -36,6 +36,11 @@ local PAD = 10
 -- ============================================================
 
 local strategy = {}
+local unpack = unpack or table.unpack
+
+local function pack(...)
+    return { n = select("#", ...), ... }
+end
 
 local function passThroughExec(_, callback, ...)
     return callback(...)
@@ -48,13 +53,23 @@ local function timingExec(moduleName, callback, ...)
         moduleTimings[moduleName] = t
     end
     local start = debugprofilestop()
-    callback(...)
+    local args = pack(...)
+    local results = pack(xpcall(function()
+        return callback(unpack(args, 1, args.n))
+    end, function(err)
+        return err
+    end))
     local elapsed = debugprofilestop() - start
     t.total = t.total + elapsed
     t.calls = t.calls + 1
     if elapsed > t.spike then
         t.spike = elapsed
     end
+
+    if not results[1] then
+        error(results[2], 0)
+    end
+    return unpack(results, 2, results.n)
 end
 
 strategy.exec = passThroughExec

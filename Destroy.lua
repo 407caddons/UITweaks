@@ -8,7 +8,7 @@ local Destroy = {}
 addonTable.Destroy = Destroy
 
 local EventBus = addonTable.EventBus
-local Helpers  -- resolved lazily; config/Helpers.lua loads before this file
+local Helpers  -- resolved lazily from the shared core helper table
 
 local DISENCHANT_SPELL_ID = 13262
 
@@ -39,6 +39,16 @@ local rowPool   = {}
 local items     = {}   -- { bag, slot, link, icon, ilvl, reason }
 local closedByUser  = false
 local pendingRefresh = false
+local RefreshList
+
+local function GetExcludedItems()
+    UIThingsDB.destroy.excludedItems = UIThingsDB.destroy.excludedItems or {}
+    return UIThingsDB.destroy.excludedItems
+end
+
+local function IsItemExcluded(itemID)
+    return itemID and GetExcludedItems()[itemID] == true
+end
 
 -- ============================================================
 -- Eligibility
@@ -94,12 +104,19 @@ local function ScanBags()
             local reason = EvaluateItem(info)
             if reason then
                 local ilvl = C_Item.GetDetailedItemLevelInfo(info.hyperlink)
+                local itemID = C_Item.GetItemInfoInstant(info.hyperlink)
+                local itemName = C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID)
+                    or GetItemInfo(info.hyperlink)
                 table.insert(items, {
                     bag = bag, slot = slot,
                     link = info.hyperlink,
+                    itemID = itemID,
+                    name = itemName,
                     icon = info.iconFileID,
+                    quality = info.quality,
                     ilvl = ilvl,
                     reason = reason,
+                    excluded = IsItemExcluded(itemID),
                 })
             end
         end
@@ -119,9 +136,13 @@ local function GetRow(index)
     row:SetHeight(22)
     row:SetPoint("LEFT", 0, 0)
     row:SetPoint("RIGHT", 0, 0)
-    row:SetAttribute("type", "macro")
+    row:SetAttribute("type1", "macro")
     local useKeyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
-    row:RegisterForClicks(useKeyDown and "AnyDown" or "AnyUp")
+    if useKeyDown then
+        row:RegisterForClicks("LeftButtonDown", "RightButtonDown")
+    else
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    end
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(18, 18)
@@ -144,10 +165,27 @@ local function GetRow(index)
         if not self.bagID then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetBagItem(self.bagID, self.slotID)
-        GameTooltip:AddLine("|cff88ff88Click to disenchant this item|r")
+        if self.excluded then
+            GameTooltip:AddLine("|cffaaaaaaExcluded from disenchanting|r")
+        else
+            GameTooltip:AddLine("|cff88ff88Left-click to disenchant this item|r")
+        end
+        GameTooltip:AddLine("|cffffd100Right-click to toggle include/exclude|r")
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Use PostClick so the SecureActionButtonTemplate retains ownership of
+    -- OnClick and can execute the left-button disenchant macro.
+    row:SetScript("PostClick", function(self, button)
+        if button ~= "RightButton" or not self.itemID or InCombatLockdown() then return end
+        local excluded = GetExcludedItems()
+        if excluded[self.itemID] then
+            excluded[self.itemID] = nil
+        else
+            excluded[self.itemID] = true
+        end
+        RefreshList()
+    end)
 
     rowPool[index] = row
     return row
@@ -160,40 +198,67 @@ end
 
 local function UpdateDisenchantButton()
     if InCombatLockdown() then return end
-    local first = items[1]
+    local first
+    for _, item in ipairs(items) do
+        if not item.excluded then
+            first = item
+            break
+        end
+    end
     if first then
-        deButton:SetAttribute("macrotext", BuildMacroText(first.bag, first.slot))
+        deButton:SetAttribute("macrotext1", BuildMacroText(first.bag, first.slot))
         deButton:SetText("Disenchant Next")
         deButton:Enable()
     else
-        deButton:SetAttribute("macrotext", "")
+        deButton:SetAttribute("macrotext1", "")
         deButton:SetText("Nothing to Disenchant")
         deButton:Disable()
     end
 end
 
-local function RefreshList()
+RefreshList = function()
     if not mainFrame then return end
     ScanBags()
 
     for _, row in ipairs(rowPool) do row:Hide() end
 
     local yOff = 0
+    local excludedCount = 0
     for i, item in ipairs(items) do
         local row = GetRow(i)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", mainFrame.scrollChild, "TOPLEFT", 0, -yOff)
         row:SetPoint("RIGHT", mainFrame.scrollChild, "RIGHT", 0, 0)
-        row.bagID, row.slotID = item.bag, item.slot
-        row:SetAttribute("macrotext", BuildMacroText(item.bag, item.slot))
+        row.bagID, row.slotID, row.itemID = item.bag, item.slot, item.itemID
+        row.excluded = item.excluded
+        -- Keep the secure action type stable. Toggling a protected attribute
+        -- from nil back to "macro" during a click can leave the row inert;
+        -- an empty macro safely disables excluded rows instead.
+        row:SetAttribute("type1", "macro")
+        row:SetAttribute("macrotext1", item.excluded and "" or BuildMacroText(item.bag, item.slot))
         row.icon:SetTexture(item.icon)
-        row.nameFS:SetText(item.link)
-        row.infoFS:SetText(item.ilvl .. " |cffaaaaaa" .. item.reason .. "|r")
+        row.icon:SetDesaturated(item.excluded)
+        row.nameFS:SetText(item.name or item.link)
+        if item.excluded then
+            excludedCount = excludedCount + 1
+            row.nameFS:SetTextColor(0.45, 0.45, 0.45)
+            row.infoFS:SetTextColor(0.45, 0.45, 0.45)
+            row.infoFS:SetText(item.ilvl .. " Excluded")
+        else
+            local color = ITEM_QUALITY_COLORS[item.quality]
+            row.nameFS:SetTextColor(color and color.r or 1, color and color.g or 1, color and color.b or 1)
+            row.infoFS:SetTextColor(1, 0.82, 0)
+            row.infoFS:SetText(item.ilvl .. " |cffaaaaaa" .. item.reason .. "|r")
+        end
         row:Show()
         yOff = yOff + 23
     end
     mainFrame.scrollChild:SetHeight(math.max(yOff, 1))
-    mainFrame.countFS:SetFormattedText("%d item(s)", #items)
+    if excludedCount > 0 then
+        mainFrame.countFS:SetFormattedText("%d item(s), %d excluded", #items, excludedCount)
+    else
+        mainFrame.countFS:SetFormattedText("%d item(s)", #items)
+    end
 
     UpdateDisenchantButton()
 end
@@ -205,7 +270,7 @@ local function CreateWindow()
 
     mainFrame = CreateFrame("Frame", "LunaUITweaks_DestroyFrame", UIParent, "BackdropTemplate")
     mainFrame:SetSize(340, 300)
-    mainFrame:SetFrameStrata("DIALOG")
+    mainFrame:SetFrameStrata(UIThingsDB.destroy.frameStrata or "BACKGROUND")
     mainFrame:SetMovable(true)
     mainFrame:EnableMouse(true)
     mainFrame:SetClampedToScreen(true)
@@ -254,9 +319,9 @@ local function CreateWindow()
         "SecureActionButtonTemplate, UIPanelButtonTemplate")
     deButton:SetSize(180, 26)
     deButton:SetPoint("BOTTOM", 0, 34)
-    deButton:SetAttribute("type", "macro")
+    deButton:SetAttribute("type1", "macro")
     local useKeyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
-    deButton:RegisterForClicks(useKeyDown and "AnyDown" or "AnyUp")
+    deButton:RegisterForClicks(useKeyDown and "LeftButtonDown" or "LeftButtonUp")
 
     mainFrame:Hide()
     Destroy.ApplyVisuals()
@@ -266,6 +331,7 @@ function Destroy.ApplyVisuals()
     if not mainFrame then return end
     local s = UIThingsDB.destroy
     Helpers = Helpers or addonTable.ConfigHelpers
+    mainFrame:SetFrameStrata(s.frameStrata or "BACKGROUND")
     Helpers.ApplyFrameBackdrop(mainFrame, true, s.borderColor, true, s.bgColor)
 end
 

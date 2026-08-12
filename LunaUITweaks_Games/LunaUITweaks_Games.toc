@@ -1,0 +1,19 @@
+## Interface: 120100
+## Title: |cff00ff96Luna's UI Tweaks|r - Games
+## Notes: Load-on-demand games for Luna's UI Tweaks
+## Author: 407c
+## Version: 1.27.0
+## Dependencies: LunaUITweaks
+## LoadOnDemand: 1
+## X-Part-Of: LunaUITweaks
+
+games\Games.lua
+games\Snek.lua
+games\Bombs.lua
+games\Gems.lua
+games\Cards.lua
+games\Tiles.lua
+games\Boxes.lua
+games\Slide.lua
+games\Lights.lua
+games\Blocks.lua

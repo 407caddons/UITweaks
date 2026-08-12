@@ -540,30 +540,41 @@ plumeAlertFrame.text = plumeAlertFrame:CreateFontString(nil, "OVERLAY", "GameFon
 plumeAlertFrame.text:SetPoint("CENTER")
 plumeAlertFrame.text:SetTextColor(1, 0.2, 0.2, 1)
 
+-- Query by constant spell ID instead of comparing aura names. In 12.0+, aura
+-- fields (including name and spellId) can be secret even outside combat when
+-- execution is addon-tainted.
+local PLUME_AURAS = {
+    { spellID = 1260615, name = "Radiant Plume" },
+    { spellID = 1265808, name = "Umbral Plume" },
+}
+
 local function CheckPlumeBuff()
     if InCombatLockdown() then return end
     if not UIThingsDB.misc.plumeAlert then return end
     if C_ChallengeMode.IsChallengeModeActive() then return end
 
-    for i = 1, 40 do
-        local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
-        if not auraData then break end
-        local name = auraData.name
-        if name and (name == "Umbral Plume" or name == "Radiant Plume") then
-            local data = C_TooltipInfo.GetUnitAura("player", i, "HELPFUL")
-            if data and data.lines then
+    for _, plume in ipairs(PLUME_AURAS) do
+        local auraData = C_UnitAuras.GetPlayerAuraBySpellID(plume.spellID)
+        local auraInstanceID = auraData and auraData.auraInstanceID
+        if auraInstanceID and addonTable.Secret.CanAccessValue(auraInstanceID) then
+            local data = C_TooltipInfo.GetUnitAura("player", auraInstanceID)
+            if data and data.lines and addonTable.Secret.CanAccessValue(data.lines) then
                 for _, line in ipairs(data.lines) do
-                    local text = line.leftText
-                    if text and text:match("increased by") then
-                        local value = tonumber(text:match("increased by (%d+)"))
-                        if value and value < 100 then
-                            plumeAlertFrame.text:SetText(string.format("%s: %d (below 100!)", name, value))
-                            plumeAlertFrame:Show()
-                            addonTable.Core.SafeAfter(10, function()
-                                plumeAlertFrame:Hide()
-                            end)
+                    local text = addonTable.Secret.CanAccessValue(line) and line.leftText or nil
+                    if text and addonTable.Secret.CanAccessValue(text) then
+                        local valueText = text:match("increased by (%d+)")
+                        local value = valueText and tonumber(valueText)
+                        if value then
+                            if value < 100 then
+                                plumeAlertFrame.text:SetText(
+                                    string.format("%s: %d (below 100!)", plume.name, value))
+                                plumeAlertFrame:Show()
+                                addonTable.Core.SafeAfter(10, function()
+                                    plumeAlertFrame:Hide()
+                                end)
+                            end
+                            return
                         end
-                        return
                     end
                 end
             end

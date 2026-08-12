@@ -1,0 +1,34 @@
+## Interface: 120100
+## Title: |cff00ff96Luna's UI Tweaks|r - Config
+## Notes: Load-on-demand configuration UI for Luna's UI Tweaks
+## Author: 407c
+## Version: 1.27.0
+## Dependencies: LunaUITweaks
+## LoadOnDemand: 1
+## X-Part-Of: LunaUITweaks
+
+config\panels\VendorPanel.lua
+config\panels\CombatPanel.lua
+config\panels\FramesPanel.lua
+config\panels\LootPanel.lua
+config\panels\MiscPanel.lua
+config\panels\MinimapPanel.lua
+config\panels\TalentPanel.lua
+config\panels\TalentManagerPanel.lua
+config\panels\WidgetsPanel.lua
+config\panels\KickPanel.lua
+config\panels\DamageMeterPanel.lua
+config\panels\AddonVersionsPanel.lua
+config\panels\NotificationsPanel.lua
+config\panels\CastBarPanel.lua
+config\panels\ReagentsPanel.lua
+config\panels\QuestAutoPanel.lua
+config\panels\QuestReminderPanel.lua
+config\panels\XpBarPanel.lua
+config\panels\MplusTimerPanel.lua
+config\panels\CoordinatesPanel.lua
+config\panels\WarehousingPanel.lua
+config\panels\QueueTimerPanel.lua
+config\panels\DestroyPanel.lua
+config\ConfigMain.lua
+Config.lua

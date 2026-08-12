@@ -748,6 +748,7 @@ end
 local QUEUE_STUCK_TIMEOUT = 5  -- seconds before declaring stuck
 local queueLastProgress = 0
 local queueLastCount = 0
+local StopQueueProcessor
 
 local function ProcessQueueStep()
     if #workQueue == 0 then
@@ -835,7 +836,7 @@ local function StartQueueProcessor(onComplete)
     queueProcessor:SetScript("OnUpdate", ProcessQueueStep)
 end
 
-local function StopQueueProcessor()
+StopQueueProcessor = function()
     workQueue = {}
     isProcessing = false
     queueOnComplete = nil

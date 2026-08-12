@@ -1,0 +1,184 @@
+local addonName, addonTable = "LunaUITweaks", _G["LunaUITweaks"]
+
+-- Create setup table if it doesn't exist
+addonTable.ConfigSetup = addonTable.ConfigSetup or {}
+
+-- Get helpers
+local Helpers = addonTable.ConfigHelpers
+
+-- Define the setup function for Vendor panel
+function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
+    Helpers.CreateResetButton(panel, "vendor")
+    local fonts = Helpers.fonts
+
+    -- Panel Title
+    local vendorTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    vendorTitle:SetPoint("TOPLEFT", 16, -16)
+    vendorTitle:SetText("Vendor Automation")
+
+    -- Enable Vendor Checkbox
+    local enableVendorBtn = CreateFrame("CheckButton", "UIThingsVendorEnableCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    enableVendorBtn:SetPoint("TOPLEFT", 20, -50)
+    _G[enableVendorBtn:GetName() .. "Text"]:SetText("Enable Vendor Automation")
+    enableVendorBtn:SetChecked(UIThingsDB.vendor.enabled)
+    enableVendorBtn:SetScript("OnClick", function(self)
+        local enabled = not not self:GetChecked()
+        UIThingsDB.vendor.enabled = enabled
+        Helpers.UpdateModuleVisuals(panel, tab, enabled)
+    end)
+    Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.vendor.enabled)
+
+    -- Auto Repair
+    local repairBtn = CreateFrame("CheckButton", "UIThingsAutoRepairCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    repairBtn:SetPoint("TOPLEFT", 20, -70)
+    _G[repairBtn:GetName() .. "Text"]:SetText("Auto Repair")
+    repairBtn:SetChecked(UIThingsDB.vendor.autoRepair)
+    repairBtn:SetScript("OnClick", function(self)
+        local val = not not self:GetChecked()
+        UIThingsDB.vendor.autoRepair = val
+    end)
+
+    -- Guild Repair
+    local guildBtn = CreateFrame("CheckButton", "UIThingsGuildRepairCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    guildBtn:SetPoint("TOPLEFT", 40, -100) -- Indented
+    _G[guildBtn:GetName() .. "Text"]:SetText("Use Guild Funds")
+    guildBtn:SetChecked(UIThingsDB.vendor.useGuildRepair)
+    guildBtn:SetScript("OnClick", function(self)
+        local val = not not self:GetChecked()
+        UIThingsDB.vendor.useGuildRepair = val
+    end)
+
+    -- Sell Greys
+    local sellBtn = CreateFrame("CheckButton", "UIThingsSellGreysCheck", panel, "ChatConfigCheckButtonTemplate")
+    sellBtn:SetPoint("TOPLEFT", 20, -130)
+    _G[sellBtn:GetName() .. "Text"]:SetText("Auto Sell Greys")
+    sellBtn:SetChecked(UIThingsDB.vendor.sellGreys)
+    sellBtn:SetScript("OnClick", function(self)
+        local val = not not self:GetChecked()
+        UIThingsDB.vendor.sellGreys = val
+    end)
+
+    -- Only Check OOC
+    local oocBtn = CreateFrame("CheckButton", "UIThingsVendorOOCCheck", panel, "ChatConfigCheckButtonTemplate")
+    oocBtn:SetPoint("TOPLEFT", 20, -160)
+    _G[oocBtn:GetName() .. "Text"]:SetText("Only Check Durability Out of Combat")
+    oocBtn.tooltip = "If enabled, durability checks will not run during combat."
+    oocBtn:SetChecked(UIThingsDB.vendor.onlyCheckDurabilityOOC)
+    oocBtn:SetScript("OnClick", function(self)
+        local val = not not self:GetChecked()
+        UIThingsDB.vendor.onlyCheckDurabilityOOC = val
+    end)
+
+    -- Durability Threshold Slider
+    local thresholdSlider = CreateFrame("Slider", "UIThingsThresholdSlider", panel, "OptionsSliderTemplate")
+    thresholdSlider:SetPoint("TOPLEFT", 20, -200)
+    thresholdSlider:SetMinMaxValues(0, 100)
+    thresholdSlider:SetValueStep(1)
+    thresholdSlider:SetObeyStepOnDrag(true)
+    thresholdSlider:SetWidth(200)
+    _G[thresholdSlider:GetName() .. 'Text']:SetText(string.format("Repair Reminder: %d%%",
+        UIThingsDB.vendor.repairThreshold or 20))
+    _G[thresholdSlider:GetName() .. 'Low']:SetText("0%")
+    _G[thresholdSlider:GetName() .. 'High']:SetText("100%")
+    thresholdSlider:SetValue(UIThingsDB.vendor.repairThreshold or 20)
+    thresholdSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.vendor.repairThreshold = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Repair Reminder: %d%%", value))
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Lock Alert Checkbox
+    local vendorLockBtn = CreateFrame("CheckButton", "UIThingsVendorLockCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    vendorLockBtn:SetPoint("TOPLEFT", 20, -240)
+    _G[vendorLockBtn:GetName() .. "Text"]:SetText("Lock Repair Alert")
+    vendorLockBtn:SetChecked(UIThingsDB.vendor.warningLocked)
+    vendorLockBtn:SetScript("OnClick", function(self)
+        local locked = not not self:GetChecked()
+        UIThingsDB.vendor.warningLocked = locked
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Vendor Font Selector
+    Helpers.CreateFontDropdown(
+        panel,
+        "UIThingsVendorFontDropdown",
+        "Alert Font:",
+        UIThingsDB.vendor.font,
+        function(fontPath, fontName)
+            UIThingsDB.vendor.font = fontPath
+            if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+        end,
+
+        20,
+        -280
+    )
+
+    -- Vendor Font Size Slider
+    local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", panel,
+        "OptionsSliderTemplate")
+    vendorFontSizeSlider:SetPoint("TOPLEFT", 20, -350)
+    vendorFontSizeSlider:SetMinMaxValues(10, 64)
+    vendorFontSizeSlider:SetValueStep(1)
+    vendorFontSizeSlider:SetObeyStepOnDrag(true)
+    vendorFontSizeSlider:SetWidth(200)
+    _G[vendorFontSizeSlider:GetName() .. 'Text']:SetText(string.format("Alert Size: %d", UIThingsDB.vendor.fontSize))
+    _G[vendorFontSizeSlider:GetName() .. 'Low']:SetText("10")
+    _G[vendorFontSizeSlider:GetName() .. 'High']:SetText("64")
+    vendorFontSizeSlider:SetValue(UIThingsDB.vendor.fontSize)
+    vendorFontSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.vendor.fontSize = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Alert Size: %d", value))
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Separator for Bag Warnings Section
+    local bagSeparator = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    bagSeparator:SetPoint("TOPLEFT", 16, -400)
+    bagSeparator:SetText("Bag Space Warnings")
+
+    -- Enable Bag Warning Checkbox
+    local enableBagWarningBtn = CreateFrame("CheckButton", "UIThingsBagWarningEnableCheck", panel,
+        "ChatConfigCheckButtonTemplate")
+    enableBagWarningBtn:SetPoint("TOPLEFT", 20, -430)
+    _G[enableBagWarningBtn:GetName() .. "Text"]:SetText("Enable Bag Space Warnings")
+    enableBagWarningBtn:SetChecked(UIThingsDB.vendor.bagWarningEnabled)
+    enableBagWarningBtn:SetScript("OnClick", function(self)
+        local enabled = not not self:GetChecked()
+        UIThingsDB.vendor.bagWarningEnabled = enabled
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Bag Warning Threshold Slider
+    local bagThresholdSlider = CreateFrame("Slider", "UIThingsBagThresholdSlider", panel, "OptionsSliderTemplate")
+    bagThresholdSlider:SetPoint("TOPLEFT", 20, -470)
+    bagThresholdSlider:SetMinMaxValues(0, 40)
+    bagThresholdSlider:SetValueStep(1)
+    bagThresholdSlider:SetObeyStepOnDrag(true)
+    bagThresholdSlider:SetWidth(200)
+    _G[bagThresholdSlider:GetName() .. 'Text']:SetText(string.format("Warning Threshold: %d slots",
+        UIThingsDB.vendor.bagWarningThreshold or 5))
+    _G[bagThresholdSlider:GetName() .. 'Low']:SetText("0")
+    _G[bagThresholdSlider:GetName() .. 'High']:SetText("40")
+    bagThresholdSlider:SetValue(UIThingsDB.vendor.bagWarningThreshold or 5)
+    bagThresholdSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        UIThingsDB.vendor.bagWarningThreshold = value
+        _G[self:GetName() .. 'Text']:SetText(string.format("Warning Threshold: %d slots", value))
+        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
+    end)
+
+    -- Help text for bag warnings
+    local bagHelpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bagHelpText:SetPoint("TOPLEFT", 40, -520)
+    bagHelpText:SetWidth(500)
+    bagHelpText:SetJustifyH("LEFT")
+    bagHelpText:SetText(
+        "Displays a warning when you have this many or fewer free bag slots remaining.\nShares font settings with durability warning. Unlock to position separately.")
+    bagHelpText:SetTextColor(0.7, 0.7, 0.7)
+end

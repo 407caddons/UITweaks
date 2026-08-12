@@ -43,7 +43,11 @@ busFrame:SetScript("OnEvent", function(_, event, ...)
     for i = 1, #subs do
         local sub = subs[i]
         if sub then
-            sub.cb(event, ...)
+            -- One broken feature must not prevent later listeners from running or
+            -- leave the dispatch depth permanently elevated. WoW's error handler
+            -- reports the original callback failure without rethrowing it through
+            -- the dispatcher.
+            xpcall(sub.cb, geterrorhandler(), event, ...)
         end
     end
 
@@ -82,7 +86,7 @@ function EventBus.Register(event, callback, moduleName, originalRef)
         end
     end
 
-    subs[#subs + 1] = { original = original, cb = callback }
+    subs[#subs + 1] = { original = original, cb = callback, moduleName = moduleName }
     return callback
 end
 

@@ -36,6 +36,24 @@ Returns the name and realm of the unit. `realm` is `nil` or `""` if the unit is 
 
 ---
 
+## UnitHealth / UnitHealthMax / UnitHealthPercent
+
+```lua
+local hp     = UnitHealth(unit [, usePredicted])
+local hpMax  = UnitHealthMax(unit)
+local pct    = UnitHealthPercent(unit [, usePredicted [, curve]])
+```
+
+**⚠️ Secret values (12.0+):** `UnitHealth("target")` returns a **secret number** for hostile units in combat, while `UnitHealthMax` may stay plain (see `C_Secrets.ShouldUnitHealthMaxBeSecret`). Arithmetic on a secret in addon-tainted execution is a Lua error.
+
+**Laundering does NOT work:** a `StatusBar:SetValue(secret)` → `GetValue()` round-trip returns the value **still secret**. There is no way to convert a secret health value into a readable number — that is the point of the system. When health is secret, skip the computation entirely (guard with `issecretvalue()`).
+
+`UnitHealthPercent` is the C-level percent accessor (used with color curves by Blizzard UI); check its return with `issecretvalue()` before doing math — it is also secret when health is secret.
+
+**Used in:** Combat.lua (TTD timer — samples are skipped when health is secret).
+
+---
+
 ## UnitClass
 
 ```lua
