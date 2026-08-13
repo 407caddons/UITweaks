@@ -348,9 +348,15 @@ local function ApplyAHFilter()
     local function SetFilter()
         if not UIThingsDB.misc.ahFilter then return end
         local searchBar = AuctionHouseFrame.SearchBar
-        if searchBar and searchBar.FilterButton then
-            searchBar.FilterButton.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
-            searchBar:UpdateClearFiltersButton()
+        local filterButton = searchBar and searchBar.FilterButton
+        if not filterButton or not filterButton.GetFilters or not filterButton.ToggleFilter then return end
+
+        -- Blizzard moved filter state out of FilterButton.filters in 12.0.7.
+        -- Use the mixin API so its saved state and clear-filter UI stay synced.
+        local filters = filterButton:GetFilters()
+        local filter = Enum.AuctionHouseFilter.CurrentExpansionOnly
+        if filters and not filters[filter] then
+            filterButton:ToggleFilter(filter)
         end
     end
 
@@ -378,8 +384,17 @@ local function ApplyWorkOrderFilter()
         local browseOrders = ProfessionsCustomerOrdersFrame.BrowseOrders
         if not browseOrders or not browseOrders.SearchBar then return end
         local filterDropdown = browseOrders.SearchBar.FilterDropdown
-        if filterDropdown and filterDropdown.filters then
-            filterDropdown.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
+        if not filterDropdown then return end
+
+        local filter = Enum.AuctionHouseFilter.CurrentExpansionOnly
+        if filterDropdown.GetFilters and filterDropdown.ToggleFilter then
+            local filters = filterDropdown:GetFilters()
+            if filters and not filters[filter] then
+                filterDropdown:ToggleFilter(filter)
+            end
+        elseif filterDropdown.filters then
+            -- Compatibility with older client implementations.
+            filterDropdown.filters[filter] = true
         end
     end
 

@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r - Games
 ## Notes: Load-on-demand games for Luna's UI Tweaks
 ## Author: 407c
-## Version: 1.27.0
+## Version: 1.29.0
 ## Dependencies: LunaUITweaks
 ## LoadOnDemand: 1
 ## X-Part-Of: LunaUITweaks
