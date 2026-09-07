@@ -19,13 +19,13 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
     -- Panel Title
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Destroy (Disenchant Helper)")
+    title:SetText("Destroy (Disenchant / Sell Gear)")
 
     local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     desc:SetPoint("TOPLEFT", 16, -44)
     desc:SetPoint("RIGHT", -16, 0)
     desc:SetJustifyH("LEFT")
-    desc:SetText("While resting, lists bag gear your class can't wear or that is lower item level than what you have equipped. Right-click an item to persistently exclude it from disenchanting. Requires Enchanting.")
+    desc:SetText("Lists bag gear your class can't wear or that is lower item level than what you have equipped. Enchanters can disenchant while resting; other characters can sell while a merchant is open. Right-click to persistently exclude an item from both actions.")
 
     -- Enable Checkbox
     local enableBtn = CreateFrame("CheckButton", "UIThingsDestroyEnableCheck", panel, "ChatConfigCheckButtonTemplate")
@@ -42,7 +42,7 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
     -- Auto popup
     local autoCB = CreateFrame("CheckButton", "UIThingsDestroyAutoShowCheck", panel, "ChatConfigCheckButtonTemplate")
     autoCB:SetPoint("TOPLEFT", 20, -112)
-    _G[autoCB:GetName() .. "Text"]:SetText("Automatically open when entering a rest area")
+    _G[autoCB:GetName() .. "Text"]:SetText("Automatically open when resting / visiting a merchant")
     autoCB:SetChecked(UIThingsDB.destroy.autoShow)
     autoCB:SetScript("OnClick", function(self)
         UIThingsDB.destroy.autoShow = not not self:GetChecked()
@@ -59,8 +59,18 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
         UpdateModule()
     end)
 
+    -- Include crafted gear
+    local craftedCB = CreateFrame("CheckButton", "UIThingsDestroyCraftedCheck", panel, "ChatConfigCheckButtonTemplate")
+    craftedCB:SetPoint("TOPLEFT", 20, -168)
+    _G[craftedCB:GetName() .. "Text"]:SetText("Include crafted gear")
+    craftedCB:SetChecked(UIThingsDB.destroy.includeCrafted)
+    craftedCB:SetScript("OnClick", function(self)
+        UIThingsDB.destroy.includeCrafted = not not self:GetChecked()
+        UpdateModule()
+    end)
+
     -- Appearance
-    Helpers.CreateSectionHeader(panel, "Appearance", -176)
+    Helpers.CreateSectionHeader(panel, "Appearance", -204)
 
     local function ApplyVisuals()
         if addonTable.Destroy and addonTable.Destroy.ApplyVisuals then
@@ -68,11 +78,11 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
         end
     end
 
-    Helpers.CreateColorSwatch(panel, "Background Color:", UIThingsDB.destroy.bgColor, ApplyVisuals, 20, -204, true)
-    Helpers.CreateColorSwatch(panel, "Border Color:", UIThingsDB.destroy.borderColor, ApplyVisuals, 20, -234, true)
+    Helpers.CreateColorSwatch(panel, "Background Color:", UIThingsDB.destroy.bgColor, ApplyVisuals, 20, -232, true)
+    Helpers.CreateColorSwatch(panel, "Border Color:", UIThingsDB.destroy.borderColor, ApplyVisuals, 20, -262, true)
 
     local strataLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    strataLabel:SetPoint("TOPLEFT", 20, -268)
+    strataLabel:SetPoint("TOPLEFT", 20, -296)
     strataLabel:SetText("Frame Strata:")
 
     local strataDropdown = CreateFrame("Frame", "LunaUITweaksDestroyStrataDropdown", panel,
@@ -104,7 +114,7 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
     -- Show window now (for testing / manual use)
     local showBtn = CreateFrame("Button", "UIThingsDestroyShowBtn", panel, "UIPanelButtonTemplate")
     showBtn:SetSize(160, 24)
-    showBtn:SetPoint("TOPLEFT", 20, -336)
+    showBtn:SetPoint("TOPLEFT", 20, -364)
     showBtn:SetText("Show Window Now")
     showBtn:SetScript("OnClick", function()
         if addonTable.Destroy and addonTable.Destroy.ShowWindow then

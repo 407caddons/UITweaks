@@ -57,6 +57,8 @@ Coordinates.lua
 Warehousing.lua
 QueueTimer.lua
 Destroy.lua
+BuffAlerts.lua
+CompactGroupFinder.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua

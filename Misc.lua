@@ -743,17 +743,29 @@ HookTooltipSpellID = function()
     local function AddIDLine(tooltip, id, label)
         if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
         if not UIThingsDB.misc.showSpellID then return end
+        -- Tooltip data (especially aura data) may become restricted/secret in
+        -- combat. Do not modify any tooltip while combat lockdown is active.
+        if InCombatLockdown() then return end
         tooltip:AddLine(string.format("|cFFAAAAAA%s %d|r", label, id))
     end
 
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
+    local function AddSpellID(tooltip, data)
+        if InCombatLockdown() then return end
         if tooltip ~= GameTooltip then return end
         if data and data.id and not issecretvalue(data.id) and data.id > 0 then
             AddIDLine(tooltip, data.id, "Spell ID:")
         end
-    end)
+    end
+
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, AddSpellID)
+
+    -- Buff and debuff tooltips use UnitAura rather than Spell tooltip data.
+    if Enum.TooltipDataType.UnitAura then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.UnitAura, AddSpellID)
+    end
 
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+        if InCombatLockdown() then return end
         if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
         if data and data.id and not issecretvalue(data.id) and data.id > 0 then
             AddIDLine(tooltip, data.id, "Item ID:")
@@ -761,6 +773,7 @@ HookTooltipSpellID = function()
     end)
 
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Action, function(tooltip, data)
+        if InCombatLockdown() then return end
         if tooltip ~= GameTooltip then return end
         if not data or not data.actionSlot or issecretvalue(data.actionSlot) then return end
         -- Actions backed by a spell

@@ -19,9 +19,8 @@ local coordsTicker = nil
 -- == QueueStatusButton (Dungeon Finder Eye) Persistent Anchor ==
 -- Frame-object hooks on QueueStatusButton (HookScript / hooksecurefunc(btn, ...))
 -- taint the shared Button prototype, which breaks Button:SetPassThroughButtons
--- on map pins. Poll on a 2s ticker instead. SetPoint/SetParent on the button
--- still taints layout context, but not the prototype — map pins stay clean.
-local queueEyeTicker = nil
+-- on map pins. Use Blizzard's EventRegistry notification instead.
+local queueEyeCallbackRegistered = false
 
 -- Expose shape for other addons that call GetMinimapShape().
 -- Defined once at file scope so it is never recreated on repeated calls to ApplyMinimapShape().
@@ -33,27 +32,41 @@ local function AnchorQueueEyeToMinimap()
     if not minimapFrame then return end
     if InCombatLockdown() then return end
 
-    -- Skip if already in place — avoids re-invoking SetPoint on every tick.
-    local left, bottom = QueueStatusButton:GetLeft(), QueueStatusButton:GetBottom()
-    local mr, mb = Minimap:GetRight(), Minimap:GetBottom()
-    local w = QueueStatusButton:GetWidth()
-    if left and bottom and mr and mb and w
-       and math.abs((left + w) - (mr + 2)) < 1
-       and math.abs(bottom - (mb + 4)) < 1 then
+    -- Check the anchor itself rather than screen coordinates; the latter use
+    -- effective scale and became unreliable now that Blizzard initially
+    -- parents this button to the independently scaled micro menu.
+    local point, relativeTo, relativePoint, x, y = QueueStatusButton:GetPoint(1)
+    if QueueStatusButton:GetNumPoints() == 1
+       and point == "BOTTOMRIGHT" and relativeTo == Minimap
+       and relativePoint == "BOTTOMRIGHT" and x == -4 and y == 4 then
         return
     end
 
+    -- Keep Blizzard's MicroMenuContainer parent. Reparenting a visible queue
+    -- button makes its visibility and eye animation restart as the micro menu
+    -- lays itself out, which presents as a regular hide/show flicker.
     QueueStatusButton:ClearAllPoints()
-    QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
-    QueueStatusButton:SetParent(Minimap)
+    QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -4, 4)
     QueueStatusButton:SetFrameStrata("HIGH")
     QueueStatusButton:SetFrameLevel(100)
 end
 
-local function StartQueueEyeTicker()
-    if queueEyeTicker then return end
+local function SetupQueueEyeAnchoring()
+    -- Since 12.0.7 Blizzard parents the eye to MicroMenuContainer. Its OnShow
+    -- handler fires QueueStatusButton.OnShow and then lays out the micro menu,
+    -- which overwrites anchors applied synchronously. Re-anchor on the next
+    -- frame after that layout completes. EventRegistry avoids hooking the
+    -- shared Button implementation (which previously tainted map pins).
+    if not queueEyeCallbackRegistered and EventRegistry and EventRegistry.RegisterCallback then
+        local function DeferQueueEyeAnchor()
+            C_Timer.After(0, AnchorQueueEyeToMinimap)
+        end
+        EventRegistry:RegisterCallback("QueueStatusButton.OnShow", DeferQueueEyeAnchor, MinimapCustom)
+        EventRegistry:RegisterCallback("QueueStatusUpdate.QueuesUpdated", DeferQueueEyeAnchor, MinimapCustom)
+        queueEyeCallbackRegistered = true
+    end
+
     AnchorQueueEyeToMinimap()
-    queueEyeTicker = C_Timer.NewTicker(2.0, AnchorQueueEyeToMinimap)
 end
 
 local deferShapeCb
@@ -120,9 +133,7 @@ local function ApplyMinimapShape(shape)
         end
         if QueueStatusButton then
             QueueStatusButton:ClearAllPoints()
-            QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 2, 4)
-            -- Parent to Minimap to ensure correct visibility logic from Blizzard
-            QueueStatusButton:SetParent(Minimap)
+            QueueStatusButton:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -4, 4)
             -- Force high strata to be clickable above map/border
             QueueStatusButton:SetFrameStrata("HIGH")
             QueueStatusButton:SetFrameLevel(100)
@@ -139,7 +150,6 @@ local function ApplyMinimapShape(shape)
 
         -- Improve interaction for Round map as well
         if QueueStatusButton then
-            QueueStatusButton:SetParent(Minimap)
             QueueStatusButton:SetFrameStrata("HIGH")
             QueueStatusButton:SetFrameLevel(100)
         end
@@ -574,8 +584,8 @@ local function SetupMinimap()
     -- Position any enabled minimap icons on the right side
     PositionMinimapIcons()
 
-    -- Start the polling ticker that keeps the dungeon finder eye on the minimap
-    StartQueueEyeTicker()
+    -- Keep the dungeon finder eye on the minimap after Blizzard lays it out.
+    SetupQueueEyeAnchoring()
 end
 
 -- == Exported Functions ==
@@ -1203,6 +1213,13 @@ local function OnAddonLoaded(event, addon)
     if addon == "Blizzard_HybridMinimap" then
         if UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled then
             ApplyMinimapShape(UIThingsDB.minimap.minimapShape)
+        end
+    elseif addon == "Blizzard_QueueStatusFrame" then
+        -- The queue UI is load-on-demand and may not exist when the minimap is
+        -- initially set up. Register its show callback as soon as it loads.
+        if UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled then
+            SetupQueueEyeAnchoring()
+            C_Timer.After(0, AnchorQueueEyeToMinimap)
         end
     end
 end

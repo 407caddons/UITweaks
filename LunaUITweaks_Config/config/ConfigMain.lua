@@ -166,7 +166,7 @@ function addonTable.Config.Initialize()
         navScrollFrame:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMLEFT", SIDEBAR_WIDTH - 25, 10)
 
         local navScrollChild = CreateFrame("Frame", nil, navScrollFrame)
-        navScrollChild:SetSize(SIDEBAR_WIDTH - 25, 500) -- Height will auto-expand if needed
+        navScrollChild:SetSize(SIDEBAR_WIDTH - 25, 800)
         navScrollFrame:SetScrollChild(navScrollChild)
 
         -- List of Modules
@@ -193,7 +193,9 @@ function addonTable.Config.Initialize()
             { id = 20, name = "Warehousing",      key = "warehousing",   icon = "Interface\\Icons\\Inv_Misc_Package" },
             { id = 21, name = "Queue Timer",      key = "queueTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
             { id = 22, name = "Destroy",          key = "destroy",       icon = "Interface\\Icons\\Inv_Enchant_Disenchant" },
-            { id = 23, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
+            { id = 23, name = "Buff Alerts",      key = "buffAlerts",    icon = "Interface\\Icons\\Spell_Holy_AuraMastery" },
+            { id = 24, name = "Group Finder",     key = "compactGroupFinder", icon = "Interface\\Icons\\Inv_Misc_GroupLooking" },
+            { id = 25, name = "Addon Versions",   key = "addonVersions", icon = "Interface\\Icons\\Inv_Misc_GroupNeedMore" },
         }
 
         -- Insert companion addon panels before AddonVersions (always last)
@@ -318,6 +320,14 @@ function addonTable.Config.Initialize()
         destroyPanel:SetAllPoints()
         destroyPanel:Hide()
 
+        local buffAlertsPanel = CreateFrame("Frame", nil, contentContainer)
+        buffAlertsPanel:SetAllPoints()
+        buffAlertsPanel:Hide()
+
+        local compactGroupFinderPanel = CreateFrame("Frame", nil, contentContainer)
+        compactGroupFinderPanel:SetAllPoints()
+        compactGroupFinderPanel:Hide()
+
         -- Store panels
         addonTable.ConfigPanels.vendor        = vendorPanel
         addonTable.ConfigPanels.combat        = combatPanel
@@ -342,6 +352,8 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.xpBar         = xpBarPanel
         addonTable.ConfigPanels.queueTimer    = queueTimerPanel
         addonTable.ConfigPanels.destroy       = destroyPanel
+        addonTable.ConfigPanels.buffAlerts    = buffAlertsPanel
+        addonTable.ConfigPanels.compactGroupFinder = compactGroupFinderPanel
 
         -- Map IDs to Panels
         local idToPanel                       = {
@@ -367,21 +379,23 @@ function addonTable.Config.Initialize()
             [20] = warehousingPanel,
             [21] = queueTimerPanel,
             [22] = destroyPanel,
-            [23] = addonVersionsPanel,
+            [23] = buffAlertsPanel,
+            [24] = compactGroupFinderPanel,
+            [25] = addonVersionsPanel,
         }
 
         -- Create companion panels and shift AddonVersions to its new slot.
-        -- Built-ins fill slots 1..23; AddonVersions was placed at 23. With N
-        -- companions, companions take 23..22+N and AddonVersions moves to 23+N.
+        -- Built-ins fill slots 1..25; AddonVersions was placed at 25. With N
+        -- companions, companions take 25..24+N and AddonVersions moves to 25+N.
         if #companionPanels > 0 then
             local numCompanions = #companionPanels
-            idToPanel[23 + numCompanions] = idToPanel[23]
-            idToPanel[23] = nil
+            idToPanel[25 + numCompanions] = idToPanel[25]
+            idToPanel[25] = nil
             for i, entry in ipairs(companionPanels) do
                 local panel = CreateFrame("Frame", nil, contentContainer)
                 panel:SetAllPoints()
                 panel:Hide()
-                idToPanel[22 + i] = panel
+                idToPanel[24 + i] = panel
                 addonTable.ConfigPanels[entry.key] = panel
                 entry._panelFrame = panel
             end
@@ -543,8 +557,14 @@ function addonTable.Config.Initialize()
             if addonTable.ConfigSetup.Destroy then
                 addonTable.ConfigSetup.Destroy(destroyPanel, navButtons[22], configWindow)
             end
+            if addonTable.ConfigSetup.BuffAlerts then
+                addonTable.ConfigSetup.BuffAlerts(buffAlertsPanel, navButtons[23], configWindow)
+            end
+            if addonTable.ConfigSetup.CompactGroupFinder then
+                addonTable.ConfigSetup.CompactGroupFinder(compactGroupFinderPanel, navButtons[24], configWindow)
+            end
             if addonTable.ConfigSetup.AddonVersions then
-                local avIdx = 23 + #companionPanels
+                local avIdx = 25 + #companionPanels
                 addonTable.ConfigSetup.AddonVersions(addonVersionsPanel, navButtons[avIdx], configWindow)
             end
         end
@@ -552,7 +572,7 @@ function addonTable.Config.Initialize()
         -- Call companion addon panel setup functions
         for i, entry in ipairs(companionPanels) do
             if entry._panelFrame and entry.setup then
-                entry.setup(entry._panelFrame, navButtons[22 + i], configWindow)
+                entry.setup(entry._panelFrame, navButtons[24 + i], configWindow)
             end
         end
         ----------------------------------------------------

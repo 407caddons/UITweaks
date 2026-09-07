@@ -39,6 +39,7 @@ local rowPool   = {}
 local items     = {}   -- { bag, slot, link, icon, ilvl, reason }
 local closedByUser  = false
 local pendingRefresh = false
+local merchantOpen = false
 local RefreshList
 
 local function GetExcludedItems()
@@ -58,8 +59,73 @@ local function IsEnchanter()
     return IsPlayerSpell(DISENCHANT_SPELL_ID) or IsSpellKnown(DISENCHANT_SPELL_ID)
 end
 
+local function IsVendorMode()
+    return not IsEnchanter() and merchantOpen and MerchantFrame and MerchantFrame:IsShown()
+end
+
+local function SellItem(item)
+    if InCombatLockdown() or not UIThingsDB.destroy.enabled or not IsVendorMode() or not item then return end
+    if IsItemExcluded(item.itemID) then return end
+    local info = C_Container.GetContainerItemInfo(item.bag, item.slot)
+    -- Revalidate the slot at click time; bag contents can change between updates.
+    if not info or info.isLocked or info.hyperlink ~= item.link then return end
+    C_Container.UseContainerItem(item.bag, item.slot)
+end
+
+local function EscapePattern(text)
+    return (text:gsub("([^%w])", "%%%1"))
+end
+
+local function MatchesFormatString(text, formatString)
+    if type(text) ~= "string" or type(formatString) ~= "string" then return false end
+
+    local pattern = "^"
+    local position = 1
+    while true do
+        local placeholderStart, placeholderEnd = formatString:find("%%[sd]", position)
+        local literalEnd = placeholderStart and placeholderStart - 1 or #formatString
+        pattern = pattern .. EscapePattern(formatString:sub(position, literalEnd))
+        if not placeholderStart then break end
+        pattern = pattern .. (formatString:sub(placeholderEnd, placeholderEnd) == "d" and "%d+" or ".+")
+        position = placeholderEnd + 1
+    end
+    return text:match(pattern .. "$") ~= nil
+end
+
+local function IsCraftedItem(bag, slot)
+    if not C_TooltipInfo or not C_TooltipInfo.GetBagItem then return false end
+
+    local tooltipData = C_TooltipInfo.GetBagItem(bag, slot)
+    local lines = tooltipData and tooltipData.lines
+    local Secret = addonTable.Secret
+    if not lines or (Secret and not Secret.CanAccessValue(lines)) then return false end
+
+    local lineTypes = Enum and Enum.TooltipDataLineType
+    local craftingQualityType = lineTypes and lineTypes.ProfessionCraftingQuality
+
+    for _, line in ipairs(lines) do
+        if not Secret or Secret.CanAccessValue(line) then
+            local lineType = line.type
+            if craftingQualityType
+                and (not Secret or Secret.CanAccessValue(lineType))
+                and lineType == craftingQualityType then
+                return true
+            end
+
+            local text = line.leftText
+            if text and (not Secret or Secret.CanAccessValue(text)) then
+                if MatchesFormatString(text, _G.ITEM_CRAFTED_BY)
+                    or MatchesFormatString(text, _G.ITEM_CREATED_BY) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Returns reason string if the item should be listed, nil otherwise
-local function EvaluateItem(info)
+local function EvaluateItem(info, bag, slot)
     if not info or not info.hyperlink or info.isLocked then return nil end
     local quality = info.quality
     -- Only Uncommon..Epic gear can be disenchanted
@@ -72,6 +138,7 @@ local function EvaluateItem(info)
     if C_Item.IsCosmeticItem and C_Item.IsCosmeticItem(info.hyperlink) then return nil end
 
     if not info.isBound and not UIThingsDB.destroy.includeBoE then return nil end
+    if not UIThingsDB.destroy.includeCrafted and IsCraftedItem(bag, slot) then return nil end
 
     -- Armor of a type the class can never wear (cloaks are usable by all)
     if classID == 4 and equipLoc ~= "INVTYPE_CLOAK"
@@ -101,7 +168,7 @@ local function ScanBags()
     for bag = 0, 4 do
         for slot = 1, C_Container.GetContainerNumSlots(bag) do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            local reason = EvaluateItem(info)
+            local reason = EvaluateItem(info, bag, slot)
             if reason then
                 local ilvl = C_Item.GetDetailedItemLevelInfo(info.hyperlink)
                 local itemID = C_Item.GetItemInfoInstant(info.hyperlink)
@@ -121,6 +188,18 @@ local function ScanBags()
             end
         end
     end
+
+    -- The rendered rows and "Disenchant Next" both consume this array in
+    -- order, so sort once here to keep every interaction lowest ilvl first.
+    table.sort(items, function(a, b)
+        local aLevel, bLevel = a.ilvl or 0, b.ilvl or 0
+        if aLevel ~= bLevel then return aLevel < bLevel end
+
+        local aName, bName = (a.name or a.link or ""):lower(), (b.name or b.link or ""):lower()
+        if aName ~= bName then return aName < bName end
+        if a.bag ~= b.bag then return a.bag < b.bag end
+        return a.slot < b.slot
+    end)
 end
 
 -- ============================================================
@@ -166,9 +245,10 @@ local function GetRow(index)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetBagItem(self.bagID, self.slotID)
         if self.excluded then
-            GameTooltip:AddLine("|cffaaaaaaExcluded from disenchanting|r")
+            GameTooltip:AddLine("|cffaaaaaaExcluded from disenchanting and selling|r")
         else
-            GameTooltip:AddLine("|cff88ff88Left-click to disenchant this item|r")
+            GameTooltip:AddLine(IsVendorMode() and "|cff88ff88Left-click to sell this item|r"
+                or "|cff88ff88Left-click to disenchant this item|r")
         end
         GameTooltip:AddLine("|cffffd100Right-click to toggle include/exclude|r")
         GameTooltip:Show()
@@ -177,6 +257,10 @@ local function GetRow(index)
     -- Use PostClick so the SecureActionButtonTemplate retains ownership of
     -- OnClick and can execute the left-button disenchant macro.
     row:SetScript("PostClick", function(self, button)
+        if button == "LeftButton" then
+            SellItem(self.sellItem)
+            return
+        end
         if button ~= "RightButton" or not self.itemID or InCombatLockdown() then return end
         local excluded = GetExcludedItems()
         if excluded[self.itemID] then
@@ -192,6 +276,7 @@ local function GetRow(index)
 end
 
 local function BuildMacroText(bag, slot)
+    if not IsEnchanter() then return "" end
     return "/cast " .. (C_Spell.GetSpellName(DISENCHANT_SPELL_ID) or "Disenchant")
         .. "\n/use " .. bag .. " " .. slot
 end
@@ -206,18 +291,21 @@ local function UpdateDisenchantButton()
         end
     end
     if first then
+        deButton.sellItem = first
         deButton:SetAttribute("macrotext1", BuildMacroText(first.bag, first.slot))
-        deButton:SetText("Disenchant Next")
-        deButton:Enable()
+        deButton:SetText(IsVendorMode() and "Sell Next" or "Disenchant Next")
+        deButton:SetEnabled(IsEnchanter() or not not IsVendorMode())
     else
+        deButton.sellItem = nil
         deButton:SetAttribute("macrotext1", "")
-        deButton:SetText("Nothing to Disenchant")
+        deButton:SetText(IsVendorMode() and "Nothing to Sell" or "Nothing to Disenchant")
         deButton:Disable()
     end
 end
 
 RefreshList = function()
-    if not mainFrame then return end
+    if not mainFrame or InCombatLockdown() then return end
+    mainFrame.title:SetText(IsVendorMode() and "Destroy - Sell Gear" or "Disenchant")
     ScanBags()
 
     for _, row in ipairs(rowPool) do row:Hide() end
@@ -231,6 +319,7 @@ RefreshList = function()
         row:SetPoint("RIGHT", mainFrame.scrollChild, "RIGHT", 0, 0)
         row.bagID, row.slotID, row.itemID = item.bag, item.slot, item.itemID
         row.excluded = item.excluded
+        row.sellItem = item
         -- Keep the secure action type stable. Toggling a protected attribute
         -- from nil back to "macro" during a click can leave the row inert;
         -- an empty macro safely disables excluded rows instead.
@@ -322,6 +411,9 @@ local function CreateWindow()
     deButton:SetAttribute("type1", "macro")
     local useKeyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
     deButton:RegisterForClicks(useKeyDown and "LeftButtonDown" or "LeftButtonUp")
+    deButton:SetScript("PostClick", function(self, button)
+        if button == "LeftButton" then SellItem(self.sellItem) end
+    end)
 
     mainFrame:Hide()
     Destroy.ApplyVisuals()
@@ -340,7 +432,7 @@ end
 -- ============================================================
 
 local function ShouldOffer()
-    return UIThingsDB.destroy.enabled and IsEnchanter() and IsResting()
+    return UIThingsDB.destroy.enabled and ((IsEnchanter() and IsResting()) or IsVendorMode())
 end
 
 function Destroy.ShowWindow(force)
@@ -375,7 +467,7 @@ end
 -- ============================================================
 
 local function OnRestingChanged()
-    if not IsResting() then
+    if not IsResting() and not IsVendorMode() then
         closedByUser = false -- re-arm auto popup for the next rest area
         if mainFrame then
             if InCombatLockdown() then
@@ -405,14 +497,32 @@ end
 
 local eventsRegistered = false
 
+local function OnMerchantChanged(event)
+    merchantOpen = event == "MERCHANT_SHOW"
+    closedByUser = false
+    if merchantOpen then
+        -- MERCHANT_SHOW can reach our event bus before Blizzard shows its
+        -- merchant frame. Wait until that event dispatch has finished before
+        -- checking visibility and opening the helper.
+        C_Timer.After(0, function()
+            if merchantOpen then Reevaluate() end
+        end)
+    else
+        Reevaluate()
+    end
+end
+
 function Destroy.UpdateSettings()
     local enabled = UIThingsDB.destroy.enabled
+    merchantOpen = MerchantFrame and MerchantFrame:IsShown() or false
     if enabled and not eventsRegistered then
         EventBus.Register("PLAYER_UPDATE_RESTING", OnRestingChanged, "Destroy")
         EventBus.Register("PLAYER_ENTERING_WORLD", OnRestingChanged, "Destroy")
         EventBus.Register("BAG_UPDATE_DELAYED", OnBagsChanged, "Destroy")
         EventBus.Register("PLAYER_EQUIPMENT_CHANGED", OnBagsChanged, "Destroy")
         EventBus.Register("PLAYER_REGEN_ENABLED", OnRegenEnabled, "Destroy")
+        EventBus.Register("MERCHANT_SHOW", OnMerchantChanged, "Destroy")
+        EventBus.Register("MERCHANT_CLOSED", OnMerchantChanged, "Destroy")
         eventsRegistered = true
     elseif not enabled and eventsRegistered then
         EventBus.Unregister("PLAYER_UPDATE_RESTING", OnRestingChanged)
@@ -420,6 +530,8 @@ function Destroy.UpdateSettings()
         EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagsChanged)
         EventBus.Unregister("PLAYER_EQUIPMENT_CHANGED", OnBagsChanged)
         EventBus.Unregister("PLAYER_REGEN_ENABLED", OnRegenEnabled)
+        EventBus.Unregister("MERCHANT_SHOW", OnMerchantChanged)
+        EventBus.Unregister("MERCHANT_CLOSED", OnMerchantChanged)
         eventsRegistered = false
     end
 
