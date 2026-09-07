@@ -15,8 +15,10 @@ addonTable.ConfigTabs = {}
 function addonTable.Config.Initialize()
     -- Initialize the window if it doesn't exist
     if not configWindow then
-        configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent, "BasicFrameTemplateWithInset")
-        configWindow:SetSize(850, 670) -- Increased width for sidebar
+        configWindow = CreateFrame("Frame", "UIThingsConfigWindow", UIParent)
+        configWindow:SetSize(920, 710)
+        configWindow:SetClampedToScreen(true)
+        addonTable.ConfigTheme.Window(configWindow)
         configWindow:SetPoint("CENTER")
         configWindow:SetMovable(true)
         configWindow:EnableMouse(true)
@@ -145,12 +147,12 @@ function addonTable.Config.Initialize()
         end)
         configWindow:Hide()
 
-        configWindow.TitleText:SetText("Luna's UI Tweaks Config")
+        configWindow.TitleText:SetText("LUNA  /  SETTINGS")
 
         ----------------------------------------------------
         -- Sidebar & Navigation
         ----------------------------------------------------
-        local SIDEBAR_WIDTH = 180
+        local SIDEBAR_WIDTH = 220
 
         -- Vertical Divider Line
         local divider = configWindow:CreateTexture(nil, "ARTWORK")
@@ -162,7 +164,7 @@ function addonTable.Config.Initialize()
         -- ScrollFrame for Navigation List
         local navScrollFrame = CreateFrame("ScrollFrame", "UIThingsConfigNavScroll", configWindow,
             "UIPanelScrollFrameTemplate")
-        navScrollFrame:SetPoint("TOPLEFT", configWindow, "TOPLEFT", 10, -30)
+        navScrollFrame:SetPoint("TOPLEFT", configWindow, "TOPLEFT", 10, -88)
         navScrollFrame:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMLEFT", SIDEBAR_WIDTH - 25, 10)
 
         local navScrollChild = CreateFrame("Frame", nil, navScrollFrame)
@@ -222,7 +224,7 @@ function addonTable.Config.Initialize()
 
         -- Content Container (Right Side)
         local contentContainer = CreateFrame("Frame", nil, configWindow)
-        contentContainer:SetPoint("TOPLEFT", configWindow, "TOPLEFT", SIDEBAR_WIDTH + 10, -30)
+        contentContainer:SetPoint("TOPLEFT", configWindow, "TOPLEFT", SIDEBAR_WIDTH + 10, -50)
         contentContainer:SetPoint("BOTTOMRIGHT", configWindow, "BOTTOMRIGHT", -10, 10)
 
         ----------------------------------------------------
@@ -415,6 +417,7 @@ function addonTable.Config.Initialize()
 
             -- Update button visuals
             for i, btn in ipairs(navButtons) do
+                btn.selected = i == id
                 if i == id then
                     btn:LockHighlight()
                     if btn.isDisabled then
@@ -430,6 +433,7 @@ function addonTable.Config.Initialize()
                         btn.text:SetTextColor(1, 0.82, 0)  -- Gold
                     end
                 end
+                if btn.RefreshTheme then btn:RefreshTheme() end
             end
 
             -- Special OnShow logic (e.g., refreshing lists)
@@ -461,9 +465,9 @@ function addonTable.Config.Initialize()
             btn.Text = btn.text -- Compatibility with Helpers.UpdateModuleVisuals
             btn.text:SetPoint("LEFT", 6, 0)
             btn.text:SetText(mod.name)
+            addonTable.ConfigTheme.Navigation(btn)
 
             -- Highlight texture
-            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
 
             btn:SetScript("OnClick", function()
                 SelectModule(i)
@@ -477,6 +481,32 @@ function addonTable.Config.Initialize()
             -- Helpers.UpdateModuleVisuals looks for tab.Text or tab:GetFontString()
             -- Button has btn.text, so it should work if we pass btn as 'tab'
         end
+
+        local search = CreateFrame("EditBox", nil, configWindow, "InputBoxTemplate")
+        search:SetSize(SIDEBAR_WIDTH - 40, 24)
+        search:SetPoint("TOPLEFT", 20, -52)
+        search:SetAutoFocus(false)
+        local hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        hint:SetPoint("LEFT", 5, 0)
+        hint:SetText("Find a settings page…")
+        search:SetScript("OnTextChanged", function(self)
+            local query = self:GetText():lower()
+            hint:SetShown(query == "")
+            local count = 0
+            for i, mod in ipairs(modules) do
+                local visible = mod.name:lower():find(query, 1, true) ~= nil
+                local button = navButtons[i]
+                button:SetShown(visible)
+                if visible then
+                    button:ClearAllPoints()
+                    button:SetPoint("TOPLEFT", 0, -count * BUTTON_HEIGHT)
+                    count = count + 1
+                end
+            end
+            navScrollChild:SetHeight(math.max(1, count * BUTTON_HEIGHT))
+            navScrollFrame:SetVerticalScroll(0)
+        end)
+        search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
 
         -- Store buttons as "Tabs" for compatibility with setup functions
         -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
@@ -576,6 +606,7 @@ function addonTable.Config.Initialize()
             end
         end
         ----------------------------------------------------
+        addonTable.ConfigTheme.SkinTree(configWindow)
         -- Register with Blizzard Settings (AddOns list)
         -- Clicking the entry opens the standalone config window
         ----------------------------------------------------

@@ -45,7 +45,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     -- Custom reset button that also clears tracked items
     local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetBtn:SetSize(120, 22)
-    resetBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -6)
+    resetBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -6)
     resetBtn:SetText("Reset Defaults")
     resetBtn:SetScript("OnClick", function()
         StaticPopup_Show("LUNA_RESET_WAREHOUSING_CONFIRM")

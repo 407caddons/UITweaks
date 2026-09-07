@@ -49,6 +49,49 @@ Defaults in Core.lua's `DEFAULTS` table, merged via `ApplyDefaults()`. Tables wi
 
 Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared factories), `config/panels/*.lua` (one panel per tab). Panel setup registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. Changes write to `UIThingsDB` and call the module's `UpdateSettings()` immediately.
 
+### Config Visual Style
+
+The configuration UI uses a flat charcoal-and-mint style. Keep future panels consistent with this style instead of introducing a separate skin. The current implementation lives in `LunaUITweaks_Config/config/Theme.lua`, exposed as `addonTable.ConfigTheme`; it loads before panel files in the config addon's TOC. Shared control factories live in root-level `ConfigHelpers.lua`.
+
+#### Palette and typography
+
+All colors below are WoW RGB values in the range 0–1; surfaces are opaque unless otherwise specified.
+
+| Element | RGB / alpha |
+|---|---|
+| Window background | `.055, .075, .095` |
+| Section card | `.09, .115, .14` |
+| Input background | `.045, .065, .085` |
+| Text button background | `.11, .16, .19` |
+| Surface border (1 px) | `.19, .25, .29` |
+| Section heading / slider thumb / selection marker | `.35, .9, .76` |
+| Window title | `.45, .95, .8` |
+| Selected navigation text | `.55, 1, .85` |
+| Normal navigation text | `.8, .85, .9` |
+| Disabled navigation text | `.48, .53, .59` |
+| Input text | `.9, .94, .97` |
+| Button hover | `.35, .9, .76`, alpha `.17` |
+
+Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontNormalLarge` for the window title and shared section headers, `GameFontNormal` for card headings, and highlight/disabled small fonts for descriptions and hints. Prefer mint section headings and muted disabled navigation over the old gold/red navigation colors. Preserve semantic colors in content such as item quality, errors, and enabled/disabled ability rows.
+
+#### Window, navigation, and spacing
+
+- The shell is a plain frame styled by `Theme.Window`, currently 920 × 710, centered, draggable, clamped to screen, and on `DIALOG` strata. Its title is `LUNA  /  SETTINGS`; Escape closes it through `UISpecialFrames`.
+- The sidebar is 220 px wide with 30 px navigation rows. Search filters page names, keeps original page IDs, and resets sidebar scrolling. Selected pages have a 3 × 22 px mint marker and a tinted highlight; disabled pages use muted text.
+- Content begins at sidebar width + 10 px, 50 px below the window top. Use roughly 12–20 px outer padding and 12 px inner card padding.
+- **Reserve the scrollbar gutter.** Standard panel scroll frames end 30 px inside the right edge. Reset Defaults buttons are 120 × 22 and must anchor at `TOPRIGHT, -36, -6`, not `-6, -6`. Use `Helpers.CreateResetButton`; Warehousing currently has a separate reset button using the same inset.
+- Group related settings into labeled sections/cards. Use two columns when labels and controls fit comfortably; retain vertical scrolling for long pages. Do not compress text to force a two-column layout.
+- `CompactGroupFinderPanel.lua` is the current grouped-layout example: a full-width Layout card, then Group Details and Leader & Members cards side by side. Most other panels retain their existing layouts with shared styling; do not assume all pages have been redesigned.
+
+#### Applying the theme
+
+- `Theme.Card(panel, title, x, y, width, height)` draws a background and heading; it is decorative, not a child container or automatic layout system. Position controls separately and leave space below the heading.
+- `Theme.Navigation(button)` installs selection styling and `button.RefreshTheme`. Set `button.selected` and use `Helpers.UpdateModuleVisuals` for enabled state so theme colors remain consistent.
+- `Theme.SkinTree(root)` styles checkboxes, edit boxes, text buttons, and slider thumbs within the config window. It tracks styled frames and revisits descendants on show to handle controls created dynamically. Explicitly call it after creating controls inside an already-visible panel if those controls otherwise miss the show traversal.
+- Existing Blizzard control templates can still supply behavior; the theme replaces their visual treatment. Preserve control scripts, checked/disabled states, tooltips, icon buttons, color swatches, and meaningful list-row colors. Avoid global hooks or reskinning unrelated game UI.
+- Keep reusable visual changes in `Theme.lua` or shared helpers rather than duplicating styling in each panel. No generated image assets or external UI libraries are required; surfaces use `WHITE8X8` textures and 1 px borders.
+- Verify changes in-game with `/reload`: check scrolling, reset-button clearance, long labels, selected/disabled navigation, search, and dynamically added controls. Lua syntax checks cannot verify visual placement.
+
 ### Core Utilities
 
 - `addonTable.Core.SafeAfter(delay, func)` — pcall-wrapped `C_Timer.After`

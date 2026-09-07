@@ -88,6 +88,7 @@ local fontObjectCache = {}
 -- @param enabled boolean Whether module is enabled
 function Helpers.UpdateModuleVisuals(panel, tab, enabled)
     tab.isDisabled = not enabled
+    if tab.RefreshTheme then tab:RefreshTheme(); return end
 
     if not enabled then
         -- Tint Tab Text Red
@@ -116,7 +117,8 @@ end
 function Helpers.CreateResetButton(panel, dbKey, label)
     local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     btn:SetSize(120, 22)
-    btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -6)
+    -- Reserve the right-hand scrollbar gutter used by scrolling panels.
+    btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -6)
     btn:SetText(label or "Reset Defaults")
 
     btn:SetScript("OnClick", function()
@@ -199,7 +201,7 @@ function Helpers.CreateSectionHeader(parent, text, yOffset)
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 16, yOffset)
     header:SetText(text)
-    header:SetTextColor(1, 0.82, 0) -- Gold
+    header:SetTextColor(.35, .9, .76)
 
     local line = parent:CreateTexture(nil, "ARTWORK")
     line:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
