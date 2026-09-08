@@ -116,11 +116,13 @@ table.insert(Widgets.moduleInits, function()
         if not UIThingsDB.widgets.locked then
             hearthFrame:StartMoving()
             hearthFrame.isMoving = true
+            hearthFrame:SetScript("OnUpdate", hearthFrame.UpdateDrag)
         end
     end)
     secureBtn:SetScript("OnDragStop", function()
         hearthFrame:StopMovingOrSizing()
         hearthFrame.isMoving = false
+        hearthFrame:SetScript("OnUpdate", nil)
         local cx, cy = hearthFrame:GetCenter()
         local pcx, pcy = UIParent:GetCenter()
         if not cx or not pcx then return end

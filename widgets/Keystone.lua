@@ -126,11 +126,13 @@ table.insert(Widgets.moduleInits, function()
         if not UIThingsDB.widgets.locked then
             keystoneFrame:StartMoving()
             keystoneFrame.isMoving = true
+            keystoneFrame:SetScript("OnUpdate", keystoneFrame.UpdateDrag)
         end
     end)
     secureBtn:SetScript("OnDragStop", function()
         keystoneFrame:StopMovingOrSizing()
         keystoneFrame.isMoving = false
+        keystoneFrame:SetScript("OnUpdate", nil)
         local cx, cy = keystoneFrame:GetCenter()
         local pcx, pcy = UIParent:GetCenter()
         if not cx or not pcx then return end
@@ -154,8 +156,12 @@ table.insert(Widgets.moduleInits, function()
         GameTooltip:Hide()
     end)
 
+    local pendingTeleport = false
+    local requestedDungeon
     local function UpdateTeleportButton(dungeonName)
-        if InCombatLockdown() then return end
+        requestedDungeon = dungeonName
+        if InCombatLockdown() then pendingTeleport = true; return end
+        pendingTeleport = false
         local spell = FindTeleportForDungeon(dungeonName)
         currentTeleportSpell = spell
         if spell then
@@ -170,6 +176,7 @@ table.insert(Widgets.moduleInits, function()
     -- Invalidate teleport cache when spells change or leaving combat
     local function OnTeleportCacheInvalidate()
         cachedTeleportSpells = nil
+        UpdateTeleportButton(requestedDungeon)
     end
     EventBus.Register("SPELLS_CHANGED", OnTeleportCacheInvalidate, "W:Keystone")
     EventBus.Register("PLAYER_REGEN_ENABLED", OnTeleportCacheInvalidate, "W:Keystone")
@@ -348,9 +355,16 @@ table.insert(Widgets.moduleInits, function()
     end)
 
     local lastKeystoneName = nil
+    local keyDirty = true
+    local cachedKeyName, cachedKeyLevel
 
     keystoneFrame.UpdateContent = function(self)
-        local keyName, keyLevel = GetPlayerKeystone()
+        if keyDirty then
+            keyDirty = false
+            cachedKeyName, cachedKeyLevel = GetPlayerKeystone()
+        end
+        local keyName, keyLevel = cachedKeyName, cachedKeyLevel
+        if pendingTeleport and not InCombatLockdown() then UpdateTeleportButton(keyName) end
 
         if keyName and keyLevel then
             local shortName = keyName
@@ -378,12 +392,12 @@ table.insert(Widgets.moduleInits, function()
 
     local function OnBagUpdate()
         if not UIThingsDB.widgets.keystone.enabled then return end
-        keystoneFrame:UpdateContent()
         if not updatePending then
             updatePending = true
             C_Timer.After(0.5, function()
                 updatePending = false
                 if UIThingsDB.widgets.keystone.enabled then
+                    keyDirty = true
                     keystoneFrame:UpdateContent()
                 end
             end)
@@ -393,17 +407,19 @@ table.insert(Widgets.moduleInits, function()
     local function OnGetItemInfoReceived(event, itemID)
         if not UIThingsDB.widgets.keystone.enabled then return end
         if itemID == KEYSTONE_ITEM_ID then
-            keystoneFrame:UpdateContent()
+            OnBagUpdate()
         end
     end
 
     local function OnKeystoneWorldUpdate()
         if not UIThingsDB.widgets.keystone.enabled then return end
-        keystoneFrame:UpdateContent()
+        OnBagUpdate()
     end
 
     keystoneFrame.ApplyEvents = function(enabled)
         if enabled then
+            keyDirty = true
+            keystoneFrame:UpdateContent()
             EventBus.Register("BAG_UPDATE", OnBagUpdate, "W:Keystone")
             EventBus.Register("BAG_UPDATE_DELAYED", OnKeystoneWorldUpdate, "W:Keystone")
             EventBus.Register("PLAYER_ENTERING_WORLD", OnKeystoneWorldUpdate, "W:Keystone")

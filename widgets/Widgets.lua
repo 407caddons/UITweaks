@@ -6,6 +6,12 @@ local Widgets = addonTable.Widgets
 local frames = {}
 local updateInterval = 1.0
 local widgetTicker = nil
+local layoutDirty = true
+local function SetTracking(frame, enabled)
+    if frame.trackingEnabled == enabled then return end
+    frame.trackingEnabled = enabled
+    if frame.ApplyEvents then frame.ApplyEvents(enabled) end
+end
 Widgets.moduleInits = {}
 
 -- Estimate M+ score for a timed run at a given key level
@@ -84,7 +90,7 @@ function Widgets.CreateWidgetFrame(name, configKey)
     f.coords:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, 2)
     f.coords:Hide()
 
-    f:SetScript("OnUpdate", function(self)
+    local function UpdateDrag(self)
         if self.isMoving then
             local cx, cy = self:GetCenter()
             local pcx, pcy = UIParent:GetCenter()
@@ -94,7 +100,12 @@ function Widgets.CreateWidgetFrame(name, configKey)
                 self.coords:SetText(string.format("(%.0f, %.0f)", x, y))
             end
         end
+    end
+    f:HookScript("OnDragStart", function(self)
+        if self.isMoving then self:SetScript("OnUpdate", UpdateDrag) end
     end)
+    f:HookScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+    f.UpdateDrag = UpdateDrag
 
     frames[configKey] = f
     return f
@@ -176,6 +187,7 @@ local anchorCacheDirty = true
 
 function Widgets.InvalidateAnchorCache()
     anchorCacheDirty = true
+    layoutDirty = true
 end
 
 local function RebuildAnchorCache()
@@ -199,6 +211,26 @@ local function UpdateAnchoredLayouts()
     local db = UIThingsDB.widgets
     if not db or not db.enabled then return end
     if InCombatLockdown() then return end
+
+    -- Detect geometry changes without rebuilding groups or reanchoring.
+    for key, frame in pairs(frames) do
+        if frame:IsShown() and db[key] and db[key].anchor then
+            local width, height = frame.text:GetStringWidth(), frame:GetHeight()
+            if frame.layoutWidth ~= width or frame.layoutHeight ~= height then
+                frame.layoutWidth, frame.layoutHeight = width, height
+                layoutDirty = true
+            end
+        end
+    end
+    for _, anchor in pairs(cachedAnchorLookup) do
+        local width, height = anchor:GetWidth(), anchor:GetHeight()
+        if anchor.widgetLayoutWidth ~= width or anchor.widgetLayoutHeight ~= height then
+            anchor.widgetLayoutWidth, anchor.widgetLayoutHeight = width, height
+            layoutDirty = true
+        end
+    end
+    if not layoutDirty and not anchorCacheDirty then return end
+    layoutDirty = false
 
     if anchorCacheDirty then
         RebuildAnchorCache()
@@ -276,6 +308,7 @@ function Widgets.UpdateVisuals()
         StopWidgetTicker()
         return
     end
+    layoutDirty = true
 
     -- Manage ticker lifecycle based on enabled state
     if db.enabled then
@@ -302,7 +335,7 @@ function Widgets.UpdateVisuals()
     for key, frame in pairs(frames) do
         if db.enabled and db[key] and db[key].enabled then
             frame:Show()
-            if frame.ApplyEvents then frame.ApplyEvents(true) end
+            SetTracking(frame, true)
 
             -- Apply Common Styles
             local fontName = db.font
@@ -327,7 +360,7 @@ function Widgets.UpdateVisuals()
             end
         else
             frame:Hide()
-            if frame.ApplyEvents then frame.ApplyEvents(false) end
+            SetTracking(frame, false)
         end
     end
 
@@ -400,7 +433,7 @@ function Widgets.UpdateContent()
 
     for key, frame in pairs(frames) do
         if frame:IsShown() and frame.UpdateContent then
-            frame:UpdateContent()
+            if not frame.usesOwnTicker then frame:UpdateContent() end
 
             if UIThingsDB.widgets[key] and UIThingsDB.widgets[key].anchor then
                 needsLayoutUpdate = true
@@ -448,17 +481,17 @@ function Widgets.UpdateConditions()
     if not db or not db.enabled then return end
 
     for key, frame in pairs(frames) do
-        if db[key] and db[key].enabled then
+        if db[key] and db[key].enabled and not (InCombatLockdown() and frame:IsProtected()) then
             local condition = db[key].condition
             if EvaluateCondition(condition) then
                 if not frame:IsShown() then
                     frame:Show()
-                    if frame.ApplyEvents then frame.ApplyEvents(true) end
+                    layoutDirty = true
                 end
             else
                 if frame:IsShown() then
                     frame:Hide()
-                    if frame.ApplyEvents then frame.ApplyEvents(false) end
+                    layoutDirty = true
                 end
             end
         end
@@ -467,7 +500,7 @@ end
 
 -- Single handler for all state transitions relevant to widget conditions.
 local function OnConditionEvent(event)
-    if UIThingsDB and UIThingsDB.widgets and UIThingsDB.widgets.enabled then
+    if UIThingsDB and UIThingsDB.widgets then
         if event == "PLAYER_REGEN_ENABLED" then
             Widgets.UpdateVisuals()
         end

@@ -437,16 +437,17 @@ function addonTable.Config.Initialize()
             end
 
             -- Special OnShow logic (e.g., refreshing lists)
-            if id == 2 and addonTable.Config.RefreshQuestReminderList then
+            local key = modules[id] and modules[id].key
+            if key == "questReminder" and addonTable.Config.RefreshQuestReminderList then
                 addonTable.Config.RefreshQuestReminderList()
             end
-            if id == 18 and addonTable.Config.RefreshTalentReminderList then
+            if key == "talent" and addonTable.Config.RefreshTalentReminderList then
                 addonTable.Config.RefreshTalentReminderList()
             end
-            if id == 16 and addonTable.Config.RefreshReagentsList then
+            if key == "reagents" and addonTable.Config.RefreshReagentsList then
                 addonTable.Config.RefreshReagentsList()
             end
-            if id == 21 and addonTable.Config.RefreshWarehousingList then
+            if key == "warehousing" and addonTable.Config.RefreshWarehousingList then
                 addonTable.Config.RefreshWarehousingList()
             end
         end

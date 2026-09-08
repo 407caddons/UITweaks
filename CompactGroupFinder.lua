@@ -13,6 +13,23 @@ local TEXT_AREA_WIDTH = 176
 local hooksInstalled = false
 local defaultRowHeight
 local supplementalDisplays = setmetatable({}, { __mode = "k" })
+local originalRows = setmetatable({}, { __mode = "k" })
+local originalExtent
+local ownedView
+
+local function CaptureEntry(entry)
+    if originalRows[entry] then return end
+    local state = { height = entry:GetHeight(), regions = {} }
+    for _, key in ipairs({ "Name", "ActivityName", "Playstyle", "VoiceChat", "DataDisplay" }) do
+        local region = entry[key]
+        if region then
+            local saved = { width = region:GetWidth(), shown = region:IsShown(), points = {} }
+            for i = 1, region:GetNumPoints() do saved.points[i] = { region:GetPoint(i) } end
+            state.regions[key] = saved
+        end
+    end
+    originalRows[entry] = state
+end
 
 local function DefaultRowHeight()
     if defaultRowHeight then return defaultRowHeight end
@@ -51,26 +68,18 @@ local function HideSupplementalDisplay(entry)
 end
 
 local function RestoreEntry(entry)
-    if not entry or not entry.Name or not entry.ActivityName or not entry.Playstyle then return end
-
-    entry:SetHeight(DefaultRowHeight())
-
-    entry.Name:ClearAllPoints()
-    entry.Name:SetPoint("TOPLEFT", entry, "TOPLEFT", 10, -6)
-
-    entry.ActivityName:ClearAllPoints()
-    entry.ActivityName:SetPoint("TOPLEFT", entry.Name, "BOTTOMLEFT", 0, 0)
-    entry.ActivityName:SetWidth(TEXT_AREA_WIDTH)
-
-    entry.Playstyle:ClearAllPoints()
-    entry.Playstyle:SetPoint("TOPLEFT", entry.ActivityName, "BOTTOMLEFT", 0, 0)
-    entry.Playstyle:SetWidth(0)
-
-    if entry.VoiceChat then
-        entry.VoiceChat:ClearAllPoints()
-        entry.VoiceChat:SetPoint("LEFT", entry.Name, "RIGHT", 5, -1)
+    local state = originalRows[entry]
+    if not state then return end
+    entry:SetHeight(state.height)
+    for key, saved in pairs(state.regions) do
+        local region = entry[key]
+        region:ClearAllPoints()
+        for _, point in ipairs(saved.points) do region:SetPoint(unpack(point)) end
+        region:SetWidth(saved.width)
+        region:SetShown(saved.shown)
     end
-
+    if state.pgfRating then state.pgfRating:SetShown(state.pgfShown) end
+    originalRows[entry] = nil
     HideSupplementalDisplay(entry)
 end
 
@@ -80,6 +89,8 @@ local function CompactEntry(entry)
         RestoreEntry(entry)
         return
     end
+
+    CaptureEntry(entry)
 
     local height = math.max(MIN_ROW_HEIGHT, math.min(MAX_ROW_HEIGHT, tonumber(db.rowHeight) or 30))
     entry:SetHeight(height)
@@ -140,7 +151,11 @@ local function CompactEntry(entry)
     -- rating is selected so the two addons do not draw the same value twice.
     local pgf = PremadeGroupsFilter and PremadeGroupsFilter.Debug
     local pgfRating = pgf and pgf.ratingInfoFrames and pgf.ratingInfoFrames[entry]
-    if pgfRating and showRating then pgfRating:Hide() end
+    if pgfRating and showRating then
+        local state = originalRows[entry]
+        if not state.pgfRating then state.pgfRating, state.pgfShown = pgfRating, pgfRating:IsShown() end
+        pgfRating:Hide()
+    end
 
     display.Rating:SetShown(showStats and showRating)
     if showStats and showRating then
@@ -170,8 +185,15 @@ local function DesiredRowHeight()
 end
 
 local function RefreshVisibleEntries()
+    local db = Settings()
+    local enabled = db and db.enabled
+    if not enabled and not ownedView and not next(originalRows) then return end
     local scrollBox = GetScrollBox()
     if not scrollBox then return end
+
+    if not enabled then
+        for entry in pairs(originalRows) do RestoreEntry(entry) end
+    end
 
     if scrollBox.ForEachFrame then
         scrollBox:ForEachFrame(function(entry)
@@ -184,7 +206,15 @@ local function RefreshVisibleEntries()
 
     local view = scrollBox.GetView and scrollBox:GetView()
     if view and view.SetElementExtent then
-        view:SetElementExtent(DesiredRowHeight())
+        if enabled then
+            if not ownedView then
+                ownedView, originalExtent = view, view.elementExtent or DefaultRowHeight()
+            end
+            view:SetElementExtent(DesiredRowHeight())
+        elseif ownedView then
+            ownedView:SetElementExtent(originalExtent)
+            ownedView, originalExtent = nil, nil
+        end
         scrollBox:FullUpdate()
     end
 end

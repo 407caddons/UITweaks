@@ -24,6 +24,10 @@ table.insert(Widgets.moduleInits, function()
     local itemsLooted     = isStale and 0 or (db.itemsLooted or 0)
     local xpAtLogin       = isStale and 0 or (db.xpAtLogin or 0)
     local xpNeedsSnap     = isStale -- snapshot XP on first PLAYER_ENTERING_WORLD
+    local xpEarned = isStale and 0 or (db.xpEarned or 0)
+    local lastXP = not isStale and db.lastXP or nil
+    local lastXPMax = not isStale and db.lastXPMax or nil
+    local lastLevel = not isStale and db.lastLevel or nil
 
     -- Cached display text updated on events
     local cachedText   = "Session: 0:00"
@@ -36,6 +40,7 @@ table.insert(Widgets.moduleInits, function()
         db.deathCount   = deathCount
         db.itemsLooted  = itemsLooted
         db.xpAtLogin    = xpAtLogin
+        db.xpEarned, db.lastXP, db.lastXPMax, db.lastLevel = xpEarned, lastXP, lastXPMax, lastLevel
         db.charKey      = charKey
         -- lastSeen is only written on PLAYER_LOGOUT to avoid dirtying SavedVars every second
     end
@@ -112,8 +117,7 @@ table.insert(Widgets.moduleInits, function()
             cachedText = "Gold/hr: " .. FormatGoldPerHour(goldPerHour)
         else
             -- xp/hr (mode == 2, only reached when isLeveling)
-            local currentXP = UnitXP("player") or 0
-            local xpDelta = currentXP - xpAtLogin
+            local xpDelta = xpEarned
             if xpDelta > 0 then
                 local xpPerHour = math.floor((xpDelta / elapsed) * 3600)
                 cachedText = "XP/hr: " .. BreakUpLargeNumbers(xpPerHour)
@@ -137,7 +141,21 @@ table.insert(Widgets.moduleInits, function()
         end
     end
 
-    -- PLAYER_ENTERING_WORLD fires after character data is loaded — snapshot gold and XP here.
+    local function OnXPUpdate(_, unit)
+        if unit and unit ~= "player" then return end
+        local current, maximum, level = UnitXP("player") or 0, UnitXPMax("player") or 0, UnitLevel("player")
+        if lastXP then
+            local delta = current - lastXP
+            if lastLevel and level > lastLevel then
+                delta = delta + (lastXPMax or 0)
+            end
+            xpEarned = xpEarned + math.max(0, delta)
+        end
+        lastXP, lastXPMax, lastLevel = current, maximum, level
+        SaveSessionData()
+    end
+
+    -- Also called on enable: PLAYER_ENTERING_WORLD may already have fired.
     local function OnSessionEnteringWorld()
         if not db.enabled then return end
         if goldNeedsSnap then
@@ -148,6 +166,7 @@ table.insert(Widgets.moduleInits, function()
             xpAtLogin = UnitXP("player") or 0
             xpNeedsSnap = false
         end
+        OnXPUpdate()
         SaveSessionData()
         UpdateCachedText()
     end
@@ -158,12 +177,15 @@ table.insert(Widgets.moduleInits, function()
             EventBus.Register("CHAT_MSG_LOOT", OnChatMsgLoot, "W:SessionStats")
             EventBus.Register("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld, "W:SessionStats")
             EventBus.Register("PLAYER_LOGOUT", OnPlayerLogout, "W:SessionStats")
-            UpdateCachedText()
+            EventBus.Register("PLAYER_XP_UPDATE", OnXPUpdate, "W:SessionStats")
+            if IsLoggedIn() then OnSessionEnteringWorld() end
         else
             EventBus.Unregister("PLAYER_DEAD", OnPlayerDead)
             EventBus.Unregister("CHAT_MSG_LOOT", OnChatMsgLoot)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnSessionEnteringWorld)
             EventBus.Unregister("PLAYER_LOGOUT", OnPlayerLogout)
+            EventBus.Unregister("PLAYER_XP_UPDATE", OnXPUpdate)
+            lastXP, lastXPMax, lastLevel = nil, nil, nil
         end
     end
 
@@ -177,6 +199,8 @@ table.insert(Widgets.moduleInits, function()
             itemsLooted     = 0
             xpAtLogin       = UnitXP("player") or 0
             xpNeedsSnap     = false
+            xpEarned = 0
+            lastXP, lastXPMax, lastLevel = xpAtLogin, UnitXPMax("player") or 0, UnitLevel("player")
             tickCount       = 0
             SaveSessionData()
             UpdateCachedText()
@@ -210,7 +234,7 @@ table.insert(Widgets.moduleInits, function()
         local maxXP = UnitXPMax("player") or 0
         if maxXP > 0 and elapsed > 60 then
             local currentXP = UnitXP("player") or 0
-            local xpDelta = currentXP - xpAtLogin
+            local xpDelta = xpEarned
             if xpDelta > 0 then
                 local xpPerHour = math.floor((xpDelta / elapsed) * 3600)
                 GameTooltip:AddDoubleLine("XP/hr:",

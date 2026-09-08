@@ -46,9 +46,10 @@ table.insert(Widgets.moduleInits, function()
         self.text:SetFormattedText("Speed: %.0f%%", percent)
     end
 
-    -- Use OnUpdate at 0.2s for real-time speed display (skyriding changes rapidly)
+    -- Refresh at 0.5s; the shared widget ticker only handles its layout.
     local elapsed = 0
-    speedFrame:HookScript("OnUpdate", function(self, delta)
+    speedFrame.usesOwnTicker = true
+    local function OnSpeedUpdate(self, delta)
         elapsed = elapsed + delta
         if elapsed >= 0.5 then
             elapsed = 0
@@ -56,7 +57,10 @@ table.insert(Widgets.moduleInits, function()
                 RefreshSpeed(self)
             end
         end
-    end)
+    end
+    speedFrame:HookScript("OnShow", function(self) self:SetScript("OnUpdate", OnSpeedUpdate) end)
+    speedFrame:HookScript("OnDragStop", function(self) self:SetScript("OnUpdate", OnSpeedUpdate) end)
+    speedFrame:SetScript("OnUpdate", OnSpeedUpdate)
 
     speedFrame.UpdateContent = function(self)
         RefreshSpeed(self)

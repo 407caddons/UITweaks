@@ -134,6 +134,7 @@ table.insert(Widgets.moduleInits, function()
     end
 
     local moveTicker = nil
+    wpFrame.usesOwnTicker = true
 
     wpFrame.ApplyEvents = function(enabled)
         if enabled then
