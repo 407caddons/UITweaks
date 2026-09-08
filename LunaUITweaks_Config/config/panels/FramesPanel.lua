@@ -574,6 +574,71 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     bordersLabel:SetPoint("RIGHT", borderLeftBtn, "LEFT", -10, 0)
     bordersLabel:SetText("Borders:")
 
+    -- Presentation only: retain the existing controls and their callbacks.
+    -- Keep selector actions together and give the editor full panel width.
+    local function Place(control, x, y, relative)
+        control:ClearAllPoints()
+        control:SetPoint("TOPLEFT", relative or frameControls, "TOPLEFT", x, y)
+    end
+
+    Place(frameSelectLabel, 24, -86, panel)
+    Place(frameDropdown, 8, -104, panel)
+    UIDropDownMenu_SetWidth(frameDropdown, 230)
+    Place(addFrameBtn, 280, -108, panel)
+    Place(duplicateFrameBtn, 370, -108, panel)
+    Place(removeFrameBtn, 550, -108, panel)
+
+    frameControls:ClearAllPoints()
+    frameControls:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -150)
+    frameControls:SetPoint("RIGHT", panel, "RIGHT", -24, 0)
+    frameControls:SetHeight(480)
+
+    local Theme = addonTable.ConfigTheme
+    Theme.Card(frameControls, "FRAME SETTINGS", 0, 0, 640, 118)
+    Theme.Card(frameControls, "SIZE & POSITION", 0, -130, 640, 132)
+    Theme.Card(frameControls, "APPEARANCE", 0, -274, 640, 196)
+
+    Place(nameLabel, 16, -42)
+    Place(nameEdit, 72, -36)
+    nameEdit:SetSize(230, 24)
+    Place(lockFrameBtn, 12, -76)
+    Place(anchorFrameBtn, 180, -76)
+    Place(dockLabel, 394, -44)
+    Place(dockDropdown, 378, -62)
+    UIDropDownMenu_SetWidth(dockDropdown, 180)
+
+    Place(widthSlider, 20, -182)
+    Place(heightSlider, 340, -182)
+    Place(xSlider, 20, -232)
+    Place(ySlider, 340, -232)
+    for _, slider in ipairs({ widthSlider, heightSlider, xSlider, ySlider }) do
+        slider:SetWidth(210)
+    end
+
+    Place(borderSlider, 20, -330)
+    borderSlider:SetWidth(210)
+    _G[borderSlider:GetName() .. "Low"]:SetText("0")
+    _G[borderSlider:GetName() .. "High"]:SetText("10")
+    Place(strataLabel, 340, -308)
+    Place(strataDropdown, 324, -326)
+    UIDropDownMenu_SetWidth(strataDropdown, 230)
+
+    Place(borderColorLabel, 20, -378)
+    Place(borderColorSwatch, 130, -373)
+    Place(fillColorLabel, 340, -378)
+    Place(fillColorSwatch, 430, -373)
+
+    Place(bordersLabel, 20, -416)
+    bordersLabel:SetText("Visible edges")
+    local edgeControls = {
+        { borderTopBtn, "Top" }, { borderBottomBtn, "Bottom" },
+        { borderLeftBtn, "Left" }, { borderRightBtn, "Right" },
+    }
+    for i, edge in ipairs(edgeControls) do
+        Place(edge[1], 140 + (i - 1) * 112, -406)
+        _G[edge[1]:GetName() .. "Text"]:SetText(edge[2])
+    end
+
     RefreshFrameControls = function()
         if selectedFrameIndex and UIThingsDB.frames.list[selectedFrameIndex] then
             frameControls:Show()

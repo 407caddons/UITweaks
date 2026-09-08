@@ -253,6 +253,9 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         cb:SetPoint("TOPLEFT", 20, yOffset)
 
         _G[cb:GetName() .. "Text"]:SetText(widget.label)
+        -- Keep long names within their column; rows have room for two lines.
+        _G[cb:GetName() .. "Text"]:SetWidth(125)
+        _G[cb:GetName() .. "Text"]:SetWordWrap(true)
         cb:SetChecked(UIThingsDB.widgets[widget.key].enabled)
         cb:SetScript("OnClick", function(self)
             UIThingsDB.widgets[widget.key].enabled = self:GetChecked()

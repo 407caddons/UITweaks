@@ -228,12 +228,12 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     -- ============================================================
     -- Tracked Quests Section
     -- ============================================================
-    Helpers.CreateSectionHeader(panel, "Tracked Quests", -410)
+    Helpers.CreateSectionHeader(panel, "Tracked Quests", -432)
 
     -- Clear All Button
     local clearAllBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
     clearAllBtn:SetSize(120, 25)
-    clearAllBtn:SetPoint("TOPLEFT", 20, -435)
+    clearAllBtn:SetPoint("TOPLEFT", 20, -460)
     clearAllBtn:SetText("Clear All")
     clearAllBtn:SetNormalFontObject("GameFontNormal")
     clearAllBtn:SetHighlightFontObject("GameFontHighlight")
@@ -264,7 +264,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     -- Scroll frame for tracked quests
     local questScrollFrame = CreateFrame("ScrollFrame", "UIThingsQuestReminderScroll", panel,
         "UIPanelScrollFrameTemplate")
-    questScrollFrame:SetPoint("TOPLEFT", 20, -465)
+    questScrollFrame:SetPoint("TOPLEFT", 20, -494)
     questScrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
 
     local questContent = CreateFrame("Frame", nil, questScrollFrame)

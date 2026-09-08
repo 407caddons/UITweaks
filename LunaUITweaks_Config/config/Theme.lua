@@ -58,6 +58,16 @@ function Theme.SkinTree(root)
         root:GetPushedTexture():SetVertexColor(.25, .5, .44)
         root:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
         root:GetCheckedTexture():SetVertexColor(.35, 1, .76)
+        -- Templates reserve transparent padding around their artwork. Keep
+        -- the visible square inside a 16px box so legacy 20px rows stay clear.
+        for _, getter in ipairs({"GetNormalTexture", "GetPushedTexture", "GetCheckedTexture", "GetHighlightTexture", "GetDisabledCheckedTexture"}) do
+            local texture = root[getter](root)
+            if texture then
+                texture:ClearAllPoints()
+                texture:SetPoint("CENTER", root, "CENTER")
+                texture:SetSize(16, 16)
+            end
+        end
     elseif kind == "EditBox" then
         for _, key in ipairs({"Left", "Middle", "Right", "LeftTex", "MidTex", "RightTex"}) do
             if root[key] and root[key].SetAlpha then root[key]:SetAlpha(0) end
@@ -78,7 +88,17 @@ function Theme.SkinTree(root)
         root:GetHighlightTexture():SetVertexColor(.35, .9, .76, .17)
     elseif kind == "Slider" then
         local thumb = root:GetThumbTexture()
-        if thumb then thumb:SetColorTexture(.35, .9, .76, 1) end
+        if thumb then
+            thumb:SetColorTexture(.35, .9, .76, 1)
+            -- Blizzard's artwork has transparent padding. A solid replacement
+            -- fills that entire canvas unless we also resize the texture.
+            if root:GetOrientation() == "HORIZONTAL" then
+                thumb:SetSize(8, 14)
+            else
+                -- Keep the scroll range's height while slimming the handle.
+                thumb:SetWidth(8)
+            end
+        end
     end
     for _, child in ipairs({root:GetChildren()}) do Theme.SkinTree(child) end
     -- Revisit descendants when panels build additional controls on demand.

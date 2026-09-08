@@ -762,7 +762,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     -- Border Thickness Slider
     local drawerBorderSlider = CreateFrame("Slider", "UIThingsDrawerBorderSize", child, "OptionsSliderTemplate")
-    drawerBorderSlider:SetPoint("TOPLEFT", 300, -780)
+    drawerBorderSlider:SetPoint("TOPLEFT", 300, -802)
     drawerBorderSlider:SetWidth(200)
     drawerBorderSlider:SetMinMaxValues(0, 5)
     drawerBorderSlider:SetValueStep(1)

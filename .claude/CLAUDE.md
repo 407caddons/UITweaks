@@ -89,6 +89,7 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 - `Theme.Navigation(button)` installs selection styling and `button.RefreshTheme`. Set `button.selected` and use `Helpers.UpdateModuleVisuals` for enabled state so theme colors remain consistent.
 - `Theme.SkinTree(root)` styles checkboxes, edit boxes, text buttons, and slider thumbs within the config window. It tracks styled frames and revisits descendants on show to handle controls created dynamically. Explicitly call it after creating controls inside an already-visible panel if those controls otherwise miss the show traversal.
 - Existing Blizzard control templates can still supply behavior; the theme replaces their visual treatment. Preserve control scripts, checked/disabled states, tooltips, icon buttons, color swatches, and meaningful list-row colors. Avoid global hooks or reskinning unrelated game UI.
+- Solid slider thumbs must not retain the padded dimensions of Blizzard's original artwork: horizontal setting sliders use an 8 × 14 px thumb; vertical scrollbar thumbs use an 8 px width while retaining their existing height.
 - Keep reusable visual changes in `Theme.lua` or shared helpers rather than duplicating styling in each panel. No generated image assets or external UI libraries are required; surfaces use `WHITE8X8` textures and 1 px borders.
 - Verify changes in-game with `/reload`: check scrolling, reset-button clearance, long labels, selected/disabled navigation, search, and dynamically added controls. Lua syntax checks cannot verify visual placement.
 

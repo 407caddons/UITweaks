@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 785)
+    child:SetSize(650, 850)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -317,7 +317,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     -- Min Gold Slider
     local minGoldValue = (UIThingsDB.loot.minGoldAmount or 10000) / 10000 -- Convert copper to gold
     local minGoldSlider = CreateFrame("Slider", "UIThingsLootMinGoldSlider", child, "OptionsSliderTemplate")
-    minGoldSlider:SetPoint("TOPLEFT", 20, -650)
+    minGoldSlider:SetPoint("TOPLEFT", 20, -665)
     minGoldSlider:SetMinMaxValues(0, 100)
     minGoldSlider:SetValueStep(1)
     minGoldSlider:SetObeyStepOnDrag(true)
@@ -366,7 +366,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     -- Show Item Level Checkbox
     local ilvlBtn = CreateFrame("CheckButton", "UIThingsLootIlvlCheck", child,
         "ChatConfigCheckButtonTemplate")
-    ilvlBtn:SetPoint("TOPLEFT", 20, -685)
+    ilvlBtn:SetPoint("TOPLEFT", 20, -708)
     _G[ilvlBtn:GetName() .. "Text"]:SetText("Show Item Level & Upgrade Indicator")
     ilvlBtn:SetChecked(UIThingsDB.loot.showItemLevel)
     ilvlBtn:SetScript("OnClick", function(self)
@@ -374,14 +374,14 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local ilvlHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ilvlHelp:SetPoint("TOPLEFT", 45, -708)
+    ilvlHelp:SetPoint("TOPLEFT", 45, -735)
     ilvlHelp:SetTextColor(0.5, 0.5, 0.5)
     ilvlHelp:SetText("Shows item level on gear toasts with green +X for upgrades")
 
     -- Highlight Bag Upgrades Checkbox
     local bagUpgradeBtn = CreateFrame("CheckButton", "UIThingsLootBagUpgradeCheck", child,
         "ChatConfigCheckButtonTemplate")
-    bagUpgradeBtn:SetPoint("TOPLEFT", 20, -725)
+    bagUpgradeBtn:SetPoint("TOPLEFT", 20, -770)
     _G[bagUpgradeBtn:GetName() .. "Text"]:SetText("Highlight ilvl Upgrades in Bags")
     bagUpgradeBtn:SetChecked(UIThingsDB.loot.highlightBagUpgrades)
     bagUpgradeBtn:SetScript("OnClick", function(self)
@@ -390,7 +390,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     local bagUpgradeHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bagUpgradeHelp:SetPoint("TOPLEFT", 45, -748)
+    bagUpgradeHelp:SetPoint("TOPLEFT", 45, -797)
     bagUpgradeHelp:SetTextColor(0.5, 0.5, 0.5)
     bagUpgradeHelp:SetText("Highlights bag items with a green overlay when they beat your equipped ilvl (checks both ring/trinket slots)")
 end

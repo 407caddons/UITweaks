@@ -19,7 +19,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 650)
+    scrollChild:SetSize(panel:GetWidth() - 30, 790)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -54,7 +54,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Work Order Filter Checkbox
     local woBtn = CreateFrame("CheckButton", "UIThingsMiscWorkOrderFilter", panel, "ChatConfigCheckButtonTemplate")
-    woBtn:SetPoint("TOPLEFT", 20, -60)
+    woBtn:SetPoint("TOPLEFT", 20, -68)
     _G[woBtn:GetName() .. "Text"]:SetText("Work Orders Current Expansion Only")
     woBtn:SetChecked(UIThingsDB.misc.workOrderFilter)
     woBtn:SetScript("OnClick", function(self)
@@ -63,7 +63,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Class Color Tooltips
     local tooltipBtn = CreateFrame("CheckButton", "UIThingsMiscClassTooltips", panel, "ChatConfigCheckButtonTemplate")
-    tooltipBtn:SetPoint("TOPLEFT", 20, -80)
+    tooltipBtn:SetPoint("TOPLEFT", 20, -96)
     _G[tooltipBtn:GetName() .. "Text"]:SetText("Class-Color Unit Tooltip Names")
     tooltipBtn:SetChecked(UIThingsDB.misc.classColorTooltips)
     tooltipBtn:SetScript("OnClick", function(self)
@@ -76,7 +76,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Show Spell/Item ID on Tooltips
     local spellIDBtn = CreateFrame("CheckButton", "UIThingsMiscSpellID", panel, "ChatConfigCheckButtonTemplate")
-    spellIDBtn:SetPoint("TOPLEFT", 20, -100)
+    spellIDBtn:SetPoint("TOPLEFT", 20, -124)
     _G[spellIDBtn:GetName() .. "Text"]:SetText("Show Spell/Item ID on Tooltips")
     spellIDBtn:SetChecked(UIThingsDB.misc.showSpellID)
     spellIDBtn:SetScript("OnClick", function(self)
@@ -87,12 +87,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     -- UI Scale Section
-    Helpers.CreateSectionHeader(panel, "UI Scale", -150)
+    Helpers.CreateSectionHeader(panel, "UI Scale", -176)
 
     -- UI Scale Enable Checkbox
     local uiScaleBtn = CreateFrame("CheckButton", "UIThingsMiscUIScaleEnable", panel,
         "ChatConfigCheckButtonTemplate")
-    uiScaleBtn:SetPoint("TOPLEFT", 20, -180)
+    uiScaleBtn:SetPoint("TOPLEFT", 20, -206)
     _G[uiScaleBtn:GetName() .. "Text"]:SetText("Enable UI Scaling")
     uiScaleBtn:SetChecked(UIThingsDB.misc.uiScaleEnabled)
     uiScaleBtn:SetScript("OnClick", function(self)
@@ -106,7 +106,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     local scaleSlider = CreateFrame("Slider", "UIThingsMiscUIScaleSlider", panel, "OptionsSliderTemplate")
     local scaleEdit = CreateFrame("EditBox", "UIThingsMiscUIScaleEdit", panel, "InputBoxTemplate")
 
-    scaleSlider:SetPoint("TOPLEFT", 40, -220)
+    scaleSlider:SetPoint("TOPLEFT", 40, -254)
     scaleSlider:SetMinMaxValues(0.4, 1.25)
     scaleSlider:SetValueStep(0.001)
     scaleSlider:SetObeyStepOnDrag(true)
@@ -171,10 +171,10 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     -- Invite Automation Section
-    Helpers.CreateSectionHeader(panel, "Invite Automation", -230)
+    Helpers.CreateSectionHeader(panel, "Invite Automation", -310)
 
     local friendsBtn = CreateFrame("CheckButton", "UIThingsMiscAutoFriends", panel, "ChatConfigCheckButtonTemplate")
-    friendsBtn:SetPoint("TOPLEFT", 20, -260)
+    friendsBtn:SetPoint("TOPLEFT", 20, -340)
     _G[friendsBtn:GetName() .. "Text"]:SetText("Auto-Accept: Friends")
     friendsBtn:SetChecked(UIThingsDB.misc.autoAcceptFriends)
     friendsBtn:SetScript("OnClick", function(self)
@@ -182,7 +182,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local guildBtn = CreateFrame("CheckButton", "UIThingsMiscAutoGuild", panel, "ChatConfigCheckButtonTemplate")
-    guildBtn:SetPoint("TOPLEFT", 180, -260)
+    guildBtn:SetPoint("TOPLEFT", 20, -368)
     _G[guildBtn:GetName() .. "Text"]:SetText("Auto-Accept: Guild")
     guildBtn:SetChecked(UIThingsDB.misc.autoAcceptGuild)
     guildBtn:SetScript("OnClick", function(self)
@@ -190,7 +190,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local everyoneBtn = CreateFrame("CheckButton", "UIThingsMiscAutoEveryone", panel, "ChatConfigCheckButtonTemplate")
-    everyoneBtn:SetPoint("TOPLEFT", 340, -260)
+    everyoneBtn:SetPoint("TOPLEFT", 20, -396)
     _G[everyoneBtn:GetName() .. "Text"]:SetText("Auto-Accept: Everyone")
     everyoneBtn:SetChecked(UIThingsDB.misc.autoAcceptEveryone)
     everyoneBtn:SetScript("OnClick", function(self)
@@ -199,7 +199,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Invite by Whisper
     local whisperBtn = CreateFrame("CheckButton", "UIThingsMiscAutoInvite", panel, "ChatConfigCheckButtonTemplate")
-    whisperBtn:SetPoint("TOPLEFT", 20, -295)
+    whisperBtn:SetPoint("TOPLEFT", 20, -436)
     _G[whisperBtn:GetName() .. "Text"]:SetText("Enable Invite by Whisper")
     whisperBtn:SetChecked(UIThingsDB.misc.autoInviteEnabled)
     whisperBtn:SetScript("OnClick", function(self)
@@ -208,12 +208,12 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    kwLabel:SetPoint("TOPLEFT", 40, -325)
+    kwLabel:SetPoint("TOPLEFT", 40, -470)
     kwLabel:SetText("Keywords (comma separated):")
 
     local kwEdit = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     kwEdit:SetSize(200, 20)
-    kwEdit:SetPoint("TOPLEFT", 40, -340)
+    kwEdit:SetPoint("TOPLEFT", 40, -490)
     kwEdit:SetText(UIThingsDB.misc.autoInviteKeywords or "inv,invite")
     kwEdit:SetAutoFocus(false)
     kwEdit:SetScript("OnEnterPressed", function(self)
@@ -227,11 +227,11 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     -- Convenience Section
-    Helpers.CreateSectionHeader(panel, "Convenience", -380)
+    Helpers.CreateSectionHeader(panel, "Convenience", -544)
 
     -- Reload UI Checkbox
     local rlBtn = CreateFrame("CheckButton", "UIThingsMiscAllowRL", panel, "ChatConfigCheckButtonTemplate")
-    rlBtn:SetPoint("TOPLEFT", 20, -410)
+    rlBtn:SetPoint("TOPLEFT", 20, -574)
     _G[rlBtn:GetName() .. "Text"]:SetText("Allow /rl to Reload UI")
     rlBtn:SetChecked(UIThingsDB.misc.allowRL)
     rlBtn:SetScript("OnClick", function(self)
@@ -240,7 +240,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
 
     -- Quick Item Destroy Checkbox
     local qdBtn = CreateFrame("CheckButton", "UIThingsMiscQuickDestroy", panel, "ChatConfigCheckButtonTemplate")
-    qdBtn:SetPoint("TOPLEFT", 20, -440)
+    qdBtn:SetPoint("TOPLEFT", 20, -606)
     _G[qdBtn:GetName() .. "Text"]:SetText("Quick Item Destroy (Red Button)")
     qdBtn:SetChecked(UIThingsDB.misc.quickDestroy)
     qdBtn:SetScript("OnClick", function(self)
@@ -251,11 +251,11 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
     -- Debug Section
-    Helpers.CreateSectionHeader(panel, "Debug", -480)
+    Helpers.CreateSectionHeader(panel, "Debug", -658)
 
     -- Plume Buff Alert
     local plumeBtn = CreateFrame("CheckButton", "UIThingsMiscPlumeAlert", panel, "ChatConfigCheckButtonTemplate")
-    plumeBtn:SetPoint("TOPLEFT", 20, -510)
+    plumeBtn:SetPoint("TOPLEFT", 20, -688)
     _G[plumeBtn:GetName() .. "Text"]:SetText("Alert if Plume Buff Below 100 (Umbral/Radiant)")
     plumeBtn:SetChecked(UIThingsDB.misc.plumeAlert)
     plumeBtn:SetScript("OnClick", function(self)
