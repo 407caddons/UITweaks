@@ -2,6 +2,29 @@ local addonName, addonTable = ...
 local Misc = {}
 addonTable.Misc = Misc
 
+-- Chat line IDs distinguish repeated delivery from two identical messages.
+-- Bound the cache so a long play session does not grow it indefinitely.
+local seenNotificationLines, notificationLineQueue = {}, {}
+local function IsDuplicateNotification(event, lineID)
+    if issecretvalue(lineID) or type(lineID) ~= "number" or lineID <= 0 then return false end
+    local key = event .. ":" .. lineID
+    if seenNotificationLines[key] then return true end
+    seenNotificationLines[key] = true
+    notificationLineQueue[#notificationLineQueue + 1] = key
+    if #notificationLineQueue > 128 then
+        seenNotificationLines[table.remove(notificationLineQueue, 1)] = nil
+    end
+    return false
+end
+
+local function HideNotificationAfter(frame, duration)
+    frame.alertGeneration = (frame.alertGeneration or 0) + 1
+    local generation = frame.alertGeneration
+    addonTable.Core.SafeAfter(duration, function()
+        if frame.alertGeneration == generation then frame:Hide() end
+    end)
+end
+
 -- == PERSONAL ORDER ALERT ==
 
 local alertFrame = CreateFrame("Frame", "UIThingsPersonalAlert", UIParent, "BackdropTemplate")
@@ -32,9 +55,7 @@ local function ShowAlert()
 
     -- Hide after duration
     local duration = UIThingsDB.misc.alertDuration or 5
-    addonTable.Core.SafeAfter(duration, function()
-        alertFrame:Hide()
-    end)
+    HideNotificationAfter(alertFrame, duration)
 end
 
 -- Expose ShowAlert for test button
@@ -56,6 +77,7 @@ mailAlertFrame.text:SetPoint("CENTER")
 mailAlertFrame.text:SetText("New mail arrived")
 
 local function PlayMailTTS()
+    if not UIThingsDB.misc.enabled or not UIThingsDB.misc.mailNotification then return end
     if not UIThingsDB.misc.mailTtsEnabled then return end
     addonTable.Core.SpeakTTS(
         UIThingsDB.misc.mailTtsMessage or "You've got mail",
@@ -72,13 +94,15 @@ local function ShowMailAlert()
     mailAlertFrame:Show()
 
     -- Delay TTS so it plays after personal order TTS
-    addonTable.Core.SafeAfter(2, PlayMailTTS)
+    mailAlertFrame.ttsGeneration = (mailAlertFrame.ttsGeneration or 0) + 1
+    local generation = mailAlertFrame.ttsGeneration
+    addonTable.Core.SafeAfter(2, function()
+        if generation == mailAlertFrame.ttsGeneration then PlayMailTTS() end
+    end)
 
     -- Hide after duration
     local duration = UIThingsDB.misc.mailAlertDuration or 5
-    addonTable.Core.SafeAfter(duration, function()
-        mailAlertFrame:Hide()
-    end)
+    HideNotificationAfter(mailAlertFrame, duration)
 end
 
 function Misc.ShowMailAlert()
@@ -121,9 +145,7 @@ local function ShowBoeAlert(itemName, quality)
     boeAlertFrame:Show()
 
     local duration = UIThingsDB.misc.boeAlertDuration or 5
-    addonTable.Core.SafeAfter(duration, function()
-        boeAlertFrame:Hide()
-    end)
+    HideNotificationAfter(boeAlertFrame, duration)
 end
 
 function Misc.ShowBoeAlert()
@@ -133,9 +155,10 @@ end
 -- Blizzard bind type constant for Bind on Equip
 local BOE_BIND_ON_EQUIP = 2
 
-local function OnChatMsgLootBoE(event, msg)
+local function OnChatMsgLootBoE(event, msg, ...)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.boeAlert then return end
+    if IsDuplicateNotification(event, select(10, ...)) then return end
 
     -- CHAT_MSG_LOOT msg can be a secret/tainted string during combat; pcall to skip safely
     local ok, itemLink = pcall(string.match, msg, "|H(item:[^|]+)|h")
@@ -155,42 +178,58 @@ local function OnChatMsgLootBoE(event, msg)
     ShowBoeAlert(itemName, quality)
 end
 
--- Check if player has pending personal orders
+-- Counts are per profession, not individual order records. Keep one baseline
+-- for login checks, chat hints and count events so they cannot double-announce.
+local personalOrderCounts
+local orderCheckPending = false
+local orderGeneration = 0
+local orderLoginStarted = false
+local orderReady = false
 local function CheckForPersonalOrders()
-    if not UIThingsDB.misc.personalOrders then return end
-    if not UIThingsDB.misc.personalOrdersCheckAtLogon then return end
-
-    -- Don't check if in an instance
-    local inInstance = IsInInstance()
-    if inInstance then return end
-
-    -- Check if we have any personal crafting orders
-    local hasOrders = false
-
-    -- Try GetPersonalOrdersInfo - returns array of orders
-    if C_CraftingOrders and C_CraftingOrders.GetPersonalOrdersInfo then
-        local info = C_CraftingOrders.GetPersonalOrdersInfo()
-        if info then
-            -- Check if it's an array (has numeric indices)
-            if type(info) == "table" and #info > 0 then
-                hasOrders = true
-                -- Check if it has named field
-            elseif info.numPersonalOrders and info.numPersonalOrders > 0 then
-                hasOrders = true
+    local settings = UIThingsDB and UIThingsDB.misc
+    if not orderReady or not settings or not settings.enabled or not settings.personalOrders then return end
+    if not C_CraftingOrders or not C_CraftingOrders.GetPersonalOrdersInfo then return end
+    local infos = C_CraftingOrders.GetPersonalOrdersInfo()
+    if type(infos) ~= "table" then return end
+    local counts, increased = {}, false
+    for _, info in ipairs(infos) do
+        local profession, count = info.profession, info.numPersonalOrders
+        if not issecretvalue(profession) and not issecretvalue(count)
+            and profession ~= nil and type(count) == "number" then
+            counts[profession] = count
+            if count > (personalOrderCounts and personalOrderCounts[profession] or 0) then
+                increased = true
             end
         end
     end
+    local announce = increased and (personalOrderCounts ~= nil or settings.personalOrdersCheckAtLogon)
+    personalOrderCounts = counts
+    if announce then ShowAlert() end
+end
 
-    -- Fallback: Try GetMyOrders
-    if not hasOrders and C_CraftingOrders and C_CraftingOrders.GetMyOrders then
-        local orders = C_CraftingOrders.GetMyOrders()
-        if orders and #orders > 0 then
-            hasOrders = true
-        end
-    end
+local function QueuePersonalOrderCheck()
+    if orderCheckPending then return end
+    orderCheckPending = true
+    local generation = orderGeneration
+    addonTable.Core.SafeAfter(1, function()
+        if generation ~= orderGeneration then return end
+        orderCheckPending = false
+        CheckForPersonalOrders()
+    end)
+end
 
-    if hasOrders then
-        ShowAlert()
+local function StartPersonalOrderChecks()
+    if orderLoginStarted then return end
+    orderLoginStarted = true
+    local generation = orderGeneration
+    -- Give login audio/data time to settle; subsequent server updates remain
+    -- authoritative even after these bounded startup retries have finished.
+    for _, delay in ipairs({ 3, 6, 12, 24 }) do
+        addonTable.Core.SafeAfter(delay, function()
+            if generation ~= orderGeneration then return end
+            orderReady = true
+            CheckForPersonalOrders()
+        end)
     end
 end
 
@@ -233,7 +272,7 @@ local function OnUnitHealth(event, unitTarget)
     if not isParty and not isRaid then return end
 
     local guid = UnitGUID(unitTarget)
-    if not guid then return end
+    if not guid or issecretvalue(guid) then return end
 
     if UnitIsDead(unitTarget) then
         if not deathAnnounced[guid] then
@@ -316,20 +355,19 @@ local function ShowWhisperAlert(senderName)
     end
 
     local duration = UIThingsDB.misc.whisperAlertDuration or 5
-    addonTable.Core.SafeAfter(duration, function()
-        whisperAlertFrame:Hide()
-    end)
+    HideNotificationAfter(whisperAlertFrame, duration)
 end
 
 function Misc.TestWhisperAlert()
     ShowWhisperAlert(UnitName("player") or "Player")
 end
 
-local function OnChatMsgWhisperAlert(event, msg, sender)
+local function OnChatMsgWhisperAlert(event, msg, sender, ...)
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.whisperAlert then return end
     if InCombatLockdown() then return end
     if not sender or issecretvalue(sender) then return end
+    if IsDuplicateNotification(event, select(9, ...)) then return end
 
     local displayName = sender:match("^([^%-]+)") or sender
     ShowWhisperAlert(displayName)
@@ -611,7 +649,7 @@ local function OnPlayerEnteringWorld()
         if UIThingsDB.misc.showSpellID then
             HookTooltipSpellID()
         end
-        addonTable.Core.SafeAfter(3, CheckForPersonalOrders)
+        if UIThingsDB.misc.personalOrders then StartPersonalOrderChecks() end
         addonTable.Core.SafeAfter(2, CheckPlumeBuff)
     end
 end
@@ -631,22 +669,24 @@ local function OnChatMsgSystem(event, msg)
     if not UIThingsDB.misc.personalOrders then return end
     if issecretvalue(msg) then return end
     if msg and (string.find(msg, "Personal Crafting Order") or string.find(msg, "Personal Order")) then
-        ShowAlert()
+        QueuePersonalOrderCheck()
     end
 end
 
 local function OnUpdatePendingMail()
     if not UIThingsDB.misc or not UIThingsDB.misc.enabled then return end
     if not UIThingsDB.misc.mailNotification then return end
-    if HasNewMail() and not mailAlertShown then
+    if not HasNewMail() then
+        mailAlertShown = false
+    elseif not mailAlertShown then
         mailAlertShown = true
         ShowMailAlert()
     end
 end
 
 local function OnMailClosedMisc()
-    -- Reset after visiting the mailbox so new mail arriving later fires the alert again
-    mailAlertShown = false
+    -- Closing an unread mailbox must not re-announce the same pending mail.
+    OnUpdatePendingMail()
 end
 
 local function OnPartyInviteRequest(event, name, isTank, isHealer, isDamage, isNativeRealm, allowMultipleRoles,
@@ -791,6 +831,9 @@ ApplyMiscEvents = function()
         EventBus.Unregister("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
         EventBus.Unregister("CRAFTINGORDERS_SHOW_CUSTOMER", OnWorkOrderShow)
         EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+        EventBus.Unregister("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", QueuePersonalOrderCheck)
+        orderGeneration = orderGeneration + 1
+        orderCheckPending, orderLoginStarted, orderReady = false, false, false
         EventBus.Unregister("UPDATE_PENDING_MAIL", OnUpdatePendingMail)
         EventBus.Unregister("MAIL_CLOSED", OnMailClosedMisc)
         EventBus.Unregister("PARTY_INVITE_REQUEST", OnPartyInviteRequest)
@@ -819,8 +862,13 @@ ApplyMiscEvents = function()
 
     if UIThingsDB.misc.personalOrders then
         EventBus.Register("CHAT_MSG_SYSTEM", OnChatMsgSystem, "Misc")
+        EventBus.Register("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", QueuePersonalOrderCheck, "Misc")
+        StartPersonalOrderChecks()
     else
         EventBus.Unregister("CHAT_MSG_SYSTEM", OnChatMsgSystem)
+        EventBus.Unregister("CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS", QueuePersonalOrderCheck)
+        orderGeneration = orderGeneration + 1
+        orderCheckPending, orderLoginStarted, orderReady = false, false, false
     end
 
     if UIThingsDB.misc.mailNotification then

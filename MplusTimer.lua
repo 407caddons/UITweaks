@@ -295,9 +295,23 @@ end
 -- ============================================================
 -- Rendering
 -- ============================================================
+local layoutBossCount
+local timerColorKey
+local function SetTimerColor(color)
+    if timerColorKey ~= color then
+        timerText:SetTextColor(color.r, color.g, color.b)
+        timerColorKey = color
+    end
+end
+local function SetTextIfChanged(region, text)
+    if region:GetText() ~= text then region:SetText(text) end
+end
+
 local function ApplyLayout()
     if not mainFrame then return end
     local settings = UIThingsDB.mplusTimer
+    layoutBossCount = #state.objectives
+    timerColorKey = nil
     local fontPath = settings.font or "Fonts\\FRIZQT__.TTF"
     local fontSize = settings.fontSize or 12
     local timerFontSize = settings.timerFontSize or 20
@@ -421,75 +435,80 @@ local function ApplyLayout()
     end
 end
 
-local function RenderTimer()
+local function RenderTimer(refreshText)
     if not mainFrame then return end
 
     local settings = UIThingsDB.mplusTimer
     local elapsed = state.timer
     local limit = state.timeLimit
-    local tc = settings.timerColor or { r = 1, g = 1, b = 1 }
-    local twc = settings.timerWarningColor or { r = 1, g = 1, b = 0.2 }
-    local tdc = settings.timerDepletedColor or { r = 1, g = 0.2, b = 0.2 }
-    local tsc = settings.timerSuccessColor or { r = 0.2, g = 1, b = 0.2 }
+    if refreshText == nil then refreshText = true end
+    if refreshText then
+        local tc = settings.timerColor or { r = 1, g = 1, b = 1 }
+        local twc = settings.timerWarningColor or { r = 1, g = 1, b = 0.2 }
+        local tdc = settings.timerDepletedColor or { r = 1, g = 0.2, b = 0.2 }
+        local tsc = settings.timerSuccessColor or { r = 0.2, g = 1, b = 0.2 }
 
-    -- Timer text: countdown from limit, goes positive after depletion
-    local timerStr
-    if state.challengeCompleted then
-        local completionSec = (state.completionTimeMs or 0) / 1000
-        local remaining = limit - completionSec
-        timerStr = FormatTimeSigned(remaining)
-        if state.completedOnTime then
-            timerText:SetTextColor(tsc.r, tsc.g, tsc.b)
+        -- Timer text: countdown from limit, goes positive after depletion
+        local timerStr
+        if state.challengeCompleted then
+            local completionSec = (state.completionTimeMs or 0) / 1000
+            local remaining = limit - completionSec
+            timerStr = FormatTimeSigned(remaining)
+            if state.completedOnTime then
+                SetTimerColor(tsc)
+            else
+                SetTimerColor(tdc)
+            end
         else
-            timerText:SetTextColor(tdc.r, tdc.g, tdc.b)
+            local remaining = limit - elapsed
+            if remaining >= 0 then
+                timerStr = "-" .. FormatTime(remaining)
+            else
+                timerStr = "+" .. FormatTime(math.abs(remaining))
+            end
+            if elapsed > limit then
+                SetTimerColor(tdc)
+            elseif limit > 0 and remaining < 120 then
+                SetTimerColor(twc)
+            else
+                SetTimerColor(tc)
+            end
         end
-    else
-        local remaining = limit - elapsed
-        if remaining >= 0 then
-            timerStr = "-" .. FormatTime(remaining)
-        else
-            timerStr = "+" .. FormatTime(math.abs(remaining))
-        end
-        if elapsed > limit then
-            timerText:SetTextColor(tdc.r, tdc.g, tdc.b)
-        elseif limit > 0 and remaining < 120 then
-            timerText:SetTextColor(twc.r, twc.g, twc.b)
-        else
-            timerText:SetTextColor(tc.r, tc.g, tc.b)
-        end
+        SetTextIfChanged(timerText, timerStr)
     end
-    timerText:SetText(timerStr)
 
     -- Update progress bars
     -- bars[1]=+3 (left), bars[2]=+2 (middle), bars[3]=+1 (right)
     -- timeLimits[1]=+1 (full), timeLimits[2]=+2 (80%), timeLimits[3]=+3 (60%)
     -- Map: bar 1 -> timeLimits[3], bar 2 -> timeLimits[2], bar 3 -> timeLimits[1]
-    local limitMap = { 3, 2, 1 }
     for i = 1, 3 do
-        local li = limitMap[i]
+        local li = 4 - i
         local barLimit = state.timeLimits[li] or 1
         local prevLimit = state.timeLimits[li + 1] or 0 -- lower tier boundary (0 for +3)
         if li == 3 then prevLimit = 0 end
         local timeRemaining = barLimit - elapsed
         local barMax = barLimit - prevLimit
         local barElapsed = elapsed - prevLimit
-        local barValue = math.max(0, math.min(barElapsed / barMax, 1.0))
+        local barValue = barMax > 0 and math.max(0, math.min(barElapsed / barMax, 1.0)) or 0
 
         bars[i]:SetValue(barValue)
 
-        local absRemaining = math.abs(timeRemaining)
-        local timeStr = FormatTime(absRemaining)
+        if refreshText then
+            local absRemaining = math.abs(timeRemaining)
+            local timeStr = FormatTime(absRemaining)
 
-        if timeRemaining < 0 then
-            if i == 3 then
-                barTexts[i]:SetText("|cFFFF3333-" .. timeStr .. "|r")
+            if timeRemaining < 0 then
+                if i == 3 then
+                    SetTextIfChanged(barTexts[i], "|cFFFF3333-" .. timeStr .. "|r")
+                else
+                    SetTextIfChanged(barTexts[i], "")
+                end
             else
-                barTexts[i]:SetText("")
+                SetTextIfChanged(barTexts[i], timeStr)
             end
-        else
-            barTexts[i]:SetText(timeStr)
         end
     end
+
 end
 
 local function RenderDeaths()
@@ -570,13 +589,13 @@ end
 local function RenderObjectives()
     if not mainFrame then return end
 
-    -- Hide all first
-    for i = 1, MAX_BOSSES do
-        bossTexts[i]:SetText("")
-        bossPctTexts[i]:SetText("")
+    if not UIThingsDB.mplusTimer.showBosses then
+        for i = 1, MAX_BOSSES do
+            SetTextIfChanged(bossTexts[i], "")
+            SetTextIfChanged(bossPctTexts[i], "")
+        end
+        return
     end
-
-    if not UIThingsDB.mplusTimer.showBosses then return end
 
     local bcc = UIThingsDB.mplusTimer.bossCompleteColor or { r = 0, g = 1, b = 0 }
     local bic = UIThingsDB.mplusTimer.bossIncompleteColor or { r = 1, g = 1, b = 1 }
@@ -593,6 +612,7 @@ local function RenderObjectives()
     for i, boss in ipairs(state.objectives) do
         if i > MAX_BOSSES then break end
         local text
+        local pctText = ""
 
         if boss.time then
             -- Completed boss: show split delta vs par
@@ -613,7 +633,7 @@ local function RenderObjectives()
             -- Right-aligned forces % with run-to-run delta
             if showBossForcePct and boss.forcePct then
                 if boss.forcePct >= 100 then
-                    bossPctTexts[i]:SetText(string.format("|cFF00DD00%.1f%%|r", boss.forcePct))
+                    pctText = string.format("|cFF00DD00%.1f%%|r", boss.forcePct)
                 else
                     local prevRunPct = history and history.bosses
                         and history.bosses[i] and history.bosses[i].forcePct
@@ -621,10 +641,10 @@ local function RenderObjectives()
                         local delta = boss.forcePct - prevRunPct
                         local pctHex = delta > 0 and "FFDD00" or (delta < 0 and "FF4444" or "00DD00")
                         local deltaSign = delta > 0 and "+" or ""
-                        bossPctTexts[i]:SetText(string.format("|cFF%s%.1f%% (%s%.1f%%)|r",
-                            pctHex, boss.forcePct, deltaSign, delta))
+                        pctText = string.format("|cFF%s%.1f%% (%s%.1f%%)|r",
+                            pctHex, boss.forcePct, deltaSign, delta)
                     else
-                        bossPctTexts[i]:SetText(string.format("|cFFAAAAAA%.1f%%|r", boss.forcePct))
+                        pctText = string.format("|cFFAAAAAA%.1f%%|r", boss.forcePct)
                     end
                 end
             end
@@ -632,11 +652,16 @@ local function RenderObjectives()
             text = string.format("|cFF%s%s|r", bicHex, boss.name)
         end
 
-        bossTexts[i]:SetText(text)
+        SetTextIfChanged(bossTexts[i], text)
+        SetTextIfChanged(bossPctTexts[i], pctText)
     end
 
     -- Resize frame based on boss count
-    ApplyLayout()
+    for i = math.min(n, MAX_BOSSES) + 1, MAX_BOSSES do
+        SetTextIfChanged(bossTexts[i], "")
+        SetTextIfChanged(bossPctTexts[i], "")
+    end
+    if layoutBossCount ~= n then ApplyLayout() end
 end
 
 -- ============================================================
@@ -734,6 +759,27 @@ end
 -- ============================================================
 local timerRunning = false
 local sinceLastUpdate = 0
+local lastTextSecond
+local objectiveGeneration = 0
+local objectiveUpdatePending = false
+
+local function CancelObjectiveUpdate()
+    objectiveGeneration = objectiveGeneration + 1
+    objectiveUpdatePending = false
+end
+
+local function QueueObjectiveUpdate()
+    if objectiveUpdatePending or state.challengeCompleted then return end
+    objectiveUpdatePending = true
+    local generation = objectiveGeneration
+    C_Timer.After(0, function()
+        if generation ~= objectiveGeneration then return end
+        objectiveUpdatePending = false
+        if state.inChallenge and not state.demoMode and UIThingsDB.mplusTimer.enabled then
+            UpdateObjectives()
+        end
+    end)
+end
 
 local function OnTimerTick(self, elapsed)
     sinceLastUpdate = sinceLastUpdate + elapsed
@@ -750,17 +796,23 @@ local function OnTimerTick(self, elapsed)
         RenderObjectives()
     end
 
-    RenderTimer()
+    local second = math.floor(state.timer)
+    local refreshText = second ~= lastTextSecond
+    lastTextSecond = second
+    RenderTimer(refreshText)
+    if refreshText and not state.forcesCompleted then RenderForces() end
 end
 
 local function StartTimerLoop()
     if timerRunning then return end
     timerRunning = true
     sinceLastUpdate = 0
+    lastTextSecond = nil
     mainFrame:SetScript("OnUpdate", OnTimerTick)
 end
 
 local function StopTimerLoop()
+    CancelObjectiveUpdate()
     timerRunning = false
     sinceLastUpdate = 0
     if mainFrame then
@@ -793,6 +845,7 @@ local function UnregisterChallengeEvents()
 end
 
 local function EnableChallengeMode()
+    CancelObjectiveUpdate()
     if state.demoMode then
         state.demoMode = false
     end
@@ -825,6 +878,7 @@ local function DisableChallengeMode()
 end
 
 local function CompleteChallenge()
+    UpdateObjectives()
     StopTimerLoop()
     state.challengeCompleted = true
 
@@ -931,10 +985,10 @@ OnChallengeEvent = function(self, event, ...)
         RenderForces()
         RenderObjectives()
     elseif event == "SCENARIO_POI_UPDATE" or event == "SCENARIO_CRITERIA_UPDATE" then
-        UpdateObjectives()
+        QueueObjectiveUpdate()
     elseif event == "ENCOUNTER_END" then
         -- Boss defeated, update objectives
-        UpdateObjectives()
+        QueueObjectiveUpdate()
     end
 end
 
@@ -1029,8 +1083,8 @@ function MplusTimer.UpdateSettings()
     ApplyLayout()
 
     if not UIThingsDB.mplusTimer.enabled then
-        StopTimerLoop()
-        mainFrame:Hide()
+        if state.demoMode then MplusTimer.CloseDemo() end
+        DisableChallengeMode()
         return
     end
 
