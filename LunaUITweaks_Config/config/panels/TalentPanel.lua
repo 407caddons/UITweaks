@@ -9,6 +9,13 @@ local Helpers = addonTable.ConfigHelpers
 -- Define the setup function for Talent panel
 function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "talentReminders")
+    -- Keep the expanded settings and saved-build list reachable on short windows.
+    local pageScroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    pageScroll:SetPoint("TOPLEFT"); pageScroll:SetPoint("BOTTOMRIGHT", -30, 0)
+    panel = CreateFrame("Frame", nil, pageScroll)
+    panel:SetSize(560, 1020); pageScroll:SetScrollChild(panel)
+    pageScroll:SetScript("OnSizeChanged", function(self, width) panel:SetWidth(width) end)
+    pageScroll:SetScript("OnShow", function(self) panel:SetWidth(self:GetWidth()) end)
     local fonts = Helpers.fonts
 
     local talentTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
@@ -34,7 +41,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Help text
     local enableText = _G[enableTalentBtn:GetName() .. "Text"]
     local helpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    helpText:SetPoint("LEFT", enableText, "RIGHT", 10, 0)
+    helpText:SetPoint("TOPLEFT", 20, -82)
     helpText:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     helpText:SetJustifyH("LEFT")
     helpText:SetTextColor(0.6, 0.6, 0.6)
@@ -42,11 +49,11 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         "Whenever you are in an instance or boss area you can snapshot your exact talent build, and when you enter that instance on that difficulty again it will highlight differences between your current build as a reminder.")
 
     -- Alert Settings Section
-    Helpers.CreateSectionHeader(panel, "Alert Settings", -80)
+    Helpers.CreateSectionHeader(panel, "Alert Settings", -140)
 
     local showPopupCheck = CreateFrame("CheckButton", "UIThingsTalentShowPopupCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    showPopupCheck:SetPoint("TOPLEFT", 20, -105)
+    showPopupCheck:SetPoint("TOPLEFT", 20, -175)
     showPopupCheck:SetHitRectInsets(0, -110, 0, 0)
     _G[showPopupCheck:GetName() .. "Text"]:SetText("Show Popup Alert")
     showPopupCheck:SetChecked(UIThingsDB.talentReminders.showPopup)
@@ -56,7 +63,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
     local showChatCheck = CreateFrame("CheckButton", "UIThingsTalentShowChatCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    showChatCheck:SetPoint("TOPLEFT", 200, -105)
+    showChatCheck:SetPoint("TOPLEFT", 250, -175)
     showChatCheck:SetHitRectInsets(0, -120, 0, 0)
     _G[showChatCheck:GetName() .. "Text"]:SetText("Show Chat Message")
     showChatCheck:SetChecked(UIThingsDB.talentReminders.showChatMessage)
@@ -66,7 +73,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
     local playSoundCheck = CreateFrame("CheckButton", "UIThingsTalentPlaySoundCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    playSoundCheck:SetPoint("TOPLEFT", 20, -130)
+    playSoundCheck:SetPoint("TOPLEFT", 20, -210)
     playSoundCheck:SetHitRectInsets(0, -80, 0, 0)
     _G[playSoundCheck:GetName() .. "Text"]:SetText("Play Sound")
     playSoundCheck:SetChecked(UIThingsDB.talentReminders.playSound)
@@ -75,12 +82,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Alert Frame Appearance Section
-    Helpers.CreateSectionHeader(panel, "Alert Frame", -155)
+    Helpers.CreateSectionHeader(panel, "Alert Frame", -255)
 
     -- Width Slider
     local widthSlider = CreateFrame("Slider", "UIThingsTalentWidthSlider", panel,
         "OptionsSliderTemplate")
-    widthSlider:SetPoint("TOPLEFT", 20, -180)
+    widthSlider:SetPoint("TOPLEFT", 20, -295)
     widthSlider:SetMinMaxValues(300, 800)
     widthSlider:SetValueStep(10)
     widthSlider:SetObeyStepOnDrag(true)
@@ -102,7 +109,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Height Slider
     local heightSlider = CreateFrame("Slider", "UIThingsTalentHeightSlider", panel,
         "OptionsSliderTemplate")
-    heightSlider:SetPoint("TOPLEFT", 200, -180)
+    heightSlider:SetPoint("TOPLEFT", 200, -295)
     heightSlider:SetMinMaxValues(200, 600)
     heightSlider:SetValueStep(10)
     heightSlider:SetObeyStepOnDrag(true)
@@ -134,13 +141,13 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             end
         end,
         380,
-        -183
+        -325
     )
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsTalentAlertFontSizeSlider", panel,
         "OptionsSliderTemplate")
-    fontSizeSlider:SetPoint("TOPLEFT", 20, -220)
+    fontSizeSlider:SetPoint("TOPLEFT", 20, -360)
     fontSizeSlider:SetMinMaxValues(8, 24)
     fontSizeSlider:SetValueStep(1)
     fontSizeSlider:SetObeyStepOnDrag(true)
@@ -166,7 +173,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Icon Size Slider
     local iconSizeSlider = CreateFrame("Slider", "UIThingsTalentAlertIconSizeSlider", panel,
         "OptionsSliderTemplate")
-    iconSizeSlider:SetPoint("TOPLEFT", 200, -220)
+    iconSizeSlider:SetPoint("TOPLEFT", 200, -360)
     iconSizeSlider:SetMinMaxValues(12, 32)
     iconSizeSlider:SetValueStep(2)
     iconSizeSlider:SetObeyStepOnDrag(true)
@@ -194,12 +201,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Border & Background Settings
-    Helpers.CreateSectionHeader(panel, "Border & Background", -255)
+    Helpers.CreateSectionHeader(panel, "Border & Background", -415)
 
     -- Row 1: Border
     local borderCheckbox = CreateFrame("CheckButton", "UIThingsTalentBorderCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    borderCheckbox:SetPoint("TOPLEFT", 20, -280)
+    borderCheckbox:SetPoint("TOPLEFT", 20, -450)
     borderCheckbox:SetHitRectInsets(0, -80, 0, 0)
     _G[borderCheckbox:GetName() .. "Text"]:SetText("Show Border")
     borderCheckbox:SetChecked(UIThingsDB.talentReminders.showBorder)
@@ -213,12 +220,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     Helpers.CreateColorSwatch(panel, "Color:",
         UIThingsDB.talentReminders.borderColor,
         function() if addonTable.TalentReminder then addonTable.TalentReminder.UpdateVisuals() end end,
-        140, -283)
+        230, -453)
 
     -- Row 2: Background
     local bgCheckbox = CreateFrame("CheckButton", "UIThingsTalentBgCheckbox", panel,
         "ChatConfigCheckButtonTemplate")
-    bgCheckbox:SetPoint("TOPLEFT", 20, -305)
+    bgCheckbox:SetPoint("TOPLEFT", 20, -490)
     bgCheckbox:SetHitRectInsets(0, -110, 0, 0)
     _G[bgCheckbox:GetName() .. "Text"]:SetText("Show Background")
     bgCheckbox:SetChecked(UIThingsDB.talentReminders.showBackground)
@@ -232,10 +239,10 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     Helpers.CreateColorSwatch(panel, "Color:",
         UIThingsDB.talentReminders.backgroundColor,
         function() if addonTable.TalentReminder then addonTable.TalentReminder.UpdateVisuals() end end,
-        165, -308)
+        230, -493)
 
     -- Difficulty Filter Section
-    Helpers.CreateSectionHeader(panel, "Alert Only On These Difficulties", -335)
+    Helpers.CreateSectionHeader(panel, "Alert Only On These Difficulties", -535)
 
     -- Helper function to handle difficulty checkbox changes
     local function OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
@@ -259,12 +266,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
     -- Dungeons
     local dungeonLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    dungeonLabel:SetPoint("TOPLEFT", 20, -363)
+    dungeonLabel:SetPoint("TOPLEFT", 20, -573)
     dungeonLabel:SetText("Dungeons:")
 
     local dNormalCheck = CreateFrame("CheckButton", "UIThingsTalentDNormalCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    dNormalCheck:SetPoint("TOPLEFT", 100, -360)
+    dNormalCheck:SetPoint("TOPLEFT", 110, -570)
     dNormalCheck:SetHitRectInsets(0, -60, 0, 0)
     _G[dNormalCheck:GetName() .. "Text"]:SetText("Normal")
     dNormalCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.dungeonNormal)
@@ -303,12 +310,12 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
     -- Raids
     local raidLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    raidLabel:SetPoint("TOPLEFT", 20, -393)
+    raidLabel:SetPoint("TOPLEFT", 20, -613)
     raidLabel:SetText("Raids:")
 
     local rLFRCheck = CreateFrame("CheckButton", "UIThingsTalentRLFRCheck", panel,
         "ChatConfigCheckButtonTemplate")
-    rLFRCheck:SetPoint("TOPLEFT", 100, -390)
+    rLFRCheck:SetPoint("TOPLEFT", 110, -610)
     rLFRCheck:SetHitRectInsets(0, -40, 0, 0)
     _G[rLFRCheck:GetName() .. "Text"]:SetText("LFR")
     rLFRCheck:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties.raidLFR)
@@ -359,7 +366,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Reminders Section
-    Helpers.CreateSectionHeader(panel, "Saved Builds", -420)
+    Helpers.CreateSectionHeader(panel, "Saved Builds", -655)
 
     -- Declare buttons upfront so they exist before the list
     local snapshotBtn, testBtn, clearBtn
@@ -373,7 +380,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Snapshot Button
     snapshotBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
     snapshotBtn:SetSize(200, 25)
-    snapshotBtn:SetPoint("TOPLEFT", 20, -445)
+    snapshotBtn:SetPoint("TOPLEFT", 20, -690)
     snapshotBtn:SetText("Snapshot Current Talents")
     snapshotBtn:SetNormalFontObject("GameFontNormal")
     snapshotBtn:SetHighlightFontObject("GameFontHighlight")
@@ -397,7 +404,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Reminder List (Scroll Frame) - fills remaining space below buttons
     local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", panel,
         "UIPanelScrollFrameTemplate")
-    reminderScrollFrame:SetPoint("TOPLEFT", 20, -475)
+    reminderScrollFrame:SetPoint("TOPLEFT", 20, -730)
     reminderScrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
 
     local reminderContent = CreateFrame("Frame", nil, reminderScrollFrame)

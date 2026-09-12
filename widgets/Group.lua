@@ -1,26 +1,72 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
+local function Public(value) return not (issecretvalue and issecretvalue(value)) end
+local function SortMessage(message) addonTable.Core.Log("Group", message, 1) end
+local function CanSort()
+    if InCombatLockdown() then return false, "Raid sorting is unavailable in combat." end
+    if not IsInRaid() then return false, "Raid sorting requires a raid group." end
+    if not UnitIsGroupLeader("player") and not UnitIsGroupAssistant("player") then
+        return false, "Raid sorting requires leader or assistant."
+    end
+    return true
+end
 
 -- Raid Sorting Logic (Local helpers)
 local function GetRaidRole(unit, role, class)
+    if not Public(role) or not Public(class) then return "UNKNOWN" end
     if role == "TANK" then return "TANK" end
     if role == "HEALER" then return "HEALER" end
     if role == "DAMAGER" then
-        if class == "WARRIOR" or class == "ROGUE" or class == "DEATHKNIGHT" or class == "DEMONHUNTER" or class == "MONK" or class == "PALADIN" then
+        if class == "WARRIOR" or class == "ROGUE" or class == "DEATHKNIGHT" or class == "MONK" or class == "PALADIN" then
             return "MELEE"
         end
-        if unit and (class == "DRUID" or class == "SHAMAN" or class == "HUNTER") then
-            if class == "DRUID" then return "RANGED" end
-            if class == "SHAMAN" then return "RANGED" end
+        if unit and (class == "DRUID" or class == "SHAMAN" or class == "HUNTER" or class == "DEMONHUNTER") then
+            local spec
+            if UnitIsUnit(unit, "player") then
+                local index = GetSpecialization()
+                if index then spec = GetSpecializationInfo(index) end
+            else
+                local inspect = C_SpecializationInfo and C_SpecializationInfo.GetInspectSpecialization or GetInspectSpecialization
+                if inspect then spec = inspect(unit) end
+            end
+            if not Public(spec) or not spec or spec == 0 then return "UNKNOWN" end
+            if spec == 103 or spec == 263 or spec == 255 or spec == 577 then return "MELEE" end
             return "RANGED"
         end
         return "RANGED"
     end
-    return "RANGED"
+    return "UNKNOWN"
 end
 
 local sortTicker = nil
+local sortNeedsCheck = false
+local function CancelSort(message)
+    if sortTicker then sortTicker:Cancel(); sortTicker = nil end
+    if message then SortMessage(message) end
+end
+
+local function CollectRoles(requireMelee)
+    CancelSort()
+    local allowed, reason = CanSort()
+    if not allowed then SortMessage(reason); return end
+    local roles = { TANK = {}, HEALER = {}, MELEE = {}, RANGED = {} }
+    for i = 1, GetNumGroupMembers() do
+        local name, _, _, _, _, class = GetRaidRosterInfo(i)
+        if not Public(name) or not name then SortMessage("Roster unavailable; try sorting again shortly."); return end
+        local role = GetRaidRole("raid" .. i, UnitGroupRolesAssigned("raid" .. i), class)
+        if role == "UNKNOWN" then
+            if requireMelee then
+                SortMessage("Cannot determine melee/ranged for " .. name .. ". Inspect their specialization, then retry, or use Standard sorting.")
+                return
+            end
+            role = "RANGED" -- Non-melee-specific layouts treat unknown DPS neutrally.
+        end
+        table.insert(roles[role], name)
+    end
+    for _, list in pairs(roles) do table.sort(list) end
+    return roles
+end
 
 -- Precompute the full sequence of moves/swaps needed to reach `assignments`
 -- against a simulated snapshot of the roster. Swap partners are only ever
@@ -48,6 +94,7 @@ local function PlanRaidMoves(assignments)
                 table.insert(list, name)
             end
         end
+        table.sort(list)
         return list
     end
 
@@ -118,85 +165,82 @@ local function PlanRaidMoves(assignments)
 end
 
 local function ApplyRaidAssignments(assignments)
-    if InCombatLockdown() then return end
-    if sortTicker then
-        sortTicker:Cancel()
-        sortTicker = nil
+    local allowed, reason = CanSort()
+    if not allowed then CancelSort(reason); return end
+    CancelSort()
+    local count, sizes = 0, {}
+    for _, target in pairs(assignments) do
+        if type(target) ~= "number" or target < 1 or target > 8 or target % 1 ~= 0 then SortMessage("Invalid raid assignment."); return end
+        sizes[target] = (sizes[target] or 0) + 1; count = count + 1
+        if sizes[target] > 5 then SortMessage("Cannot sort: an assigned group exceeds five players."); return end
     end
-
-    local ops = PlanRaidMoves(assignments)
-    if #ops == 0 then
-        addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
-        return
-    end
-
-    local function FindPlayerByName(n)
-        for j = 1, GetNumGroupMembers() do
-            local name = GetRaidRosterInfo(j)
-            if name == n then return j end
-        end
-        return nil
-    end
-
-    local opIndex = 0
+    if count ~= GetNumGroupMembers() then SortMessage("Roster changed; please sort again."); return end
+    local pending, deadline = nil, GetTime() + 60
+    sortNeedsCheck = true
     local function DoNextOp()
-        if InCombatLockdown() then
-            if sortTicker then
-                sortTicker:Cancel()
-                sortTicker = nil
+        local canSort, failure = CanSort()
+        if not canSort then CancelSort(failure); return end
+        local now = GetTime()
+        if now > deadline then CancelSort("Raid sorting timed out; please retry."); return end
+        if pending and now - pending.sent > 3 then CancelSort("Raid move was not confirmed. Sorting stopped; please retry."); return end
+        if not sortNeedsCheck then return end
+        sortNeedsCheck = false
+        local roster = {}
+        if GetNumGroupMembers() ~= count then CancelSort("Raid membership changed; please sort again."); return end
+        for i = 1, count do
+            local name, _, group = GetRaidRosterInfo(i)
+            if not Public(name) or not name or not Public(group) or not assignments[name] then
+                CancelSort("Raid roster changed or is unavailable; please sort again."); return
             end
-            return
+            roster[name] = {index=i, group=group}
         end
-
-        opIndex = opIndex + 1
-        local op = ops[opIndex]
-        if not op then
-            if sortTicker then
-                sortTicker:Cancel()
-                sortTicker = nil
+        if pending then
+            for name, target in pairs(pending.expected) do
+                if not roster[name] or roster[name].group ~= target then return end
             end
-            addonTable.Core.Log("Group", "Raid sorting complete.", addonTable.Core.LogLevel.DEBUG)
-            return
+            pending = nil
         end
-
+        local complete = true
+        for name, target in pairs(assignments) do if not roster[name] or roster[name].group ~= target then complete = false; break end end
+        if complete then CancelSort("Raid sorting complete."); return end
+        local op = PlanRaidMoves(assignments)[1]
+        if not op then CancelSort("Cannot finish these assignments; sorting stopped."); return end
+        pending = {sent=now, expected={}}
+        local ok
         if op.kind == "move" then
-            local idx = FindPlayerByName(op.name)
-            if idx then SetRaidSubgroup(idx, op.group) end
+            pending.expected[op.name] = op.group
+            ok = pcall(SetRaidSubgroup, roster[op.name].index, op.group)
         else
-            local idxA = FindPlayerByName(op.name)
-            local idxB = FindPlayerByName(op.partner)
-            if idxA and idxB then SwapRaidSubgroup(idxA, idxB) end
+            pending.expected[op.name], pending.expected[op.partner] = roster[op.partner].group, roster[op.name].group
+            ok = pcall(SwapRaidSubgroup, roster[op.name].index, roster[op.partner].index)
         end
+        if not ok then CancelSort("Raid move rejected; sorting stopped.") end
     end
 
+    SortMessage("Arranging raid groups...")
     sortTicker = C_Timer.NewTicker(0.2, DoNextOp)
 end
 
 local function SortHealersToLast()
-    if not IsInRaid() then return end
+    local roles = CollectRoles(false)
+    if not roles then return end
     local numMembers = GetNumGroupMembers()
     local lastGroup = math.max(math.ceil(numMembers / 5), 1)
-
-    local roles = { TANK = {}, HEALER = {}, MELEE = {}, RANGED = {} }
-    for i = 1, numMembers do
-        local name, _, _, _, _, class, _, _, _, role = GetRaidRosterInfo(i)
-        local unit = "raid" .. i
-        local raidRole = GetRaidRole(unit, role, class)
-        table.insert(roles[raidRole], name)
-    end
 
     local assignments = {}
     local groupSizes = {}
     for i = 1, 8 do groupSizes[i] = 0 end
 
     for _, name in ipairs(roles.TANK) do
-        assignments[name] = 1
-        groupSizes[1] = groupSizes[1] + 1
+        for g = 1, lastGroup do
+            if groupSizes[g] < 5 then assignments[name] = g; groupSizes[g] = groupSizes[g] + 1; break end
+        end
     end
 
     for _, name in ipairs(roles.HEALER) do
-        assignments[name] = lastGroup
-        groupSizes[lastGroup] = groupSizes[lastGroup] + 1
+        for g = lastGroup, 1, -1 do
+            if groupSizes[g] < 5 then assignments[name] = g; groupSizes[g] = groupSizes[g] + 1; break end
+        end
     end
 
     local function AssignNextAvailable(name, startGroup, preferGroup)
@@ -222,16 +266,8 @@ local function SortHealersToLast()
 end
 
 local function SortOddsEvens(meleeOddPriority)
-    if not IsInRaid() then return end
-    local numMembers = GetNumGroupMembers()
-    local roles = { TANK = {}, HEALER = {}, MELEE = {}, RANGED = {} }
-
-    for i = 1, numMembers do
-        local name, _, _, _, _, class, _, _, _, role = GetRaidRosterInfo(i)
-        local unit = "raid" .. i
-        local raidRole = GetRaidRole(unit, role, class)
-        table.insert(roles[raidRole], name)
-    end
+    local roles = CollectRoles(meleeOddPriority)
+    if not roles then return end
 
     local assignments = {}
     local groupSizes = {}
@@ -279,6 +315,7 @@ local function SortOddsEvens(meleeOddPriority)
                     end
                 end
             end
+            if not assignments[name] then AddToBestSide(name, gIdx == 1) end
             gIdx = (gIdx % #groupsToUse) + 1
         end
     end
@@ -303,59 +340,28 @@ local function SortOddsEvens(meleeOddPriority)
 end
 
 local function SortSplitHalf()
-    if not IsInRaid() then return end
+    local roles = CollectRoles(false)
+    if not roles then return end
     local numMembers = GetNumGroupMembers()
-    local roles = { TANK = {}, HEALER = {}, MELEE = {}, RANGED = {} }
-    for i = 1, numMembers do
-        local name, _, _, _, _, class, _, _, _, role = GetRaidRosterInfo(i)
-        local unit = "raid" .. i
-        local raidRole = GetRaidRole(unit, role, class)
-        table.insert(roles[raidRole], name)
-    end
 
     local assignments = {}
     local groupSizes = {}
     for i = 1, 8 do groupSizes[i] = 0 end
 
-    local numGroups = math.ceil(numMembers / 5)
-    local halfGroupStart = math.ceil(numGroups / 2) + 1
-    if numGroups < 2 then halfGroupStart = 2 end
-
-    for i, name in ipairs(roles.TANK) do
-        if i == 1 then
-            assignments[name] = 1
-            groupSizes[1] = groupSizes[1] + 1
-        else
-            assignments[name] = halfGroupStart
-            groupSizes[halfGroupStart] = groupSizes[halfGroupStart] + 1
-        end
-    end
-
-    local numHealers = #roles.HEALER
-    local firstHalfHealers = math.ceil(numHealers / 2)
-    for i, name in ipairs(roles.HEALER) do
-        local g = (i <= firstHalfHealers) and 1 or halfGroupStart
-        assignments[name] = g
-        groupSizes[g] = groupSizes[g] + 1
-    end
-
-    local dps = {}
-    for _, v in ipairs(roles.MELEE) do table.insert(dps, v) end
-    for _, v in ipairs(roles.RANGED) do table.insert(dps, v) end
-
-    local gIter = 1
-    for _, name in ipairs(dps) do
-        local placed = false
-        for attempt = 1, 8 do
-            if groupSizes[gIter] < 5 then
-                assignments[name] = gIter
-                groupSizes[gIter] = groupSizes[gIter] + 1
-                placed = true
-                gIter = (gIter % numGroups) + 1
-                break
-            else
-                gIter = (gIter % numGroups) + 1
+    local limits = { math.ceil(numMembers / 2), math.floor(numMembers / 2) }
+    local teamSize = { 0, 0 }
+    local groupsPerTeam = math.ceil(limits[1] / 5)
+    for _, role in ipairs({ "TANK", "HEALER", "MELEE", "RANGED" }) do
+        local side = teamSize[1] <= teamSize[2] and 1 or 2
+        for _, name in ipairs(roles[role]) do
+            if teamSize[side] >= limits[side] then side = 3 - side end
+            local firstGroup = side == 1 and 1 or groupsPerTeam + 1
+            for g = firstGroup, firstGroup + groupsPerTeam - 1 do
+                if groupSizes[g] < 5 then
+                    assignments[name] = g; groupSizes[g] = groupSizes[g] + 1; break
+                end
             end
+            teamSize[side] = teamSize[side] + 1; side = 3 - side
         end
     end
     ApplyRaidAssignments(assignments)
@@ -405,7 +411,8 @@ table.insert(Widgets.moduleInits, function()
             for i = 1, 8 do groups[i] = {} end
 
             for i = 1, members do
-                local name, _, subgroup, level, _, class, _, _, _, role = GetRaidRosterInfo(i)
+                local name, _, subgroup, level, _, class = GetRaidRosterInfo(i)
+                local role = IsInRaid() and UnitGroupRolesAssigned("raid" .. i) or nil
                 if not name then
                     -- Fallback for party
                     local unit = (i == members) and "player" or "party" .. i
@@ -516,7 +523,9 @@ table.insert(Widgets.moduleInits, function()
 
     groupFrame:RegisterForClicks("AnyUp")
     groupFrame:SetScript("OnClick", function(self, button)
-        if button == "RightButton" and IsInRaid() and (UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")) then
+        if button == "RightButton" then
+            local allowed, reason = CanSort()
+            if not allowed then SortMessage(reason); return end
             GameTooltip:Hide()
             MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
                 rootDescription:CreateTitle("Raid Management")
@@ -524,7 +533,7 @@ table.insert(Widgets.moduleInits, function()
                 rootDescription:CreateButton("Odds/Evens (Melee Odd)", function() SortOddsEvens(true) end)
                 rootDescription:CreateButton("Split in Half (2 Teams)", SortSplitHalf)
                 rootDescription:CreateButton("Healers to Last Group", SortHealersToLast)
-                rootDescription:CreateButton("Cancel", function() end)
+                rootDescription:CreateButton("Stop sorting", function() CancelSort("Raid sorting cancelled.") end)
             end)
         end
     end)
@@ -558,6 +567,7 @@ table.insert(Widgets.moduleInits, function()
     end
 
     local function OnGroupRosterUpdate()
+        sortNeedsCheck = true
         RefreshGroupCache()
         RefreshReadyCheckNames()
     end
@@ -616,6 +626,7 @@ table.insert(Widgets.moduleInits, function()
             EventBus.Register("READY_CHECK_CONFIRM", OnReadyCheckConfirm, "W:Group")
             EventBus.Register("READY_CHECK_FINISHED", OnReadyCheckFinished, "W:Group")
         else
+            CancelSort()
             EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
             EventBus.Unregister("PLAYER_ENTERING_WORLD", OnGroupRosterUpdate)
             EventBus.Unregister("ROLE_CHANGED_INFORM", OnGroupRosterUpdate)

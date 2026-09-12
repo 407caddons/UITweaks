@@ -4,6 +4,7 @@ addonTable.MplusTimer = MplusTimer
 
 local Log = addonTable.Core.Log
 local OnChallengeEvent
+local deathObservations, deathCredits = {}, {}
 
 -- ============================================================
 -- Utility
@@ -69,6 +70,8 @@ local function ResetState()
     state.deathTimeLost = 0
     wipe(state.deathLog)
     wipe(state.knownDead)
+    wipe(deathObservations)
+    wipe(deathCredits)
     state.currentCount = 0
     state.totalCount = 100
     state.objectives = {}
@@ -76,6 +79,34 @@ local function ResetState()
     state.forcesCompletionTime = nil
     state.completedOnTime = nil
     state.completionTimeMs = nil
+end
+
+-- Unit state and the challenge total can arrive in either order. Match only
+-- recent transitions; historical/restricted deaths remain unattributed.
+local function ScanDeaths(baseline)
+    if state.demoMode or not state.inChallenge or state.challengeCompleted then return end
+    local now = GetTime()
+    for i = 0, 4 do
+        local unit = i == 0 and "player" or "party" .. i
+        local name = GetUnitName(unit, true)
+        local dead = UnitIsDeadOrGhost(unit)
+        if not (issecretvalue and (issecretvalue(name) or issecretvalue(dead)))
+            and name and dead ~= nil then
+            if dead and not state.knownDead[name] and not baseline then
+                deathObservations[#deathObservations + 1] = { name = name, time = now }
+            end
+            state.knownDead[name] = dead and true or nil
+        end
+    end
+    while deathObservations[1] and now - deathObservations[1].time > 2 do
+        table.remove(deathObservations, 1)
+    end
+    while deathCredits[1] and now - deathCredits[1].time > 2 do table.remove(deathCredits, 1) end
+    while deathObservations[1] and deathCredits[1] do
+        local observation = table.remove(deathObservations, 1)
+        table.remove(deathCredits, 1)
+        state.deathLog[observation.name] = (state.deathLog[observation.name] or 0) + 1
+    end
 end
 
 -- Death penalty per death in seconds, based on key level:
@@ -164,7 +195,7 @@ local function InitFrames()
     deathsFrame:SetPoint("BOTTOMRIGHT", deathsText, "BOTTOMRIGHT", 0, 0)
     deathsFrame:EnableMouse(true)
     deathsFrame:SetScript("OnEnter", function(self)
-        if state.deathCount == 0 or not next(state.deathLog) then return end
+        if state.deathCount == 0 then return end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
         GameTooltip:SetText("Deaths", 1, 0.2, 0.2)
         local penaltySec = math.floor(state.deathTimeLost / 1000)
@@ -172,8 +203,10 @@ local function InitFrames()
         GameTooltip:AddLine(" ")
         -- Sort by death count descending
         local sorted = {}
+        local attributed = 0
         for name, count in pairs(state.deathLog) do
             table.insert(sorted, { name = name, count = count })
+            attributed = attributed + count
         end
         table.sort(sorted, function(a, b)
             if a.count ~= b.count then return a.count > b.count end
@@ -184,10 +217,10 @@ local function InitFrames()
             -- Try to find class color from group
             for i = 1, GetNumGroupMembers() do
                 local unit = IsInRaid() and "raid" .. i or (i == GetNumGroupMembers() and "player" or "party" .. i)
-                local name = GetUnitName(unit, false)
-                if name == entry.name then
+                local name = GetUnitName(unit, true)
+                if not (issecretvalue and issecretvalue(name)) and name == entry.name then
                     local _, className = UnitClass(unit)
-                    if className then
+                    if not (issecretvalue and issecretvalue(className)) and className then
                         classColor = C_ClassColor.GetClassColor(className)
                     end
                     break
@@ -199,6 +232,9 @@ local function InitFrames()
             else
                 GameTooltip:AddDoubleLine(entry.name, entry.count .. "x", 1, 1, 1, 1, 1, 1)
             end
+        end
+        if attributed < state.deathCount then
+            GameTooltip:AddDoubleLine("Unattributed", (state.deathCount - attributed) .. "x", 0.7, 0.7, 0.7, 1, 1, 1)
         end
         GameTooltip:Show()
     end)
@@ -788,6 +824,7 @@ local function OnTimerTick(self, elapsed)
 
     if state.challengeCompleted then return end
 
+    ScanDeaths()
     state.timer = select(2, GetWorldElapsedTime(1))
 
     if state.timer > 0 and not state.timerStarted then
@@ -833,6 +870,7 @@ local function RegisterChallengeEvents()
     addonTable.EventBus.Register("SCENARIO_POI_UPDATE", OnChallengeEventBus, "MplusTimer")
     addonTable.EventBus.Register("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus, "MplusTimer")
     addonTable.EventBus.Register("ENCOUNTER_END", OnChallengeEventBus, "MplusTimer")
+    addonTable.EventBus.Register("UNIT_FLAGS", OnChallengeEventBus, "MplusTimer")
 end
 
 local function UnregisterChallengeEvents()
@@ -842,6 +880,7 @@ local function UnregisterChallengeEvents()
     addonTable.EventBus.Unregister("SCENARIO_POI_UPDATE", OnChallengeEventBus)
     addonTable.EventBus.Unregister("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus)
     addonTable.EventBus.Unregister("ENCOUNTER_END", OnChallengeEventBus)
+    addonTable.EventBus.Unregister("UNIT_FLAGS", OnChallengeEventBus)
 end
 
 local function EnableChallengeMode()
@@ -859,6 +898,7 @@ local function EnableChallengeMode()
     state.deathCount = deathCount or 0
     state.deathTimeLost = state.deathCount * GetDeathPenaltySecs() * 1000
 
+    ScanDeaths(true) -- Existing corpses after a reload are not new deaths.
     UpdateObjectives()
     RenderDeaths()
     ApplyLayout()
@@ -955,30 +995,14 @@ OnChallengeEvent = function(self, event, ...)
         local prevCount = state.deathCount
         state.deathCount = deathCount or 0
         state.deathTimeLost = state.deathCount * GetDeathPenaltySecs() * 1000
-        -- If death count increased, scan for who is newly dead
-        if state.deathCount > prevCount then
-            local members = GetNumGroupMembers()
-            -- Remove resurrected players from knownDead first
-            for i = 1, members do
-                local unit = "party" .. i
-                if i == members then unit = "player" end
-                local name = GetUnitName(unit, false)
-                if name and not UnitIsDeadOrGhost(unit) then
-                    state.knownDead[name] = nil
-                end
-            end
-            -- Count only units that are newly dead (not already known ghosts)
-            for i = 1, members do
-                local unit = "party" .. i
-                if i == members then unit = "player" end
-                local name = GetUnitName(unit, false)
-                if name and UnitIsDeadOrGhost(unit) and not state.knownDead[name] then
-                    state.deathLog[name] = (state.deathLog[name] or 0) + 1
-                    state.knownDead[name] = true
-                end
-            end
+        for i = prevCount + 1, state.deathCount do
+            deathCredits[#deathCredits + 1] = { time = GetTime() }
         end
+        ScanDeaths()
         RenderDeaths()
+    elseif event == "UNIT_FLAGS" then
+        local unit = ...
+        if unit == "player" or (unit and unit:match("^party[1-4]$")) then ScanDeaths() end
     elseif event == "WORLD_STATE_TIMER_START" then
         state.timerStarted = true
         RenderTimer()

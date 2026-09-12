@@ -7,7 +7,6 @@ addonTable.Comm = Comm
 local ADDON_PREFIX = "LunaUI"
 local LEGACY_PREFIXES = {
     LunaVer = true,
-    LunaKick = true,
 }
 
 local MIN_SEND_INTERVAL = 1.0 -- seconds between sends per module:action
@@ -35,7 +34,7 @@ local recentMessages = {}
 -- == PUBLIC API ==
 
 --- Register a handler for a module:action pair
--- @param module string  Module namespace (e.g., "VER", "KICK")
+-- @param module string  Module namespace (e.g., "VER")
 -- @param action string  Action name (e.g., "HELLO", "CD", "SPELLS")
 -- @param callback function  function(senderShort, payload, senderFull)
 function Comm.Register(module, action, callback)
@@ -232,9 +231,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
                 addonTable.Core.Log("Comm", "  -> Legacy VER:HELLO", 0)
                 Dispatch(senderShort, sender, "VER", "HELLO", message)
             end
-        elseif prefix == "LunaKick" then
-            addonTable.Core.Log("Comm", "  -> Legacy KICK:CD", 0)
-            Dispatch(senderShort, sender, "KICK", "CD", message)
         end
     end
 end
@@ -248,4 +244,3 @@ end, "AddonComm")
 -- Register all prefixes
 C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
 C_ChatInfo.RegisterAddonMessagePrefix("LunaVer")
-C_ChatInfo.RegisterAddonMessagePrefix("LunaKick")

@@ -373,7 +373,9 @@ end
 
 -- Combat Logging by Instance Difficulty
 local ApplyLogFrameEvents -- forward declaration
-local combatLogActive = false
+local combatLogActive = false -- Ownership only; never used as the actual logging state.
+local combatLogTicker
+local logCheckGeneration = 0
 
 local difficultyMap = {
     [1]  = "dungeonNormal",
@@ -387,8 +389,7 @@ local difficultyMap = {
 }
 
 local function CheckCombatLogging()
-    local settings = UIThingsDB.combat.combatLog
-    if not settings then return end
+    local settings = UIThingsDB.combat.combatLog or {}
 
     local _, instanceType, difficultyID = GetInstanceInfo()
     local shouldLog = false
@@ -400,20 +401,24 @@ local function CheckCombatLogging()
         end
     end
 
-    if shouldLog and not combatLogActive then
+    local isLogging = LoggingCombat()
+    if shouldLog and not isLogging then
         LoggingCombat(true)
-        combatLogActive = true
-        addonTable.Core.Log("Combat", "Combat logging started", 1)
+        if LoggingCombat() then
+            combatLogActive = true
+            addonTable.Core.Log("Combat", "Combat logging started", 1)
+        end
     elseif not shouldLog and combatLogActive then
-        LoggingCombat(false)
-        combatLogActive = false
-        addonTable.Core.Log("Combat", "Combat logging stopped", 1)
+        if isLogging then LoggingCombat(false) end
+        if not LoggingCombat() then
+            combatLogActive = false
+            if isLogging then addonTable.Core.Log("Combat", "Combat logging stopped", 1) end
+        end
     end
 end
 
 function addonTable.Combat.CheckCombatLogging()
     ApplyLogFrameEvents()
-    CheckCombatLogging()
 end
 
 function addonTable.Combat.ApplyLogFrameEvents()
@@ -423,15 +428,15 @@ end
 -- Instance detection frame (separate from timer so it works even with timer disabled)
 local logFrame = CreateFrame("Frame")
 logFrame:SetScript("OnEvent", function(self, event)
-    C_Timer.After(2, CheckCombatLogging)
+    logCheckGeneration = logCheckGeneration + 1
+    local generation = logCheckGeneration
+    C_Timer.After(2, function()
+        if generation == logCheckGeneration then CheckCombatLogging() end
+    end)
 end)
 
 ApplyLogFrameEvents = function()
-    local settings = UIThingsDB.combat.combatLog
-    if not settings then
-        logFrame:UnregisterAllEvents()
-        return
-    end
+    local settings = UIThingsDB.combat.combatLog or {}
     -- Check if any combat log option is enabled
     local anyEnabled = false
     for _, v in pairs(settings) do
@@ -442,9 +447,20 @@ ApplyLogFrameEvents = function()
     if anyEnabled then
         logFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
         logFrame:RegisterEvent("CHALLENGE_MODE_START")
+        logFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        if not combatLogTicker then
+            combatLogTicker = C_Timer.NewTicker(5, CheckCombatLogging)
+        end
     else
         logFrame:UnregisterAllEvents()
+        logCheckGeneration = logCheckGeneration + 1
+        if combatLogTicker then
+            combatLogTicker:Cancel()
+            combatLogTicker = nil
+        end
     end
+    -- PLAYER_ENTERING_WORLD may already have fired before delayed initialization.
+    CheckCombatLogging()
 end
 
 -- ============================================================

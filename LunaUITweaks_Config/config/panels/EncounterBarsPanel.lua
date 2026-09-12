@@ -1,0 +1,120 @@
+local addon = _G.LunaUITweaks
+local H = addon.ConfigHelpers
+
+local function Setup(panel, tab)
+    H.CreateResetButton(panel, "encounterBars")
+    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT"); scroll:SetPoint("BOTTOMRIGHT", -30, 0)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetSize(560, 3270); scroll:SetScrollChild(child)
+    scroll:SetScript("OnShow", function() child:SetWidth(scroll:GetWidth()) end)
+    local function Label(text, x, y, width, template)
+        local f = child:CreateFontString(nil, "OVERLAY", template or "GameFontHighlight")
+        f:SetPoint("TOPLEFT", x, y); f:SetText(text)
+        if width then f:SetWidth(width); f:SetJustifyH("LEFT") end
+        return f
+    end
+    Label("Encounter Bars & Timers", 16, -36, nil, "GameFontNormalHuge")
+    local status = Label("", 20, -110, 490)
+    local function Status()
+        local blocker = addon.EncounterBars.GetBlocker()
+        status:SetText(blocker and ("Inactive: " .. blocker .. ". Your options are retained.")
+            or (UIThingsDB.encounterBars.enabled and "Active — no boss-mod dependency." or "Disabled — use the checkbox above to enable these timers."))
+        H.UpdateModuleVisuals(panel, tab, addon.EncounterBars.IsActive())
+    end
+    local function Update() addon.EncounterBars.UpdateSettings(); Status() end
+    local function Check(key, text, x, y)
+        local f = CreateFrame("CheckButton", "LunaEncounterBars_" .. key, child, "ChatConfigCheckButtonTemplate")
+        f:SetPoint("TOPLEFT", x, y); f.Text:SetText(text)
+        f:SetChecked(UIThingsDB.encounterBars[key])
+        f:SetScript("OnClick", function(self) UIThingsDB.encounterBars[key] = not not self:GetChecked(); Update() end)
+        return f
+    end
+    local function Slider(key, text, low, high, step, x, y)
+        local name = "LunaEncounterBars_" .. key
+        local f = CreateFrame("Slider", name, child, "OptionsSliderTemplate")
+        f:SetPoint("TOPLEFT", x, y); f:SetWidth(210)
+        f:SetMinMaxValues(low, high); f:SetValueStep(step); f:SetObeyStepOnDrag(true)
+        _G[name .. "Low"]:SetText(low); _G[name .. "High"]:SetText(high)
+        local function Caption(value) _G[name .. "Text"]:SetText(text .. ": " .. value) end
+        f:SetValue(UIThingsDB.encounterBars[key]); Caption(UIThingsDB.encounterBars[key])
+        f:SetScript("OnValueChanged", function(_, value)
+            value = math.floor(value / step + 0.5) * step
+            UIThingsDB.encounterBars[key] = value; Caption(value); Update()
+        end)
+    end
+    local function Button(text, x, y, fn)
+        local f = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
+        f:SetPoint("TOPLEFT", x, y); f:SetSize(145, 26); f:SetText(text); f:SetScript("OnClick", fn)
+    end
+    Check("enabled", "Enable Encounter Bars & Timers", 20, -74)
+    H.CreateSectionHeader(child, "What to show", -158)
+    Check("timeline", "Encounter timeline bars", 20, -188)
+    Check("hideTimeline", "Hide Blizzard timeline", 280, -188)
+    Check("pulls", "Pull timers", 20, -224)
+    Check("breaks", "Break timers", 280, -224)
+    Label("Bars show Blizzard events and your custom schedules below. Pull timers use Blizzard's group countdown; break timers exchange messages with BigWigs and DBM users.", 20, -264, 490)
+    H.CreateSectionHeader(child, "Appearance", -325)
+    Slider("width", "Bar width", 180, 500, 10, 20, -378)
+    Slider("height", "Bar height", 18, 40, 1, 280, -378)
+    Slider("spacing", "Spacing", 0, 16, 1, 20, -448)
+    Slider("maxBars", "Maximum encounter bars", 1, 15, 1, 280, -448)
+    H.CreateFontDropdown(child, "LunaEncounterBarsFont", "Font", UIThingsDB.encounterBars.font,
+        function(value) UIThingsDB.encounterBars.font = value; Update() end, 20, -502)
+    Slider("fontSize", "Font size", 8, 20, 1, 280, -522)
+    H.CreateColorSwatch(child, "Bars", UIThingsDB.encounterBars.color, Update, 20, -578)
+    H.CreateColorSwatch(child, "Urgent", UIThingsDB.encounterBars.urgentColor, Update, 180, -578)
+    H.CreateColorSwatch(child, "Pull / break", UIThingsDB.encounterBars.timerColor, Update, 340, -578)
+    H.CreateSectionHeader(child, "Position", -628)
+    Check("locked", "Lock all anchors", 20, -658)
+    Check("growUp", "Normal / timer bars grow up", 280, -658)
+    Button("Preview bars", 20, -700, addon.EncounterBars.TogglePreview)
+    Button("Reset positions", 180, -700, function()
+        UIThingsDB.encounterBars.encounterPos = { point = "CENTER", x = 330, y = 100 }
+        UIThingsDB.encounterBars.emphasizePos = { point = "CENTER", x = -330, y = 100 }
+        UIThingsDB.encounterBars.timerPos = { point = "CENTER", x = 0, y = 180 }; Update()
+    end)
+    Label("Unlock to drag the labelled anchors. Preview does not send group timers or play sounds.", 20, -740, 490)
+    H.CreateSectionHeader(child, "Countdowns & controls", -790)
+    Check("countdown", "Encounter / custom 5–1 audio", 20, -820)
+    Check("timerCountdown", "Pull / break 5–1 audio", 280, -820)
+    Check("recordedCountdown", "Recorded 5–1 voice (not TTS)", 20, -856)
+    Check("timerStartSound", "Pull / break start sound", 280, -856)
+    Slider("pullSeconds", "Default pull seconds", 3, 60, 1, 20, -925)
+    Slider("breakMinutes", "Default break minutes", 1, 60, 1, 280, -925)
+    Button("Start pull", 20, -975, function() addon.EncounterBars.StartPull() end)
+    Button("Start break", 180, -975, function() addon.EncounterBars.StartBreak() end)
+    Button("Cancel timers", 340, -975, function() addon.EncounterBars.StartPull(0); addon.EncounterBars.StartBreak(0) end)
+    Label("/lunapull [seconds]   /lunabreak [minutes]\nUse 0 or cancel to stop. Group timers require leader/assistant. Recorded numbers play on Master; completion messages still use TTS.", 20, -1015, 490)
+    Check("shortCommands", "Also enable /pull and /break", 20, -1080)
+    Label("Optional aliases; the Luna-prefixed commands remain available. Commands already registered by another addon are left alone.", 20, -1120, 490)
+    H.CreateSectionHeader(child, "Emphasized encounter bars", -1170)
+    Check("emphasize", "Move imminent abilities to a separate anchor", 20, -1200)
+    Slider("emphasizeThreshold", "Move at (seconds)", 1, 30, 1, 20, -1270)
+    Slider("emphasizeFontSize", "Emphasized font size", 8, 24, 1, 280, -1270)
+    Slider("emphasizeWidth", "Emphasized width", 180, 600, 10, 20, -1340)
+    Slider("emphasizeHeight", "Emphasized height", 18, 50, 1, 280, -1340)
+    H.CreateColorSwatch(child, "Emphasized colour", UIThingsDB.encounterBars.emphasizeColor, Update, 20, -1400)
+    Label("Bars move, rather than duplicate, at the selected threshold. Both groups share the overall bar limit, font and spacing. Unlock anchors and use Preview bars to position them.", 20, -1440, 490)
+    Check("emphasizeGrowUp", "Emphasized bars grow upwards", 20, -1510)
+    Check("emphasizeGlow", "Flash when moving to emphasis", 20, -1546)
+    Check("emphasizeSound", "Play transition sound", 280, -1546)
+    Label("One brief flash and optional raid-warning sound when a visible bar enters emphasis. Settings changes and previews do not trigger the sound.", 20, -1586, 490)
+    H.CreateSectionHeader(child, "Timeline details", -1650)
+    Check("indicators", "Show role / mechanic icons", 20, -1680)
+    Label("Blizzard-supplied indicators appear beside the bar; these do not filter abilities by your role.", 20, -1716, 490)
+    Check("dueNow", "Highlight abilities due now", 20, -1762)
+    H.CreateColorSwatch(child, "Due now colour", UIThingsDB.encounterBars.dueNowColor, Update, 320, -1768)
+    Check("limitHorizon", "Limit how far ahead to show", 20, -1810)
+    Slider("horizon", "Show next (seconds)", 10, 120, 5, 280, -1840)
+    Label("The time limit only affects encounter bars, not pull or break timers. Due-now bars remain until Blizzard finishes or cancels the event.", 20, -1880, 490)
+    if addon.CustomEncounterTimers and addon.CustomEncounterTimers.CreateEditor then
+        addon.CustomEncounterTimers.CreateEditor(child, -1960)
+    end
+    panel:HookScript("OnShow", Status)
+    panel:HookScript("OnHide", addon.EncounterBars.ClosePreview)
+    Status()
+end
+
+-- Use the dynamic panel registry so existing navigation IDs remain stable.
+LunaUITweaksAPI.RegisterConfigPanel("encounterBars", "Encounter Bars", "Interface\\Icons\\Inv_Relics_Hourglass", Setup)

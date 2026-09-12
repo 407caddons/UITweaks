@@ -10,6 +10,7 @@ table.insert(Widgets.moduleInits, function()
     local pullActive = false
     local pullStartTime = nil
     local pullCancelled = false   -- guards the fallback chat countdown
+    local pullDuration = PULL_DURATION
     local cachedText = "|cFF888888Pull|r"
 
     -- --------------------------------------------------------
@@ -20,6 +21,9 @@ table.insert(Widgets.moduleInits, function()
             return "bigwigs"
         elseif C_AddOns.IsAddOnLoaded("DBM-Core") then
             return "dbm"
+        elseif addonTable.EncounterBars and addonTable.EncounterBars.IsActive()
+            and UIThingsDB.encounterBars.pulls then
+            return "luna"
         end
         return "none"
     end
@@ -27,6 +31,7 @@ table.insert(Widgets.moduleInits, function()
     local function GetBackendLabel(backend)
         if backend == "bigwigs" then return "BigWigs"
         elseif backend == "dbm" then return "DBM"
+        elseif backend == "luna" then return "Luna Timers"
         else return "Chat Countdown"
         end
     end
@@ -66,12 +71,17 @@ table.insert(Widgets.moduleInits, function()
     -- Start / Cancel
     -- --------------------------------------------------------
     local function StartPull()
+        local backend = GetBackend()
+        pullDuration = backend == "luna" and UIThingsDB.encounterBars.pullSeconds or PULL_DURATION
         pullActive = true
         pullStartTime = GetTime()
-        cachedText = string.format("|cFF00FF00Pull: %d|r", PULL_DURATION)
+        cachedText = string.format("|cFF00FF00Pull: %d|r", pullDuration)
 
-        local backend = GetBackend()
-        if backend == "bigwigs" then
+        if backend == "luna" then
+            if not addonTable.EncounterBars.StartPull(pullDuration) then
+                pullActive = false; pullStartTime = nil; cachedText = "|cFF888888Pull|r"
+            end
+        elseif backend == "bigwigs" then
             -- BigWigs registers SLASH_BigWigsPull1 = "/pull"
             if SlashCmdList["BigWigsPull"] then
                 SlashCmdList["BigWigsPull"](tostring(PULL_DURATION))
@@ -90,6 +100,12 @@ table.insert(Widgets.moduleInits, function()
     end
 
     local function CancelPull()
+        if GetBackend() == "luna" then
+            if addonTable.EncounterBars.StartPull(0) then
+                pullActive = false; pullStartTime = nil; cachedText = "|cFF888888Pull|r"
+            end
+            return
+        end
         pullCancelled = true
         pullActive = false
         pullStartTime = nil
@@ -123,7 +139,8 @@ table.insert(Widgets.moduleInits, function()
         if pullActive then
             GameTooltip:AddLine("Click to cancel pull", 1, 0.4, 0.4)
         else
-            GameTooltip:AddLine(string.format("Click to start %ds pull timer", PULL_DURATION),
+            local seconds = GetBackend() == "luna" and UIThingsDB.encounterBars.pullSeconds or PULL_DURATION
+            GameTooltip:AddLine(string.format("Click to start %ds pull timer", seconds),
                 0.5, 0.5, 1)
         end
         GameTooltip:Show()
@@ -149,8 +166,15 @@ table.insert(Widgets.moduleInits, function()
     -- Update (called every 1s by widget ticker)
     -- --------------------------------------------------------
     pullFrame.UpdateContent = function(self)
+        if GetBackend() == "luna" then
+            local remaining = addonTable.EncounterBars.GetPullRemaining()
+            pullActive = remaining ~= nil and remaining > 0
+            cachedText = pullActive and string.format("|cFF00FF00Pull: %d|r", math.ceil(remaining)) or "|cFF888888Pull|r"
+            self.text:SetText(cachedText)
+            return
+        end
         if pullActive and pullStartTime then
-            local remaining = PULL_DURATION - (GetTime() - pullStartTime)
+            local remaining = pullDuration - (GetTime() - pullStartTime)
 
             if remaining <= 0 then
                 -- Natural expiry

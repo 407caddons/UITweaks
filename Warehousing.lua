@@ -25,7 +25,7 @@ local MAIL_STEP_DELAY = 0.3
 local BAG_LIST = (function()
     local t = {}
     for bag = 0, NUM_BAG_SLOTS do t[#t + 1] = bag end
-    t[#t + 1] = REAGENT_BAG_SLOT
+    if REAGENT_BAG_SLOT > NUM_BAG_SLOTS then t[#t + 1] = REAGENT_BAG_SLOT end
     return t
 end)()
 
@@ -43,6 +43,9 @@ local atMailbox = false
 local atBank = false
 local atWarbandBank = false
 local atMerchant = false
+local merchantSession = 0
+local autoBuyAttempted = false
+local pendingPurchases = {} -- reservations survive rapid merchant reopening
 -- (drag-and-drop is set up via SetupDropTarget from WarehousingPanel.lua)
 
 -- Centralized Logging
@@ -181,6 +184,9 @@ local function ScanBags()
                 end
 
                 if trackedKey then
+                    local tracked = trackedItems[trackedKey]
+                    tracked.knownItemIDs = tracked.knownItemIDs or {}
+                    tracked.knownItemIDs[info.itemID] = true
                     counts[trackedKey] = (counts[trackedKey] or 0) + info.stackCount
                 end
             end
@@ -217,6 +223,9 @@ local function ScanContainers(containerIDs)
                     end
                 end
                 if trackedKey then
+                    local tracked = trackedItems[trackedKey]
+                    tracked.knownItemIDs = tracked.knownItemIDs or {}
+                    tracked.knownItemIDs[info.itemID] = true
                     counts[trackedKey] = (counts[trackedKey] or 0) + info.stackCount
                 end
             end
@@ -286,6 +295,12 @@ local function ScanOpenBank()
     return ScanContainers(GetOpenBankContainers())
 end
 
+local function ReconcilePurchases(bagCounts)
+    for itemID, reservation in pairs(pendingPurchases) do
+        if (bagCounts[itemID] or 0) >= reservation.expected then pendingPurchases[itemID] = nil end
+    end
+end
+
 --- Debounced bag scan
 local function ScheduleBagScan()
     if not UIThingsDB.warehousing.enabled then return end
@@ -296,6 +311,8 @@ local function ScheduleBagScan()
         EnsureDB()
         local key = GetCharacterKey()
         local bagCounts = ScanBags()
+        ReconcilePurchases(bagCounts)
+        if atBank then ScanOpenBank() end
         LunaUITweaks_WarehousingData.characters[key] = LunaUITweaks_WarehousingData.characters[key] or {}
         LunaUITweaks_WarehousingData.characters[key].lastSeen = time()
         LunaUITweaks_WarehousingData.characters[key].bagCounts = bagCounts
@@ -307,6 +324,33 @@ local function ScheduleBagScan()
 end
 
 --- Calculate overflow and deficit for current character
+local function IsMaterial(itemID, item)
+    local classID = select(6, C_Item.GetItemInfoInstant(itemID)) or item.classID
+    return classID == 7
+end
+
+local function GetAccessibleMaterialCount(itemID, item)
+    -- Ask the client for current bags + personal/reagent + account bank stock.
+    -- Remember discovered quality variants, but never reuse stale cached quantities.
+    local ids = { [itemID] = true }
+    for id in pairs(item.knownItemIDs or {}) do ids[id] = true end
+    -- Migrate variant identities from the old cache (counts are deliberately ignored).
+    local old = LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.warband
+    for id in pairs(old and old.items or {}) do
+        local name = C_Item.GetItemNameByID(id)
+        if name and item.name and name:lower() == item.name:lower() then ids[id] = true end
+    end
+    local total = 0
+    for id in pairs(ids) do
+        if id == itemID or not LunaUITweaks_WarehousingData.items[id] then
+            local count = C_Item.GetItemCount(id, true, false, true, true)
+            if issecretvalue(count) or type(count) ~= "number" then return nil end
+            total = total + count
+        end
+    end
+    return total
+end
+
 local function CalculateOverflowDeficit()
     EnsureDB()
     local bagCounts = ScanBags()
@@ -332,10 +376,17 @@ local function CalculateOverflowDeficit()
             minKeep = itemData.minKeep or 0
         end
 
-        if bagCount > minKeep then
-            overflow[itemID] = { count = bagCount - minKeep, destination = dest }
-        elseif bagCount < minKeep then
-            deficit[itemID] = { count = minKeep - bagCount }
+        local material = IsMaterial(itemID, itemData)
+        local available = bagCount
+        if material then available = GetAccessibleMaterialCount(itemID, itemData) end
+        if available then
+            -- Materials remain accessible in either bank; consumables retain
+            -- their minimum in bags. Mailing must preserve accessible stock.
+            local excess = material and math.min(bagCount, math.max(0, available - minKeep))
+                or math.max(0, bagCount - minKeep)
+            if material and (dest == "Warband Bank" or dest == "Personal Bank") then excess = bagCount end
+            if excess > 0 then overflow[itemID] = { count = excess, destination = dest } end
+            if available < minKeep then deficit[itemID] = { count = minKeep - available } end
         end
     end
 
@@ -666,7 +717,7 @@ function Warehousing.RefreshPopup()
         local hasWithdraw = false
         for itemID, data in pairs(deficit) do
             local defItemData = LunaUITweaks_WarehousingData.items[itemID]
-            if defItemData and defItemData.classID == 7 then
+            if defItemData and IsMaterial(itemID, defItemData) then
                 -- skip reagents
             else
             local bankHas = bankCounts[itemID] or 0
@@ -990,7 +1041,7 @@ local function StartBankSync(continuationPass)
         -- Tradeskill reagents (classID 7) are accessible directly from the warband bank
         -- during crafting, so never pull them out to fill a bag deficit.
         local itemData = LunaUITweaks_WarehousingData.items[itemID]
-        if itemData and itemData.classID == 7 then
+        if itemData and IsMaterial(itemID, itemData) then
             -- skip: reagents stay in bank, auto-buy from vendor instead
         else
         local bankHas = bankCounts[itemID] or 0
@@ -1246,106 +1297,99 @@ function Warehousing.RegisterVendorItem(itemID)
 end
 
 --- Execute auto-buy purchases for all autoBuy items with a deficit.
-local function RunAutoBuy()
-    if not UIThingsDB.warehousing.enabled then return end
-    if not UIThingsDB.warehousing.autoBuyEnabled then return end
-    if InCombatLockdown() then return end
-    EnsureDB()
-
+local function BuildAutoBuyPlan(approved)
     local _, deficit = CalculateOverflowDeficit()
-    local goldReserve = (UIThingsDB.warehousing.goldReserve or 500) * 10000  -- convert to copper
-    local confirmAbove = (UIThingsDB.warehousing.confirmAbove or 100) * 10000
-    local currentMoney = GetMoney()
-    local spendable = math.max(0, currentMoney - goldReserve)
-
-    if spendable <= 0 then
-        Log("AutoBuy: not enough gold (reserve=" .. (UIThingsDB.warehousing.goldReserve or 500) .. "g)", 1)
-        return
-    end
-
-    -- Cache warband bank counts (by itemID) for deficit reduction
-    local warbandCounts = (LunaUITweaks_ReagentData and LunaUITweaks_ReagentData.warband
-        and LunaUITweaks_ReagentData.warband.items) or {}
-
-    -- Build purchase list
-    local purchases = {}
-    local totalCost = 0
-    for itemID, data in pairs(deficit) do
+    local bagCounts = ScanBags()
+    local spendable = math.max(0, GetMoney() - (UIThingsDB.warehousing.goldReserve or 500) * 10000)
+    ReconcilePurchases(bagCounts)
+    local purchases, totalCost = {}, 0
+    local sorted = {}
+    for itemID in pairs(deficit) do sorted[#sorted + 1] = itemID end
+    table.sort(sorted)
+    for _, itemID in ipairs(sorted) do
         local item = LunaUITweaks_WarehousingData.items[itemID]
-        if item and item.autoBuy then
-            local mIndex, mPrice, mStackSize = FindOnMerchant(itemID)
-            if mIndex and mPrice and mPrice > 0 then
-                -- Subtract warband bank stock: check by exact ID, then by name for quality variants
-                local warbandHas = warbandCounts[itemID] or 0
-                if warbandHas == 0 and item.name then
-                    local targetName = item.name:lower()
-                    for wbID, wbCount in pairs(warbandCounts) do
-                        local wbName = C_Item.GetItemNameByID(wbID)
-                        if wbName and wbName:lower() == targetName then
-                            warbandHas = warbandHas + wbCount
-                        end
-                    end
+        local reservation = pendingPurchases[itemID]
+        local pending = 0
+        if reservation then
+            pending = math.max(0, reservation.expected - (bagCounts[itemID] or 0))
+            if pending == 0 then pendingPurchases[itemID] = nil end
+        end
+        if item and item.autoBuy and (not approved or approved[itemID]) then
+            local index, price, bundle = FindOnMerchant(itemID)
+            local info = index and C_MerchantFrame.GetItemInfo(index)
+            local link = index and GetMerchantItemLink(index)
+            local vendorID = link and tonumber(link:match("item:(%d+)"))
+            local approval = approved and approved[itemID]
+            if vendorID and info and not info.hasExtendedCost and info.isPurchasable ~= false
+                and price and price > 0 and bundle and bundle > 0
+                and (not approval or (approval.vendorID == vendorID and approval.price == price
+                    and approval.bundle == bundle)) then
+                local needed = math.max(0, deficit[itemID].count - pending)
+                if approval then needed = math.min(needed, approval.quantity) end
+                -- Vendor prices are per bundle, but BuyMerchantItem takes item units.
+                -- Never round beyond the target merely to complete a vendor bundle.
+                local bundles = math.min(math.floor(needed / bundle), math.floor(spendable / price))
+                if info.numAvailable and info.numAvailable >= 0 then
+                    bundles = math.min(bundles, math.floor(info.numAvailable / bundle))
                 end
-                local needed = math.max(0, data.count - warbandHas)
-                if needed > 0 then
-                    -- Round up to full stacks
-                    local stacks = math.ceil(needed / mStackSize)
-                    local totalItems = stacks * mStackSize
-                    local cost = stacks * mPrice
-                    if cost <= spendable then
-                        table.insert(purchases, {
-                            itemID = itemID,
-                            name = item.name,
-                            mIndex = mIndex,
-                            stacks = stacks,
-                            totalItems = totalItems,
-                            cost = cost,
-                        })
-                        totalCost = totalCost + cost
-                        spendable = spendable - cost
-                    else
-                        -- Buy as many stacks as we can afford
-                        local affordableStacks = math.floor(spendable / mPrice)
-                        if affordableStacks > 0 then
-                            local cost2 = affordableStacks * mPrice
-                            table.insert(purchases, {
-                                itemID = itemID,
-                                name = item.name,
-                                mIndex = mIndex,
-                                stacks = affordableStacks,
-                                totalItems = affordableStacks * mStackSize,
-                                cost = cost2,
-                            })
-                            totalCost = totalCost + cost2
-                            spendable = spendable - cost2
-                        end
-                    end
+                if bundles > 0 then
+                    local quantity, cost = bundles * bundle, bundles * price
+                    purchases[#purchases + 1] = {itemID=itemID, name=item.name, index=index,
+                        vendorID=vendorID, quantity=quantity, price=price, bundle=bundle, cost=cost}
+                    spendable, totalCost = spendable - cost, totalCost + cost
                 end
             end
         end
     end
+    return purchases, totalCost
+end
 
+local function CanAutoBuy(session)
+    return atMerchant and session == merchantSession and MerchantFrame and MerchantFrame:IsShown()
+        and UIThingsDB.warehousing.enabled and UIThingsDB.warehousing.autoBuyEnabled
+        and not InCombatLockdown()
+end
+
+local function RunAutoBuy()
+    local session = merchantSession
+    if autoBuyAttempted or not CanAutoBuy(session) then return end
+    autoBuyAttempted = true
+    EnsureDB()
+    local purchases, totalCost = BuildAutoBuyPlan()
     if #purchases == 0 then return end
-
+    local approved = {}
+    for _, p in ipairs(purchases) do approved[p.itemID] = p end
+    local consumed = false
     local function DoPurchases()
-        for _, p in ipairs(purchases) do
-            BuyMerchantItem(p.mIndex, p.stacks)
-            Log("AutoBuy: bought " .. p.stacks .. "x stack(s) of " .. (p.name or p.itemID)
-                .. " for " .. GetCoinTextureString(p.cost), 1)
+        if consumed or not CanAutoBuy(session) then return end
+        consumed = true
+        -- Recompute stock, enabled items, prices and the gold reserve on acceptance.
+        local current = BuildAutoBuyPlan(approved)
+        local bags = ScanBags()
+        for _, p in ipairs(current) do
+            pendingPurchases[p.itemID] = {expected=(bags[p.itemID] or 0) + p.quantity}
+            local remaining = p.quantity
+            local maxStack = GetMerchantItemMaxStack(p.index) or p.bundle
+            local chunkSize = math.floor(maxStack / p.bundle) * p.bundle
+            if chunkSize > 0 then
+                while remaining > 0 do
+                    local quantity = math.min(remaining, chunkSize)
+                    BuyMerchantItem(p.index, quantity)
+                    remaining = remaining - quantity
+                end
+                Log("AutoBuy: requested " .. p.quantity .. "x " .. (p.name or p.itemID)
+                    .. " for " .. GetCoinTextureString(p.cost), 1)
+            else
+                pendingPurchases[p.itemID] = nil
+            end
         end
-        -- Rescan bags after purchase
         C_Timer.After(0.5, ScheduleBagScan)
     end
 
-    -- Confirm if total cost exceeds threshold
-    if totalCost > confirmAbove then
-        local gold = math.floor(totalCost / 10000)
-        local silver = math.floor((totalCost % 10000) / 100)
-        local copper = totalCost % 100
-        local costStr = gold > 0 and (gold .. "g " .. silver .. "s") or (silver .. "s " .. copper .. "c")
-        local confirmMsg = "Auto-buy " .. #purchases .. " item type(s) from vendor for " .. costStr .. "?"
+    if totalCost > (UIThingsDB.warehousing.confirmAbove or 100) * 10000 then
         StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"].OnAccept = DoPurchases
-        StaticPopup_Show("LUNA_WAREHOUSING_AUTOBUY_CONFIRM", confirmMsg)
+        StaticPopup_Show("LUNA_WAREHOUSING_AUTOBUY_CONFIRM",
+            "Auto-buy " .. #purchases .. " item type(s) for up to " .. GetCoinTextureString(totalCost) .. "?")
     else
         DoPurchases()
     end
@@ -1451,6 +1495,7 @@ end
 local function OnBankShow()
     if not UIThingsDB.warehousing.enabled then return end
     atBank = true
+    ScanOpenBank() -- discover material quality variants before calculating targets
     RecheckWarbandFlags()
     CreatePopupFrame()
     popupMode = "bank"
@@ -1489,13 +1534,19 @@ end
 
 local function OnMerchantShow()
     if not UIThingsDB.warehousing.enabled then return end
+    if atMerchant then return end
     atMerchant = true
+    merchantSession = merchantSession + 1
+    autoBuyAttempted = false
+    local session = merchantSession
     -- Small delay to allow merchant inventory to fully load
-    C_Timer.After(0.3, RunAutoBuy)
+    C_Timer.After(0.3, function() if CanAutoBuy(session) then RunAutoBuy() end end)
 end
 
 local function OnMerchantClosed()
     atMerchant = false
+    merchantSession = merchantSession + 1
+    StaticPopup_Hide("LUNA_WAREHOUSING_AUTOBUY_CONFIRM")
 end
 
 --------------------------------------------------------------
@@ -1541,6 +1592,7 @@ function Warehousing.UpdateSettings()
         ScheduleBagScan()
     else
         UnregisterEvents()
+        OnMerchantClosed()
         if popupFrame then popupFrame:Hide() end
     end
 

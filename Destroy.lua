@@ -41,6 +41,57 @@ local closedByUser  = false
 local pendingRefresh = false
 local merchantOpen = false
 local RefreshList
+local disenchantBusy = false
+local busyGeneration = 0
+local activeDisenchantCast
+
+local function SetDisenchantBusy(busy)
+    disenchantBusy = busy
+    if InCombatLockdown() then pendingRefresh = true; return end
+    if busy then
+        if deButton then
+            deButton:Disable()
+            deButton:SetText("Disenchanting...")
+        end
+        for _, row in ipairs(rowPool) do row:Disable() end
+    elseif RefreshList then
+        RefreshList()
+    end
+end
+
+local function ReleaseDisenchant(delay)
+    busyGeneration = busyGeneration + 1
+    local generation = busyGeneration
+    C_Timer.After(delay, function()
+        if generation ~= busyGeneration then return end
+        activeDisenchantCast = nil
+        SetDisenchantBusy(false)
+    end)
+end
+
+local function OnDisenchantClick(self, button)
+    if button ~= "LeftButton" or disenchantBusy or InCombatLockdown() then return end
+    if not IsPlayerSpell(DISENCHANT_SPELL_ID) and not IsSpellKnown(DISENCHANT_SPELL_ID) then return end
+    if not self:GetAttribute("macrotext1") or self:GetAttribute("macrotext1") == "" then return end
+    SetDisenchantBusy(true)
+    -- Failed attempts may never produce a cast event. Do not leave the UI stuck.
+    if not activeDisenchantCast then ReleaseDisenchant(1) end
+end
+
+local function OnDisenchantCast(event, unit, castGUID, spellID)
+    if unit ~= "player" or spellID ~= DISENCHANT_SPELL_ID then return end
+    if event == "UNIT_SPELLCAST_START" then
+        busyGeneration = busyGeneration + 1
+        activeDisenchantCast = castGUID
+        SetDisenchantBusy(true)
+    elseif disenchantBusy and (not activeDisenchantCast or activeDisenchantCast == castGUID) then
+        -- Allow the consumed item's bag update to land before arming the next macro.
+        ReleaseDisenchant(0.5)
+    end
+end
+
+local disenchantEvents = { "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED" }
 
 local function GetExcludedItems()
     UIThingsDB.destroy.excludedItems = UIThingsDB.destroy.excludedItems or {}
@@ -259,6 +310,7 @@ local function GetRow(index)
     row:SetScript("PostClick", function(self, button)
         if button == "LeftButton" then
             SellItem(self.sellItem)
+            OnDisenchantClick(self, button)
             return
         end
         if button ~= "RightButton" or not self.itemID or InCombatLockdown() then return end
@@ -283,6 +335,7 @@ end
 
 local function UpdateDisenchantButton()
     if InCombatLockdown() then return end
+    if disenchantBusy then SetDisenchantBusy(true); return end
     local first
     for _, item in ipairs(items) do
         if not item.excluded then
@@ -305,6 +358,7 @@ end
 
 RefreshList = function()
     if not mainFrame or InCombatLockdown() then return end
+    if disenchantBusy then return end
     mainFrame.title:SetText(IsVendorMode() and "Destroy - Sell Gear" or "Disenchant")
     ScanBags()
 
@@ -314,6 +368,7 @@ RefreshList = function()
     local excludedCount = 0
     for i, item in ipairs(items) do
         local row = GetRow(i)
+        row:Enable()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", mainFrame.scrollChild, "TOPLEFT", 0, -yOff)
         row:SetPoint("RIGHT", mainFrame.scrollChild, "RIGHT", 0, 0)
@@ -413,6 +468,7 @@ local function CreateWindow()
     deButton:RegisterForClicks(useKeyDown and "LeftButtonDown" or "LeftButtonUp")
     deButton:SetScript("PostClick", function(self, button)
         if button == "LeftButton" then SellItem(self.sellItem) end
+        OnDisenchantClick(self, button)
     end)
 
     mainFrame:Hide()
@@ -516,6 +572,7 @@ function Destroy.UpdateSettings()
     local enabled = UIThingsDB.destroy.enabled
     merchantOpen = MerchantFrame and MerchantFrame:IsShown() or false
     if enabled and not eventsRegistered then
+        for _, event in ipairs(disenchantEvents) do EventBus.Register(event, OnDisenchantCast, "Destroy") end
         EventBus.Register("PLAYER_UPDATE_RESTING", OnRestingChanged, "Destroy")
         EventBus.Register("PLAYER_ENTERING_WORLD", OnRestingChanged, "Destroy")
         EventBus.Register("BAG_UPDATE_DELAYED", OnBagsChanged, "Destroy")
@@ -525,6 +582,9 @@ function Destroy.UpdateSettings()
         EventBus.Register("MERCHANT_CLOSED", OnMerchantChanged, "Destroy")
         eventsRegistered = true
     elseif not enabled and eventsRegistered then
+        for _, event in ipairs(disenchantEvents) do EventBus.Unregister(event, OnDisenchantCast) end
+        busyGeneration = busyGeneration + 1
+        disenchantBusy, activeDisenchantCast = false, nil
         EventBus.Unregister("PLAYER_UPDATE_RESTING", OnRestingChanged)
         EventBus.Unregister("PLAYER_ENTERING_WORLD", OnRestingChanged)
         EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagsChanged)

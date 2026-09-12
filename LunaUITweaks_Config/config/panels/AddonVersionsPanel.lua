@@ -31,11 +31,6 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             print("|cFF00FF00[LunaUITweaks]|r Addon communication enabled")
             -- Immediately announce presence and request data from the group
             addonTable.AddonVersions.BroadcastPresence()
-            if UIThingsDB.kick and UIThingsDB.kick.enabled then
-                addonTable.Kick.BroadcastSpells()
-                -- Request spell lists from others so we get fresh data
-                addonTable.Comm.Send("KICK", "REQ", "")
-            end
         end
     end)
 
@@ -45,7 +40,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     hideTooltip:SetJustifyH("LEFT")
     hideTooltip:SetTextColor(0.7, 0.7, 0.7)
     hideTooltip:SetText(
-        "When enabled, this addon will not communicate with other players' addons (Kick tracker, Addon Versions)")
+        "When enabled, addon communication with other players is disabled (including Addon Versions)")
 
     -- Debug mode checkbox
     local debugCheckbox = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")

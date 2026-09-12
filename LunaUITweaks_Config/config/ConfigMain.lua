@@ -73,14 +73,6 @@ function addonTable.Config.Initialize()
                 end
             end
 
-            -- Kick CDs
-            if UIThingsDB.kick then
-                UIThingsDB.kick.locked = true
-                if addonTable.Kick and addonTable.Kick.UpdateSettings then
-                    addonTable.Kick.UpdateSettings()
-                end
-            end
-
             -- Damage Meter
             if UIThingsDB.damageMeter then
                 UIThingsDB.damageMeter.locked = true
@@ -178,7 +170,6 @@ function addonTable.Config.Initialize()
             { id = 3,  name = "XP Bar",           key = "xpBar",         icon = "Interface\\Icons\\XP_Icon" },
             { id = 4,  name = "Combat",           key = "combat",        icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance" },
             { id = 5,  name = "Cast Bar",         key = "castBar",       icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
-            { id = 6,  name = "Kick CDs",         key = "kick",          icon = "Interface\\Icons\\Ability_Kick" },
             { id = 7,  name = "M+ Timer",         key = "mplusTimer",    icon = "Interface\\Icons\\Inv_Relics_Hourglass" },
             { id = 8,  name = "Minimap",          key = "minimap",       icon = "Interface\\Icons\\Inv_Misc_Map02" },
             { id = 9,  name = "Coordinates",      key = "coordinates",   icon = "Interface\\Icons\\Inv_Misc_Map_01" },
@@ -204,17 +195,35 @@ function addonTable.Config.Initialize()
         local companionPanels = LunaUITweaksAPI and LunaUITweaksAPI._pendingPanels or {}
         if #companionPanels > 0 then
             local lastMod = table.remove(modules)
-            for _, entry in ipairs(companionPanels) do
+            for i, entry in ipairs(companionPanels) do
                 table.insert(modules, {
-                    id   = #modules + 1,
+                    id   = 24 + i,
                     name = entry.name,
                     key  = entry.key,
                     icon = entry.icon,
                 })
             end
-            lastMod.id = #modules + 1
+            lastMod.id = 25 + #companionPanels
             table.insert(modules, lastMod)
         end
+
+        -- Sort presentation only: panel IDs and ConfigTabs indexes remain stable.
+        local modulesById = {}
+        for _, mod in ipairs(modules) do modulesById[mod.id] = mod end
+        local displayModules = {}
+        for i, mod in ipairs(modules) do displayModules[i] = mod end
+        table.sort(displayModules, function(a, b)
+            local function Rank(mod)
+                if mod.key == "misc" then return 0 end
+                if mod.key == "addonVersions" then return 2 end
+                return 1
+            end
+            local ar, br = Rank(a), Rank(b)
+            if ar ~= br then return ar < br end
+            local an, bn = a.name:lower(), b.name:lower()
+            if an == bn then return a.id < b.id end
+            return an < bn
+        end)
 
         -- Expand scroll child to fit all nav buttons (30px each)
         navScrollChild:SetHeight(math.max(500, #modules * 30 + 10))
@@ -261,10 +270,6 @@ function addonTable.Config.Initialize()
         local widgetsPanel = CreateFrame("Frame", nil, contentContainer)
         widgetsPanel:SetAllPoints()
         widgetsPanel:Hide()
-
-        local kickPanel = CreateFrame("Frame", nil, contentContainer)
-        kickPanel:SetAllPoints()
-        kickPanel:Hide()
 
         local damageMeterPanel = CreateFrame("Frame", nil, contentContainer)
         damageMeterPanel:SetAllPoints()
@@ -339,7 +344,6 @@ function addonTable.Config.Initialize()
         addonTable.ConfigPanels.minimap       = minimapPanel
         addonTable.ConfigPanels.talent        = talentPanel
         addonTable.ConfigPanels.widgets       = widgetsPanel
-        addonTable.ConfigPanels.kick          = kickPanel
         addonTable.ConfigPanels.damageMeter   = damageMeterPanel
         addonTable.ConfigPanels.addonVersions = addonVersionsPanel
         addonTable.ConfigPanels.notifications = notificationsPanel
@@ -364,7 +368,6 @@ function addonTable.Config.Initialize()
             [3]  = xpBarPanel,
             [4]  = combatPanel,
             [5]  = castBarPanel,
-            [6]  = kickPanel,
             [7]  = mplusTimerPanel,
             [8]  = minimapPanel,
             [9]  = coordinatesPanel,
@@ -387,7 +390,7 @@ function addonTable.Config.Initialize()
         }
 
         -- Create companion panels and shift AddonVersions to its new slot.
-        -- Built-ins fill slots 1..25; AddonVersions was placed at 25. With N
+        -- Built-ins retain their IDs (slot 6 is retired); AddonVersions is 25. With N
         -- companions, companions take 25..24+N and AddonVersions moves to 25+N.
         if #companionPanels > 0 then
             local numCompanions = #companionPanels
@@ -416,7 +419,7 @@ function addonTable.Config.Initialize()
             end
 
             -- Update button visuals
-            for i, btn in ipairs(navButtons) do
+            for i, btn in pairs(navButtons) do
                 btn.selected = i == id
                 if i == id then
                     btn:LockHighlight()
@@ -437,7 +440,7 @@ function addonTable.Config.Initialize()
             end
 
             -- Special OnShow logic (e.g., refreshing lists)
-            local key = modules[id] and modules[id].key
+            local key = modulesById[id] and modulesById[id].key
             if key == "questReminder" and addonTable.Config.RefreshQuestReminderList then
                 addonTable.Config.RefreshQuestReminderList()
             end
@@ -456,7 +459,7 @@ function addonTable.Config.Initialize()
         -- Create Sidebar Buttons
         ----------------------------------------------------
         local BUTTON_HEIGHT = 30
-        for i, mod in ipairs(modules) do
+        for i, mod in ipairs(displayModules) do
             local btn = CreateFrame("Button", nil, navScrollChild)
             btn:SetSize(SIDEBAR_WIDTH - 25, BUTTON_HEIGHT)
             btn:SetPoint("TOPLEFT", 0, -((i - 1) * BUTTON_HEIGHT))
@@ -471,10 +474,10 @@ function addonTable.Config.Initialize()
             -- Highlight texture
 
             btn:SetScript("OnClick", function()
-                SelectModule(i)
+                SelectModule(mod.id)
             end)
 
-            navButtons[i] = btn
+            navButtons[mod.id] = btn
 
             -- Store as tab-like object for compatibility with Helpers.UpdateModuleVisuals
             -- because existing panel setups expect a "tab" to tint red if disabled
@@ -494,9 +497,9 @@ function addonTable.Config.Initialize()
             local query = self:GetText():lower()
             hint:SetShown(query == "")
             local count = 0
-            for i, mod in ipairs(modules) do
+            for _, mod in ipairs(displayModules) do
                 local visible = mod.name:lower():find(query, 1, true) ~= nil
-                local button = navButtons[i]
+                local button = navButtons[mod.id]
                 button:SetShown(visible)
                 if visible then
                     button:ClearAllPoints()
@@ -536,9 +539,6 @@ function addonTable.Config.Initialize()
             end
             if addonTable.ConfigSetup.CastBar then
                 addonTable.ConfigSetup.CastBar(castBarPanel, navButtons[5], configWindow)
-            end
-            if addonTable.ConfigSetup.Kick then
-                addonTable.ConfigSetup.Kick(kickPanel, navButtons[6], configWindow)
             end
             if addonTable.ConfigSetup.MplusTimer then
                 addonTable.ConfigSetup.MplusTimer(mplusTimerPanel, navButtons[7], configWindow)

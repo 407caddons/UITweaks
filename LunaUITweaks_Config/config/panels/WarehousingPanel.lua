@@ -79,7 +79,8 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     desc:SetJustifyH("LEFT")
     desc:SetText(
         "Manages item distribution across your characters. Set minimum counts and overflow destinations per item.\n" ..
-        "Overflow items are mailed at the mailbox or deposited at the bank. Deficit items are withdrawn from the bank.\n" ..
+        "Materials: minimum counts bags + personal/warband banks. Consumables: minimum counts bags only.\n" ..
+        "Materials can stay in the bank; consumables are withdrawn to refill bags.\n" ..
         "Drag items from your bags and drop them onto this panel to add them to the list.")
     desc:SetTextColor(0.7, 0.7, 0.7)
 
