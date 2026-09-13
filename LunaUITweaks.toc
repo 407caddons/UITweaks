@@ -58,6 +58,7 @@ Coordinates.lua
 Warehousing.lua
 QueueTimer.lua
 Destroy.lua
+GearReview.lua
 BuffAlerts.lua
 CompactGroupFinder.lua
 widgets\Widgets.lua

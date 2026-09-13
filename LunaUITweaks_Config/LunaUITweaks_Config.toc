@@ -31,6 +31,7 @@ config\panels\CoordinatesPanel.lua
 config\panels\WarehousingPanel.lua
 config\panels\QueueTimerPanel.lua
 config\panels\DestroyPanel.lua
+config\panels\GearReviewPanel.lua
 config\panels\BuffAlertsPanel.lua
 config\panels\CompactGroupFinderPanel.lua
 config\panels\CustomEncounterTimersPanel.lua

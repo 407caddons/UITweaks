@@ -34,6 +34,7 @@ local function NewAnchor(key, title)
     local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     f:SetMovable(true); f:SetClampedToScreen(true); f:RegisterForDrag("LeftButton")
     f:SetFrameStrata("MEDIUM")
+    f:SetFrameLevel(20) -- Keep the drag handle readable over preview/live bars.
     f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     f:SetBackdropColor(0.04, 0.07, 0.09, 0.9)
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -101,8 +102,9 @@ local function Draw(entry, remaining, index, anchorKey, position, paused, suppre
         f:ClearAllPoints()
         local offset = (position - 1) * (height + db.spacing)
         local growUp = (emphasized and db.emphasizeGrowUp) or (not emphasized and db.growUp)
-        if growUp then f:SetPoint("BOTTOMLEFT", anchors[anchorKey], "TOPLEFT", height + 4, offset)
-        else f:SetPoint("TOPLEFT", anchors[anchorKey], "BOTTOMLEFT", height + 4, -offset) end
+        -- The handle marks the first bar's actual rectangle, not a header above it.
+        -- Upward growth adds subsequent bars above the same first-bar position.
+        f:SetPoint("TOPLEFT", anchors[anchorKey], "TOPLEFT", height + 4, growUp and offset or -offset)
         f.icon:SetSize(height, height)
         f.text:SetFont(db.font, fontSize, "OUTLINE")
         f.time:SetFont(db.font, fontSize, "OUTLINE")
@@ -362,7 +364,8 @@ function Bars.UpdateSettings()
         local f = anchors[key] or NewAnchor(key, label)
         local pos = DB()[key]
         f:ClearAllPoints(); f:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
-        f:SetSize(key == "emphasizePos" and DB().emphasizeWidth or DB().width, DB().locked and 1 or 24)
+        f:SetSize(key == "emphasizePos" and DB().emphasizeWidth or DB().width,
+            key == "emphasizePos" and DB().emphasizeHeight or DB().height)
         f:EnableMouse(not DB().locked); f.title:SetShown(not DB().locked)
         f:SetBackdropColor(0.04, 0.07, 0.09, DB().locked and 0 or 0.9); f:Show()
         if key == "emphasizePos" and not DB().emphasize then f:Hide() end

@@ -699,6 +699,7 @@ local function OnEvent(self, event, ...)
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
             },
+            gearReview = { enabled = true, notify = true, showEqual = true, ignored = {} },
             destroy = {
                 enabled = false,
                 autoShow = true,
