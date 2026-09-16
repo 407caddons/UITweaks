@@ -687,6 +687,7 @@ end)
 -- == UpdateSettings ==
 
 function CastBar.UpdateSettings()
+    if addonTable.FocusCastBar then addonTable.FocusCastBar.UpdateSettings() end
     if not castBarFrame then return end
 
     local settings = UIThingsDB.castBar

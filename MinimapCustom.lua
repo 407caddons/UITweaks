@@ -371,9 +371,10 @@ local function SetupMinimap()
         zoneDragOverlay:SetScript("OnDragStop", function()
             zoneFrame:StopMovingOrSizing()
             -- Recalculate position relative to minimap TOP center
-            local zoneCX, zoneCY = zoneFrame:GetCenter()
-            local mapCX, mapTop = Minimap:GetCenter(), select(2, Minimap:GetTop(), Minimap:GetTop())
-            mapTop = Minimap:GetTop()
+            local zoneCX = zoneFrame:GetCenter()
+            local zoneCY = zoneFrame:GetBottom()
+            local mapCX = Minimap:GetCenter()
+            local mapTop = Minimap:GetTop()
             local offX = zoneCX - mapCX
             local offY = zoneCY - mapTop
             -- Re-anchor to minimap so it stays correct on reload
@@ -437,7 +438,8 @@ local function SetupMinimap()
         clockDragOverlay:SetScript("OnDragStop", function()
             clockFrame:StopMovingOrSizing()
             -- Recalculate position relative to minimap BOTTOM center
-            local clockCX, clockCY = clockFrame:GetCenter()
+            local clockCX = clockFrame:GetCenter()
+            local clockCY = clockFrame:GetTop()
             local mapCX = Minimap:GetCenter()
             local mapBottom = Minimap:GetBottom()
             local offX = clockCX - mapCX
@@ -487,7 +489,8 @@ local function SetupMinimap()
         end)
         coordsDragOverlay:SetScript("OnDragStop", function()
             coordsFrame:StopMovingOrSizing()
-            local coordsCX, coordsCY = coordsFrame:GetCenter()
+            local coordsCX = coordsFrame:GetCenter()
+            local coordsCY = coordsFrame:GetTop()
             local mapCX = Minimap:GetCenter()
             local mapBottom = Minimap:GetBottom()
             local offX = coordsCX - mapCX

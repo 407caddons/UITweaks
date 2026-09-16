@@ -85,6 +85,7 @@ function Loot.ToggleAnchor()
         anchorFrame:Hide()
         return false
     else
+        anchorFrame:EnableMouse(true)
         anchorFrame:Show()
         return true
     end

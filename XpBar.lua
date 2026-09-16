@@ -326,7 +326,7 @@ function addonTable.XpBar.UpdateSettings()
             hideAtMaxLevel = not settings.showAtMaxLevel
         end
     end
-    if not settings.enabled or hideAtMaxLevel then
+    if not settings.enabled or (hideAtMaxLevel and not (addonTable.LayoutMode and addonTable.LayoutMode.IsActive())) then
         barFrame:Hide()
         return
     end

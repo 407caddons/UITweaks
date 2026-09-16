@@ -10,7 +10,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 900)
+    child:SetSize(650, 1120)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -376,4 +376,43 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- Target bar color
     Helpers.CreateColorSwatch(child, "Target Bar Color", UIThingsDB.castBar.targetBar.barColor, UpdateCastBar, 20, -685)
+
+    Helpers.CreateSectionHeader(child, "Focus Cast Bar", -750)
+    local function FocusCheck(label, suffix, key, x)
+        local f = CreateFrame("CheckButton", "UIThingsFocusCastBar"..suffix, child, "ChatConfigCheckButtonTemplate")
+        f:SetPoint("TOPLEFT", x, -785)
+        _G[f:GetName().."Text"]:SetText(label)
+        f:SetChecked(UIThingsDB.castBar.focusBar[key])
+        f:SetScript("OnClick", function(self)
+            UIThingsDB.castBar.focusBar[key] = not not self:GetChecked(); UpdateCastBar()
+        end)
+    end
+    FocusCheck("Enable Focus Cast Bar", "Enable", "enabled", 20)
+    FocusCheck("Lock Focus Cast Bar", "Lock", "locked", 260)
+    local function FocusNumber(label, suffix, key, isPosition, x, y, min, max)
+        local text = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        text:SetPoint("TOPLEFT", x, y); text:SetText(label)
+        local box = CreateFrame("EditBox", "UIThingsFocusCastBar"..suffix, child, "InputBoxTemplate")
+        box:SetSize(70, 24); box:SetPoint("LEFT", text, "RIGHT", 10, 0); box:SetAutoFocus(false)
+        local function ValueTable() return isPosition and UIThingsDB.castBar.focusBar.pos or UIThingsDB.castBar.focusBar end
+        box:SetText(tostring(RoundCoord(ValueTable()[key])))
+        box:SetScript("OnEnterPressed", function(self)
+            local value = tonumber(self:GetText())
+            if value and value == value and value >= min and value <= max then
+                ValueTable()[key] = RoundCoord(value); UpdateCastBar()
+            end
+            self:SetText(tostring(RoundCoord(ValueTable()[key]))); self:ClearFocus()
+        end)
+        box:SetScript("OnEscapePressed", function(self)
+            self:SetText(tostring(RoundCoord(ValueTable()[key]))); self:ClearFocus()
+        end)
+    end
+    FocusNumber("X Position:", "PosX", "x", true, 20, -832, -10000, 10000)
+    FocusNumber("Y Position:", "PosY", "y", true, 260, -832, -10000, 10000)
+    FocusNumber("Width:", "Width", "width", false, 20, -880, 80, 1000)
+    FocusNumber("Height:", "Height", "height", false, 260, -880, 8, 100)
+    Helpers.CreateColorSwatch(child, "Kickable colour", UIThingsDB.castBar.focusBar.barColor, UpdateCastBar, 20, -928)
+    local help = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    help:SetPoint("TOPLEFT", 20, -975); help:SetWidth(480); help:SetJustifyH("LEFT")
+    help:SetText("Independent of the player/target bars. Uses the shared font, texture, icon and non-interruptible colour. Unlock here or use Layout Mode to position it. Interruptibility does not check your interrupt cooldown or range.")
 end

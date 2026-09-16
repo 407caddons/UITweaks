@@ -130,6 +130,8 @@ local barTexts = {}
 local forcesBar, forcesText
 local bossTexts = {}
 local bossPctTexts = {}
+local bossMeasure
+local bossFitCache = {}
 local MAX_BOSSES = 8
 
 local function CreateBar(parent, index)
@@ -313,16 +315,21 @@ local function InitFrames()
     forcesText:SetTextColor(0.4, 0.8, 1.0)
 
     -- Boss objective texts
+    bossMeasure = mainFrame:CreateFontString(nil, "OVERLAY")
+    bossMeasure:SetFont(fontPath, fontSize, "OUTLINE")
+    bossMeasure:Hide()
     for i = 1, MAX_BOSSES do
         local bt = mainFrame:CreateFontString(nil, "OVERLAY")
         bt:SetFont(fontPath, fontSize, "OUTLINE")
         bt:SetJustifyH("LEFT")
+        bt:SetWordWrap(false)
         bt:SetTextColor(1, 1, 1)
         bossTexts[i] = bt
 
         local bpt = mainFrame:CreateFontString(nil, "OVERLAY")
         bpt:SetFont(fontPath, fontSize, "OUTLINE")
         bpt:SetJustifyH("RIGHT")
+        bpt:SetWordWrap(false)
         bpt:SetTextColor(1, 1, 1)
         bossPctTexts[i] = bpt
     end
@@ -353,6 +360,9 @@ local function ApplyLayout()
     local timerFontSize = settings.timerFontSize or 20
     local barWidth = settings.barWidth or 250
     local barHeight = settings.barHeight or 8
+
+    wipe(bossFitCache)
+    bossMeasure:SetFont(fontPath, fontSize, "OUTLINE")
 
     mainFrame:SetWidth(barWidth + 20)
 
@@ -622,6 +632,42 @@ local function GetParTime(i, n)
     return (target / n) * i
 end
 
+local function FitBossRow(index, name, prefix, suffix, pctText)
+    local width = UIThingsDB.mplusTimer.barWidth or 250
+    local signature = prefix .. name .. suffix .. "\n" .. pctText
+    local cached = bossFitCache[index]
+    if cached and cached.signature == signature and cached.width == width then return cached.text end
+    local function Measure(text)
+        bossMeasure:SetText(text)
+        return bossMeasure:GetStringWidth()
+    end
+    -- Reserve the right-hand column first. Bound both columns even at extreme
+    -- widths/font sizes, where the timing fields alone may not all fit.
+    local rightWidth = pctText ~= "" and math.min(Measure(pctText), width * 0.5) or 0
+    local leftWidth = math.max(1, width - rightWidth - (rightWidth > 0 and 8 or 0))
+    bossPctTexts[index]:SetWidth(math.max(1, rightWidth))
+    bossTexts[index]:SetWidth(leftWidth)
+    local available = leftWidth - Measure(prefix .. suffix)
+    local fitted = name
+    if Measure(name) > available then
+        fitted = ""
+        if Measure("...") <= available then
+            -- Search on UTF-8 character boundaries, not bytes.
+            local chars = {}
+            for char in name:gmatch("[%z\1-\127\194-\244][\128-\191]*") do chars[#chars+1]=char end
+            local low, high = 0, #chars
+            while low < high do
+                local middle = math.floor((low + high + 1) / 2)
+                if Measure(table.concat(chars,"",1,middle).."...") <= available then low=middle else high=middle-1 end
+            end
+            fitted=table.concat(chars,"",1,low).."..."
+        end
+    end
+    local text = prefix .. fitted .. suffix
+    bossFitCache[index] = {signature=signature,width=width,text=text}
+    return text
+end
+
 local function RenderObjectives()
     if not mainFrame then return end
 
@@ -647,7 +693,7 @@ local function RenderObjectives()
 
     for i, boss in ipairs(state.objectives) do
         if i > MAX_BOSSES then break end
-        local text
+        local text, prefix, suffix
         local pctText = ""
 
         if boss.time then
@@ -663,8 +709,8 @@ local function RenderObjectives()
                     splitStr = string.format(" |cFF%s%s|r", deltaHex, FormatTimeSigned(delta))
                 end
             end
-            text = string.format("|cFF%s[%s]|r |cFF%s%s|r%s",
-                bccHex, timeStr, bccHex, boss.name, splitStr)
+            prefix = string.format("|cFF%s[%s]|r |cFF%s", bccHex, timeStr, bccHex)
+            suffix = "|r" .. splitStr
 
             -- Right-aligned forces % with run-to-run delta
             if showBossForcePct and boss.forcePct then
@@ -685,9 +731,10 @@ local function RenderObjectives()
                 end
             end
         else
-            text = string.format("|cFF%s%s|r", bicHex, boss.name)
+            prefix, suffix = "|cFF" .. bicHex, "|r"
         end
 
+        text = FitBossRow(i, boss.name, prefix, suffix, pctText)
         SetTextIfChanged(bossTexts[i], text)
         SetTextIfChanged(bossPctTexts[i], pctText)
     end

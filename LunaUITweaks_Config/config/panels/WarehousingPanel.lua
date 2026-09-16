@@ -177,13 +177,19 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
 
     local instrText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     instrText:SetPoint("TOPLEFT", 20, -325)
+    instrText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -130, -325)
+    instrText:SetHeight(28)
+    instrText:SetJustifyH("LEFT")
+    instrText:SetJustifyV("TOP")
+    instrText:SetWordWrap(true)
     instrText:SetText("Drag an item from your bags and drop it here to add it to the list.")
     instrText:SetTextColor(0.5, 0.5, 0.5)
 
     -- Scroll frame for item list
     local scrollFrame = CreateFrame("ScrollFrame", "UIThingsWarehousingItemScroll", panel,
         "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 20, -345)
+    -- Keep the hint/refresh toolbar separate from the column-heading row.
+    scrollFrame:SetPoint("TOPLEFT", 20, -382)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 20)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -709,7 +715,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     -- Refresh button
     local refreshBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     refreshBtn:SetSize(80, 22)
-    refreshBtn:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", -20, 18)
+    refreshBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -35, -322)
     refreshBtn:SetText("Refresh")
     refreshBtn:SetScript("OnClick", RefreshItemList)
 

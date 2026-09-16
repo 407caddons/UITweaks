@@ -602,6 +602,11 @@ local function OnEvent(self, event, ...)
                     pos = { point = "CENTER", x = 0, y = -230 },
                     barColor = { r = 1, g = 0.3, b = 0.3, a = 1 },
                 },
+                focusBar = {
+                    enabled = false, locked = true, width = 250, height = 20,
+                    pos = { point = "CENTER", x = 0, y = -260 },
+                    barColor = { r = 1, g = 0.7, b = 0, a = 1 },
+                },
             },
             addonComm = {
                 hideFromWorld = false,
@@ -698,6 +703,11 @@ local function OnEvent(self, event, ...)
                 autoBuyEnabled = true,
                 goldReserve = 500,  -- never spend below this many gold
                 confirmAbove = 100, -- confirm popup if purchase total exceeds this many gold
+            },
+            tankDebuffs = {
+                enabled=false, onlyTanking=true, bossOnly=true,
+                player={enabled=true,iconSize=48,maxIcons=5,fontSize=16,x=-280,y=120},
+                other={enabled=true,iconSize=48,maxIcons=5,fontSize=16,x=40,y=120},
             },
             gearReview = { enabled = true, notify = true, showEqual = true, ignored = {} },
             destroy = {

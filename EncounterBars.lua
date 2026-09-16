@@ -17,6 +17,45 @@ local function DB() return UIThingsDB and UIThingsDB.encounterBars end
 local function Public(v) return not (issecretvalue and issecretvalue(v)) end
 local function Number(v) return Public(v) and type(v) == "number" and v == v end
 local function Tell(message) addon.Core.Log("EncounterBars", message, 1) end
+
+-- Temporary opt-in diagnostic: never compare or stringify a secret cast payload.
+local castDebugFrame, castDebugGeneration
+SLASH_LUNACASTDEBUG1 = "/lunacastdebug"
+SlashCmdList.LUNACASTDEBUG = function(input)
+    castDebugGeneration = (castDebugGeneration or 0) + 1
+    local generation = castDebugGeneration
+    if input and input:lower():match("^%s*off%s*$") then
+        if castDebugFrame then castDebugFrame:UnregisterAllEvents() end
+        print("LunaUITweaks: Cast debug OFF.")
+        return
+    end
+    if not castDebugFrame then
+        castDebugFrame = CreateFrame("Frame")
+        castDebugFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
+            local context = InCombatLockdown() and "IN COMBAT" or "out of combat"
+            if not Public(spellID) then
+                print("LunaUITweaks: Own successful cast [" .. context .. "]: spell ID is SECRET.")
+                return
+            end
+            if type(spellID) ~= "number" then
+                print("LunaUITweaks: Own successful cast [" .. context .. "]: no numeric spell ID.")
+                return
+            end
+            local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
+            if not Public(name) or type(name) ~= "string" then name = "Unknown spell" end
+            print("LunaUITweaks: Own successful cast [" .. context .. "]: " .. name ..
+                " — ID " .. tostring(spellID) .. " is readable.")
+        end)
+    end
+    castDebugFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    print("LunaUITweaks: Cast debug ON for 2 minutes. Cast Healing Rain in combat; /lunacastdebug off to stop.")
+    C_Timer.After(120, function()
+        if castDebugGeneration ~= generation then return end
+        castDebugFrame:UnregisterAllEvents()
+        print("LunaUITweaks: Cast debug OFF (timeout).")
+    end)
+end
+
 local function FullName(unit)
     local name, realm = UnitFullName(unit)
     if not Public(name) or not Public(realm) or not name then return end
@@ -46,6 +85,11 @@ local function NewAnchor(key, title)
         DB()[key] = { point = point, x = x, y = y }
     end)
     anchors[key] = f
+    if addon.LayoutMode then
+        addon.LayoutMode.RegisterTarget(title, function() return f end, function()
+            return Bars.IsActive() and (key ~= "emphasizePos" or DB().emphasize)
+        end)
+    end
     return f
 end
 
@@ -74,17 +118,24 @@ end
 
 local function Speak(entry, remaining, enabled)
     local second = math.ceil(remaining)
-    if enabled and second >= 1 and second <= 5 and not entry.spoken[second] then
+    if enabled and second >= 0 and second <= 5 and not entry.spoken[second]
+        and (second ~= 0 or entry.spoken[1]) then
         entry.spoken[second] = true
         if DB().recordedCountdown then
             -- Play the current number directly; never queue or catch up missed numbers.
-            local played = PlaySoundFile("Interface\\AddOns\\LunaUITweaks\\Sounds\\" .. second .. ".ogg", "Master")
+            local played = PlaySoundFile("Interface\\AddOns\\LunaUITweaks\\Sounds\\" .. (second == 0 and "go" or second) .. ".ogg", "Master")
             if not played and not countdownSoundWarning then
                 countdownSoundWarning = true
-                Tell("Countdown sound could not play. Check Sounds/1.ogg through 5.ogg and restart WoW after adding files.")
+                Tell("Countdown sound could not play. Check Sounds/1.ogg through 5.ogg and go.ogg and restart WoW after adding files.")
             end
-        else addon.Core.SpeakTTS(tostring(second)) end
+        else addon.Core.SpeakTTS(second == 0 and "Go" or tostring(second)) end
     end
+end
+
+function Bars.FinishCustomCountdown(entry, remaining)
+    local enabled = DB().countdown
+    if entry.countdown ~= nil then enabled = entry.countdown end
+    Speak(entry, remaining, not preview and enabled)
 end
 
 local function Draw(entry, remaining, index, anchorKey, position, paused, suppressTransitions)
@@ -255,8 +306,8 @@ Refresh = function(suppressTransitions)
         if entry then
             local remaining = entry.ends - GetTime()
             if remaining <= 0 then
+                Speak(entry, remaining, DB().timerCountdown and not preview)
                 StopTimer(kind)
-                if DB().timerCountdown and not preview then addon.Core.SpeakTTS(kind == "pull" and "Pull" or "Break finished") end
             else
                 position = position + 1; count = count + 1
                 Draw(entry, remaining, count, "timerPos", position)
@@ -352,6 +403,7 @@ function Bars.UpdateSettings()
         "START_PLAYER_COUNTDOWN", "CANCEL_PLAYER_COUNTDOWN", "CHAT_MSG_ADDON", "ENCOUNTER_END",
         "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS",
         "ZONE_CHANGED_NEW_AREA" }) do events:RegisterEvent(event) end
+    events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     if C_EncounterTimeline then
         for _, event in ipairs({ "ENCOUNTER_TIMELINE_EVENT_ADDED", "ENCOUNTER_TIMELINE_EVENT_REMOVED",
             "ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED", "ENCOUNTER_TIMELINE_VIEW_ACTIVATED",
@@ -456,8 +508,9 @@ events:SetScript("OnEvent", function(_, event, ...)
         return
     end
     if not Bars.IsActive() then Bars.UpdateSettings(); return end
-    if addon.CustomEncounterTimers then addon.CustomEncounterTimers.OnEvent(event) end
-    if event == "PLAYER_ENTERING_WORLD" then Bars.UpdateSettings()
+    if addon.CustomEncounterTimers then addon.CustomEncounterTimers.OnEvent(event, ...) end
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then Refresh()
+    elseif event == "PLAYER_ENTERING_WORLD" then Bars.UpdateSettings()
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END"
         or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
         if event == "PLAYER_REGEN_DISABLED" then preview = false end

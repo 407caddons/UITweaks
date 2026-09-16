@@ -73,6 +73,12 @@ function addonTable.Frames.UpdateFrames()
         local f = framePool[i]
         if not f then
             f = CreateFrame("Frame", "UIThingsCustomFrame" .. i, UIParent, "BackdropTemplate")
+            if addonTable.LayoutMode then
+                local frame, index = f, i
+                addonTable.LayoutMode.RegisterTarget("Custom frame " .. i, function() return frame end, function()
+                    return UIThingsDB.frames.enabled and UIThingsDB.frames.list[index] ~= nil
+                end)
+            end
             framePool[i] = f
         end
 

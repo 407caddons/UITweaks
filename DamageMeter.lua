@@ -7,8 +7,6 @@ addonTable.DamageMeter = {}
 
 local EventBus  = addonTable.EventBus
 local SafeAfter = addonTable.Core.SafeAfter
-local Abbrev    = addonTable.Core.AbbreviateNumber
-local Secret    = addonTable.Secret
 
 -- ============================================================
 -- Constants
@@ -55,284 +53,114 @@ local ENUM_NAMES = {
 -- Data Layer (C_DamageMeter API)
 -- ============================================================
 
--- overallBaseIdx: sessions at-or-below this index are excluded from "overall" view.
--- Reset to #sessions at ResetData() time.
-local overallBaseIdx = 0
-
--- Short-lived cache so repeated renders in the same frame don't re-query the API.
-local entryCache = {}   -- [cacheKey] = { entries, expiry }
-local CACHE_TTL  = 0.5
-
--- DPS computation: track fight durations using combat events.
--- "fight" DPS uses lastFightDuration; "overall" DPS sums sessionDurations.
-local fightStartTime   = nil
-local lastFightDuration = 0
-local sessionDurations    = {}  -- durations (seconds) of all fights after last ResetData()
-local sessionDurationByID = {}  -- [sessionID] = duration in seconds
-local sessionNameByID     = {}  -- [sessionID] = encounter/combat name (if readable)
-
-local DPS_TYPES   = { damage = true, healing = true, damageTaken = true }
-local COUNT_TYPES = { interrupts = true, deaths = true, dispels = true }
-
-local function GetOverallDuration()
-    local total = 0
-    for _, d in ipairs(sessionDurations) do total = total + d end
-    return total
-end
-
-local function SafeVal(v)
-    -- Secret values are allowed in arithmetic/display — only table keys are restricted.
-    -- Don't gate on issecretvalue here; just ensure we have a number.
-    return type(v) == "number" and v or 0
-end
-
+-- Keep the native session's totals, rates and duration together. Never reconstruct
+-- Overall from the bounded historical list or time it with PLAYER_REGEN events.
+local entryCache = {}
+local CACHE_TTL = 0.5
+local sessionDurationByID, sessionNameByID = {}, {}
+local DPS_TYPES = { damage=true, healing=true, damageTaken=true }
+local COUNT_TYPES = { interrupts=true, deaths=true, dispels=true }
+local function Public(value) return not (issecretvalue and issecretvalue(value)) end
+local function Present(value) return not Public(value) or value ~= nil end
 local function GetEnumType(mtype)
-    local name = ENUM_NAMES[mtype]
-    if not name then return nil end
-    return Enum.DamageMeterType and Enum.DamageMeterType[name]
+    return Enum.DamageMeterType and Enum.DamageMeterType[ENUM_NAMES[mtype]]
 end
-
 local function GetSessions()
     local ok, list = pcall(C_DamageMeter.GetAvailableCombatSessions)
-    if ok and list then return list end
-    return {}
+    if not ok or type(list) ~= "table" then return {} end
+    local result = {}
+    for _, session in ipairs(list) do
+        local id = session.sessionID
+        if Public(id) and type(id) == "number" then
+            result[#result+1] = session
+            if Public(session.durationSeconds) and type(session.durationSeconds) == "number" then
+                sessionDurationByID[id] = session.durationSeconds
+            end
+            if Public(session.name) and type(session.name) == "string" then sessionNameByID[id] = session.name end
+        end
+    end
+    table.sort(result, function(a,b) return a.sessionID < b.sessionID end)
+    return result
 end
-
--- Returns a sorted array of { guid, name, class, total } for the given view.
+local function ResolveSession(key)
+    if type(key) == "number" then return nil, key end
+    if key == "segment" or key == "fight" then
+        local sessions = GetSessions()
+        return nil, sessions[#sessions] and sessions[#sessions].sessionID
+    end
+    local types = Enum.DamageMeterSessionType
+    if key == "overall" then return types and types.Overall or 0 end
+    return types and types.Current or 1
+end
+local function ReadSession(key, mtype, source)
+    local meterType = GetEnumType(mtype)
+    if not meterType then return end
+    local sessionType, id = ResolveSession(key)
+    local ok, data
+    if source then
+        if sessionType ~= nil then
+            ok, data = pcall(C_DamageMeter.GetCombatSessionSourceFromType, sessionType, meterType, source.guid, source.creatureID)
+        elseif id then
+            ok, data = pcall(C_DamageMeter.GetCombatSessionSourceFromID, id, meterType, source.guid, source.creatureID)
+        end
+    elseif sessionType ~= nil then
+        ok, data = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, meterType)
+    elseif id then
+        ok, data = pcall(C_DamageMeter.GetCombatSessionFromID, id, meterType)
+    end
+    if ok then return data end
+end
 local function FetchEntries(sessKey, mtype)
-    local cacheKey = sessKey .. "|" .. mtype
-    local cached   = entryCache[cacheKey]
-    if cached and GetTime() < cached.expiry then
-        return cached.entries
-    end
-
-    local enumType = GetEnumType(mtype)
-    if not enumType then return {} end
-
-    local byGuid = {}
-
-    local function AccumulateSources(combatSources)
-        for _, src in ipairs(combatSources or {}) do
-            local guid = src.sourceGUID
-            local name = src.name
-            -- guid/name may be secret during live combat but are safe as table keys/display values.
-            -- Only totalAmount needs SafeVal (arithmetic on secret numbers returns garbage).
-            if guid and name then
-                local amt      = SafeVal(src.totalAmount)
-                -- Count-based types (interrupts/dispels/deaths) may store count in casts, not totalAmount
-                if amt == 0 and COUNT_TYPES[mtype] then amt = SafeVal(src.casts) end
-                -- Deaths: totalAmount is 0; deathRecapID (NeverSecret) signals an actual death
-                if amt == 0 and mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0 then
-                    amt = 1
-                end
-                local existing = byGuid[guid]
-                if existing then
-                    existing.total = existing.total + amt
-                    if mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0 then
-                        existing.deathRecapID = src.deathRecapID
-                    end
-                else
-                    byGuid[guid] = {
-                        guid         = guid,
-                        name         = name,
-                        class        = src.classFilename,
-                        total        = amt,
-                        deathRecapID = (mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0) and src.deathRecapID or nil,
-                    }
-                end
-            end
+    local key = tostring(sessKey) .. "|" .. mtype
+    local cached = entryCache[key]
+    if cached and GetTime() < cached.expiry then return cached.entries, cached.max end
+    local data = ReadSession(sessKey, mtype)
+    local entries = {}
+    if data then
+        for _, src in ipairs(data.combatSources or {}) do
+            -- Preserve Blizzard's order and identity, including creature-only sources.
+            local death = mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0
+            entries[#entries+1] = {
+                guid=src.sourceGUID, creatureID=src.sourceCreatureID, name=src.name,
+                class=src.classFilename, isLocalPlayer=src.isLocalPlayer,
+                total=death and 1 or src.totalAmount, rate=src.amountPerSecond,
+                deathRecapID=death and src.deathRecapID or nil,
+                max=death and 1 or data.maxAmount,
+            }
         end
     end
-
-    local liveMode = false
-    if sessKey == "current" then
-        if InCombatLockdown() then
-            -- Live combat: sourceGUID/name/totalAmount/maxAmount are all secret values.
-            -- Store in byGuid with integer keys; liveMode=true tells the render path to
-            -- skip Lua sorting/arithmetic and use only C-level calls on the secret values.
-            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
-            if ok and sessData and sessData.combatSources then
-                liveMode = true
-                for i, src in ipairs(sessData.combatSources) do
-                    -- All live combat fields are secret — never compare, copy to table only for
-                    -- C-level calls (SetValue/SetMinMaxValues/SetText/string.format).
-                    -- type() is safe on secrets; comparison operators are NOT.
-                    if type(src.totalAmount) == "number" or (COUNT_TYPES[mtype] and type(src.casts) == "number")
-                       or (mtype == "deaths" and src.deathRecapID and src.deathRecapID ~= 0) then
-                        local displayName
-                        if src.isLocalPlayer then
-                            displayName = Secret.SafeUnitName("player", "You")
-                        else
-                            displayName = Secret.SafeUnitName(src.name, src.name) or src.classFilename or "Unknown"
-                        end
-                        -- For count-based types, prefer casts over totalAmount.
-                        -- We store the source ref directly so the render path can read the
-                        -- original secret fields without any Lua-level comparison.
-                        byGuid[i] = {
-                            guid     = src.sourceGUID,
-                            name     = displayName,
-                            class    = src.classFilename,
-                            src      = src,          -- original API source (secret fields)
-                            sessMax  = sessData.maxAmount, -- secret, for SetMinMaxValues
-                            isCount  = COUNT_TYPES[mtype] or false,
-                        }
-                    end
-                end
-            end
-        else
-            -- Post-combat: use the last finalized session by ID — always clean, non-tainted.
-            -- GetCombatSessionFromType can still return tainted values briefly after combat
-            -- ends (before restrictions lift), so GetCombatSessionFromID is the safe path.
-            local sessions = GetSessions()
-            if #sessions > 0 then
-                local sid = sessions[#sessions].sessionID
-                local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sid, enumType)
-                if ok and sessData then
-                    AccumulateSources(sessData.combatSources)
-                end
-            end
-        end
-    elseif sessKey == "overall" then
-        local sessions = GetSessions()
-        for i = overallBaseIdx + 1, #sessions do
-            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sessions[i].sessionID, enumType)
-            if ok and sessData then
-                if not (sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount)) then
-                    AccumulateSources(sessData.combatSources)
-                end
-            end
-        end
-    else
-        -- Specific sessionID (number) or legacy "segment"/"fight" aliases
-        local sid
-        if type(sessKey) == "number" then
-            sid = sessKey
-        elseif sessKey == "segment" or sessKey == "fight" then
-            local sessions = GetSessions()
-            if #sessions > 0 then sid = sessions[#sessions].sessionID end
-        end
-        if sid then
-            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromID, sid, enumType)
-            if ok and sessData then
-                if not (sessData.totalAmount ~= nil and issecretvalue and issecretvalue(sessData.totalAmount)) then
-                    AccumulateSources(sessData.combatSources)
-                end
-            end
-        end
-    end
-
-    local list = {}
-    if liveMode then
-        -- byGuid has sequential integer keys; ipairs preserves API sort order.
-        -- Secret values can't be compared so we skip re-sorting.
-        for i = 1, #byGuid do
-            local d = byGuid[i]
-            if d then list[#list + 1] = d end
-        end
-    else
-        for _, d in pairs(byGuid) do
-            if d.total > 0 then list[#list + 1] = d end
-        end
-        table.sort(list, function(a, b) return a.total > b.total end)
-    end
-
-    entryCache[cacheKey] = { entries = list, expiry = GetTime() + CACHE_TTL }
-    return list
+    local maximum = data and data.maxAmount or 1
+    entryCache[key] = {entries=entries,max=maximum,expiry=GetTime()+CACHE_TTL}
+    return entries, maximum
 end
-
--- Returns a sorted array of { spellId, name, total } for one source's spell breakdown.
-local function FetchSpellEntries(sessKey, mtype, guid)
-    local enumType = GetEnumType(mtype)
-    if not enumType then return {} end
-
-    local bySpell = {}
-
-    local function AccumulateSpells(combatSpells)
-        for _, sp in ipairs(combatSpells or {}) do
-            local amt = SafeVal(sp.totalAmount)
-            -- Count-based types (interrupts/dispels/deaths) use casts as the value
-            if amt == 0 then amt = SafeVal(sp.casts) end
-            if sp.spellID and amt > 0 then
-                local existing = bySpell[sp.spellID]
-                if existing then
-                    existing.total = existing.total + amt
-                else
-                    local spellName = sp.name
-                    if not spellName or spellName == "" then
-                        -- C_Spell.GetSpellName uses async data; returns "" if not yet cached.
-                        -- Fall back to legacy synchronous GetSpellInfo which always resolves.
-                        local ok2, n = pcall(C_Spell.GetSpellName, sp.spellID)
-                        if ok2 and n and n ~= "" then
-                            spellName = n
-                        else
-                            spellName = GetSpellInfo(sp.spellID) or ("Spell " .. sp.spellID)
-                        end
-                    end
-                    bySpell[sp.spellID] = { spellId = sp.spellID, name = spellName, total = amt }
-                end
+local function FetchSpellEntries(sessKey, mtype, guid, creatureID)
+    local data = ReadSession(sessKey, mtype, {guid=guid,creatureID=creatureID})
+    local entries = {}
+    if data then
+        for _, spell in ipairs(data.combatSpells or {}) do
+            local name
+            if Present(spell.spellID) and C_Spell and C_Spell.GetSpellName then
+                local ok, value = pcall(C_Spell.GetSpellName, spell.spellID)
+                if ok then name=value end
             end
+            if not Present(name) then name="Unknown ability" end
+            entries[#entries+1] = {spellId=spell.spellID,name=name,total=spell.totalAmount,
+                rate=spell.amountPerSecond,max=data.maxAmount}
         end
     end
-
-    if sessKey == "current" then
-        if InCombatLockdown() then
-            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, guid)
-            if ok and srcData then
-                AccumulateSpells(srcData.combatSpells)
-            end
-        else
-            -- Post-combat: use the last finalized session by ID, same as FetchEntries does.
-            -- GetCombatSessionSourceFromType(1, ...) is empty after combat ends.
-            local sessions = GetSessions()
-            if #sessions > 0 then
-                local sid = sessions[#sessions].sessionID
-                local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sid, enumType, guid)
-                if ok and srcData then
-                    AccumulateSpells(srcData.combatSpells)
-                end
-            end
-        end
-    elseif sessKey == "overall" then
-        local sessions = GetSessions()
-        for i = overallBaseIdx + 1, #sessions do
-            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessions[i].sessionID, enumType, guid)
-            if ok and srcData then AccumulateSpells(srcData.combatSpells) end
-        end
-    else
-        local sid
-        if type(sessKey) == "number" then
-            sid = sessKey
-        elseif sessKey == "segment" or sessKey == "fight" then
-            local sessions = GetSessions()
-            if #sessions > 0 then sid = sessions[#sessions].sessionID end
-        end
-        if sid then
-            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sid, enumType, guid)
-            if ok and srcData then AccumulateSpells(srcData.combatSpells) end
-        end
-    end
-
-    local list = {}
-    for _, sp in pairs(bySpell) do
-        if sp.total > 0 then list[#list + 1] = sp end
-    end
-    table.sort(list, function(a, b) return a.total > b.total end)
-    return list
+    return entries, data and data.maxAmount or 1
 end
-
 local function FormatVal(val, mtype)
-    if mtype == "interrupts" or mtype == "deaths" or mtype == "dispels" then
-        return tostring(val)
-    end
-    return Abbrev(val)
+    if not Present(val) then return "—" end
+    if COUNT_TYPES[mtype] then return string.format("%d", val) end
+    return AbbreviateNumbers(val)
 end
 
--- ============================================================
 -- Class Color
 -- ============================================================
 
 local function GetClassColor(class)
-    if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+    if Public(class) and class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
         local c = RAID_CLASS_COLORS[class]
         return c.r, c.g, c.b
     end
@@ -406,13 +234,14 @@ end
 
 -- Attach a GameTooltip showing the top 5 abilities for the source at `guid`.
 -- Skipped during combat to avoid secret-value arithmetic/sort failures.
-local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey)
+local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey, creatureID)
     row:SetScript("OnEnter", function(self)
         if not UIThingsDB.damageMeter.showTooltip then return end
         if InCombatLockdown() then return end
-        if not guid then return end
+        if not Present(guid) and not Present(creatureID) then return end
+        if not Public(displayName) then return end
 
-        local spells = FetchSpellEntries(sessKey, mtype, guid)
+        local spells = FetchSpellEntries(sessKey, mtype, guid, creatureID)
         if not spells or #spells == 0 then return end
 
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -420,6 +249,7 @@ local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey)
         local n = math.min(5, #spells)
         for i = 1, n do
             local sp = spells[i]
+            if not Public(sp.name) or not Public(sp.total) then GameTooltip:Hide(); return end
             local valText = COUNT_TYPES[mtype] and tostring(sp.total) or AbbreviateNumbers(sp.total)
             GameTooltip:AddDoubleLine(i .. ". " .. (sp.name or "?"), valText, 0.9, 0.9, 0.9, 1, 0.82, 0)
         end
@@ -431,6 +261,7 @@ end
 local function ApplyDeathTooltip(row, entry)
     row:SetScript("OnEnter", function(self)
         if not UIThingsDB.damageMeter.showTooltip then return end
+        if InCombatLockdown() or not Public(entry.name) then return end
         local recapID = entry.deathRecapID
         if not recapID or not C_DeathRecap.HasRecapEvents(recapID) then return end
         local events = C_DeathRecap.GetRecapEvents(recapID)
@@ -537,402 +368,98 @@ end
 local function RenderPane(idx)
     local pane = panes[idx]
     if not pane or not pane.frame:IsShown() then return end
-
-    local s     = UIThingsDB.damageMeter
-    local cfg   = (idx == 1) and s.meter1 or s.meter2
-    local mtype = cfg.type
-    local sess  = cfg.session
-    local dd    = drilldown[idx]
-
-    -- Title
-    local tstr
+    local s = UIThingsDB.damageMeter
+    local cfg = idx == 1 and s.meter1 or s.meter2
+    local mtype, sess, dd = cfg.type, cfg.session, drilldown[idx]
     if dd then
-        tstr = "|cff999999< |r" .. (TYPE_LABEL[mtype] or mtype) .. ": " .. (dd.name or "?")
+        pane.titleFS:SetFormattedText("%s: %s", TYPE_LABEL[mtype] or mtype, dd.name)
     else
-        local sessLabel
+        local label = SESSION_FULL[sess] or "Segment"
         if type(sess) == "number" then
-            local dur = sessionDurationByID[sess]
-            local durStr = dur and string.format(" [%02d:%02d]", math.floor(dur / 60), dur % 60) or ""
-            sessLabel = (sessionNameByID[sess] or "Segment") .. durStr
-        elseif sess == "current" then
-            sessLabel = "Current"
-        elseif sess == "overall" then
-            sessLabel = "All"
-        else
-            sessLabel = SESSION_FULL[sess] or "Segment"
+            GetSessions()
+            label = sessionNameByID[sess] or "Segment"
+            local seconds = sessionDurationByID[sess]
+            if seconds then label = label .. string.format(" [%02d:%02d]", math.floor(seconds / 60), math.floor(seconds % 60)) end
         end
-        tstr = (TYPE_LABEL[mtype] or mtype) .. "  [" .. sessLabel .. "]"
+        pane.titleFS:SetText((TYPE_LABEL[mtype] or mtype) .. "  [" .. label .. "]")
     end
-    pane.titleFS:SetText(tstr)
     pane.backBtn:SetShown(dd ~= nil)
-
-    -- Build entry list
-    local entries
-    if dd then
-        entries = FetchSpellEntries(sess, mtype, dd.guid)
-    else
-        entries = FetchEntries(sess, mtype)
-    end
-
+    local entries, maximum
+    if dd then entries, maximum = FetchSpellEntries(sess, mtype, dd.guid, dd.creatureID)
+    else entries, maximum = FetchEntries(sess, mtype) end
     HideAllRows(pane.rowPool)
-
-    local barH     = s.barHeight or 18
-    local useClass = s.useClassColors
-    local barCol   = s.barColor     or { r = 0.2, g = 0.5, b = 0.9, a = 1 }
-    local barBgCol = s.barBgColor   or { r = 0.12, g = 0.12, b = 0.12, a = 1 }
-    local txtCol   = s.barTextColor or { r = 1, g = 1, b = 1, a = 1 }
-    local paneW    = pane.scrollFrame:GetWidth()
-    if not paneW or paneW <= 0 then paneW = 200 end
-
-    -- ── Live combat drilldown path ──────────────────────────────────────────
-    -- Drilldown (spell view) during combat. FetchSpellEntries would sort a table
-    -- of secret totals (> comparison on secrets fails), and the post-combat render
-    -- path calls scrollContent:SetSize which registers a scroll range while child
-    -- StatusBars are tainted by SetValue(secret) — that taint later propagates to
-    -- UIPanelScrollFrameTemplate's secure SetEnabled call and errors on scroll.
-    -- Render directly from live C_DamageMeter data, keeping secrets as direct
-    -- locals and skipping scrollContent:SetSize entirely.
-    -- ─────────────────────────────────────────────────────────────────────────
-    if sess == "current" and dd and InCombatLockdown() then
-        local enumType = GetEnumType(mtype)
-        local yOff = 0
-        local hasRows = false
-        if enumType then
-            local ok, srcData = pcall(C_DamageMeter.GetCombatSessionSourceFromType, 1, enumType, dd.guid)
-            if ok and srcData and srcData.combatSpells then
-                -- Keep srcMax as a direct local (secret); never store in a table.
-                local srcMax = srcData.totalAmount
-                for _, sp in ipairs(srcData.combatSpells) do
-                    if sp.spellID then
-                        local row = AcquireRow(pane.rowPool, pane.scrollContent)
-                        row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
-                        row:SetSize(paneW, barH)
-                        row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
-
-                        local amt
-                        if COUNT_TYPES[mtype] and type(sp.casts) == "number" then
-                            amt = sp.casts
-                        else
-                            amt = sp.totalAmount
-                        end
-
-                        row.bar:SetMinMaxValues(0, srcMax)
-                        row.bar:SetValue(amt)
-                        row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
-
-                        local spellName = sp.name
-                        if not spellName or spellName == "" then
-                            local ok2, n = pcall(C_Spell.GetSpellName, sp.spellID)
-                            if ok2 and n and n ~= "" then
-                                spellName = n
-                            else
-                                spellName = GetSpellInfo(sp.spellID) or ("Spell " .. sp.spellID)
-                            end
-                        end
-                        row.nameFS:SetText(spellName or "?")
-                        row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-
-                        local valText
-                        if COUNT_TYPES[mtype] then
-                            valText = string.format("%d", amt)
-                        else
-                            valText = AbbreviateNumbers(amt)
-                        end
-                        row.valFS:SetText(valText)
-                        row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-                        if row.dpsFS then row.dpsFS:Hide() end
-
-                        ApplyRowIcon(row, "spell", sp.spellID)
-
-                        local captIdx = idx
-                        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-                        row:SetScript("OnClick", function(_, btn)
-                            if btn == "RightButton" then
-                                drilldown[captIdx] = nil
-                                RenderPane(captIdx)
-                            end
-                        end)
-
-                        yOff = yOff + barH + 1
-                        hasRows = true
-                    end
-                end
-            end
-        end
-        if not hasRows then
-            local row = AcquireRow(pane.rowPool, pane.scrollContent)
-            row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
-            row:SetSize(paneW, barH)
-            row.bg:SetColorTexture(0, 0, 0, 0)
-            row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
-            row.bar:SetStatusBarColor(0, 0, 0, 0)
-            row.nameFS:SetText("|cff555555No data|r")
-            row.valFS:SetText("")
-            if row.dpsFS then row.dpsFS:Hide() end
-            ApplyRowIcon(row, "none")
-        end
-        -- Intentionally no scrollContent:SetSize — user can't scroll during combat
-        -- drilldown, matching non-drilldown combat behavior. Post-combat renders
-        -- restore proper scrolling.
-        return
+    local barH = s.barHeight or 18
+    local barCol = s.barColor or {r=.2,g=.5,b=.9,a=1}
+    local bg = s.barBgColor or {r=.12,g=.12,b=.12,a=1}
+    local txt = s.barTextColor or {r=1,g=1,b=1,a=1}
+    local width = pane.scrollFrame:GetWidth()
+    if not width or width <= 0 then width = 200 end
+    local order = {}
+    if s.pinSelf and not dd then
+        for i, entry in ipairs(entries) do if entry.isLocalPlayer then order[#order+1] = i end end
     end
-
-    -- ── Live combat path ────────────────────────────────────────────────────
-    -- For sess=="current" during combat: render directly from sessData so that
-    -- secret values (totalAmount, maxAmount) stay as Blizzard-tainted locals
-    -- and are NEVER copied into our own Lua table.  Blizzard-tainted values
-    -- allow arithmetic and can be passed to WoW API calls (SetValue, Abbrev/
-    -- string.format); LunaUITweaks-tainted copies (from our table) do not.
-    -- ─────────────────────────────────────────────────────────────────────────
-    if sess == "current" and not dd and InCombatLockdown() then
-        local enumType = GetEnumType(mtype)
-        local yOff = 0
-        local hasRows = false
-        if enumType then
-            local ok, sessData = pcall(C_DamageMeter.GetCombatSessionFromType, 1, enumType)
-            if ok and sessData and sessData.combatSources then
-                local srcList = sessData.combatSources
-                local renderOrder = {}
-                if UIThingsDB.damageMeter.pinSelf then
-                    local selfI = nil
-                    for ri = 1, #srcList do
-                        if srcList[ri].isLocalPlayer then selfI = ri break end
-                    end
-                    if selfI then renderOrder[1] = selfI end
-                    for ri = 1, #srcList do
-                        if ri ~= selfI then renderOrder[#renderOrder + 1] = ri end
-                    end
-                else
-                    for ri = 1, #srcList do renderOrder[ri] = ri end
-                end
-                for _, srcIdx in ipairs(renderOrder) do
-                    local src = srcList[srcIdx]
-                    local i = srcIdx
-                    local row = AcquireRow(pane.rowPool, pane.scrollContent)
-                    row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
-                    row:SetSize(paneW, barH)
-                    row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
-
-                    -- All live combat values are secret — use C-level calls only (no Lua comparisons).
-                    -- For count-based types, prefer casts; for DPS types, use totalAmount.
-                    -- Deaths: totalAmount is 0; deathRecapID (NeverSecret) is the death signal.
-                    local srcAmt, srcMax
-                    if mtype == "deaths" then
-                        srcAmt = (src.deathRecapID and src.deathRecapID ~= 0) and 1 or 0
-                    elseif COUNT_TYPES[mtype] and type(src.casts) == "number" then
-                        srcAmt = src.casts
-                    else
-                        srcAmt = src.totalAmount
-                    end
-                    srcMax = sessData.maxAmount
-
-                    -- Bar: SetMinMaxValues/SetValue accept secret values (C-level calls).
-                    -- This taints StatusBar geometry but we never call UpdateScrollChildRect.
-                    row.bar:SetMinMaxValues(0, srcMax)
-                    row.bar:SetValue(srcAmt)
-                    if useClass and src.classFilename then
-                        local r, g, b = GetClassColor(src.classFilename)
-                        row.bar:SetStatusBarColor(r, g, b, 0.65)
-                    else
-                        row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
-                    end
-
-                    local displayName
-                    if src.isLocalPlayer then
-                        displayName = Secret.SafeUnitName("player", "You")
-                    else
-                        displayName = Secret.SafeUnitName(src.name, src.name) or src.classFilename or "?"
-                    end
-                    local nameText = displayName or "?"
-                    if UIThingsDB.damageMeter.showRank then
-                        nameText = i .. ". " .. nameText
-                    end
-                    row.nameFS:SetText(nameText)
-                    row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-
-                    -- Values: AbbreviateNumbers is a C-level WoW function — no Lua comparison,
-                    -- handles secret/tainted values. string.format("%d") also safe for counts.
-                    -- Concatenate into valFS (same as post-combat path) to avoid overlap with dpsFS.
-                    local valText
-                    if COUNT_TYPES[mtype] then
-                        valText = string.format("%d", srcAmt)
-                    else
-                        valText = AbbreviateNumbers(src.totalAmount)
-                        if DPS_TYPES[mtype] then
-                            valText = valText .. "  |cffaaaaaa" .. AbbreviateNumbers(src.amountPerSecond) .. "/s|r"
-                        end
-                    end
-                    row.valFS:SetText(valText)
-                    row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-                    if row.dpsFS then row.dpsFS:Hide() end
-
-                    if src.isLocalPlayer then
-                        ApplyRowIcon(row, "player")
-                    else
-                        ApplyRowIcon(row, "class", src.classFilename)
-                    end
-
-                    -- Drilldown: store src reference so guid stays as a table value
-                    local captSrc = src
-                    local captName = displayName
-                    local captIdx = idx
-                    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-                    row:SetScript("OnClick", function(_, btn)
-                        if btn == "RightButton" then
-                            drilldown[captIdx] = nil
-                            RenderPane(captIdx)
-                        elseif btn == "LeftButton" then
-                            drilldown[captIdx] = { guid = captSrc.sourceGUID, name = captName }
-                            RenderPane(captIdx)
-                        end
-                    end)
-
-                    yOff = yOff + barH + 1
-                    hasRows = true
-                end
-            end
-        end
-        if not hasRows then
-            local row = AcquireRow(pane.rowPool, pane.scrollContent)
-            row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
-            row:SetSize(paneW, barH)
-            row.bg:SetColorTexture(0, 0, 0, 0)
-            row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
-            row.bar:SetStatusBarColor(0, 0, 0, 0)
-            row.nameFS:SetText("|cff555555No data|r")
-            row.valFS:SetText("")
-            if row.dpsFS then row.dpsFS:Hide() end
-            ApplyRowIcon(row, "none")
-            yOff = barH
-        end
-        -- Do NOT call scrollContent:SetSize() here — it triggers OnSizeChanged on the
-        -- UIPanelScrollFrameTemplate, which calls UpdateScrollChildRect, which reads
-        -- StatusBar geometry tainted by SetValue(secretValue) and throws
-        -- "numeric conversion on secret number value". Rows are already visible via
-        -- SetPoint. ADDON_RESTRICTION_STATE_CHANGED re-renders cleanly after combat ends.
-        return
+    for i, entry in ipairs(entries) do
+        if dd or not s.pinSelf or not entry.isLocalPlayer then order[#order+1] = i end
     end
-
-    -- ── Post-combat / historical path ────────────────────────────────────────
-    -- Non-secret values; arithmetic and comparison work normally.
-    local maxVal = (#entries > 0 and entries[1].total) or 1
-
-    local orderedIndices = {}
-    if UIThingsDB.damageMeter.pinSelf and not dd then
-        local selfI = nil
-        local playerGUID = UnitGUID("player")
-        for i, entry in ipairs(entries) do
-            if entry.guid and entry.guid == playerGUID then selfI = i break end
-        end
-        if selfI then orderedIndices[1] = selfI end
-        for i = 1, #entries do
-            if i ~= selfI then orderedIndices[#orderedIndices + 1] = i end
-        end
-    else
-        for i = 1, #entries do orderedIndices[i] = i end
-    end
-
-    local yOff = 0
-    for _, rankIdx in ipairs(orderedIndices) do
-        local entry = entries[rankIdx]
+    local y = 0
+    for _, rank in ipairs(order) do
+        local entry = entries[rank]
         local row = AcquireRow(pane.rowPool, pane.scrollContent)
-        row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -yOff)
-        row:SetSize(paneW, barH)
-
-        row.bg:SetColorTexture(barBgCol.r, barBgCol.g, barBgCol.b, barBgCol.a or 1)
-
-        row.bar:SetMinMaxValues(0, maxVal)
+        row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -y)
+        row:SetSize(width, barH)
+        row.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a or 1)
+        row.bar:SetMinMaxValues(0, entry.max or maximum)
         row.bar:SetValue(entry.total)
-        if useClass and entry.class and not dd then
+        if s.useClassColors and not dd then
             local r, g, b = GetClassColor(entry.class)
-            row.bar:SetStatusBarColor(r, g, b, 0.65)
-        else
-            row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1)
-        end
-
-        local entryName = entry.name or "?"
-        if UIThingsDB.damageMeter.showRank and not dd then
-            entryName = rankIdx .. ". " .. entryName
-        end
-        row.nameFS:SetText(entryName)
-        row.nameFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-
-        local valText = FormatVal(entry.total, mtype)
-        if DPS_TYPES[mtype] and not dd then
-            local dur
-            if sess == "overall" then
-                dur = GetOverallDuration()
-            elseif type(sess) == "number" then
-                dur = sessionDurationByID[sess] or lastFightDuration
-            else
-                dur = lastFightDuration
-            end
-            if dur > 0 then
-                valText = valText .. "  |cffaaaaaa" .. Abbrev(entry.total / dur) .. "/s|r"
-            end
-        end
-        row.valFS:SetText(valText)
-        row.valFS:SetTextColor(txtCol.r, txtCol.g, txtCol.b, txtCol.a or 1)
-        if row.dpsFS then row.dpsFS:Hide() end
-
-        if dd then
-            ApplyRowIcon(row, "spell", entry.spellId)
-        elseif entry.guid and entry.guid == UnitGUID("player") then
-            ApplyRowIcon(row, "player")
-        else
-            ApplyRowIcon(row, "class", entry.class)
-        end
-
+            row.bar:SetStatusBarColor(r, g, b, .65)
+        else row.bar:SetStatusBarColor(barCol.r, barCol.g, barCol.b, barCol.a or 1) end
+        local name = entry.name
+        if not Present(name) then name = "Unknown" end
+        if s.showRank and not dd then row.nameFS:SetFormattedText("%d. %s", rank, name)
+        else row.nameFS:SetText(name) end
+        row.nameFS:SetTextColor(txt.r, txt.g, txt.b, txt.a or 1)
+        local amount = FormatVal(entry.total, mtype)
+        if DPS_TYPES[mtype] and not dd and Present(entry.rate) then
+            row.valFS:SetFormattedText("%s  |cffaaaaaa%s/s|r", amount, AbbreviateNumbers(entry.rate))
+        else row.valFS:SetText(amount) end
+        row.valFS:SetTextColor(txt.r, txt.g, txt.b, txt.a or 1)
+        row.dpsFS:Hide()
+        if dd then ApplyRowIcon(row, "spell", entry.spellId)
+        elseif entry.isLocalPlayer then ApplyRowIcon(row, "player")
+        else ApplyRowIcon(row, "class", entry.class) end
+        row.nameFS:SetPoint("RIGHT", row.valFS, "LEFT", -8, 0)
         if not dd then
-            if mtype == "deaths" and entry.deathRecapID then
-                ApplyDeathTooltip(row, entry)
-            else
-                ApplyRowTooltip(row, entry.guid, entry.name, mtype, sess)
-            end
+            if entry.deathRecapID then ApplyDeathTooltip(row, entry)
+            else ApplyRowTooltip(row, entry.guid, name, mtype, sess, entry.creatureID) end
         end
-
-        local captEntry = entry
-        local captIdx   = idx
-        local captDd    = dd
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-        row:SetScript("OnClick", function(_, btn)
-            if btn == "RightButton" then
-                drilldown[captIdx] = nil
-                RenderPane(captIdx)
-            elseif btn == "LeftButton" and not captDd then
-                if mtype == "deaths" and captEntry.deathRecapID then
-                    OpenDeathRecapUI(captEntry.deathRecapID)
-                else
-                    drilldown[captIdx] = { guid = captEntry.guid, name = captEntry.name }
-                    RenderPane(captIdx)
-                end
-            end
+        row:SetScript("OnClick", function(_, button)
+            if button == "RightButton" then drilldown[idx] = nil
+            elseif button == "LeftButton" and not dd then
+                if entry.deathRecapID then OpenDeathRecapUI(entry.deathRecapID); return end
+                drilldown[idx] = {guid=entry.guid, creatureID=entry.creatureID, name=name}
+            else return end
+            RenderPane(idx)
         end)
-
-        yOff = yOff + barH + 1
+        y = y + barH + 1
     end
-
-    -- Empty state
     if #entries == 0 then
         local row = AcquireRow(pane.rowPool, pane.scrollContent)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
-        row:SetSize(paneW, barH)
+        row:SetSize(width, barH)
         row.bg:SetColorTexture(0, 0, 0, 0)
-        row.bar:SetMinMaxValues(0, 1) row.bar:SetValue(0)
+        row.bar:SetMinMaxValues(0, 1)
+        row.bar:SetValue(0)
         row.bar:SetStatusBarColor(0, 0, 0, 0)
         row.nameFS:SetText("|cff555555No data|r")
         row.valFS:SetText("")
-        if row.dpsFS then row.dpsFS:Hide() end
+        row.dpsFS:Hide()
         ApplyRowIcon(row, "none")
-        yOff = barH
+        y = barH
     end
-
-    pane.scrollContent:SetSize(paneW, math.max(yOff + 4, 20))
-    -- Do NOT call UpdateScrollChildRect — StatusBar geometry is tainted during live combat
-    -- renders (SetValue with secret values), and that taint persists on the frame objects.
-    -- UpdateScrollChildRect reads child geometry and fails with "numeric conversion on
-    -- secret number value" even in the post-combat path.  scrollContent:SetSize() triggers
-    -- OnSizeChanged which updates the scroll range automatically via UIPanelScrollFrame.
+    -- Do not inspect secret status-bar geometry through the scroll template.
+    if not InCombatLockdown() then pane.scrollContent:SetSize(width, math.max(y + 4, 20)) end
 end
 
 local function RenderAllPanes()
@@ -1008,14 +535,14 @@ local function RebuildSessionMenu(paneIdx)
     local count       = 0
 
     -- Past sessions, newest first
-    for i = #sessions, overallBaseIdx + 1, -1 do
+    for i = #sessions, 1, -1 do
         local sess = sessions[i]
         local sid  = sess.sessionID
         -- Try reading a name from the session object itself
         local rawName = sess.name
         if rawName and issecretvalue and issecretvalue(rawName) then rawName = nil end
         local dur    = sessionDurationByID[sid]
-        local durStr = dur and string.format(" [%02d:%02d]", math.floor(dur / 60), dur % 60) or " [--:--]"
+        local durStr = dur and string.format(" [%02d:%02d]", math.floor(dur / 60), math.floor(dur % 60)) or " [--:--]"
         local name   = (rawName and rawName ~= "") and rawName
                        or sessionNameByID[sid]
                        or ("Combat " .. count + 1)
@@ -1421,106 +948,99 @@ function addonTable.DamageMeter.SetLocked(locked)
     if mainFrame then mainFrame:EnableMouse(not locked) end
 end
 
-function addonTable.DamageMeter.ResetData()
-    local sessions = GetSessions()
-    overallBaseIdx = #sessions
-    entryCache          = {}
-    lastFightDuration   = 0
-    sessionDurations    = {}
-    sessionDurationByID = {}
-    sessionNameByID     = {}
-    fightStartTime      = nil
-    for i = 1, 2 do drilldown[i] = nil end
+local function ClearSessionState()
+    entryCache = {}
+    sessionDurationByID, sessionNameByID = {}, {}
+    for i = 1, 2 do
+        drilldown[i] = nil
+        local cfg = i == 1 and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+        if cfg and type(cfg.session) == "number" then cfg.session = "current" end
+    end
     if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
+end
+
+function addonTable.DamageMeter.ResetData()
+    if InCombatLockdown() then
+        print("Luna damage meter: reset is unavailable during combat.")
+        return false
+    end
+    local ok = pcall(C_DamageMeter.ResetAllCombatSessions)
+    if not ok then
+        print("Luna damage meter: Blizzard could not reset the session data.")
+        return false
+    end
+    ClearSessionState()
+    return true
 end
 
 function addonTable.DamageMeter.GetFrame() return mainFrame end
 function addonTable.DamageMeter.GetMeterTypes() return METER_TYPES end
 function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 
--- ============================================================
--- Events
--- ============================================================
-
+-- Coalesce the paired Overall/Current notifications into one refresh.
 local eventsRegistered = false
-
-local function OnRegenEnabled()
-    entryCache = {}
-    if fightStartTime then
-        lastFightDuration = math.max(1, GetTime() - fightStartTime)
-        table.insert(sessionDurations, lastFightDuration)
-        local dur = lastFightDuration
-        SafeAfter(0.1, function()
-            local sessions = GetSessions()
-            if #sessions > 0 then
-                local last = sessions[#sessions]
-                local sid  = last.sessionID
-                sessionDurationByID[sid] = dur
-                local rawName = last.name
-                if rawName and not (issecretvalue and issecretvalue(rawName)) and rawName ~= "" then
-                    sessionNameByID[sid] = rawName
-                end
-            end
-        end)
-        fightStartTime = nil
+local refreshPending = false
+local function OnSessionUpdated(_, meterType)
+    if meterType ~= nil then
+        local s = UIThingsDB.damageMeter
+        if meterType ~= GetEnumType(s.meter1.type) and meterType ~= GetEnumType(s.meter2.type) then return end
     end
+    entryCache = {}
+    if refreshPending then return end
+    refreshPending = true
+    SafeAfter(0, function()
+        refreshPending = false
+        if eventsRegistered and mainFrame and mainFrame:IsShown() then RenderAllPanes() end
+    end)
+end
+
+local function OnCurrentSessionUpdated()
     for i = 1, 2 do
-        local cfg = (i == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+        local cfg = i == 1 and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
         if cfg and cfg.session ~= "overall" then drilldown[i] = nil end
     end
+    OnSessionUpdated()
 end
 
-local function OnRegenDisabled()
-    fightStartTime = GetTime()
+local lastInstance
+local function InstanceKey()
+    local inside = IsInInstance()
+    if not inside then return nil end
+    local _, kind, _, _, _, _, _, id = GetInstanceInfo()
+    return tostring(kind) .. ":" .. tostring(id)
 end
-
-local function OnSessionUpdated()
-    entryCache = {}
-    if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
-end
-
-local function OnRestrictionChanged()
-    local restrState = C_RestrictedActions and Enum.AddOnRestrictionType and
-        C_RestrictedActions.GetAddOnRestrictionState(Enum.AddOnRestrictionType.Combat)
-    if not restrState or restrState == 0 then
-        entryCache = {}
-        if mainFrame and mainFrame:IsShown() then RenderAllPanes() end
-    end
-end
-
 local function OnEnteringWorld()
     entryCache = {}
-    if InCombatLockdown() then
-        fightStartTime = GetTime()
-    end
+    lastInstance = InstanceKey()
     SafeAfter(1, addonTable.DamageMeter.Initialize)
 end
-
 local function OnZoneChanged()
-    if UIThingsDB.damageMeter.clearOnInstance then
-        local inInst = IsInInstance()
-        if inInst then addonTable.DamageMeter.ResetData() end
+    local nextInstance = InstanceKey()
+    local changed = nextInstance ~= lastInstance
+    lastInstance = nextInstance
+    if changed and nextInstance and UIThingsDB.damageMeter.clearOnInstance then
+        addonTable.DamageMeter.ResetData()
     end
 end
 
+local handlers = {
+    PLAYER_REGEN_ENABLED = function() OnSessionUpdated() end,
+    PLAYER_REGEN_DISABLED = function() OnSessionUpdated() end,
+    DAMAGE_METER_COMBAT_SESSION_UPDATED = OnSessionUpdated,
+    DAMAGE_METER_CURRENT_SESSION_UPDATED = OnCurrentSessionUpdated,
+    DAMAGE_METER_RESET = ClearSessionState,
+    ADDON_RESTRICTION_STATE_CHANGED = function() OnSessionUpdated() end,
+    PLAYER_ENTERING_WORLD = OnEnteringWorld,
+    ZONE_CHANGED_NEW_AREA = OnZoneChanged,
+}
 RegisterEvents = function()
     if eventsRegistered then return end
     eventsRegistered = true
-    EventBus.Register("PLAYER_REGEN_ENABLED",               OnRegenEnabled,       "DamageMeter")
-    EventBus.Register("PLAYER_REGEN_DISABLED",              OnRegenDisabled,      "DamageMeter")
-    EventBus.Register("DAMAGE_METER_COMBAT_SESSION_UPDATED", OnSessionUpdated,    "DamageMeter")
-    EventBus.Register("ADDON_RESTRICTION_STATE_CHANGED",    OnRestrictionChanged, "DamageMeter")
-    EventBus.Register("PLAYER_ENTERING_WORLD",              OnEnteringWorld,      "DamageMeter")
-    EventBus.Register("ZONE_CHANGED_NEW_AREA",              OnZoneChanged,        "DamageMeter")
+    lastInstance = InstanceKey()
+    for event, handler in pairs(handlers) do EventBus.Register(event, handler, "DamageMeter") end
 end
-
 UnregisterEvents = function()
     if not eventsRegistered then return end
     eventsRegistered = false
-    EventBus.Unregister("PLAYER_REGEN_ENABLED",               OnRegenEnabled)
-    EventBus.Unregister("PLAYER_REGEN_DISABLED",              OnRegenDisabled)
-    EventBus.Unregister("DAMAGE_METER_COMBAT_SESSION_UPDATED", OnSessionUpdated)
-    EventBus.Unregister("ADDON_RESTRICTION_STATE_CHANGED",    OnRestrictionChanged)
-    EventBus.Unregister("PLAYER_ENTERING_WORLD",              OnEnteringWorld)
-    EventBus.Unregister("ZONE_CHANGED_NEW_AREA",              OnZoneChanged)
+    for event, handler in pairs(handlers) do EventBus.Unregister(event, handler) end
 end

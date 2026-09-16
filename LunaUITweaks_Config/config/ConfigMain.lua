@@ -29,117 +29,16 @@ function addonTable.Config.Initialize()
         configWindow:SetScript("OnDragStop", configWindow.StopMovingOrSizing)
 
         configWindow:SetScript("OnHide", function()
-            -- Auto-lock all movable/unlockable elements on config close
-
-            -- Frames (each frame has its own locked flag)
-            if UIThingsDB.frames and UIThingsDB.frames.list then
-                for _, f in ipairs(UIThingsDB.frames.list) do
-                    f.locked = true
-                end
-                if addonTable.Frames and addonTable.Frames.UpdateFrames then
-                    C_Timer.After(0, addonTable.Frames.UpdateFrames)
-                end
-            end
-
-            -- Loot Anchor
-            if addonTable.Loot and addonTable.Loot.LockAnchor then
-                addonTable.Loot.LockAnchor()
-            end
-
-            -- Widgets
-            if UIThingsDB.widgets then
-                UIThingsDB.widgets.locked = true
-                if addonTable.Widgets and addonTable.Widgets.UpdateVisuals then
-                    C_Timer.After(0, addonTable.Widgets.UpdateVisuals)
-                end
-            end
-
-            -- Combat Timer
-            if UIThingsDB.combat then
-                UIThingsDB.combat.locked = true
-                if UIThingsDB.combat.reminders then
-                    UIThingsDB.combat.reminders.locked = true
-                end
-                if addonTable.Combat and addonTable.Combat.UpdateSettings then
-                    addonTable.Combat.UpdateSettings()
-                end
-            end
-
-            -- Cast Bar
-            if UIThingsDB.castBar then
-                UIThingsDB.castBar.locked = true
-                if addonTable.CastBar and addonTable.CastBar.UpdateSettings then
-                    addonTable.CastBar.UpdateSettings()
-                end
-            end
-
-            -- Damage Meter
-            if UIThingsDB.damageMeter then
-                UIThingsDB.damageMeter.locked = true
-                if addonTable.DamageMeter and addonTable.DamageMeter.SetLocked then
-                    addonTable.DamageMeter.SetLocked(true)
-                end
-            end
-
-            -- M+ Timer
-            if UIThingsDB.mplusTimer then
-                UIThingsDB.mplusTimer.locked = true
-                if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
-                    addonTable.MplusTimer.UpdateSettings()
-                end
-            end
-
-            -- Coordinates / Waypoints
-            if UIThingsDB.coordinates then
-                UIThingsDB.coordinates.locked = true
-                if addonTable.Coordinates and addonTable.Coordinates.UpdateSettings then
-                    addonTable.Coordinates.UpdateSettings()
-                end
-            end
-
-            -- Warehousing
-            if UIThingsDB.warehousing then
-                UIThingsDB.warehousing.locked = true
-                if addonTable.Warehousing and addonTable.Warehousing.UpdateSettings then
-                    addonTable.Warehousing.UpdateSettings()
-                end
-            end
-
-            -- XP Bar
-            if UIThingsDB.xpBar then
-                UIThingsDB.xpBar.locked = true
-                if addonTable.XpBar and addonTable.XpBar.UpdateSettings then
-                    addonTable.XpBar.UpdateSettings()
-                end
-            end
-
-            -- Minimap (position, zone, clock, drawer)
-            if addonTable.MinimapCustom then
-                if addonTable.MinimapCustom.SetMinimapLocked then
-                    addonTable.MinimapCustom.SetMinimapLocked(true)
-                end
-                if addonTable.MinimapCustom.SetZoneLocked then
-                    addonTable.MinimapCustom.SetZoneLocked(true)
-                end
-                if addonTable.MinimapCustom.SetClockLocked then
-                    addonTable.MinimapCustom.SetClockLocked(true)
-                end
-                if addonTable.MinimapCustom.SetCoordsLocked then
-                    addonTable.MinimapCustom.SetCoordsLocked(true)
-                end
-                if addonTable.MinimapCustom.SetDrawerLocked then
-                    addonTable.MinimapCustom.SetDrawerLocked(true)
-                end
-            end
-
-            -- Close M+ Timer demo if running
-            if addonTable.MplusTimer and addonTable.MplusTimer.CloseDemo then
-                addonTable.MplusTimer.CloseDemo()
-            end
+            if addonTable.LayoutMode then addonTable.LayoutMode.LockAll() end
         end)
         configWindow:Hide()
 
         configWindow.TitleText:SetText("LUNA  /  SETTINGS")
+        local layoutButton = CreateFrame("Button", nil, configWindow, "UIPanelButtonTemplate")
+        layoutButton:SetSize(115, 22)
+        layoutButton:SetPoint("TOPRIGHT", -48, -5)
+        layoutButton:SetText("Layout Mode")
+        layoutButton:SetScript("OnClick", function() addonTable.LayoutMode.Toggle() end)
 
         ----------------------------------------------------
         -- Sidebar & Navigation

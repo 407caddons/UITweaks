@@ -26,6 +26,8 @@ function Custom.CreateEditor(parent, y)
     name:SetPoint("TOPLEFT", 120, -180); name:SetSize(380, 26); name:SetAutoFocus(false); name:SetMaxLetters(80)
     local enabled = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
     enabled:SetPoint("TOPLEFT", 20, -220); enabled.Text:SetText("Enable this set")
+    local anywhere = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
+    anywhere:SetPoint("TOPLEFT", 260, -220); anywhere.Text:SetText("Anywhere (ignore location)")
     Label("Start on", 20, -272, 100)
     local triggerDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
     triggerDD:SetPoint("TOPLEFT", 104, -262); UIDropDownMenu_SetWidth(triggerDD, 230)
@@ -61,12 +63,30 @@ function Custom.CreateEditor(parent, y)
         f:SetScript("OnTextChanged", function(_, userInput) if userInput and timerIndex then timerDirty = true end end)
         return f
     end
-    local timerTitle = Edit("Timer title", 20, -490, 470); timerTitle:SetMaxLetters(200)
+    local timerTitle = Edit("Timer title", 20, -490, 270); timerTitle:SetMaxLetters(200)
+    local castSpell = Edit("Your cast ID (optional)", 320, -490, 170)
     local firstDelay = Edit("First delay (20 or 2:20)", 20, -550, 210)
     local interval = Edit("Repeat every (blank = once)", 270, -550, 220)
     local countdownDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
-    countdownDD:SetPoint("TOPLEFT", 4, -615); UIDropDownMenu_SetWidth(countdownDD, 270)
+    countdownDD:SetPoint("TOPLEFT", 4, -615); UIDropDownMenu_SetWidth(countdownDD, 210)
     local countdownMode = "default"
+    local expirySound = "none"
+    local expiryDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
+    expiryDD:SetPoint("TOPLEFT", 254, -615); UIDropDownMenu_SetWidth(expiryDD, 220)
+    UIDropDownMenu_Initialize(expiryDD, function()
+        if not addon.BuffAlerts then return end
+        for _, option in ipairs(addon.BuffAlerts.GetSoundOptions()) do
+            local value = option.value
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.label; info.checked = expirySound == value
+            info.func = function()
+                if not timerIndex then return end
+                expirySound = value; timerDirty = true
+                UIDropDownMenu_SetText(expiryDD, "Expiry: " .. option.label)
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
     local defaultColor = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
     defaultColor:SetPoint("TOPLEFT", 20, -660); defaultColor.Text:SetText("Use default colour")
     defaultColor:SetScript("OnClick", function() if timerIndex then timerDirty = true end end)
@@ -88,6 +108,7 @@ function Custom.CreateEditor(parent, y)
     name:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     text:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     enabled:SetScript("OnClick", MarkDirty)
+    anywhere:SetScript("OnClick", MarkDirty)
     local function FindSelected()
         for _, set in ipairs(Custom.GetSets()) do if set.id == selected then return set end end
     end
@@ -99,6 +120,11 @@ function Custom.CreateEditor(parent, y)
         ownsPicker = false
         timerIndex = index; local rule = rules[index]
         timerTitle:SetText(rule and rule.name or "")
+        expirySound = rule and rule.expirySound or "none"
+        UIDropDownMenu_SetText(expiryDD, "Expiry: " .. (addon.BuffAlerts and
+            addon.BuffAlerts.GetSoundLabel({preset=expirySound}) or "None"))
+        castSpell:SetText(rule and rule.spellID and tostring(rule.spellID) or "")
+        castSpell:SetEnabled(rule ~= nil)
         firstDelay:SetText(rule and Custom.FormatTime(rule.first) or "")
         interval:SetText(rule and rule.interval and Custom.FormatTime(rule.interval) or "")
         countdownMode = "default"
@@ -121,6 +147,15 @@ function Custom.CreateEditor(parent, y)
             message:SetText("Enter a title and valid times (1–3600 seconds). Leave Repeat blank for a one-off timer."); return false
         end
         local rule = {name=title, first=first, interval=repeatEvery}
+        if expirySound ~= "none" then rule.expirySound = expirySound end
+        local spellText = castSpell:GetText():match("^%s*(.-)%s*$")
+        if spellText ~= "" then
+            local id = tonumber(spellText)
+            if not spellText:match("^%d+$") or not id or id < 1 or id > 2147483647 then
+                message:SetText("Enter a positive cast spell ID, or leave it blank for the set's start trigger."); return false
+            end
+            rule.spellID = id
+        end
         if countdownMode ~= "default" then rule.countdown = countdownMode == "on" end
         if not defaultColor:GetChecked() then rule.color = {r=editColor.r,g=editColor.g,b=editColor.b} end
         rules[timerIndex] = rule; timerDirty = false; SyncText(); RefreshTimers()
@@ -142,6 +177,7 @@ function Custom.CreateEditor(parent, y)
             local color = rule.color or UIThingsDB.encounterBars.customColor
             row.label:SetTextColor(color.r,color.g,color.b)
             row.label:SetText((timerIndex == i and "> " or "") .. rule.name .. " · " .. Custom.FormatTime(rule.first)
+                .. (rule.spellID and (" / cast " .. rule.spellID) or "")
                 .. (rule.interval and (" / repeat " .. Custom.FormatTime(rule.interval)) or ""))
             row:SetPoint("TOPLEFT", 0, -(i-1)*30); row:Show()
         end
@@ -160,13 +196,15 @@ function Custom.CreateEditor(parent, y)
         if not ApplyTimer() then return false end
         if selected and dirty then
             drafts[selected] = { name = name:GetText(), text = text:GetText(),
-                enabled = not not enabled:GetChecked(), trigger = trigger }
+                enabled = not not enabled:GetChecked(), trigger = trigger, anywhere = not not anywhere:GetChecked() }
         end
         loading = true; selected = set and set.id; confirmDelete = nil
         local values = set and (drafts[set.id] or set)
         UIDropDownMenu_SetText(setDD, set and ((set.enabled and "|cff55ddaa" or "|cff888888") .. set.name .. " #" .. set.id .. "|r") or "Select a timer set")
         name:SetText(values and values.name or ""); text:SetText(values and values.text or "")
         enabled:SetChecked(values and values.enabled or false)
+        anywhere:SetChecked(values and values.anywhere or false)
+        anywhere:SetEnabled(set ~= nil)
         trigger = values and values.trigger or "combat"
         UIDropDownMenu_SetText(triggerDD, trigger == "combat" and "Combat start" or "Encounter start")
         location:SetText(set and ("Location: " .. Custom.LocationLabel(set.location)) or "Click Add current subzone to create a timer set.")
@@ -206,7 +244,7 @@ function Custom.CreateEditor(parent, y)
         if not selected then message:SetText("Create or select a timer set first."); return end
         if importDirty then message:SetText("Click Import text first, or Discard text edits."); return end
         if not ApplyTimer() then return end
-        local ok, err = Custom.SaveSet(selected, name:GetText(), trigger, not not enabled:GetChecked(), text:GetText())
+        local ok, err = Custom.SaveSet(selected, name:GetText(), trigger, not not enabled:GetChecked(), text:GetText(), not not anywhere:GetChecked())
         if not ok then message:SetText(err); return end
         drafts[selected] = nil; dirty = false; Select(FindSelected()); addon.EncounterBars.UpdateSettings()
         name:ClearFocus(); text:ClearFocus(); message:SetText("Saved. Changes apply on the next matching combat/encounter start.")

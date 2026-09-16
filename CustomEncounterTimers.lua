@@ -34,7 +34,8 @@ function Custom.Serialize(rules)
                 math.floor(rule.color.g * 255 + 0.5), math.floor(rule.color.b * 255 + 0.5))
         end
         if rule.countdown ~= nil then tags = tags .. "[countdown=" .. (rule.countdown and "on" or "off") .. "] " end
-        lines[#lines + 1] = "{" .. spec .. "} " .. tags .. rule.name
+        if rule.expirySound then tags = tags .. "[sound=" .. rule.expirySound .. "] " end
+        lines[#lines + 1] = (rule.spellID and (tostring(rule.spellID) .. " ") or "") .. "{" .. spec .. "} " .. tags .. rule.name
     end
     return table.concat(lines, "\n")
 end
@@ -45,7 +46,12 @@ function Custom.Parse(text)
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
         lineNumber = lineNumber + 1
         if Trim(line) ~= "" then
-            local spec, name = line:match("^%s*{([^}]+)}%s*(.-)%s*$")
+            local spell, body = line:match("^%s*(%d+)%s+({.*)$")
+            local spellID = spell and tonumber(spell)
+            if spellID and (spellID < 1 or spellID > 2147483647) then
+                return nil, "Line " .. lineNumber .. ": invalid cast spell ID."
+            end
+            local spec, name = (body or line):match("^%s*{([^}]+)}%s*(.-)%s*$")
             local first, repeatEvery
             if spec then
                 local a, b = spec:match("^([^,]+),([^,]+)$")
@@ -53,7 +59,7 @@ function Custom.Parse(text)
                 else first = Seconds(spec) end
                 if spec:find(",", 1, true) and not repeatEvery then first = nil end
             end
-            local color, countdown
+            local color, countdown, expirySound
             while name do
                 local tag, rest = name:match("^%[([^%]]+)%]%s*(.*)$")
                 if not tag then break end
@@ -70,13 +76,19 @@ function Custom.Parse(text)
                     end
                     countdown = nil
                     if mode ~= "default" then countdown = mode == "on" end
+                elseif tag:sub(1, 6) == "sound=" then
+                    local value = tag:sub(7)
+                    if not value:match("^[%w_:%-]+$") then
+                        return nil, "Line " .. lineNumber .. ": invalid expiry sound."
+                    end
+                    expirySound = value ~= "none" and value or nil
                 else break end
                 name = rest
             end
             if not first or not name or name == "" or #name > 200 then
                 return nil, "Line " .. lineNumber .. ": use {20} Title or {2:20,20} Title; times must be 1–3600 seconds and titles 1–200 characters."
             end
-            result[#result + 1] = { first = first, interval = repeatEvery, name = name, color = color, countdown = countdown }
+            result[#result + 1] = { first = first, interval = repeatEvery, name = name, color = color, countdown = countdown, spellID = spellID, expirySound = expirySound }
             if #result > 100 then return nil, "Maximum 100 timers per set." end
         end
     end
@@ -117,7 +129,7 @@ function Custom.AddSet()
     return set
 end
 
-function Custom.SaveSet(id, name, trigger, isEnabled, text)
+function Custom.SaveSet(id, name, trigger, isEnabled, text, anywhere)
     local parsed, err = Custom.Parse(text)
     if not parsed then return false, err end
     name = Trim(name)
@@ -126,6 +138,7 @@ function Custom.SaveSet(id, name, trigger, isEnabled, text)
     for _, set in ipairs(Custom.GetSets()) do
         if set.id == id then
             set.name, set.trigger, set.enabled, set.text = name, trigger, isEnabled, text
+            if anywhere ~= nil then set.anywhere = not not anywhere end
             runs[id] = nil -- Edits take effect on the next trigger, not halfway through a pull.
             return true
         end
@@ -160,25 +173,45 @@ local function Start(trigger)
     local location = Custom.CaptureLocation()
     local now = GetTime()
     for _, set in ipairs(Custom.GetSets()) do
-        if set.enabled and set.trigger == trigger and not runs[set.id] and Matches(set.location, location) then
+        if set.enabled and set.trigger == trigger and not runs[set.id]
+            and (set.anywhere or Matches(set.location, location)) then
             local parsed = Custom.Parse(set.text)
             if parsed then
                 local entries = {}
                 for i, rule in ipairs(parsed) do
+                    if not rule.spellID then
                     entries[i] = { custom = true, customKey = set.id * 1000 + i, name = rule.name,
                         icon = 134376, duration = rule.first, ends = now + rule.first,
                         firstEnd = now + rule.first, interval = rule.interval, spoken = {} }
                     entries[i].color, entries[i].countdown = rule.color, rule.countdown
+                    entries[i].expirySound = rule.expirySound
+                    end
                 end
-                runs[set.id] = { source = set, entries = entries }
+                runs[set.id] = { source = set, entries = entries, rules = parsed }
             end
         end
     end
 end
 
-function Custom.OnEvent(event)
+function Custom.OnEvent(event, unit, castGUID, spellID)
     if not enabled then return end
-    if event == "PLAYER_REGEN_DISABLED" then
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if not InCombatLockdown() or not Public(unit) or unit ~= "player"
+            or not Public(spellID) or type(spellID) ~= "number" then return end
+        local now = GetTime()
+        for _, run in pairs(runs) do
+            for i, rule in ipairs(run.rules) do
+                if rule.spellID == spellID then
+                    -- A recast replaces this rule's entire schedule, including countdown state.
+                    run.entries[i] = { custom = true, customKey = run.source.id * 1000 + i,
+                        name = rule.name, icon = 134376, duration = rule.first,
+                        ends = now + rule.first, firstEnd = now + rule.first,
+                        interval = rule.interval, spoken = {}, color = rule.color, countdown = rule.countdown,
+                        expirySound = rule.expirySound }
+                end
+            end
+        end
+    elseif event == "PLAYER_REGEN_DISABLED" then
         if not inCombat then inCombat = true; Start("combat") end
     elseif event == "ENCOUNTER_START" then
         if not encounterStarted then encounterStarted = true; Start("encounter") end
@@ -193,7 +226,9 @@ function Custom.OnEvent(event)
         encounterStarted = not not IsEncounterInProgress()
     elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
         local location = Custom.CaptureLocation()
-        for id, run in pairs(runs) do if not Matches(run.source.location, location) then runs[id] = nil end end
+        for id, run in pairs(runs) do
+            if not run.source.anywhere and not Matches(run.source.location, location) then runs[id] = nil end
+        end
     end
 end
 
@@ -208,13 +243,22 @@ function Custom.Append(list, now)
     for _, run in pairs(runs) do
         for key, entry in pairs(run.entries) do
             if now >= entry.ends then
+                -- Expiry is consumed before removing/advancing the entry. Never replay
+                -- missed repeats after a hitch, or sound on cancellation/recast.
+                if entry.expirySound and addon.BuffAlerts then
+                    local sound = addon.BuffAlerts.ResolveSound({preset = entry.expirySound})
+                    if sound then PlaySoundFile(sound, "Master") end
+                end
+                if addon.EncounterBars and addon.EncounterBars.FinishCustomCountdown then
+                    addon.EncounterBars.FinishCustomCountdown(entry, entry.ends - now)
+                end
                 if entry.interval then
                     -- Skip missed occurrences after a hitch; never replay a burst of alerts.
                     local occurrence = math.floor((now - entry.firstEnd) / entry.interval) + 1
                     entry = { custom = true, customKey = entry.customKey, name = entry.name, icon = entry.icon,
                         duration = entry.interval, firstEnd = entry.firstEnd, interval = entry.interval,
                         ends = entry.firstEnd + occurrence * entry.interval, spoken = {},
-                        color = entry.color, countdown = entry.countdown }
+                        color = entry.color, countdown = entry.countdown, expirySound = entry.expirySound }
                     run.entries[key] = entry
                 else run.entries[key] = nil; entry = nil end
             end

@@ -44,6 +44,19 @@ end
 function Widgets.CreateWidgetFrame(name, configKey)
     local f = CreateFrame("Button", "LunaUITweaks_Widget_" .. name, UIParent)
     f:SetSize(100, 20)
+    if addonTable.LayoutMode then
+        addonTable.LayoutMode.RegisterTarget("Widget: " .. name, function() return f end, function()
+            local db=UIThingsDB.widgets
+            if not db or not db.enabled or not db[configKey] or not db[configKey].enabled then return false end
+            local anchorName=db[configKey].anchor
+            if anchorName and UIThingsDB.frames and UIThingsDB.frames.enabled then
+                for i,data in ipairs(UIThingsDB.frames.list or {}) do
+                    if data.isAnchor and data.name==anchorName and _G["UIThingsCustomFrame"..i] then return false end
+                end
+            end
+            return true
+        end)
+    end
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")

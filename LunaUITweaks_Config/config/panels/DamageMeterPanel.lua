@@ -216,9 +216,16 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
 
     -- Reset data + Lock/Unlock on their own line below the checkbox
     local resetBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
-    resetBtn:SetSize(110, 22)
+    resetBtn:SetSize(130, 22)
     resetBtn:SetPoint("TOPLEFT", 20, yBase - 30)
-    resetBtn:SetText("Reset All Data")
+    resetBtn:SetText("Reset Shared Data")
+    resetBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Reset shared damage meter data")
+        GameTooltip:AddLine("Clears Luna and Blizzard's built-in sessions. Unavailable during combat.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     resetBtn:SetScript("OnClick", ResetData)
 
     -- Lock / Unlock
@@ -228,6 +235,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     local function RefreshLock()
         lockBtn:SetText(UIThingsDB.damageMeter.locked and "Unlock Frame" or "Lock Frame")
     end
+    if addonTable.LayoutMode then addonTable.LayoutMode.RegisterControl(RefreshLock) end
     RefreshLock()
     lockBtn:SetScript("OnClick", function()
         UIThingsDB.damageMeter.locked = not UIThingsDB.damageMeter.locked
@@ -357,7 +365,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     -- Clear on instance
     local clearCB = CreateFrame("CheckButton", "UIThingsDMClear", child, "ChatConfigCheckButtonTemplate")
     clearCB:SetPoint("TOPLEFT", 20, yBase)
-    _G[clearCB:GetName() .. "Text"]:SetText("Clear data when entering an instance")
+    _G[clearCB:GetName() .. "Text"]:SetText("Clear shared meter data when entering an instance")
     clearCB:SetChecked(UIThingsDB.damageMeter.clearOnInstance)
     clearCB:SetScript("OnClick", function(self)
         UIThingsDB.damageMeter.clearOnInstance = self:GetChecked()
