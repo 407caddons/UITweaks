@@ -2,6 +2,14 @@ local addonName, addonTable = ...
 addonTable.TalentManager = {}
 
 local TalentManager = addonTable.TalentManager
+-- Level alone is insufficient: Classic clients may not expose Retail talents.
+local function CanUseTalents()
+    return UnitLevel("player") > 10
+        and type(GetSpecialization) == "function"
+        and type(GetSpecializationInfo) == "function"
+        and C_ClassTalents and type(C_ClassTalents.GetConfigIDsBySpecID) == "function"
+        and C_Traits and type(C_Traits.GetConfigInfo) == "function"
+end
 local Log = addonTable.Core.Log
 local LogLevel = addonTable.Core.LogLevel
 
@@ -228,6 +236,7 @@ local function AnchorToTalentFrame()
 end
 
 local function OnTalentFrameShow()
+    if not CanUseTalents() then return end
     if not UIThingsDB.talentManager or not UIThingsDB.talentManager.enabled then return end
     if not mainPanel then
         CreateMainPanel()
@@ -244,6 +253,7 @@ local function OnTalentFrameHide()
 end
 
 local function HookTalentFrame()
+    if not CanUseTalents() then return end
     if hooked then return end
     if not PlayerSpellsFrame then return end
 
@@ -501,6 +511,7 @@ end
 local ImportStringMatchesCurrent  -- forward declaration; defined after DecodeImportString
 
 function TalentManager.RefreshBuildList()
+    if not CanUseTalents() then return end
     if not scrollContent then return end
 
     -- Get current class/spec for filtering
@@ -806,6 +817,7 @@ local function GetOrCreateImportExportFrame()
 end
 
 function TalentManager.ShowExportDialog()
+    if not CanUseTalents() then return end
     if not C_Traits or not C_ClassTalents then
         Log("TalentManager", "Talent APIs not available", LogLevel.WARN)
         return
@@ -835,6 +847,7 @@ function TalentManager.ShowExportDialog()
 end
 
 function TalentManager.ShowImportDialog()
+    if not CanUseTalents() then return end
     local f = GetOrCreateImportExportFrame()
     f.title:SetText("Import Talent Build")
     f.editBox:SetText("")
@@ -1168,6 +1181,7 @@ end
 -- ============================================================
 
 function TalentManager.ShowAddDialog(importString)
+    if not CanUseTalents() then return end
     -- Clear any stale pending import if this isn't an import flow
     if not importString then
         TalentManager._pendingImportString = nil
@@ -1328,6 +1342,7 @@ end
 -- ============================================================
 
 function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, reminder)
+    if not CanUseTalents() then return end
     local f = GetOrCreateAddEditFrame()
     f.title:SetText("Edit Talent Build")
     local cache = EnsureEJCache()
@@ -1820,6 +1835,10 @@ StaticPopupDialogs["LUNA_TALENTMGR_UPDATE_CONFIRM"] = {
 -- ============================================================
 
 function TalentManager.UpdateSettings()
+    if not CanUseTalents() then
+        if mainPanel then mainPanel:Hide() end
+        return
+    end
     if mainPanel then
         local settings = UIThingsDB.talentManager
         mainPanel:SetWidth(settings.panelWidth or 280)
@@ -1837,6 +1856,7 @@ end
 
 -- One-time cleanup of leftover temp loadout entries from old import approach
 local function CleanupTempLoadouts()
+    if not CanUseTalents() then return end
     local specIndex = GetSpecialization()
     local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
     if not specID then return end
@@ -1868,6 +1888,7 @@ end
 
 local tempLoadoutsCleaned = false
 local function OnTalentManagerEnteringWorld()
+    if not CanUseTalents() then return end
     -- Try hooking on world entry in case talent frame loaded before us
     if PlayerSpellsFrame then
         HookTalentFrame()
@@ -1888,5 +1909,9 @@ end
 
 addonTable.EventBus.Register("ADDON_LOADED", OnTalentManagerAddonLoaded, "TalentManager")
 addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnTalentManagerEnteringWorld, "TalentManager")
+-- Recheck after leveling, when UnitLevel reflects the new level.
+addonTable.EventBus.Register("PLAYER_LEVEL_UP", function()
+    addonTable.Core.SafeAfter(0, OnTalentManagerEnteringWorld)
+end, "TalentManager")
 addonTable.EventBus.Register("TRAIT_CONFIG_UPDATED", OnTalentConfigUpdated, "TalentManager")
 addonTable.EventBus.Register("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", OnTalentConfigUpdated, "TalentManager")

@@ -71,6 +71,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     -- ============================================================
 
     local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    -- Full settings include large saved lists and caches. Use the same bound
+    -- on both sides so we never generate an export our importer rejects.
+    local MAX_SETTINGS_BYTES = 4 * 1024 * 1024
+    local MAX_ENCODED_BYTES = 4 * math.ceil(MAX_SETTINGS_BYTES / 3)
+    local SIZE_ERROR = "Settings exceed the 4 MiB limit. Export settings and talent builds separately."
 
     local function Base64Encode(data)
         local out = {}
@@ -164,7 +169,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     local function DeserializeString(str)
         -- Safely deserialize a Lua table string
         if not str or str == "" then return nil, "Empty string" end
-        if #str > 65536 then return nil, "Input too large" end
+        if #str > MAX_SETTINGS_BYTES then return nil, SIZE_ERROR end
         local func, err = loadstring("return " .. str)
         if not func then return nil, "Parse error: " .. (err or "unknown") end
         -- Sandbox: no access to globals
@@ -187,6 +192,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         exportData.exportDate = date("%Y-%m-%d %H:%M:%S")
 
         local serialized = SerializeValue(exportData)
+        if #serialized > MAX_SETTINGS_BYTES then return nil, SIZE_ERROR end
         return "LUIT1:" .. Base64Encode(serialized)
     end
 
@@ -202,6 +208,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         end
 
         local b64Data = importStr:sub(7)
+        if #b64Data > MAX_ENCODED_BYTES then return nil, SIZE_ERROR end
         local decoded = Base64Decode(b64Data)
         if not decoded or decoded == "" then
             return nil, "Failed to decode data"
@@ -306,7 +313,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 editBox:SetText("Please select at least one option to export.")
                 return
             end
-            local exportStr = BuildExportString(includeSettings, includeTalents)
+            local exportStr, err = BuildExportString(includeSettings, includeTalents)
+            if not exportStr then
+                editBox:SetText("Error: " .. err)
+                return
+            end
             editBox:SetText(exportStr)
             editBox:HighlightText()
             editBox:SetFocus()

@@ -382,7 +382,7 @@ local function OnEvent(self, event, ...)
                 dueNowColor = { r = 1, g = 0.15, b = 0.15 },
                 emphasizeGlow = true, emphasizeSound = false, emphasizeGrowUp = false,
                 limitHorizon = false, horizon = 60,
-                customSets = {}, nextCustomSetID = 1,
+                customTimers = {}, nextCustomTimerID = 1,
                 customColor = { r = 0.7, g = 0.4, b = 1 },
                 emphasizePos = { point = "CENTER", x = -330, y = 100 },
                 encounterPos = { point = "CENTER", x = 330, y = 100 },
@@ -436,7 +436,6 @@ local function OnEvent(self, event, ...)
                 quickDestroy = false,
                 classColorTooltips = false,
                 showSpellID = false,
-                plumeAlert = false,
                 boeAlert = false,
                 boeMinQuality = 4, -- 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary
                 boeAlertDuration = 5,

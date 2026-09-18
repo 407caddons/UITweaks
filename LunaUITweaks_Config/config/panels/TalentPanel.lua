@@ -8,6 +8,21 @@ local Helpers = addonTable.ConfigHelpers
 
 -- Define the setup function for Talent panel
 function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
+    -- Classic clients may lack the Retail specialization/trait APIs entirely.
+    -- Do not let this optional page abort construction of the other config tabs.
+    if type(GetSpecialization) ~= "function"
+        or type(GetSpecializationInfo) ~= "function"
+        or not C_ClassTalents or not C_Traits then
+        local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        title:SetPoint("TOPLEFT", 16, -16)
+        title:SetText("Talent Reminders")
+        local message = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        message:SetPoint("TOPLEFT", 20, -60)
+        message:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
+        message:SetJustifyH("LEFT")
+        message:SetText("Talent Reminders requires the Retail talent system and is unavailable on this client.")
+        return
+    end
     Helpers.CreateResetButton(panel, "talentReminders")
     -- Keep the expanded settings and saved-build list reachable on short windows.
     local pageScroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")

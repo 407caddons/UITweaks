@@ -250,16 +250,5 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
 
-    -- Debug Section
-    Helpers.CreateSectionHeader(panel, "Debug", -658)
-
-    -- Plume Buff Alert
-    local plumeBtn = CreateFrame("CheckButton", "UIThingsMiscPlumeAlert", panel, "ChatConfigCheckButtonTemplate")
-    plumeBtn:SetPoint("TOPLEFT", 20, -688)
-    _G[plumeBtn:GetName() .. "Text"]:SetText("Alert if Plume Buff Below 100 (Umbral/Radiant)")
-    plumeBtn:SetChecked(UIThingsDB.misc.plumeAlert)
-    plumeBtn:SetScript("OnClick", function(self)
-        UIThingsDB.misc.plumeAlert = self:GetChecked()
-    end)
 
 end

@@ -4,240 +4,168 @@ addon.CustomEncounterTimers = Custom
 local enabled, inCombat, encounterStarted = false, false, false
 local runs = {}
 local function DB() return UIThingsDB.encounterBars end
-local function Public(value) return not (issecretvalue and issecretvalue(value)) end
-local function Trim(text) return text:match("^%s*(.-)%s*$") end
-
-local function Seconds(text)
+local function Public(v) return not (issecretvalue and issecretvalue(v)) end
+local function Trim(v) return type(v) == "string" and v:match("^%s*(.-)%s*$") or "" end
+function Custom.ParseTime(text)
     text = Trim(text)
-    local minutes, seconds = text:match("^(%d+):(%d%d?)$")
+    local m, s = text:match("^(%d+):(%d%d?)$")
     local value
-    if minutes then
-        if tonumber(seconds) >= 60 then return end
-        value = tonumber(minutes) * 60 + tonumber(seconds)
+    if m then
+        if tonumber(s) >= 60 then return end
+        value = tonumber(m) * 60 + tonumber(s)
     elseif text:match("^%d+$") then value = tonumber(text) end
     if value and value >= 1 and value <= 3600 then return value end
 end
-Custom.ParseTime = Seconds
 function Custom.FormatTime(seconds)
-    if seconds < 60 then return tostring(seconds) end
-    return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+    return seconds < 60 and tostring(seconds) or string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
 end
-
-function Custom.Serialize(rules)
-    local lines = {}
-    for _, rule in ipairs(rules) do
-        local spec = Custom.FormatTime(rule.first)
-        if rule.interval then spec = spec .. "," .. Custom.FormatTime(rule.interval) end
-        local tags = ""
-        if rule.color then
-            tags = string.format("[#%02X%02X%02X] ", math.floor(rule.color.r * 255 + 0.5),
-                math.floor(rule.color.g * 255 + 0.5), math.floor(rule.color.b * 255 + 0.5))
-        end
-        if rule.countdown ~= nil then tags = tags .. "[countdown=" .. (rule.countdown and "on" or "off") .. "] " end
-        if rule.expirySound then tags = tags .. "[sound=" .. rule.expirySound .. "] " end
-        lines[#lines + 1] = (rule.spellID and (tostring(rule.spellID) .. " ") or "") .. "{" .. spec .. "} " .. tags .. rule.name
+function Custom.GetTimers()
+    local db = DB()
+    -- User-requested reset of legacy sets; other encounter settings are untouched.
+    db.customSets, db.nextCustomSetID = nil, nil
+    db.customTimers = db.customTimers or {}
+    return db.customTimers
+end
+function Custom.GetSortedTimers()
+    local list = {}
+    for _, timer in ipairs(Custom.GetTimers()) do list[#list+1] = timer end
+    table.sort(list, function(a, b)
+        local x, y = a.name:lower(), b.name:lower()
+        if x == y then return a.id < b.id end
+        return x < y
+    end)
+    return list
+end
+function Custom.GetIcon(timer)
+    if timer.trigger == "cast" and timer.spellID and C_Spell and C_Spell.GetSpellTexture then
+        return C_Spell.GetSpellTexture(timer.spellID) or 134376
     end
-    return table.concat(lines, "\n")
+    return 134376
 end
-
-function Custom.Parse(text)
-    if type(text) ~= "string" or #text > 16000 then return nil, "Schedule must be at most 16,000 characters." end
-    local result, lineNumber = {}, 0
-    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-        lineNumber = lineNumber + 1
-        if Trim(line) ~= "" then
-            local spell, body = line:match("^%s*(%d+)%s+({.*)$")
-            local spellID = spell and tonumber(spell)
-            if spellID and (spellID < 1 or spellID > 2147483647) then
-                return nil, "Line " .. lineNumber .. ": invalid cast spell ID."
-            end
-            local spec, name = (body or line):match("^%s*{([^}]+)}%s*(.-)%s*$")
-            local first, repeatEvery
-            if spec then
-                local a, b = spec:match("^([^,]+),([^,]+)$")
-                if a then first, repeatEvery = Seconds(a), Seconds(b)
-                else first = Seconds(spec) end
-                if spec:find(",", 1, true) and not repeatEvery then first = nil end
-            end
-            local color, countdown, expirySound
-            while name do
-                local tag, rest = name:match("^%[([^%]]+)%]%s*(.*)$")
-                if not tag then break end
-                if tag:sub(1, 1) == "#" then
-                    if not tag:match("^#%x%x%x%x%x%x$") or color then
-                        return nil, "Line " .. lineNumber .. ": colour must be [#RRGGBB], once per timer."
-                    end
-                    color = { r = tonumber(tag:sub(2, 3), 16) / 255,
-                        g = tonumber(tag:sub(4, 5), 16) / 255, b = tonumber(tag:sub(6, 7), 16) / 255 }
-                elseif tag:sub(1, 10) == "countdown=" then
-                    local mode = tag:sub(11)
-                    if mode ~= "on" and mode ~= "off" and mode ~= "default" then
-                        return nil, "Line " .. lineNumber .. ": countdown must be on, off or default."
-                    end
-                    countdown = nil
-                    if mode ~= "default" then countdown = mode == "on" end
-                elseif tag:sub(1, 6) == "sound=" then
-                    local value = tag:sub(7)
-                    if not value:match("^[%w_:%-]+$") then
-                        return nil, "Line " .. lineNumber .. ": invalid expiry sound."
-                    end
-                    expirySound = value ~= "none" and value or nil
-                else break end
-                name = rest
-            end
-            if not first or not name or name == "" or #name > 200 then
-                return nil, "Line " .. lineNumber .. ": use {20} Title or {2:20,20} Title; times must be 1–3600 seconds and titles 1–200 characters."
-            end
-            result[#result + 1] = { first = first, interval = repeatEvery, name = name, color = color, countdown = countdown, spellID = spellID, expirySound = expirySound }
-            if #result > 100 then return nil, "Maximum 100 timers per set." end
-        end
-    end
-    if #result == 0 then return nil, "Enter at least one timer." end
-    return result
-end
-
 function Custom.CaptureLocation()
     local subzone, zone = GetSubZoneText(), GetRealZoneText()
-    local _, _, _, _, _, _, _, instanceID = GetInstanceInfo()
-    if not Public(subzone) or not Public(zone) or not Public(instanceID)
-        or type(subzone) ~= "string" or type(zone) ~= "string" or zone == ""
-        or type(instanceID) ~= "number" then return nil, "Current location is unavailable. Try again outside combat." end
-    -- Instance ID is the physical map, not a UI-map floor that changes on stairs.
-    return { subzone = subzone, zone = zone, instanceID = instanceID }
+    local _, _, _, _, _, _, _, id = GetInstanceInfo()
+    if not Public(subzone) or not Public(zone) or not Public(id)
+        or type(subzone) ~= "string" or type(zone) ~= "string" or type(id) ~= "number" then
+        return nil, "Current location unavailable. Try outside combat."
+    end
+    return {subzone=subzone, zone=zone, instanceID=id}
 end
-
-function Custom.LocationLabel(location)
-    return location.subzone ~= "" and (location.subzone .. " — " .. location.zone)
-        or (location.zone .. " (no named subzone)")
+local function Matches(timer, location)
+    return not timer.location or (location and timer.location.instanceID == location.instanceID
+        and timer.location.subzone == location.subzone)
 end
-
-local function Matches(a, b)
-    return a and b and a.instanceID == b.instanceID and a.zone == b.zone and a.subzone == b.subzone
+local function ValidNumber(v, low, high)
+    return type(v) == "number" and v >= low and v <= high and v == math.floor(v)
 end
-
-function Custom.GetSets() return DB().customSets or {} end
-function Custom.AddSet()
-    local location, err = Custom.CaptureLocation()
-    if not location then return nil, err end
-    local sets = Custom.GetSets()
-    if #sets >= 32 then return nil, "Maximum 32 timer sets." end
-    local id = #sets == 0 and 1 or (DB().nextCustomSetID or 1)
-    DB().nextCustomSetID = id + 1
-    local set = { id = id, name = location.subzone ~= "" and location.subzone or location.zone,
-        location = location, trigger = "combat", enabled = false, text = "" }
-    sets[#sets + 1] = set; DB().customSets = sets
-    return set
-end
-
-function Custom.SaveSet(id, name, trigger, isEnabled, text, anywhere)
-    local parsed, err = Custom.Parse(text)
-    if not parsed then return false, err end
-    name = Trim(name)
-    if name == "" or #name > 80 then return false, "Enter a set name (1–80 characters)." end
-    if trigger ~= "combat" and trigger ~= "encounter" then return false, "Select a valid trigger." end
-    for _, set in ipairs(Custom.GetSets()) do
-        if set.id == id then
-            set.name, set.trigger, set.enabled, set.text = name, trigger, isEnabled, text
-            if anywhere ~= nil then set.anywhere = not not anywhere end
-            runs[id] = nil -- Edits take effect on the next trigger, not halfway through a pull.
-            return true
+function Custom.SaveTimer(id, values)
+    local name = Trim(values.name)
+    if name == "" or #name > 200 or name:find("[\r\n]") then return nil, "Enter a timer name (1–200 characters)." end
+    if values.trigger ~= "combat" and values.trigger ~= "encounter" and values.trigger ~= "cast" then
+        return nil, "Choose a start trigger."
+    end
+    if not ValidNumber(values.first, 1, 3600)
+        or (values.interval ~= nil and not ValidNumber(values.interval, 1, 3600)) then
+        return nil, "Times must be 1–3600 seconds; leave Repeat blank for a one-off timer."
+    end
+    if values.trigger == "cast" and not ValidNumber(values.spellID, 1, 2147483647) then
+        return nil, "Enter the spell ID of your successful cast."
+    end
+    local timer = {id=id, name=name, enabled=not not values.enabled, trigger=values.trigger,
+        first=values.first, interval=values.interval}
+    if values.trigger == "cast" then timer.spellID=values.spellID end
+    if values.countdown ~= nil then timer.countdown=not not values.countdown end
+    if values.expirySound and values.expirySound ~= "none" then
+        if type(values.expirySound) ~= "string" or not values.expirySound:match("^[%w_:%-]+$") then
+            return nil, "Invalid expiry sound."
+        end
+        timer.expirySound=values.expirySound
+    end
+    if values.color then
+        timer.color={}
+        for _, key in ipairs({"r","g","b"}) do
+            local v=values.color[key]
+            if type(v) ~= "number" or not (v >= 0 and v <= 1) then return nil, "Invalid colour." end
+            timer.color[key]=v
         end
     end
-    return false, "This timer set no longer exists."
+    if values.location then
+        local loc=values.location
+        if not ValidNumber(loc.instanceID,0,2147483647) or type(loc.subzone) ~= "string" or #loc.subzone>200 then
+            return nil, "Enter an instance/map ID and subzone name, or clear both for anywhere."
+        end
+        timer.location={instanceID=loc.instanceID, subzone=Trim(loc.subzone), zone=Trim(loc.zone)}
+    end
+    local list=Custom.GetTimers()
+    if id then
+        for i, old in ipairs(list) do
+            if old.id==id then list[i]=timer; runs[id]=nil; return timer end
+        end
+        return nil, "This timer no longer exists."
+    end
+    if #list>=500 then return nil, "Maximum 500 custom timers." end
+    local nextID=DB().nextCustomTimerID or 1
+    for _, old in ipairs(list) do nextID=math.max(nextID,old.id+1) end
+    timer.id=nextID; DB().nextCustomTimerID=nextID+1
+    list[#list+1]=timer
+    return timer
 end
-
-function Custom.DeleteSet(id)
-    for i, set in ipairs(Custom.GetSets()) do
-        if set.id == id then table.remove(DB().customSets, i); runs[id] = nil; return end
+function Custom.DeleteTimer(id)
+    for i, timer in ipairs(Custom.GetTimers()) do
+        if timer.id==id then table.remove(DB().customTimers,i); runs[id]=nil; return end
     end
 end
-
 function Custom.Configure(active)
-    if not active then
-        enabled, inCombat, encounterStarted = false, false, false
-        wipe(runs)
-        return
-    end
+    local list=Custom.GetTimers()
+    if not active then enabled,inCombat,encounterStarted=false,false,false; wipe(runs); return end
     if not enabled then
-        -- Never infer a start time on reload or when enabling mid-fight.
-        inCombat = not not InCombatLockdown()
-        encounterStarted = not not IsEncounterInProgress()
+        inCombat=not not InCombatLockdown()
+        encounterStarted=IsEncounterInProgress and not not IsEncounterInProgress() or false
     end
-    enabled = true
-    local valid = {}
-    for _, set in ipairs(Custom.GetSets()) do if set.enabled then valid[set.id] = set end end
-    for id, run in pairs(runs) do if valid[id] ~= run.source then runs[id] = nil end end
+    enabled=true
+    local valid={}
+    for _, timer in ipairs(list) do if timer.enabled then valid[timer.id]=timer end end
+    for id, run in pairs(runs) do if valid[id]~=run.source then runs[id]=nil end end
 end
-
-local function Start(trigger)
-    local location = Custom.CaptureLocation()
-    local now = GetTime()
-    for _, set in ipairs(Custom.GetSets()) do
-        if set.enabled and set.trigger == trigger and not runs[set.id]
-            and (set.anywhere or Matches(set.location, location)) then
-            local parsed = Custom.Parse(set.text)
-            if parsed then
-                local entries = {}
-                for i, rule in ipairs(parsed) do
-                    if not rule.spellID then
-                    entries[i] = { custom = true, customKey = set.id * 1000 + i, name = rule.name,
-                        icon = 134376, duration = rule.first, ends = now + rule.first,
-                        firstEnd = now + rule.first, interval = rule.interval, spoken = {} }
-                    entries[i].color, entries[i].countdown = rule.color, rule.countdown
-                    entries[i].expirySound = rule.expirySound
-                    end
-                end
-                runs[set.id] = { source = set, entries = entries, rules = parsed }
-            end
+local function Start(trigger, spellID)
+    local location=Custom.CaptureLocation()
+    local now=GetTime()
+    for _, timer in ipairs(Custom.GetTimers()) do
+        if timer.enabled and timer.trigger==trigger and Matches(timer,location)
+            and (trigger~="cast" or timer.spellID==spellID) then
+            local entry={custom=true,customKey=timer.id,name=timer.name,icon=Custom.GetIcon(timer),
+                duration=timer.first,ends=now+timer.first,firstEnd=now+timer.first,interval=timer.interval,
+                color=timer.color,countdown=timer.countdown,expirySound=timer.expirySound,spoken={}}
+            runs[timer.id]={source=timer,entries={entry}}
         end
     end
 end
-
 function Custom.OnEvent(event, unit, castGUID, spellID)
     if not enabled then return end
-    if event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if not InCombatLockdown() or not Public(unit) or unit ~= "player"
-            or not Public(spellID) or type(spellID) ~= "number" then return end
-        local now = GetTime()
-        for _, run in pairs(runs) do
-            for i, rule in ipairs(run.rules) do
-                if rule.spellID == spellID then
-                    -- A recast replaces this rule's entire schedule, including countdown state.
-                    run.entries[i] = { custom = true, customKey = run.source.id * 1000 + i,
-                        name = rule.name, icon = 134376, duration = rule.first,
-                        ends = now + rule.first, firstEnd = now + rule.first,
-                        interval = rule.interval, spoken = {}, color = rule.color, countdown = rule.countdown,
-                        expirySound = rule.expirySound }
-                end
-            end
-        end
-    elseif event == "PLAYER_REGEN_DISABLED" then
-        if not inCombat then inCombat = true; Start("combat") end
-    elseif event == "ENCOUNTER_START" then
-        if not encounterStarted then encounterStarted = true; Start("encounter") end
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        inCombat = false; wipe(runs)
-        -- Keep the encounter latch until ENCOUNTER_END to avoid duplicate starts.
-    elseif event == "ENCOUNTER_END" then
-        encounterStarted = false; wipe(runs)
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        wipe(runs)
-        inCombat = not not InCombatLockdown()
-        encounterStarted = not not IsEncounterInProgress()
-    elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
-        local location = Custom.CaptureLocation()
-        for id, run in pairs(runs) do
-            if not run.source.anywhere and not Matches(run.source.location, location) then runs[id] = nil end
-        end
+    if event=="UNIT_SPELLCAST_SUCCEEDED" then
+        if not InCombatLockdown() or not Public(unit) or unit~="player"
+            or not Public(spellID) or type(spellID)~="number" then return end
+        inCombat=true
+        Start("cast",spellID)
+    elseif event=="PLAYER_REGEN_DISABLED" then
+        if not inCombat then inCombat=true; Start("combat") end
+    elseif event=="ENCOUNTER_START" then
+        if not encounterStarted then encounterStarted=true; Start("encounter") end
+    elseif event=="PLAYER_REGEN_ENABLED" then inCombat=false; wipe(runs)
+    elseif event=="ENCOUNTER_END" then encounterStarted=false; wipe(runs)
+    elseif event=="PLAYER_ENTERING_WORLD" then
+        wipe(runs); inCombat=not not InCombatLockdown()
+        encounterStarted=IsEncounterInProgress and not not IsEncounterInProgress() or false
+    elseif event=="ZONE_CHANGED" or event=="ZONE_CHANGED_INDOORS" or event=="ZONE_CHANGED_NEW_AREA" then
+        local location=Custom.CaptureLocation()
+        for id, run in pairs(runs) do if not Matches(run.source,location) then runs[id]=nil end end
     end
 end
-
 function Custom.HasTimers()
     if not enabled or not inCombat then return false end
     for _, run in pairs(runs) do if next(run.entries) then return true end end
     return false
 end
-
 function Custom.Append(list, now)
     if not enabled or not inCombat then return end
     for _, run in pairs(runs) do

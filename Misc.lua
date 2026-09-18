@@ -132,7 +132,12 @@ local function ShowBoeAlert(itemName, quality)
     boeAlertFrame.text:SetTextColor(color.r, color.g, color.b, color.a or 1)
 
     if itemName then
-        local r, g, b, hex = C_Item.GetItemQualityColor and C_Item.GetItemQualityColor(quality)
+        local getQualityColor = C_Item and C_Item.GetItemQualityColor or GetItemQualityColor
+        local hex
+        if type(getQualityColor) == "function" then
+            local r, g, b
+            r, g, b, hex = getQualityColor(quality)
+        end
         if hex then
             boeAlertFrame.text:SetText(string.format("|c%sBoE: %s|r", hex, itemName))
         else
@@ -168,7 +173,9 @@ local function OnChatMsgLootBoE(event, msg, ...)
     itemID = tonumber(itemID)
     if not itemID then return end
 
-    local itemName, _, quality, _, _, _, _, _, _, _, _, _, _, bindType = GetItemInfo(itemID)
+    local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+    if type(getItemInfo) ~= "function" then return end
+    local itemName, _, quality, _, _, _, _, _, _, _, _, _, _, bindType = getItemInfo(itemID)
     if not itemName then return end
 
     local minQuality = UIThingsDB.misc.boeMinQuality or 4
@@ -581,59 +588,6 @@ local RegisterMiscEvents, UnregisterMiscEvents -- forward declarations (defined 
 local miscEventsRegistered = false
 
 -- Named event callbacks
--- == PLUME BUFF ALERT ==
-
-local plumeAlertFrame = CreateFrame("Frame", "UIThingsPlumeAlert", UIParent, "BackdropTemplate")
-plumeAlertFrame:SetSize(400, 50)
-plumeAlertFrame:SetPoint("TOP", 0, -380)
-plumeAlertFrame:SetFrameStrata("DIALOG")
-plumeAlertFrame:Hide()
-
-plumeAlertFrame.text = plumeAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-plumeAlertFrame.text:SetPoint("CENTER")
-plumeAlertFrame.text:SetTextColor(1, 0.2, 0.2, 1)
-
--- Query by constant spell ID instead of comparing aura names. In 12.0+, aura
--- fields (including name and spellId) can be secret even outside combat when
--- execution is addon-tainted.
-local PLUME_AURAS = {
-    { spellID = 1260615, name = "Radiant Plume" },
-    { spellID = 1265808, name = "Umbral Plume" },
-}
-
-local function CheckPlumeBuff()
-    if InCombatLockdown() then return end
-    if not UIThingsDB.misc.plumeAlert then return end
-    if C_ChallengeMode.IsChallengeModeActive() then return end
-
-    for _, plume in ipairs(PLUME_AURAS) do
-        local auraData = C_UnitAuras.GetPlayerAuraBySpellID(plume.spellID)
-        local auraInstanceID = auraData and auraData.auraInstanceID
-        if auraInstanceID and addonTable.Secret.CanAccessValue(auraInstanceID) then
-            local data = C_TooltipInfo.GetUnitAura("player", auraInstanceID)
-            if data and data.lines and addonTable.Secret.CanAccessValue(data.lines) then
-                for _, line in ipairs(data.lines) do
-                    local text = addonTable.Secret.CanAccessValue(line) and line.leftText or nil
-                    if text and addonTable.Secret.CanAccessValue(text) then
-                        local valueText = text:match("increased by (%d+)")
-                        local value = valueText and tonumber(valueText)
-                        if value then
-                            if value < 100 then
-                                plumeAlertFrame.text:SetText(
-                                    string.format("%s: %d (below 100!)", plume.name, value))
-                                plumeAlertFrame:Show()
-                                addonTable.Core.SafeAfter(10, function()
-                                    plumeAlertFrame:Hide()
-                                end)
-                            end
-                            return
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
 
 local function OnPlayerEnteringWorld()
     if not UIThingsDB.misc then return end
@@ -650,7 +604,6 @@ local function OnPlayerEnteringWorld()
             HookTooltipSpellID()
         end
         if UIThingsDB.misc.personalOrders then StartPersonalOrderChecks() end
-        addonTable.Core.SafeAfter(2, CheckPlumeBuff)
     end
 end
 

@@ -2,6 +2,25 @@ local addonName, addonTable = ...
 addonTable.TalentReminder = {}
 
 local TalentReminder = addonTable.TalentReminder
+function TalentReminder.IsSupported()
+    return type(GetSpecialization) == "function"
+        and type(GetSpecializationInfo) == "function"
+        and C_ClassTalents and type(C_ClassTalents.GetActiveConfigID) == "function"
+        and C_Traits and type(C_Traits.GetConfigInfo) == "function"
+end
+local function CanUseTalents()
+    return TalentReminder.IsSupported() and UnitLevel("player") > 10
+end
+local function IsActive()
+    return CanUseTalents() and UIThingsDB and UIThingsDB.talentReminders
+        and UIThingsDB.talentReminders.enabled
+end
+local function OnLevelUp()
+    addonTable.Core.SafeAfter(0, function()
+        TalentReminder.ApplyEvents()
+        if IsActive() then TalentReminder.OnEnteringWorld() end
+    end)
+end
 local alertFrame        -- Popup alert frame
 local currentInstanceID, currentDifficultyID
 local lastZone = nil    -- Track last zone mapID for zone change detection
@@ -24,7 +43,7 @@ function TalentReminder.Initialize()
         if not UIThingsDB.talentReminders.frameHeight then UIThingsDB.talentReminders.frameHeight = 300 end
     end
 
-    TalentReminder.CreateAlertFrame()
+    if CanUseTalents() then TalentReminder.CreateAlertFrame() end
 
     TalentReminder.ApplyEvents()
 
@@ -34,7 +53,13 @@ end
 
 function TalentReminder.ApplyEvents()
     local EventBus = addonTable.EventBus
-    if UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
+    if TalentReminder.IsSupported() and UIThingsDB.talentReminders and UIThingsDB.talentReminders.enabled then
+        EventBus.Register("PLAYER_LEVEL_UP", OnLevelUp, "TalentReminder")
+    else
+        EventBus.Unregister("PLAYER_LEVEL_UP", OnLevelUp)
+    end
+    if IsActive() then
+        if not alertFrame then TalentReminder.CreateAlertFrame() end
         EventBus.Register("PLAYER_ENTERING_WORLD", TalentReminder.OnEnteringWorldEvent, "TalentReminder")
         EventBus.Register("PLAYER_SPECIALIZATION_CHANGED", TalentReminder.OnTalentChangeEvent, "TalentReminder")
         EventBus.Register("TRAIT_CONFIG_UPDATED", TalentReminder.OnTalentChangeEvent, "TalentReminder")
@@ -83,7 +108,9 @@ function TalentReminder.OnEnteringWorldEvent()
 end
 
 function TalentReminder.OnTalentChangeEvent()
+    if not IsActive() then return end
     addonTable.Core.SafeAfter(1.0, function()
+        if not IsActive() then return end
         local _, _, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
         currentInstanceID = instanceID
         currentDifficultyID = difficultyID
@@ -99,6 +126,7 @@ end
 
 -- On zone changed
 function TalentReminder.OnZoneChanged()
+    if not IsActive() then return end
     if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.enabled then
         return
     end
@@ -134,6 +162,7 @@ end
 
 -- On entering world/instance
 function TalentReminder.OnEnteringWorld()
+    if not IsActive() then return end
     -- Update current instance info
     local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
     currentInstanceID = instanceID
@@ -178,6 +207,7 @@ end
 
 -- Check talents in instance (for talent changes)
 function TalentReminder.CheckTalentsInInstance()
+    if not IsActive() then return end
     if not currentInstanceID or currentInstanceID == 0 then
         return
     end
@@ -299,6 +329,7 @@ end
 
 -- Check talents on M+ entry
 function TalentReminder.CheckTalentsOnMythicPlusEntry()
+    if not IsActive() then return end
     if not UIThingsDB.talentReminders or not UIThingsDB.talentReminders.enabled then
         return
     end
@@ -398,6 +429,7 @@ end
 
 -- Compare current talents vs saved
 function TalentReminder.CompareTalents(savedTalents)
+    if not CanUseTalents() then return {} end
     local mismatches = {}
 
     if not savedTalents then
@@ -560,6 +592,7 @@ end
 -- Validate that saved talents still exist in current talent tree
 -- Returns: isValid (boolean), invalidTalents (table)
 function TalentReminder.ValidateTalentBuild(savedTalents)
+    if not CanUseTalents() then return false, {} end
     if not savedTalents then
         return true, {}  -- Import-string builds have no snapshot to validate
     end
@@ -716,6 +749,7 @@ end
 
 -- Create talent snapshot
 function TalentReminder.CreateSnapshot()
+    if not CanUseTalents() then return nil, "Talents require a supported client and level above 10" end
     if not C_ClassTalents or not C_Traits then
         return nil, "Talent API not available"
     end
@@ -936,6 +970,7 @@ end
 
 -- Show alert
 function TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
+    if not IsActive() then return end
     if not alertFrame then
         return
     end
@@ -1009,6 +1044,7 @@ end
 
 -- Apply talents from saved build
 function TalentReminder.ApplyTalents(reminder)
+    if not CanUseTalents() then return false end
     if not C_ClassTalents or not C_Traits then
         print("|cFFFF0000[LunaUITweaks]|r Talent API not available")
         return false

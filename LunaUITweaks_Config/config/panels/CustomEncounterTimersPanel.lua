@@ -3,301 +3,264 @@ local Custom, H = addon.CustomEncounterTimers, addon.ConfigHelpers
 
 function Custom.CreateEditor(parent, y)
     local root = CreateFrame("Frame", nil, parent)
-    root:SetPoint("TOPLEFT", 0, y); root:SetSize(550, 1290)
-    H.CreateSectionHeader(root, "Custom timer sets", 0)
-    local function Label(text, x, offset, width)
-        local f = root:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        f:SetPoint("TOPLEFT", x, offset); f:SetWidth(width or 490); f:SetJustifyH("LEFT"); f:SetText(text)
+    root:SetPoint("TOPLEFT", 0, y); root:SetSize(550, 860)
+    H.CreateSectionHeader(root, "Custom timers", 0)
+    local function Label(owner, text, x, top, width)
+        local f=owner:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+        f:SetPoint("TOPLEFT",x,top); f:SetWidth(width); f:SetJustifyH("LEFT"); f:SetText(text)
         return f
     end
-    local function Button(text, x, offset, callback)
-        local f = CreateFrame("Button", nil, root, "UIPanelButtonTemplate")
-        f:SetPoint("TOPLEFT", x, offset); f:SetSize(145, 26); f:SetText(text); f:SetScript("OnClick", callback)
+    local function Button(owner,text,x,top,width,callback)
+        local f=CreateFrame("Button",nil,owner,"UIPanelButtonTemplate")
+        f:SetPoint("TOPLEFT",x,top); f:SetSize(width,26); f:SetText(text); f:SetScript("OnClick",callback)
         return f
     end
-    Label("Create a set here to capture your current subzone. Timers run locally, only in combat, and use the normal/emphasized bars.", 20, -32)
-    local selected, dirty, loading, confirmDelete
-    local drafts = {}
-    local setDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
-    setDD:SetPoint("TOPLEFT", 4, -86); UIDropDownMenu_SetWidth(setDD, 290)
-    local location = Label("", 20, -130)
-    Label("Set name", 20, -184, 100)
-    local name = CreateFrame("EditBox", nil, root, "InputBoxTemplate")
-    name:SetPoint("TOPLEFT", 120, -180); name:SetSize(380, 26); name:SetAutoFocus(false); name:SetMaxLetters(80)
-    local enabled = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
-    enabled:SetPoint("TOPLEFT", 20, -220); enabled.Text:SetText("Enable this set")
-    local anywhere = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
-    anywhere:SetPoint("TOPLEFT", 260, -220); anywhere.Text:SetText("Anywhere (ignore location)")
-    Label("Start on", 20, -272, 100)
-    local triggerDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
-    triggerDD:SetPoint("TOPLEFT", 104, -262); UIDropDownMenu_SetWidth(triggerDD, 230)
-    local trigger = "combat"
-    Label("Timers — select one to edit its timing, colour and countdown", 20, -305)
-    local scroll = CreateFrame("ScrollFrame", nil, root, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 24, -945); scroll:SetSize(455, 220); scroll:Hide()
-    local text = CreateFrame("EditBox", nil, scroll)
-    text:SetMultiLine(true); text:SetAutoFocus(false); text:SetFontObject("ChatFontNormal")
-    text:SetWidth(445); text:SetHeight(220); text:SetMaxLetters(16000)
-    text:SetTextInsets(6, 6, 6, 6); scroll:SetScrollChild(text)
-    local bg = scroll:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(0.025, 0.04, 0.05, 1)
-    scroll:EnableMouse(true); scroll:SetScript("OnMouseDown", function() text:SetFocus() end)
-    text:SetScript("OnCursorChanged", function(_, _, cursorY, _, height)
-        local offset = scroll:GetVerticalScroll()
-        local top = -cursorY
-        if top < offset then scroll:SetVerticalScroll(math.max(0, top))
-        elseif top + height > offset + scroll:GetHeight() then
-            scroll:SetVerticalScroll(top + height - scroll:GetHeight())
-        end
-    end)
-    local message = Label("", 20, -842)
-    local rules, timerIndex, timerDirty, importDirty = {}, nil, false, false
-    local list = CreateFrame("ScrollFrame", nil, root, "UIPanelScrollFrameTemplate")
-    list:SetPoint("TOPLEFT", 20, -335); list:SetSize(455, 140)
-    local listChild = CreateFrame("Frame", nil, list); listChild:SetSize(455, 1); list:SetScrollChild(listChild)
-    local timerRows = {}
-    local function Edit(label, x, offset, width)
-        Label(label, x, offset, width)
-        local f = CreateFrame("EditBox", nil, root, "InputBoxTemplate")
-        f:SetPoint("TOPLEFT", x + 4, offset - 24); f:SetSize(width, 26); f:SetAutoFocus(false)
-        f:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        f:SetScript("OnTextChanged", function(_, userInput) if userInput and timerIndex then timerDirty = true end end)
+    Label(root,"Independent timers, sorted A–Z. Green = enabled; grey = disabled. Timers run only in combat.",20,-32,510)
+    local list=CreateFrame("ScrollFrame",nil,root,"UIPanelScrollFrameTemplate")
+    list:SetPoint("TOPLEFT",20,-110); list:SetSize(175,620)
+    local child=CreateFrame("Frame",nil,list); child:SetSize(175,1); list:SetScrollChild(child)
+    local rows={}
+    local empty=Label(root,"No custom timers. Click Add timer to create one.",20,-118,170)
+    local editor=CreateFrame("Frame",nil,root); editor:SetPoint("TOPLEFT",235,-78); editor:SetSize(300,660)
+    local selected, loading, confirmDelete, ownsPicker
+    local drafts={}
+    local message=Label(root,"Select a timer or click Add timer.",20,-752,510)
+    local function Dirty()
+        if loading or selected==nil then return end
+        confirmDelete=nil
+        message:SetText("Unsaved changes — Save to apply. Drafts are kept while switching timers.")
+    end
+    local function Edit(label,x,top,width,max)
+        Label(editor,label,x,top,width)
+        local f=CreateFrame("EditBox",nil,editor,"InputBoxTemplate")
+        f:SetPoint("TOPLEFT",x+4,top-24); f:SetSize(width-4,24); f:SetAutoFocus(false)
+        f:SetMaxLetters(max or 200)
+        f:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+        f:SetScript("OnTextChanged",function(_,user) if user then Dirty() end end)
         return f
     end
-    local timerTitle = Edit("Timer title", 20, -490, 270); timerTitle:SetMaxLetters(200)
-    local castSpell = Edit("Your cast ID (optional)", 320, -490, 170)
-    local firstDelay = Edit("First delay (20 or 2:20)", 20, -550, 210)
-    local interval = Edit("Repeat every (blank = once)", 270, -550, 220)
-    local countdownDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
-    countdownDD:SetPoint("TOPLEFT", 4, -615); UIDropDownMenu_SetWidth(countdownDD, 210)
-    local countdownMode = "default"
-    local expirySound = "none"
-    local expiryDD = CreateFrame("Frame", nil, root, "UIDropDownMenuTemplate")
-    expiryDD:SetPoint("TOPLEFT", 254, -615); UIDropDownMenu_SetWidth(expiryDD, 220)
-    UIDropDownMenu_Initialize(expiryDD, function()
-        if not addon.BuffAlerts then return end
-        for _, option in ipairs(addon.BuffAlerts.GetSoundOptions()) do
-            local value = option.value
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = option.label; info.checked = expirySound == value
-            info.func = function()
-                if not timerIndex then return end
-                expirySound = value; timerDirty = true
-                UIDropDownMenu_SetText(expiryDD, "Expiry: " .. option.label)
-            end
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-    local defaultColor = CreateFrame("CheckButton", nil, root, "ChatConfigCheckButtonTemplate")
-    defaultColor:SetPoint("TOPLEFT", 20, -660); defaultColor.Text:SetText("Use default colour")
-    defaultColor:SetScript("OnClick", function() if timerIndex then timerDirty = true end end)
-    local editColor = {r=1,g=1,b=1}
-    local colorSwatch = H.CreateColorSwatch(root, "Override colour", editColor, function()
-        if timerIndex then defaultColor:SetChecked(false); timerDirty = true end
-    end, 280, -665, false)
-    local ownsPicker = false
-    if colorSwatch then colorSwatch:HookScript("OnClick", function() ownsPicker = true end) end
-    local RefreshTimers, LoadTimer, ApplyTimer
-    local function MarkDirty()
-        if selected and not loading then dirty = true; confirmDelete = nil; message:SetText("Unsaved changes — click Save to apply. Drafts are kept while switching sets.") end
+    local name=Edit("Timer name",0,0,300)
+    local enabled=CreateFrame("CheckButton",nil,editor,"ChatConfigCheckButtonTemplate")
+    enabled:SetPoint("TOPLEFT",0,-58); enabled.Text:SetText("Enable this timer"); enabled:SetScript("OnClick",Dirty)
+    local function Dropdown(label,top)
+        Label(editor,label,0,top,300)
+        local f=CreateFrame("Frame",nil,editor,"UIDropDownMenuTemplate")
+        f:SetPoint("TOPLEFT",-16,top-20); UIDropDownMenu_SetWidth(f,275)
+        return f
     end
-    local function OnTextChanged(_, userInput)
-        if userInput then MarkDirty() end
+    local triggerDD=Dropdown("Start on",-98)
+    local trigger="combat"
+    local triggerNames={combat="Combat start",encounter="Encounter start",cast="Your spell cast"}
+    local spell=Edit("Your cast spell name or ID",0,-161,300,200)
+    local popup=CreateFrame("Frame",nil,editor,"BackdropTemplate")
+    popup:SetPoint("TOPLEFT",spell,"BOTTOMLEFT",0,-2); popup:SetSize(300,1)
+    popup:SetFrameStrata("DIALOG"); popup:SetFrameLevel(100)
+    popup:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
+    popup:SetBackdropColor(.025,.04,.05,.98); popup:SetBackdropBorderColor(.3,.5,.5,1); popup:Hide()
+    local matches, resultRows, searchGeneration = {}, {}, 0
+    local function HideSearch()
+        searchGeneration=searchGeneration+1; popup:Hide()
     end
-    name:SetScript("OnTextChanged", OnTextChanged)
-    text:SetScript("OnTextChanged", function(_, userInput) if userInput then importDirty = true end end)
-    name:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    text:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    enabled:SetScript("OnClick", MarkDirty)
-    anywhere:SetScript("OnClick", MarkDirty)
-    local function FindSelected()
-        for _, set in ipairs(Custom.GetSets()) do if set.id == selected then return set end end
+    local function PickSpell(id)
+        spell:SetText(tostring(id)); spell:ClearFocus(); HideSearch(); Dirty()
     end
-    local function SyncText()
-        text:SetText(Custom.Serialize(rules)); importDirty = false; MarkDirty()
-    end
-    LoadTimer = function(index)
-        if ownsPicker and ColorPickerFrame then ColorPickerFrame:Hide() end
-        ownsPicker = false
-        timerIndex = index; local rule = rules[index]
-        timerTitle:SetText(rule and rule.name or "")
-        expirySound = rule and rule.expirySound or "none"
-        UIDropDownMenu_SetText(expiryDD, "Expiry: " .. (addon.BuffAlerts and
-            addon.BuffAlerts.GetSoundLabel({preset=expirySound}) or "None"))
-        castSpell:SetText(rule and rule.spellID and tostring(rule.spellID) or "")
-        castSpell:SetEnabled(rule ~= nil)
-        firstDelay:SetText(rule and Custom.FormatTime(rule.first) or "")
-        interval:SetText(rule and rule.interval and Custom.FormatTime(rule.interval) or "")
-        countdownMode = "default"
-        if rule and rule.countdown ~= nil then countdownMode = rule.countdown and "on" or "off" end
-        UIDropDownMenu_SetText(countdownDD, "Countdown: " .. countdownMode)
-        defaultColor:SetChecked(not rule or not rule.color)
-        local color = rule and rule.color or UIThingsDB.encounterBars.customColor
-        editColor.r, editColor.g, editColor.b = color.r, color.g, color.b
-        if colorSwatch then colorSwatch.tex:SetColorTexture(color.r,color.g,color.b,1); colorSwatch:SetEnabled(rule ~= nil) end
-        timerTitle:SetEnabled(rule ~= nil); firstDelay:SetEnabled(rule ~= nil); interval:SetEnabled(rule ~= nil)
-        timerDirty = false
-    end
-    ApplyTimer = function()
-        if not timerDirty then return true end
-        local first = Custom.ParseTime(firstDelay:GetText())
-        local repeatText = interval:GetText():match("^%s*(.-)%s*$")
-        local repeatEvery = repeatText ~= "" and Custom.ParseTime(repeatText) or nil
-        local title = timerTitle:GetText():match("^%s*(.-)%s*$")
-        if not first or (repeatText ~= "" and not repeatEvery) or title == "" or title:find("[\r\n]") then
-            message:SetText("Enter a title and valid times (1–3600 seconds). Leave Repeat blank for a one-off timer."); return false
-        end
-        local rule = {name=title, first=first, interval=repeatEvery}
-        if expirySound ~= "none" then rule.expirySound = expirySound end
-        local spellText = castSpell:GetText():match("^%s*(.-)%s*$")
-        if spellText ~= "" then
-            local id = tonumber(spellText)
-            if not spellText:match("^%d+$") or not id or id < 1 or id > 2147483647 then
-                message:SetText("Enter a positive cast spell ID, or leave it blank for the set's start trigger."); return false
-            end
-            rule.spellID = id
-        end
-        if countdownMode ~= "default" then rule.countdown = countdownMode == "on" end
-        if not defaultColor:GetChecked() then rule.color = {r=editColor.r,g=editColor.g,b=editColor.b} end
-        rules[timerIndex] = rule; timerDirty = false; SyncText(); RefreshTimers()
-        return true
-    end
-    RefreshTimers = function()
-        for i, rule in ipairs(rules) do
-            local row = timerRows[i]
+    local function UpdateSearch()
+        if trigger~="cast" or not spell:HasFocus() or not editor:IsShown() then HideSearch(); return end
+        matches=addon.BuffAlerts.FindSpellMatches(spell:GetText(),8)
+        for i=1,8 do
+            local row=resultRows[i]
             if not row then
-                row = CreateFrame("Button", nil, listChild); row:SetSize(450, 30)
-                row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                row.label:SetPoint("LEFT", 6, 0); row.label:SetWidth(438); row.label:SetJustifyH("LEFT"); row.label:SetWordWrap(false)
-                row:SetScript("OnClick", function()
-                    if importDirty then message:SetText("Import or discard the text edits first."); return end
-                    if ApplyTimer() then LoadTimer(i); RefreshTimers() end
-                end)
-                timerRows[i] = row
+                row=CreateFrame("Button",nil,popup); row:SetSize(296,28); row:SetPoint("TOPLEFT",2,-2-(i-1)*28)
+                row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
+                row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(22,22); row.icon:SetPoint("LEFT",3,0)
+                row.text=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+                row.text:SetPoint("LEFT",row.icon,"RIGHT",6,0); row.text:SetWidth(262); row.text:SetJustifyH("LEFT")
+                row.text:SetWordWrap(false)
+                row:SetScript("OnClick",function(self) PickSpell(self.spellID) end)
+                resultRows[i]=row
             end
-            local color = rule.color or UIThingsDB.encounterBars.customColor
-            row.label:SetTextColor(color.r,color.g,color.b)
-            row.label:SetText((timerIndex == i and "> " or "") .. rule.name .. " · " .. Custom.FormatTime(rule.first)
-                .. (rule.spellID and (" / cast " .. rule.spellID) or "")
-                .. (rule.interval and (" / repeat " .. Custom.FormatTime(rule.interval)) or ""))
-            row:SetPoint("TOPLEFT", 0, -(i-1)*30); row:Show()
+            local match=matches[i]
+            if match then
+                row.spellID=match.spellID; row.icon:SetTexture(match.iconID or 134376)
+                row.text:SetText(match.name.." ("..match.spellID..")"); row:Show()
+            else row:Hide() end
         end
-        for i=#rules+1,#timerRows do timerRows[i]:Hide() end
-        listChild:SetHeight(math.max(1,#rules*30))
+        popup:SetHeight(#matches*28+4); popup:SetShown(#matches>0)
     end
-    UIDropDownMenu_Initialize(countdownDD, function(_, level)
-        for _, mode in ipairs({"default","on","off"}) do
-            local item=UIDropDownMenu_CreateInfo(); item.text="Countdown: "..mode; item.checked=countdownMode==mode
-            item.func=function() if timerIndex then countdownMode=mode; timerDirty=true; UIDropDownMenu_SetText(countdownDD,item.text) end end
-            UIDropDownMenu_AddButton(item,level)
-        end
-    end)
-    local function Select(set)
-        if importDirty then message:SetText("Import or discard the text edits first."); return false end
-        if not ApplyTimer() then return false end
-        if selected and dirty then
-            drafts[selected] = { name = name:GetText(), text = text:GetText(),
-                enabled = not not enabled:GetChecked(), trigger = trigger, anywhere = not not anywhere:GetChecked() }
-        end
-        loading = true; selected = set and set.id; confirmDelete = nil
-        local values = set and (drafts[set.id] or set)
-        UIDropDownMenu_SetText(setDD, set and ((set.enabled and "|cff55ddaa" or "|cff888888") .. set.name .. " #" .. set.id .. "|r") or "Select a timer set")
-        name:SetText(values and values.name or ""); text:SetText(values and values.text or "")
-        enabled:SetChecked(values and values.enabled or false)
-        anywhere:SetChecked(values and values.anywhere or false)
-        anywhere:SetEnabled(set ~= nil)
-        trigger = values and values.trigger or "combat"
-        UIDropDownMenu_SetText(triggerDD, trigger == "combat" and "Combat start" or "Encounter start")
-        location:SetText(set and ("Location: " .. Custom.LocationLabel(set.location)) or "Click Add current subzone to create a timer set.")
-        name:SetEnabled(set ~= nil); text:SetEnabled(set ~= nil); enabled:SetEnabled(set ~= nil)
-        scroll:SetVerticalScroll(0); loading = false; dirty = selected and drafts[selected] ~= nil or false
-        message:SetText(dirty and "Unsaved draft restored — click Save to apply." or "")
-        local parsed, err = Custom.Parse(values and values.text or "")
-        rules = parsed or {}; LoadTimer(#rules > 0 and 1 or nil); RefreshTimers()
-        if values and values.text ~= "" and not parsed then scroll:Show(); importDirty=true; message:SetText(err) end
-        return true
+    if addon.BuffAlerts and addon.BuffAlerts.FindSpellMatches then
+        spell:SetScript("OnTextChanged",function(_,user)
+            if not user then return end
+            Dirty(); UpdateSearch(); searchGeneration=searchGeneration+1
+            local generation=searchGeneration
+            C_Timer.After(.3,function()
+                if generation==searchGeneration and spell:HasFocus() and editor:IsShown() and trigger=="cast" then
+                    addon.BuffAlerts.SearchEncounterJournal(spell:GetText())
+                end
+            end)
+        end)
+        spell:SetScript("OnEditFocusGained",UpdateSearch)
+        spell:SetScript("OnEnterPressed",function()
+            if #matches==1 and popup:IsShown() then PickSpell(matches[1].spellID)
+            else spell:ClearFocus(); HideSearch() end
+        end)
+        addon.BuffAlerts.SetSearchUpdateCallback(function(query)
+            if spell:HasFocus() and editor:IsShown() and spell:GetText():match("^%s*(.-)%s*$")==query then UpdateSearch() end
+        end,root)
     end
-    UIDropDownMenu_Initialize(setDD, function(_, level)
-        for _, set in ipairs(Custom.GetSets()) do
-            local item = UIDropDownMenu_CreateInfo()
-            item.text = (set.enabled and "|cff55ddaa" or "|cff888888") .. set.name .. " #" .. set.id .. "|r"
-            item.checked = selected == set.id; item.func = function() Select(set) end
-            UIDropDownMenu_AddButton(item, level)
-        end
-    end)
-    UIDropDownMenu_Initialize(triggerDD, function(_, level)
-        for _, value in ipairs({ "combat", "encounter" }) do
-            local item = UIDropDownMenu_CreateInfo()
-            item.text = value == "combat" and "Combat start" or "Encounter start"
-            item.checked = trigger == value
-            item.func = function() trigger = value; UIDropDownMenu_SetText(triggerDD, item.text); MarkDirty() end
-            UIDropDownMenu_AddButton(item, level)
-        end
-    end)
-    Button("Add current subzone", 350, -86, function()
-        if importDirty or not ApplyTimer() then message:SetText("Apply timer edits or import/discard text edits first."); return end
-        local set, err = Custom.AddSet()
-        if not set then message:SetText(err); return end
-        Select(set); message:SetText("Enter your schedule, enable the set, then click Save.")
-        name:SetFocus(); name:HighlightText()
-    end)
-    Button("Save", 20, -800, function()
-        if not selected then message:SetText("Create or select a timer set first."); return end
-        if importDirty then message:SetText("Click Import text first, or Discard text edits."); return end
-        if not ApplyTimer() then return end
-        local ok, err = Custom.SaveSet(selected, name:GetText(), trigger, not not enabled:GetChecked(), text:GetText(), not not anywhere:GetChecked())
-        if not ok then message:SetText(err); return end
-        drafts[selected] = nil; dirty = false; Select(FindSelected()); addon.EncounterBars.UpdateSettings()
-        name:ClearFocus(); text:ClearFocus(); message:SetText("Saved. Changes apply on the next matching combat/encounter start.")
-    end)
-    Button("Revert", 180, -800, function()
-        if selected then drafts[selected] = nil end
-        dirty = false; timerDirty = false; importDirty = false; Select(FindSelected())
-    end)
-    Button("Delete set", 340, -800, function()
-        if not selected then return end
-        if confirmDelete ~= selected then
-            confirmDelete = selected; message:SetText("Click Delete set again to permanently remove this set."); return
-        end
-        Custom.DeleteSet(selected); drafts[selected] = nil; dirty = false; timerDirty = false; importDirty = false; Select(nil); addon.EncounterBars.UpdateSettings()
-    end)
-    Button("Add timer",20,-705,function()
-        if not selected or importDirty or not ApplyTimer() then return end
-        if #rules>=100 then message:SetText("Maximum 100 timers per set."); return end
-        rules[#rules+1]={name="New timer",first=20}; SyncText(); LoadTimer(#rules); RefreshTimers()
-        timerTitle:SetFocus(); timerTitle:HighlightText()
-    end)
-    Button("Duplicate timer",180,-705,function()
-        if not timerIndex or importDirty or not ApplyTimer() then return end
-        if #rules>=100 then message:SetText("Maximum 100 timers per set."); return end
-        local copy=Custom.Parse(Custom.Serialize({rules[timerIndex]}))
-        rules[#rules+1]=copy[1]; SyncText(); LoadTimer(#rules); RefreshTimers()
-    end)
-    Button("Delete timer",340,-705,function()
-        if not timerIndex or importDirty then return end
-        table.remove(rules,timerIndex); timerDirty=false; SyncText(); LoadTimer(#rules>0 and math.min(timerIndex,#rules) or nil); RefreshTimers()
-    end)
-    Button("Apply timer edits",20,-750,function() if not importDirty then ApplyTimer() end end)
-    Label("Countdown default follows Encounter / custom 5–1 audio. On overrides it; Off silences this timer.",180,-750,320)
-    Button("Text import / export",20,-900,function()
-        if importDirty or ApplyTimer() then scroll:SetShown(not scroll:IsShown()) end
-    end)
-    Button("Import text",180,-900,function()
-        if not selected then return end
-        local parsed,err=Custom.Parse(text:GetText())
-        if not parsed then message:SetText(err); return end
-        rules=parsed; timerDirty=false; importDirty=false; MarkDirty(); LoadTimer(1); RefreshTimers()
-        message:SetText("Text imported into this draft. Click Save to keep it.")
-    end)
-    Button("Discard text edits",340,-900,function() text:SetText(Custom.Serialize(rules)); importDirty=false end)
-    H.CreateColorSwatch(root, "Custom timer colour", UIThingsDB.encounterBars.customColor,
-        addon.EncounterBars.UpdateSettings, 20, -1230)
-    root:SetScript("OnHide", function()
-        name:ClearFocus(); text:ClearFocus(); timerTitle:ClearFocus(); firstDelay:ClearFocus(); interval:ClearFocus()
+    spell:SetScript("OnEscapePressed",function() spell:ClearFocus(); HideSearch() end)
+    local first=Edit("First delay (20 or 2:20)",0,-223,145,8)
+    local repeatBox=Edit("Repeat (blank = once)",155,-223,145,8)
+    local subzone=Edit("Subzone name",0,-288,300)
+    local map=Edit("Instance/map ID",0,-350,125,10)
+    Label(editor,"Clear both location fields for anywhere.",0,-402,300)
+    local countdownDD=Dropdown("Countdown",-420)
+    local countdown="default"
+    local expiryDD=Dropdown("Expiry sound",-482)
+    local expiry="none"
+    local defaultColor=CreateFrame("CheckButton",nil,editor,"ChatConfigCheckButtonTemplate")
+    defaultColor:SetPoint("TOPLEFT",0,-547); defaultColor.Text:SetText("Use default colour")
+    defaultColor:SetScript("OnClick",Dirty)
+    local color={r=1,g=1,b=1}
+    local swatch=H.CreateColorSwatch(editor,"Override colour",color,function()
+        defaultColor:SetChecked(false); Dirty()
+    end,0,-584,false)
+    if swatch then swatch:HookScript("OnClick",function() ownsPicker=true end) end
+    local function ClosePicker()
         if ownsPicker and ColorPickerFrame then ColorPickerFrame:Hide() end
-        ownsPicker = false
+        ownsPicker=false
+    end
+    local function Read()
+        return {name=name:GetText(),enabled=not not enabled:GetChecked(),trigger=trigger,
+            spell=spell:GetText(),first=first:GetText(),repeatText=repeatBox:GetText(),
+            subzone=subzone:GetText(),map=map:GetText(),countdown=countdown,expiry=expiry,
+            defaultColor=not not defaultColor:GetChecked(),color={r=color.r,g=color.g,b=color.b}}
+    end
+    local function Values(timer)
+        return {name=timer.name,enabled=timer.enabled,trigger=timer.trigger,
+            spell=timer.spellID and tostring(timer.spellID) or "",first=Custom.FormatTime(timer.first),
+            repeatText=timer.interval and Custom.FormatTime(timer.interval) or "",
+            subzone=timer.location and timer.location.subzone or "",
+            map=timer.location and tostring(timer.location.instanceID) or "",
+            countdown=timer.countdown==nil and "default" or (timer.countdown and "on" or "off"),
+            expiry=timer.expirySound or "none",defaultColor=not timer.color,
+            color=timer.color or UIThingsDB.encounterBars.customColor}
+    end
+    local function Find(id)
+        for _,timer in ipairs(Custom.GetTimers()) do if timer.id==id then return timer end end
+    end
+    local Refresh, Select
+    Select=function(id, discard)
+        HideSearch()
+        ClosePicker()
+        if selected~=nil and not discard then drafts[selected]=Read() end
+        selected=id; confirmDelete=nil; loading=true
+        local timer=id and Find(id)
+        local v=id~=nil and (drafts[id] or (timer and Values(timer)))
+        if not v then selected=nil; editor:Hide(); message:SetText("Select a timer or click Add timer.")
+        else
+            editor:Show()
+            name:SetText(v.name); enabled:SetChecked(v.enabled)
+            trigger=v.trigger; UIDropDownMenu_SetText(triggerDD,triggerNames[trigger])
+            spell:SetText(v.spell); spell:SetEnabled(trigger=="cast")
+            first:SetText(v.first); repeatBox:SetText(v.repeatText)
+            subzone:SetText(v.subzone); map:SetText(v.map)
+            countdown=v.countdown; UIDropDownMenu_SetText(countdownDD,countdown)
+            expiry=v.expiry; UIDropDownMenu_SetText(expiryDD,addon.BuffAlerts and addon.BuffAlerts.GetSoundLabel({preset=expiry}) or expiry)
+            defaultColor:SetChecked(v.defaultColor)
+            color.r,color.g,color.b=v.color.r,v.color.g,v.color.b
+            if swatch then swatch.tex:SetColorTexture(color.r,color.g,color.b,1) end
+            message:SetText(drafts[id] and "Draft — click Save to apply." or "")
+        end
+        loading=false; Refresh()
+    end
+    Refresh=function()
+        local timers=Custom.GetSortedTimers()
+        empty:SetShown(#timers==0)
+        for i,timer in ipairs(timers) do
+            local row=rows[i]
+            if not row then
+                row=CreateFrame("Button",nil,child); row:SetSize(175,34)
+                row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetPoint("LEFT",2,0); row.icon:SetSize(26,26)
+                row.text=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+                row.text:SetPoint("LEFT",row.icon,"RIGHT",6,0); row.text:SetWidth(137)
+                row.text:SetJustifyH("LEFT"); row.text:SetWordWrap(false)
+                row.bg=row:CreateTexture(nil,"BACKGROUND"); row.bg:SetAllPoints(); row.bg:SetColorTexture(.12,.3,.3,.65)
+                row:SetScript("OnClick",function(self) Select(self.timerID) end)
+                rows[i]=row
+            end
+            row.timerID=timer.id; row:SetPoint("TOPLEFT",0,-(i-1)*34)
+            row.icon:SetTexture(Custom.GetIcon(timer)); row.text:SetText(timer.name)
+            if timer.enabled then row.text:SetTextColor(.35,.9,.65) else row.text:SetTextColor(.5,.5,.5) end
+            row.bg:SetShown(selected==timer.id); row:Show()
+        end
+        for i=#timers+1,#rows do rows[i]:Hide() end
+        child:SetHeight(math.max(1,#timers*34))
+    end
+    UIDropDownMenu_Initialize(triggerDD,function()
+        for _,value in ipairs({"combat","encounter","cast"}) do
+            local item=UIDropDownMenu_CreateInfo(); item.text=triggerNames[value]; item.checked=trigger==value
+            item.func=function() trigger=value; UIDropDownMenu_SetText(triggerDD,item.text); spell:SetEnabled(value=="cast"); HideSearch(); Dirty() end
+            UIDropDownMenu_AddButton(item)
+        end
     end)
-    root:SetScript("OnShow", function()
-        if selected and not FindSelected() then dirty = false; timerDirty=false; importDirty=false; Select(nil) end
+    UIDropDownMenu_Initialize(countdownDD,function()
+        for _,value in ipairs({"default","on","off"}) do
+            local item=UIDropDownMenu_CreateInfo(); item.text=value; item.checked=countdown==value
+            item.func=function() countdown=value; UIDropDownMenu_SetText(countdownDD,value); Dirty() end
+            UIDropDownMenu_AddButton(item)
+        end
+    end)
+    UIDropDownMenu_Initialize(expiryDD,function()
+        local options=addon.BuffAlerts and addon.BuffAlerts.GetSoundOptions() or {{value="none",label="None"}}
+        for _,option in ipairs(options) do
+            local item=UIDropDownMenu_CreateInfo(); item.text=option.label; item.checked=expiry==option.value
+            item.func=function() expiry=option.value; UIDropDownMenu_SetText(expiryDD,option.label); Dirty() end
+            UIDropDownMenu_AddButton(item)
+        end
+    end)
+    Button(editor,"Use current subzone",140,-374,160,function()
+        local location,err=Custom.CaptureLocation()
+        if not location then message:SetText(err); return end
+        subzone:SetText(location.subzone); map:SetText(tostring(location.instanceID)); Dirty()
+    end)
+    Button(root,"Add timer",20,-72,175,function()
+        if selected==0 then name:SetFocus(); return end
+        drafts[0]=drafts[0] or Values({name="New timer",first=20,trigger="combat",enabled=false})
+        Select(0); name:SetFocus(); name:HighlightText()
+    end)
+    Button(editor,"Save",0,-626,90,function()
+        local v=Read()
+        local repeatText=v.repeatText:match("^%s*(.-)%s*$")
+        local interval=repeatText~="" and Custom.ParseTime(repeatText) or nil
+        if repeatText~="" and not interval then message:SetText("Invalid repeat interval."); return end
+        local data={name=v.name,enabled=v.enabled,trigger=v.trigger,first=Custom.ParseTime(v.first),
+            interval=interval,spellID=tonumber(v.spell),expirySound=v.expiry}
+        if countdown~="default" then data.countdown=countdown=="on" end
+        if not v.defaultColor then data.color=v.color end
+        local sub=v.subzone:match("^%s*(.-)%s*$"); local id=v.map:match("^%s*(.-)%s*$")
+        if sub~="" or id~="" then data.location={subzone=sub,instanceID=tonumber(id)} end
+        local saved,err=Custom.SaveTimer(selected~=0 and selected or nil,data)
+        if not saved then message:SetText(err); return end
+        drafts[selected]=nil; Select(saved.id,true); addon.EncounterBars.UpdateSettings()
+        message:SetText("Saved. Starts on the next matching trigger; an active timer is cancelled.")
+    end)
+    Button(editor,"Revert",100,-626,90,function()
+        drafts[selected]=nil; Select(selected,true)
+    end)
+    Button(editor,"Delete",200,-626,90,function()
+        if selected==nil then return end
+        if confirmDelete~=selected then confirmDelete=selected; message:SetText("Click Delete again to remove this timer."); return end
+        Custom.DeleteTimer(selected); drafts[selected]=nil; Select(nil,true); addon.EncounterBars.UpdateSettings()
+    end)
+    H.CreateColorSwatch(root,"Default custom timer colour",UIThingsDB.encounterBars.customColor,
+        addon.EncounterBars.UpdateSettings,20,-820)
+    root:SetScript("OnHide",function()
+        HideSearch()
+        for _,box in ipairs({name,spell,first,repeatBox,subzone,map}) do box:ClearFocus() end
+        ClosePicker()
+    end)
+    root:SetScript("OnShow",function()
+        if selected and selected~=0 and not Find(selected) then Select(nil,true) else Refresh() end
     end)
     Select(nil)
     return root

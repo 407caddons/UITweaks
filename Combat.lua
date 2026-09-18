@@ -826,19 +826,20 @@ local function TrackConsumableUsage(itemID, retries)
     if not itemID then return end
 
     -- Exclude toys
-    if C_ToyBox and C_ToyBox.GetToyInfo(itemID) then return end
+    if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return end
 
-    local itemName = GetItemInfo(itemID)
+    local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+    if type(getItemInfo) ~= "function" then return end
+    local itemName, _, _, _, _, _, _, _, _, itemIcon, _, classID, subclassID = getItemInfo(itemID)
     if not itemName then
         retries = (retries or 0) + 1
         if retries > 10 then return end
-        C_Item.RequestLoadItemDataByID(itemID)
+        if C_Item and C_Item.RequestLoadItemDataByID then
+            C_Item.RequestLoadItemDataByID(itemID)
+        end
         C_Timer.After(0.5, function() TrackConsumableUsage(itemID, retries) end)
         return
     end
-
-    local itemName, _, _, _, _, _, _, _, _, itemIcon, _, classID, subclassID = GetItemInfo(itemID)
-    if not itemName then return end
 
     local category = nil
     local lowerName = itemName:lower()
@@ -967,7 +968,8 @@ local function ScanBagConsumables(category)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.itemID then
-                local name = GetItemInfo(info.itemID)
+                local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+                local name = type(getItemInfo) == "function" and getItemInfo(info.itemID)
                 if name and watchedNames[name] then
                     -- Filter out legacy non-stat foods
                     if name:lower():find("conjured mana bun") then
@@ -1131,15 +1133,23 @@ local function HookConsumableUsage()
     end
 
     -- Hook Direct Item Usage (Macros, etc)
-    hooksecurefunc("UseItemByName", function(name)
+    local function TryTrackItemByName(name)
         if name then
-            local _, link = GetItemInfo(name)
+            local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+            if type(getItemInfo) ~= "function" then return end
+            local _, link = getItemInfo(name)
             if link then
                 local itemID = link:match("item:(%d+)")
                 if itemID then TrackConsumableUsage(tonumber(itemID)) end
             end
         end
-    end)
+    end
+    -- Clients differ in whether item usage is global or namespaced.
+    if type(UseItemByName) == "function" then
+        hooksecurefunc("UseItemByName", TryTrackItemByName)
+    elseif C_Item and type(C_Item.UseItemByName) == "function" then
+        hooksecurefunc(C_Item, "UseItemByName", TryTrackItemByName)
+    end
 end
 
 local function ApplyReminderFont()

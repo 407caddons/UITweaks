@@ -415,8 +415,12 @@ function addonTable.Config.Initialize()
         -- ConfigMain.lua was setting addonTable.ConfigTabs = configWindow.Tabs
         addonTable.ConfigTabs = navButtons
 
-        -- Select first module by default
-        SelectModule(1)
+        -- General UI is the landing page, regardless of the last selected tab.
+        SelectModule(18)
+        configWindow:SetScript("OnShow", function()
+            search:SetText("")
+            SelectModule(18)
+        end)
 
         ----------------------------------------------------
         -- Init Setup Functions

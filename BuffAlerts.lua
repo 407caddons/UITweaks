@@ -11,6 +11,7 @@ local journalIndexed = false
 local journalSearchQuery
 local journalSearchComplete
 local searchUpdateCallback
+local searchUpdateListeners = {}
 local lastError
 
 BuffAlerts.SOUND_PRESETS = {
@@ -195,6 +196,7 @@ local function CollectJournalSearchResults()
     journalSearchComplete = journalSearchQuery
     if EJ_EndSearch then pcall(EJ_EndSearch) end
     if searchUpdateCallback then searchUpdateCallback(journalSearchComplete) end
+    for _, callback in pairs(searchUpdateListeners) do callback(journalSearchComplete) end
 end
 
 local function PollJournalSearch(query, attempt)
@@ -223,8 +225,9 @@ function BuffAlerts.SearchEncounterJournal(query)
     PollJournalSearch(query, 1)
 end
 
-function BuffAlerts.SetSearchUpdateCallback(callback)
-    searchUpdateCallback = callback
+function BuffAlerts.SetSearchUpdateCallback(callback, owner)
+    if owner then searchUpdateListeners[owner] = callback
+    else searchUpdateCallback = callback end
 end
 
 function BuffAlerts.FindSpellMatches(query, limit)
