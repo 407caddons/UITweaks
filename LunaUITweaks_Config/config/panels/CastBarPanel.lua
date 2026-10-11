@@ -40,15 +40,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.castBar.enabled)
 
-    -- Lock Checkbox
-    local lockBtn = CreateFrame("CheckButton", "UIThingsCastBarLock", child, "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 260, -50)
-    _G[lockBtn:GetName() .. "Text"]:SetText("Lock Cast Bar")
-    lockBtn:SetChecked(UIThingsDB.castBar.locked)
-    lockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.castBar.locked = not not self:GetChecked()
-        UpdateCastBar()
-    end)
+    Helpers.CreateLayoutModeHint(child, 260, -55)
 
     -- == Appearance ==
     Helpers.CreateSectionHeader(child, "Appearance", -85)
@@ -315,14 +307,6 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
         UpdateCastBar()
     end)
 
-    local targetLockBtn = CreateFrame("CheckButton", "UIThingsTargetCastBarLock", child, "ChatConfigCheckButtonTemplate")
-    targetLockBtn:SetPoint("TOPLEFT", 260, -620)
-    _G[targetLockBtn:GetName() .. "Text"]:SetText("Lock Target Cast Bar")
-    targetLockBtn:SetChecked(UIThingsDB.castBar.targetBar.locked)
-    targetLockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.castBar.targetBar.locked = not not self:GetChecked()
-        UpdateCastBar()
-    end)
 
     -- Target X Position
     local txLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -388,7 +372,6 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
         end)
     end
     FocusCheck("Enable Focus Cast Bar", "Enable", "enabled", 20)
-    FocusCheck("Lock Focus Cast Bar", "Lock", "locked", 260)
     local function FocusNumber(label, suffix, key, isPosition, x, y, min, max)
         local text = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         text:SetPoint("TOPLEFT", x, y); text:SetText(label)
@@ -414,5 +397,5 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     Helpers.CreateColorSwatch(child, "Kickable colour", UIThingsDB.castBar.focusBar.barColor, UpdateCastBar, 20, -928)
     local help = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     help:SetPoint("TOPLEFT", 20, -975); help:SetWidth(480); help:SetJustifyH("LEFT")
-    help:SetText("Independent of the player/target bars. Uses the shared font, texture, icon and non-interruptible colour. Unlock here or use Layout Mode to position it. Interruptibility does not check your interrupt cooldown or range.")
+    help:SetText("Independent of the player/target bars. Uses the shared font, texture, icon and non-interruptible colour. Use Layout Mode to position it. Interruptibility does not check your interrupt cooldown or range.")
 end

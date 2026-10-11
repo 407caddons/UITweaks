@@ -41,15 +41,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.widgets.enabled)
     end)
 
-    -- Lock Widgets Checkbox
-    local lockBtn = CreateFrame("CheckButton", "UIThingsWidgetsLockCheck", panel, "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 250, -40)
-    _G[lockBtn:GetName() .. "Text"]:SetText("Lock Widgets")
-    lockBtn:SetChecked(UIThingsDB.widgets.locked)
-    lockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.widgets.locked = self:GetChecked()
-        UpdateWidgets()
-    end)
+    Helpers.CreateLayoutModeHint(panel, 250, -45)
 
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.widgets.enabled)
 

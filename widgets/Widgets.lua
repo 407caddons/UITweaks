@@ -174,9 +174,9 @@ local function StopWidgetTicker()
 end
 
 function Widgets.Initialize()
-    -- Always start locked
+    -- Only Layout Mode unlocks widget positions.
     if UIThingsDB.widgets then
-        UIThingsDB.widgets.locked = true
+        UIThingsDB.widgets.locked = not addonTable.LayoutMode.IsActive()
     end
 
     -- Initialize all registered modules
@@ -496,7 +496,7 @@ function Widgets.UpdateConditions()
     for key, frame in pairs(frames) do
         if db[key] and db[key].enabled and not (InCombatLockdown() and frame:IsProtected()) then
             local condition = db[key].condition
-            if EvaluateCondition(condition) then
+            if addonTable.LayoutMode.IsActive() or EvaluateCondition(condition) then
                 if not frame:IsShown() then
                     frame:Show()
                     layoutDirty = true

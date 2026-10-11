@@ -321,22 +321,12 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     -- ============================================================
     Helpers.CreateSectionHeader(child, "Position", -795)
 
-    local lockBtn = CreateFrame("CheckButton", "UIThingsMplusTimerLockCheck", child,
-        "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 20, -825)
-    _G[lockBtn:GetName() .. "Text"]:SetText("Lock Position")
-    lockBtn:SetChecked(UIThingsDB.mplusTimer.locked)
-    lockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.mplusTimer.locked = not not self:GetChecked()
-        if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
-            addonTable.MplusTimer.UpdateSettings()
-        end
-    end)
+    Helpers.CreateLayoutModeHint(child, 20, -830)
 
     -- Test / Demo Button
     local testBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     testBtn:SetSize(120, 26)
-    testBtn:SetPoint("TOPLEFT", 160, -825)
+    testBtn:SetPoint("TOPLEFT", 300, -825)
     testBtn:SetText("Toggle Demo")
     testBtn:SetScript("OnClick", function()
         if addonTable.MplusTimer and addonTable.MplusTimer.ToggleDemo then

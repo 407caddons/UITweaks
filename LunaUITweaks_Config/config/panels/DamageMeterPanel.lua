@@ -214,7 +214,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.damageMeter.enabled)
 
-    -- Reset data + Lock/Unlock on their own line below the checkbox
+    -- Reset shared data below the checkbox
     local resetBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     resetBtn:SetSize(130, 22)
     resetBtn:SetPoint("TOPLEFT", 20, yBase - 30)
@@ -228,22 +228,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     resetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     resetBtn:SetScript("OnClick", ResetData)
 
-    -- Lock / Unlock
-    local lockBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
-    lockBtn:SetSize(110, 22)
-    lockBtn:SetPoint("LEFT", resetBtn, "RIGHT", 6, 0)
-    local function RefreshLock()
-        lockBtn:SetText(UIThingsDB.damageMeter.locked and "Unlock Frame" or "Lock Frame")
-    end
-    if addonTable.LayoutMode then addonTable.LayoutMode.RegisterControl(RefreshLock) end
-    RefreshLock()
-    lockBtn:SetScript("OnClick", function()
-        UIThingsDB.damageMeter.locked = not UIThingsDB.damageMeter.locked
-        if addonTable.DamageMeter and addonTable.DamageMeter.SetLocked then
-            addonTable.DamageMeter.SetLocked(UIThingsDB.damageMeter.locked)
-        end
-        RefreshLock()
-    end)
+    Helpers.CreateLayoutModeHint(child, 170, yBase - 35)
 
     yBase = yBase - 64
 
@@ -287,9 +272,9 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     yBase = yBase - 30
 
     -- Meter type / session for each meter
-    local METER_TYPES  = { "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken" }
+    local METER_TYPES  = { "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken", "enemyDamageTaken", "avoidableDamageTaken" }
     local TYPE_LABELS  = { damage="Damage", healing="Healing", interrupts="Interrupts", deaths="Deaths",
-                           dispels="Dispels", damageTaken="Dmg Taken" }
+                           dispels="Dispels", damageTaken="Dmg Taken", enemyDamageTaken="Enemy Damage Taken", avoidableDamageTaken="Avoidable Damage Taken" }
 
     for mIdx = 1, 2 do
         local captMIdx = mIdx
@@ -365,7 +350,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     -- Clear on instance
     local clearCB = CreateFrame("CheckButton", "UIThingsDMClear", child, "ChatConfigCheckButtonTemplate")
     clearCB:SetPoint("TOPLEFT", 20, yBase)
-    _G[clearCB:GetName() .. "Text"]:SetText("Clear shared meter data when entering an instance")
+    _G[clearCB:GetName() .. "Text"]:SetText("Ask to clear meter history when entering an instance")
     clearCB:SetChecked(UIThingsDB.damageMeter.clearOnInstance)
     clearCB:SetScript("OnClick", function(self)
         UIThingsDB.damageMeter.clearOnInstance = self:GetChecked()

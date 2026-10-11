@@ -45,15 +45,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.coordinates.enabled)
 
-    -- Lock checkbox
-    local lockBtn = CreateFrame("CheckButton", "UIThingsCoordinatesLockCheck", child, "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 20, -70)
-    _G[lockBtn:GetName() .. "Text"]:SetText("Lock Waypoint Frame")
-    lockBtn:SetChecked(UIThingsDB.coordinates.locked)
-    lockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.coordinates.locked = not not self:GetChecked()
-        UpdateCoordinates()
-    end)
+    Helpers.CreateLayoutModeHint(child, 20, -75)
 
     -- Appearance section
     Helpers.CreateSectionHeader(child, "Appearance", -110)

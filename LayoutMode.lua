@@ -3,18 +3,6 @@ local Layout = { active = false }
 addon.LayoutMode = Layout
 local targets, handles = {}, {}
 local toolbar, ticker, pendingLock
-local controls = {}
-function Layout.RegisterControl(refresh) controls[#controls+1]=refresh end
-local function SyncControls(locked)
-    for _,name in ipairs({"UIThingsWidgetsLockCheck","UIThingsCombatLockCheck","UIThingsTTDLockCheck",
-        "UIThingsReminderLockCheck","UIThingsCastBarLock","UIThingsTargetCastBarLock","UIThingsFocusCastBarLock","UIThingsMplusTimerLockCheck",
-        "UIThingsCoordinatesLockCheck","UIThingsXpBarLockCheck","UIThingsVendorLockCheck","LunaEncounterBars_locked",
-        "UIThingsMinimapLocked","UIThingsLockZone","UIThingsLockClock","UIThingsLockCoords","UIThingsMinimapDrawerLocked"}) do
-        local control=_G[name]
-        if control then control:SetChecked(locked) end
-    end
-    for _,refresh in ipairs(controls) do refresh() end
-end
 local function Call(module, method, ...)
     local m = addon[module]
     if m and m[method] then m[method](...) end
@@ -41,7 +29,7 @@ local function RefreshHandles()
     for key, spec in pairs(targets) do
         local target = spec.getFrame()
         local handle = handles[key]
-        if target and spec.enabled() then
+        if target and spec.enabled() and target:IsShown() then
             if not handle then
                 handle = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
                 handle:SetFrameStrata("TOOLTIP"); handle:SetFrameLevel(100)
@@ -87,15 +75,13 @@ end
 local function Apply(locked)
     Call("Frames","UpdateFrames")
     Call("Widgets","UpdateVisuals")
-    for _,name in ipairs({"Combat","CastBar","DamageMeter","MplusTimer","Coordinates","XpBar","Vendor","EncounterBars"}) do
+    for _,name in ipairs({"Combat","CastBar","DamageMeter","MplusTimer","Coordinates","XpBar","Vendor","EncounterBars","Loot"}) do
         Call(name,"UpdateSettings")
     end
     Call("Combat","TtdApplySettings"); Call("Combat","UpdateReminders")
     for _,method in ipairs({"SetMinimapLocked","SetZoneLocked","SetClockLocked","SetCoordsLocked","SetDrawerLocked"}) do
         Call("MinimapCustom",method,locked)
     end
-    Call("Loot","LockAnchor")
-    if not locked and UIThingsDB.loot and UIThingsDB.loot.enabled then Call("Loot","ToggleAnchor") end
     Call("MplusTimer","CloseDemo")
     Call("EncounterBars","ClosePreview")
     if not locked then
@@ -103,7 +89,6 @@ local function Apply(locked)
         if UIThingsDB.encounterBars and UIThingsDB.encounterBars.enabled then Call("EncounterBars","TogglePreview") end
     end
     Call("TankDebuffs","UpdateSettings")
-    SyncControls(locked)
     Call("Config","RefreshFrameControls")
 end
 function Layout.LockAll()
@@ -154,8 +139,8 @@ local function Enabled(key, extra)
 end
 for _,entry in ipairs({
     {"Combat timer","UIThingsCombatTimer","combat"},
-    {"Time to die","UIThingsTTDTimer","combat",function(db) return db.ttdEnabled end},
-    {"Consumable reminders","LunaCombatReminders","combat",function(db) return db.reminders~=nil end},
+    {"Time to die","UIThingsTTDTimer","combat",function(db) return db.ttdEnabled ~= false end},
+    {"Consumable reminders","LunaCombatReminders","combat",function(db) return db.reminders ~= nil end},
     {"Player cast bar","LunaCastBar","castBar"},
     {"Target cast bar","LunaTargetCastBar","castBar",function(db) return db.targetBar and db.targetBar.enabled end},
     {"M+ timer","LunaMplusTimer","mplusTimer"},
@@ -163,7 +148,7 @@ for _,entry in ipairs({
     {"XP / reputation","LunaUITweaks_XpBar","xpBar"},
     {"Damage meter","LunaUITweaks_DamageMeterMain","damageMeter",function(db) return (db.dockToFrame or 0)==0 end},
     {"Repair warning","UIThingsRepairWarning","vendor"},
-    {"Bag warning","UIThingsBagWarning","vendor"},
+    {"Bag warning","UIThingsBagWarning","vendor",function(db) return db.bagWarningEnabled end},
     {"Loot toasts","UIThingsLootAnchor","loot"},
 }) do
     local name,global,key,extra=unpack(entry)

@@ -313,6 +313,8 @@ local function OnEvent(self, event, ...)
                 showItemLevel = true,
                 highlightBagUpgrades = false,
                 autoGreed = false,
+                confirmBonusRoll = true,
+                confirmBonusPass = true,
             },
             combat = {
                 enabled = false,

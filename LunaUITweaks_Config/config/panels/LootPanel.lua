@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 850)
+    child:SetSize(650, 980)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -56,24 +56,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         UIThingsDB.loot.showAll = self:GetChecked()
     end)
 
-    -- Unlock Anchor Button
-    local unlockBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
-    unlockBtn:SetSize(120, 24)
-    unlockBtn:SetPoint("TOPLEFT", 200, -50)
-    unlockBtn:SetText("Unlock Anchor")
-    unlockBtn:SetScript("OnShow", function(self)
-        self:SetText("Unlock Anchor")
-    end)
-    unlockBtn:SetScript("OnClick", function(self)
-        if addonTable.Loot and addonTable.Loot.ToggleAnchor then
-            local isUnlocked = addonTable.Loot.ToggleAnchor()
-            if isUnlocked then
-                self:SetText("Lock Anchor")
-            else
-                self:SetText("Unlock Anchor")
-            end
-        end
-    end)
+    Helpers.CreateLayoutModeHint(child, 200, -55)
 
     -- Duration Slider
     local durationSlider = CreateFrame("Slider", "UIThingsLootDuration", child, "OptionsSliderTemplate")
@@ -393,4 +376,20 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     bagUpgradeHelp:SetPoint("TOPLEFT", 45, -797)
     bagUpgradeHelp:SetTextColor(0.5, 0.5, 0.5)
     bagUpgradeHelp:SetText("Highlights bag items with a green overlay when they beat your equipped ilvl (checks both ring/trinket slots)")
+    Helpers.CreateSectionHeader(child, "Bonus Rolls", -840)
+    for i, entry in ipairs({
+        { "confirmBonusRoll", "Confirm spending a bonus roll (shows loot spec)" },
+        { "confirmBonusPass", "Confirm passing on a bonus roll" },
+    }) do
+        local key, label = entry[1], entry[2]
+        local check = CreateFrame("CheckButton", "LunaLoot" .. key, child, "ChatConfigCheckButtonTemplate")
+        check:SetPoint("TOPLEFT", 20, -865 - (i - 1) * 30)
+        _G[check:GetName() .. "Text"]:SetText(label)
+        check:SetChecked(UIThingsDB.loot[key] ~= false)
+        check:SetScript("OnClick", function(self) UIThingsDB.loot[key] = self:GetChecked() end)
+    end
+    local bonusHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bonusHelp:SetPoint("TOPLEFT", 45, -930)
+    bonusHelp:SetTextColor(0.5, 0.5, 0.5)
+    bonusHelp:SetText("Works even when loot toasts are disabled.")
 end

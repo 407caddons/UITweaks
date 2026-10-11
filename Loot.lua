@@ -56,10 +56,9 @@ end
 local anchorFrame = CreateFrame("Frame", "UIThingsLootAnchor", UIParent, "BackdropTemplate")
 anchorFrame:SetSize(200, 20)
 anchorFrame:SetMovable(true)
-anchorFrame:EnableMouse(true)
+anchorFrame:EnableMouse(false)
 anchorFrame:SetClampedToScreen(true)
 anchorFrame:RegisterForDrag("LeftButton")
-anchorFrame:SetScript("OnDragStart", anchorFrame.StartMoving)
 anchorFrame:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     local point, _, _, x, y = self:GetPoint()
@@ -80,21 +79,16 @@ anchorFrame.text:SetPoint("CENTER")
 anchorFrame.text:SetText("Loot Toasts Anchor")
 anchorFrame:Hide()
 
-function Loot.ToggleAnchor()
-    if anchorFrame:IsShown() then
-        anchorFrame:Hide()
-        return false
-    else
-        anchorFrame:EnableMouse(true)
-        anchorFrame:Show()
-        return true
+function Loot.UpdateAnchor()
+    local settings = UIThingsDB.loot
+    local pos = settings.anchor
+    if pos then
+        anchorFrame:ClearAllPoints()
+        anchorFrame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
     end
-end
-
-function Loot.LockAnchor()
-    if anchorFrame:IsShown() then
-        anchorFrame:Hide()
-    end
+    -- The common Layout Mode handle owns dragging; the anchor is only a preview.
+    anchorFrame:EnableMouse(false)
+    anchorFrame:SetShown(settings.enabled and addonTable.LayoutMode.IsActive())
 end
 
 -- Toast Factory
@@ -358,13 +352,8 @@ end
 function Loot.UpdateSettings()
     if Loot.ApplyEvents then Loot.ApplyEvents() end
 
-    -- Apply anchor position
     local settings = UIThingsDB.loot
-    if settings.anchor then
-        anchorFrame:ClearAllPoints()
-        anchorFrame:SetPoint(settings.anchor.point, UIParent, settings.anchor.point, settings.anchor.x, settings.anchor
-            .y)
-    end
+    Loot.UpdateAnchor()
 
     -- Update existing toasts visually
     for _, toast in ipairs(activeToasts) do
@@ -573,12 +562,15 @@ end
 
 local function OnStartLootRoll(event, rollID)
     if not UIThingsDB.loot.autoGreed then return end
-    local _, _, _, _, _, canNeed, canGreed = GetLootRollItemInfo(rollID)
-    if canNeed then return end -- player can need — let them decide
-    if canGreed then
+    local _, _, _, _, _, canNeed, canGreed, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
+    if canNeed then return end -- player can need -- let them decide
+    -- Blizzard shows Transmog instead of Greed when it is available.
+    if canTransmog then
+        RollOnLoot(rollID, 4) -- transmog
+    elseif canGreed then
         RollOnLoot(rollID, 2) -- greed
     end
-    -- if can't greed either, pass silently (WoW auto-passes when the window closes)
+    -- No eligible choice: leave the roll untouched.
 end
 
 local function OnPlayerLogin()
@@ -706,3 +698,102 @@ function Loot.ApplyBagHighlightEvents(enabled)
 end
 
 EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Loot")
+
+-- Bonus-roll prompts are independent of custom loot toasts. Only intercept the
+-- two known action buttons; other children may belong to unrelated addons.
+local BONUS_ROLL_CONFIRM = "LUNA_LOOT_BONUS_ROLL_CONFIRM"
+local BONUS_PASS_CONFIRM = "LUNA_LOOT_BONUS_PASS_CONFIRM"
+local bonusGeneration = 0
+local bonusHookedButtons = setmetatable({}, { __mode = "k" })
+local bonusHookedFrames = setmetatable({}, { __mode = "k" })
+
+local function LootSpecText()
+    local specID = GetLootSpecialization and GetLootSpecialization()
+    if specID and specID > 0 then
+        local _, name = GetSpecializationInfoByID(specID)
+        return name or "unknown"
+    end
+    local index = GetSpecialization and GetSpecialization()
+    if index then
+        local _, name = GetSpecializationInfo(index)
+        if name then return name .. " (current spec)" end
+    end
+    return "unknown"
+end
+
+local function InvalidateBonusPrompt()
+    bonusGeneration = bonusGeneration + 1
+    StaticPopup_Hide(BONUS_ROLL_CONFIRM)
+    StaticPopup_Hide(BONUS_PASS_CONFIRM)
+end
+
+local function AcceptBonusAction(_, data)
+    if not data or data.generation ~= bonusGeneration then return end
+    if not data.frame:IsShown() or not data.button:IsShown() or not data.button:IsEnabled() then return end
+    -- Consume the pending action before invoking Blizzard's handler.
+    InvalidateBonusPrompt()
+    data.original(data.button, data.mouseButton, data.down)
+end
+
+StaticPopupDialogs[BONUS_ROLL_CONFIRM] = {
+    text = "Are you sure you want to use a bonus roll?\n\nLoot spec: |cffffd100%s|r",
+    button1 = "Confirm", button2 = "Cancel",
+    OnAccept = AcceptBonusAction, timeout = 0, whileDead = false,
+    hideOnEscape = true, preferredIndex = 3,
+}
+StaticPopupDialogs[BONUS_PASS_CONFIRM] = {
+    text = "Are you sure you want to pass on this bonus roll?",
+    button1 = "Confirm", button2 = "Cancel",
+    OnAccept = AcceptBonusAction, timeout = 0, whileDead = false,
+    hideOnEscape = true, preferredIndex = 3,
+}
+
+local function HookBonusButton(frame, button, isRoll)
+    if not button or bonusHookedButtons[button] then return end
+    local original = button:GetScript("OnClick")
+    if not original then return end
+    bonusHookedButtons[button] = true
+    button:SetScript("OnClick", function(self, mouseButton, down)
+        local settings = UIThingsDB and UIThingsDB.loot
+        local key = isRoll and "confirmBonusRoll" or "confirmBonusPass"
+        if not settings or settings[key] == false then
+            original(self, mouseButton, down)
+            return
+        end
+        InvalidateBonusPrompt()
+        local data = { frame = frame, button = self, original = original,
+            mouseButton = mouseButton, down = down, generation = bonusGeneration }
+        StaticPopup_Show(isRoll and BONUS_ROLL_CONFIRM or BONUS_PASS_CONFIRM,
+            isRoll and LootSpecText() or nil, nil, data)
+    end)
+end
+
+local function HookBonusRollFrame()
+    local frame = BonusRollFrame
+    if not frame then return end
+    if not bonusHookedFrames[frame] then
+        bonusHookedFrames[frame] = true
+        frame:HookScript("OnHide", InvalidateBonusPrompt)
+    end
+    local prompt = frame.PromptFrame
+    HookBonusButton(frame, (prompt and prompt.RollButton) or frame.RollButton, true)
+    HookBonusButton(frame, (prompt and prompt.PassButton) or frame.PassButton, false)
+end
+
+local bonusStartHooked = false
+local function TryHookBonusRoll()
+    if BonusRollFrame_StartBonusRoll and not bonusStartHooked then
+        bonusStartHooked = true
+        hooksecurefunc("BonusRollFrame_StartBonusRoll", function()
+            InvalidateBonusPrompt()
+            HookBonusRollFrame()
+        end)
+    end
+    HookBonusRollFrame()
+end
+EventBus.Register("PLAYER_LOGIN", TryHookBonusRoll, "Loot:BonusRoll")
+EventBus.Register("ADDON_LOADED", TryHookBonusRoll, "Loot:BonusRoll")
+EventBus.Register("BONUS_ROLL_STARTED", function()
+    InvalidateBonusPrompt()
+    TryHookBonusRoll()
+end, "Loot:BonusRoll")

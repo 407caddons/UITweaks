@@ -75,16 +75,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         UIDropDownMenu_AddButton(info)
     end)
 
-    -- Lock Checkbox
-    local lockBtn = CreateFrame("CheckButton", "UIThingsMinimapLocked", child, "ChatConfigCheckButtonTemplate")
-    lockBtn:SetPoint("TOPLEFT", 20, -45)
-    _G[lockBtn:GetName() .. "Text"]:SetText("Lock Minimap Position")
-    lockBtn:SetChecked(true) -- Always defaults to locked
-    lockBtn:SetScript("OnClick", function(self)
-        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetMinimapLocked then
-            addonTable.MinimapCustom.SetMinimapLocked(self:GetChecked())
-        end
-    end)
+    Helpers.CreateLayoutModeHint(child, 20, -50)
 
     -- Border Color
     local borderColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -284,15 +275,6 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         })
     end)
 
-    local lockZoneBtn = CreateFrame("CheckButton", "UIThingsLockZone", child, "ChatConfigCheckButtonTemplate")
-    lockZoneBtn:SetPoint("TOPLEFT", 20, -355)
-    _G[lockZoneBtn:GetName() .. "Text"]:SetText("Lock Zone Position")
-    lockZoneBtn:SetChecked(true)
-    lockZoneBtn:SetScript("OnClick", function(self)
-        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetZoneLocked then
-            addonTable.MinimapCustom.SetZoneLocked(self:GetChecked())
-        end
-    end)
 
     local zoneOff = UIThingsDB.minimap.minimapZoneOffset or { x = 0, y = 4 }
 
@@ -465,15 +447,6 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         UIDropDownMenu_AddButton(info)
     end)
 
-    local lockClockBtn = CreateFrame("CheckButton", "UIThingsLockClock", child, "ChatConfigCheckButtonTemplate")
-    lockClockBtn:SetPoint("TOPLEFT", rightCol, -390)
-    _G[lockClockBtn:GetName() .. "Text"]:SetText("Lock Clock Position")
-    lockClockBtn:SetChecked(true)
-    lockClockBtn:SetScript("OnClick", function(self)
-        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetClockLocked then
-            addonTable.MinimapCustom.SetClockLocked(self:GetChecked())
-        end
-    end)
 
     local clockOff = UIThingsDB.minimap.minimapClockOffset or { x = 0, y = -4 }
 
@@ -591,15 +564,6 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         })
     end)
 
-    local lockCoordsBtn = CreateFrame("CheckButton", "UIThingsLockCoords", child, "ChatConfigCheckButtonTemplate")
-    lockCoordsBtn:SetPoint("TOPLEFT", 20, -635)
-    _G[lockCoordsBtn:GetName() .. "Text"]:SetText("Lock Coords Position")
-    lockCoordsBtn:SetChecked(true)
-    lockCoordsBtn:SetScript("OnClick", function(self)
-        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetCoordsLocked then
-            addonTable.MinimapCustom.SetCoordsLocked(self:GetChecked())
-        end
-    end)
 
     local coordsOff = UIThingsDB.minimap.minimapCoordsOffset or { x = 0, y = -20 }
 
@@ -652,17 +616,6 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         UIThingsDB.minimap.minimapDrawerEnabled = self:GetChecked()
     end)
 
-    local drawerLockBtn = CreateFrame("CheckButton", "UIThingsMinimapDrawerLocked", child,
-        "ChatConfigCheckButtonTemplate")
-    drawerLockBtn:SetPoint("TOPLEFT", 20, -755)
-    drawerLockBtn:SetHitRectInsets(0, -130, 0, 0)
-    _G[drawerLockBtn:GetName() .. "Text"]:SetText("Lock Drawer Position")
-    drawerLockBtn:SetChecked(UIThingsDB.minimap.minimapDrawerLocked)
-    drawerLockBtn:SetScript("OnClick", function(self)
-        if addonTable.MinimapCustom and addonTable.MinimapCustom.SetDrawerLocked then
-            addonTable.MinimapCustom.SetDrawerLocked(self:GetChecked())
-        end
-    end)
 
     -- Background Color
     local drawerBgLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

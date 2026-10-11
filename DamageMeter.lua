@@ -13,7 +13,7 @@ local SafeAfter = addonTable.Core.SafeAfter
 -- ============================================================
 
 local METER_TYPES = {
-    "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken",
+    "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken", "enemyDamageTaken", "avoidableDamageTaken",
 }
 
 local TYPE_LABEL = {
@@ -23,6 +23,8 @@ local TYPE_LABEL = {
     deaths      = "Deaths",
     dispels     = "Dispels",
     damageTaken = "Dmg Taken",
+    enemyDamageTaken = "Enemy Damage Taken",
+    avoidableDamageTaken = "Avoidable Damage Taken",
 }
 
 local SESSION_LABELS = {
@@ -44,6 +46,8 @@ local ENUM_NAMES = {
     damage      = "DamageDone",
     healing     = "HealingDone",
     damageTaken = "DamageTaken",
+    enemyDamageTaken = "EnemyDamageTaken",
+    avoidableDamageTaken = "AvoidableDamageTaken",
     interrupts  = "Interrupts",
     dispels     = "Dispels",
     deaths      = "Deaths",
@@ -58,7 +62,7 @@ local ENUM_NAMES = {
 local entryCache = {}
 local CACHE_TTL = 0.5
 local sessionDurationByID, sessionNameByID = {}, {}
-local DPS_TYPES = { damage=true, healing=true, damageTaken=true }
+local DPS_TYPES = { damage=true, healing=true, damageTaken=true, enemyDamageTaken=true, avoidableDamageTaken=true }
 local COUNT_TYPES = { interrupts=true, deaths=true, dispels=true }
 local function Public(value) return not (issecretvalue and issecretvalue(value)) end
 local function Present(value) return not Public(value) or value ~= nil end
@@ -150,6 +154,61 @@ local function FetchSpellEntries(sessKey, mtype, guid, creatureID)
     end
     return entries, data and data.maxAmount or 1
 end
+-- EnemyDamageTaken detail records identify the units that damaged this enemy.
+-- Never aggregate live/secret data: names become keys and amounts are summed/sorted.
+local function FetchEnemyContributors(sessKey, guid, creatureID)
+    if InCombatLockdown() or not Public(guid) or not Public(creatureID) then return end
+    local data = ReadSession(sessKey, "enemyDamageTaken", {guid=guid, creatureID=creatureID})
+    if not Public(data) or type(data) ~= "table" then return end
+    local spells = data.combatSpells
+    if not Public(spells) or type(spells) ~= "table" then return end
+    local byName, entries = {}, {}
+    for _, spell in ipairs(spells) do
+        if not Public(spell) or type(spell) ~= "table" then return end
+        local detail = spell.combatSpellDetails
+        if not Public(detail) or type(detail) ~= "table" then return end
+        local name, amount = detail.unitName, detail.amount
+        if not Public(name) or not Public(amount) or not Public(detail.isMob)
+            or not Public(detail.isPet) or not Public(detail.unitClassFilename) then return end
+        if type(name) == "string" and name ~= "" and type(amount) == "number"
+            and amount > 0 and not detail.isMob and not detail.isPet then
+            local entry = byName[name]
+            if not entry then
+                entry = {name=name, total=0, class=detail.unitClassFilename}
+                byName[name] = entry
+                entries[#entries+1] = entry
+            end
+            entry.total = entry.total + amount
+        end
+    end
+    table.sort(entries, function(a,b)
+        if a.total == b.total then return a.name < b.name end
+        return a.total > b.total
+    end)
+    return entries
+end
+
+local GetClassColor
+local function ApplyEnemyTooltip(row, guid, displayName, sessKey, creatureID)
+    row:SetScript("OnEnter", function(self)
+        if not UIThingsDB.damageMeter.showTooltip or InCombatLockdown() then return end
+        if not Public(displayName) or not Public(guid) or not Public(creatureID) then return end
+        if not Present(guid) and not Present(creatureID) then return end
+        local entries = FetchEnemyContributors(sessKey, guid, creatureID)
+        if not entries or #entries == 0 then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine((displayName or "Unknown") .. " — Top 5 Players", 1, 1, 1)
+        for i = 1, math.min(5, #entries) do
+            local entry = entries[i]
+            local r, g, b = GetClassColor(entry.class)
+            GameTooltip:AddDoubleLine(i .. ". " .. entry.name, AbbreviateNumbers(entry.total), r, g, b, 1, .82, 0)
+        end
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+end
+
 local function FormatVal(val, mtype)
     if not Present(val) then return "—" end
     if COUNT_TYPES[mtype] then return string.format("%d", val) end
@@ -159,7 +218,7 @@ end
 -- Class Color
 -- ============================================================
 
-local function GetClassColor(class)
+GetClassColor = function(class)
     if Public(class) and class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
         local c = RAID_CLASS_COLORS[class]
         return c.r, c.g, c.b
@@ -323,6 +382,9 @@ local function AcquireRow(pool, parent)
         end
     end
     local row = CreateFrame("Button", nil, parent)
+    row:SetScript("OnHide", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
     row.bg  = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints()
     -- StatusBar lets us use SetMinMaxValues/SetValue with secret numbers (no Lua arithmetic needed)
@@ -425,18 +487,21 @@ local function RenderPane(idx)
         else row.valFS:SetText(amount) end
         row.valFS:SetTextColor(txt.r, txt.g, txt.b, txt.a or 1)
         row.dpsFS:Hide()
-        if dd then ApplyRowIcon(row, "spell", entry.spellId)
+        if mtype == "enemyDamageTaken" then ApplyRowIcon(row, "none")
+        elseif dd then ApplyRowIcon(row, "spell", entry.spellId)
         elseif entry.isLocalPlayer then ApplyRowIcon(row, "player")
         else ApplyRowIcon(row, "class", entry.class) end
         row.nameFS:SetPoint("RIGHT", row.valFS, "LEFT", -8, 0)
         if not dd then
-            if entry.deathRecapID then ApplyDeathTooltip(row, entry)
+            if mtype == "enemyDamageTaken" then ApplyEnemyTooltip(row, entry.guid, name, sess, entry.creatureID)
+            elseif entry.deathRecapID then ApplyDeathTooltip(row, entry)
             else ApplyRowTooltip(row, entry.guid, name, mtype, sess, entry.creatureID) end
         end
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnClick", function(_, button)
             if button == "RightButton" then drilldown[idx] = nil
             elseif button == "LeftButton" and not dd then
+                if mtype == "enemyDamageTaken" then return end
                 if entry.deathRecapID then OpenDeathRecapUI(entry.deathRecapID); return end
                 drilldown[idx] = {guid=entry.guid, creatureID=entry.creatureID, name=name}
             else return end
@@ -504,7 +569,7 @@ local function AcquireSessMenuBtn()
     return btn
 end
 
-local function SetupSessBtn(btn, sessionVal, label, isSelected, menuW)
+local function SetupSessBtn(btn, sessionVal, label, isSelected, menuW, setting)
     btn:SetWidth(menuW)
     btn.dot:SetText(isSelected and RADIO_ON or RADIO_OFF)
     btn.dot:SetTextColor(isSelected and 1 or 0.45, isSelected and 0.8 or 0.45, isSelected and 0 or 0.45)
@@ -513,7 +578,7 @@ local function SetupSessBtn(btn, sessionVal, label, isSelected, menuW)
     btn:SetScript("OnClick", function()
         local pidx = sessMenuFrame.paneIdx
         local cfg = (pidx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-        cfg.session = sessionVal
+        cfg[setting or "session"] = sessionVal
         drilldown[pidx] = nil
         entryCache = {}
         RenderPane(pidx)
@@ -582,7 +647,23 @@ local function RebuildSessionMenu(paneIdx)
     sessMenuFrame:SetHeight(yOff + 3)
 end
 
-local function ShowSessionMenu(paneIdx, anchorBtn)
+local function RebuildTypeMenu(paneIdx)
+    for _, btn in ipairs(sessMenuBtnPool) do btn:Hide() end
+    sessMenuFrame.divider:Hide()
+    local cfg = paneIdx == 1 and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
+    local menuW = sessMenuFrame:GetWidth() - 6
+    local yOff = 3
+    for _, mtype in ipairs(METER_TYPES) do
+        local btn = AcquireSessMenuBtn()
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", 3, -yOff)
+        SetupSessBtn(btn, mtype, TYPE_LABEL[mtype] or mtype, cfg.type == mtype, menuW, "type")
+        yOff = yOff + 23
+    end
+    sessMenuFrame:SetHeight(yOff + 3)
+end
+
+local function ShowSessionMenu(paneIdx, anchorBtn, isTypeMenu)
     if not sessMenuFrame then
         local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
         menu:SetWidth(190)
@@ -608,13 +689,16 @@ local function ShowSessionMenu(paneIdx, anchorBtn)
     end
 
     -- Toggle: hide if already showing for this pane
-    if sessMenuFrame:IsShown() and sessMenuFrame.paneIdx == paneIdx then
+    if sessMenuFrame:IsShown() and sessMenuFrame.paneIdx == paneIdx and sessMenuFrame.isTypeMenu == isTypeMenu then
         sessMenuFrame:Hide()
         return
     end
 
     sessMenuFrame.paneIdx = paneIdx
-    RebuildSessionMenu(paneIdx)
+    sessMenuFrame.isTypeMenu = isTypeMenu
+    sessMenuFrame:SetWidth(isTypeMenu and 230 or 190)
+    if isTypeMenu then RebuildTypeMenu(paneIdx)
+    else RebuildSessionMenu(paneIdx) end
     sessMenuFrame:ClearAllPoints()
     sessMenuFrame:SetPoint("TOPRIGHT", anchorBtn, "BOTTOMRIGHT", 0, -2)
     sessMenuFrame:Show()
@@ -630,6 +714,9 @@ local function BuildPane(idx, parent)
 
     local f = CreateFrame("Frame", nil, parent)
     pane.frame = f
+    f:SetScript("OnHide", function()
+        if sessMenuFrame and sessMenuFrame.paneIdx == idx then sessMenuFrame:Hide() end
+    end)
 
     -- Header strip
     local hdr = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -656,19 +743,13 @@ local function BuildPane(idx, parent)
     end)
     pane.sessBtn = sessBtn
 
-    -- Type cycle button
+    -- Type selection menu, sharing the session menu's style and selected marker.
     local typeBtn = CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate")
     typeBtn:SetSize(52, 20)
     typeBtn:SetPoint("RIGHT", sessBtn, "LEFT", -2, 0)
     local ci2 = idx
-    typeBtn:SetScript("OnClick", function()
-        local cfg2 = (ci2 == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-        local cur = 1
-        for i, t in ipairs(METER_TYPES) do if t == cfg2.type then cur = i; break end end
-        cfg2.type      = METER_TYPES[(cur % #METER_TYPES) + 1]
-        drilldown[ci2] = nil
-        entryCache = {}
-        RenderPane(ci2)
+    typeBtn:SetScript("OnClick", function(self)
+        ShowSessionMenu(ci2, self, true)
     end)
     pane.typeBtn = typeBtn
 
@@ -1003,29 +1084,82 @@ local function OnCurrentSessionUpdated()
 end
 
 local lastInstance
+local pendingResetInstance
+local RESET_CONFIRM = "LUNA_DAMAGE_METER_INSTANCE_RESET"
 local function InstanceKey()
     local inside = IsInInstance()
     if not inside then return nil end
     local _, kind, _, _, _, _, _, id = GetInstanceInfo()
     return tostring(kind) .. ":" .. tostring(id)
 end
-local function OnEnteringWorld()
-    entryCache = {}
-    lastInstance = InstanceKey()
-    SafeAfter(1, addonTable.DamageMeter.Initialize)
+local function ShouldPromptForReset()
+    local settings = UIThingsDB.damageMeter
+    return eventsRegistered and settings and settings.enabled and settings.clearOnInstance
+end
+
+StaticPopupDialogs[RESET_CONFIRM] = {
+    text = "Clear damage meter history for this instance?\n\nThis clears shared Luna and Blizzard damage meter history.",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function(_, instance)
+        if ShouldPromptForReset() and instance == InstanceKey() then
+            addonTable.DamageMeter.ResetData()
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+local function ShowPendingResetPrompt()
+    if not pendingResetInstance then return end
+    if not ShouldPromptForReset() or pendingResetInstance ~= InstanceKey() then
+        pendingResetInstance = nil
+        return
+    end
+    -- ResetData cannot run in combat; wait until the player can answer and reset.
+    if InCombatLockdown() then return end
+    if StaticPopup_Show(RESET_CONFIRM, nil, nil, pendingResetInstance) then
+        pendingResetInstance = nil
+    end
 end
 local function OnZoneChanged()
     local nextInstance = InstanceKey()
     local changed = nextInstance ~= lastInstance
     lastInstance = nextInstance
-    if changed and nextInstance and UIThingsDB.damageMeter.clearOnInstance then
-        addonTable.DamageMeter.ResetData()
+    if changed then
+        pendingResetInstance = nil
+        StaticPopup_Hide(RESET_CONFIRM)
+        if nextInstance and ShouldPromptForReset() then
+            pendingResetInstance = nextInstance
+        end
     end
+    ShowPendingResetPrompt()
+end
+local function OnEnteringWorld()
+    entryCache = {}
+    -- Both events can fire for one entry. Share the transition check so only one
+    -- prompt appears, and don't overwrite the previous instance before checking.
+    OnZoneChanged()
+    SafeAfter(1, addonTable.DamageMeter.Initialize)
 end
 
 local handlers = {
-    PLAYER_REGEN_ENABLED = function() OnSessionUpdated() end,
-    PLAYER_REGEN_DISABLED = function() OnSessionUpdated() end,
+    PLAYER_REGEN_ENABLED = function()
+        OnSessionUpdated()
+        ShowPendingResetPrompt()
+    end,
+    PLAYER_REGEN_DISABLED = function()
+        -- A breakdown opened before combat must not remain visible as live data changes.
+        if GameTooltip then
+            for _, pane in pairs(panes) do
+                for _, row in ipairs(pane.rowPool) do
+                    if GameTooltip:IsOwned(row) then GameTooltip:Hide() end
+                end
+            end
+        end
+        OnSessionUpdated()
+    end,
     DAMAGE_METER_COMBAT_SESSION_UPDATED = OnSessionUpdated,
     DAMAGE_METER_CURRENT_SESSION_UPDATED = OnCurrentSessionUpdated,
     DAMAGE_METER_RESET = ClearSessionState,
@@ -1040,6 +1174,8 @@ RegisterEvents = function()
     for event, handler in pairs(handlers) do EventBus.Register(event, handler, "DamageMeter") end
 end
 UnregisterEvents = function()
+    pendingResetInstance = nil
+    StaticPopup_Hide(RESET_CONFIRM)
     if not eventsRegistered then return end
     eventsRegistered = false
     for event, handler in pairs(handlers) do EventBus.Unregister(event, handler) end

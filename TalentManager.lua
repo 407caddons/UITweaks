@@ -20,6 +20,32 @@ local scrollContent  -- Scroll child for build list
 local buildRows = {} -- Reusable row frames
 local hooked = false -- Whether we've hooked PlayerSpellsFrame
 
+local function GetTalentsFrame()
+    if not PlayerSpellsFrame then return nil end
+    return PlayerSpellsFrame.TalentsTab or PlayerSpellsFrame.TalentsFrame
+end
+
+local function IsTalentTabShown()
+    local talentsFrame = GetTalentsFrame()
+    return PlayerSpellsFrame and PlayerSpellsFrame:IsShown()
+        and talentsFrame and talentsFrame:IsShown()
+end
+
+local buildRefreshPending = false
+local function QueueBuildListRefresh()
+    if buildRefreshPending or not mainPanel or not mainPanel:IsShown() then return end
+    buildRefreshPending = true
+    -- Talent events are synchronous and can arrive while the tree is changing.
+    -- Compare once the current burst of node/config updates has settled.
+    addonTable.Core.SafeAfter(0.1, function()
+        buildRefreshPending = false
+        local settings = UIThingsDB.talentManager
+        if settings and settings.enabled and mainPanel and mainPanel:IsShown() and IsTalentTabShown() then
+            TalentManager.RefreshBuildList()
+        end
+    end)
+end
+
 -- Shared difficulty references
 local RAID_DIFFICULTIES = Helpers.RAID_DIFFICULTIES
 local DUNGEON_DIFFICULTIES = Helpers.DUNGEON_DIFFICULTIES
@@ -235,45 +261,38 @@ local function AnchorToTalentFrame()
     mainPanel:SetWidth(settings.panelWidth or 280)
 end
 
-local function OnTalentFrameShow()
-    if not CanUseTalents() then return end
-    if not UIThingsDB.talentManager or not UIThingsDB.talentManager.enabled then return end
-    if not mainPanel then
-        CreateMainPanel()
-    end
-    AnchorToTalentFrame()
-    TalentManager.RefreshBuildList()
-    mainPanel:Show()
-end
-
 local function OnTalentFrameHide()
     if mainPanel and mainPanel:IsShown() then
         mainPanel:Hide()
     end
 end
 
-local function HookTalentFrame()
-    if not CanUseTalents() then return end
-    if hooked then return end
-    if not PlayerSpellsFrame then return end
+local function OnTalentFrameShow()
+    local settings = UIThingsDB.talentManager
+    if not CanUseTalents() or not settings or not settings.enabled or not IsTalentTabShown() then
+        OnTalentFrameHide()
+        return
+    end
+    if not mainPanel then CreateMainPanel() end
+    AnchorToTalentFrame()
+    TalentManager.RefreshBuildList()
+    mainPanel:Show()
+    QueueBuildListRefresh()
+end
 
-    -- Global-form hooksecurefunc keeps us off the Blizzard frame's method
-    -- table; frame-object HookScript on PlayerSpellsFrame taints the frame
-    -- context and propagates to secure code that touches talent UI.
-    hooksecurefunc("ShowUIPanel", function(frame)
-        if frame == PlayerSpellsFrame then OnTalentFrameShow() end
-    end)
-    hooksecurefunc("HideUIPanel", function(frame)
-        if frame == PlayerSpellsFrame then OnTalentFrameHide() end
-    end)
+local function HookTalentFrame()
+    if not CanUseTalents() or hooked or not GetTalentsFrame() then return end
+
+    -- Blizzard publishes talent-page visibility callbacks, including tab switches.
+    -- Register callbacks rather than modifying scripts on the protected frame.
+    EventRegistry:RegisterCallback("PlayerSpellsFrame.TalentTab.Show", OnTalentFrameShow, TalentManager)
+    EventRegistry:RegisterCallback("PlayerSpellsFrame.TalentTab.Hide", OnTalentFrameHide, TalentManager)
+    EventRegistry:RegisterCallback("PlayerSpellsFrame.OpenFrame", OnTalentFrameShow, TalentManager)
+    EventRegistry:RegisterCallback("PlayerSpellsFrame.CloseFrame", OnTalentFrameHide, TalentManager)
     hooked = true
 
-    Log("TalentManager", "Hooked PlayerSpellsFrame", LogLevel.DEBUG)
-
-    -- If talent frame is already shown when we hook, show our panel
-    if PlayerSpellsFrame:IsShown() then
-        OnTalentFrameShow()
-    end
+    Log("TalentManager", "Registered talent tab visibility callbacks", LogLevel.DEBUG)
+    OnTalentFrameShow()
 end
 
 -- ============================================================
@@ -508,7 +527,34 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
     end)
 end
 
-local ImportStringMatchesCurrent  -- forward declaration; defined after DecodeImportString
+-- Read the live tree once per list refresh so every build uses the same state.
+local function GetCurrentTalentState()
+    local configID = C_ClassTalents.GetActiveConfigID()
+    local specIndex = GetSpecialization()
+    local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
+    local treeID = specID and C_ClassTalents.GetTraitTreeForSpec(specID)
+    if not configID or not treeID then return nil end
+
+    -- A staged preview has not been applied yet, so it must not earn a checkmark.
+    if C_Traits.GetStagedChanges then
+        local purchases, refunds, swaps = C_Traits.GetStagedChanges(configID)
+        if (purchases and next(purchases)) or (refunds and next(refunds)) or (swaps and next(swaps)) then
+            return nil
+        end
+    end
+
+    local nodes = C_Traits.GetTreeNodes(treeID)
+    if not nodes or #nodes == 0 then return nil end
+    local state = { configID = configID, treeID = treeID, nodes = nodes, nodeInfo = {} }
+    for _, nodeID in ipairs(nodes) do
+        local info = C_Traits.GetNodeInfo(configID, nodeID)
+        if not info then return nil end
+        state.nodeInfo[nodeID] = info
+    end
+    return state
+end
+
+local BuildMatchesCurrent -- defined after the import-string reader
 
 function TalentManager.RefreshBuildList()
     if not CanUseTalents() then return end
@@ -518,6 +564,8 @@ function TalentManager.RefreshBuildList()
     local _, _, playerClassID = UnitClass("player")
     local specIndex = GetSpecialization()
     local playerSpecID = specIndex and select(1, GetSpecializationInfo(specIndex))
+
+    local currentTalents = GetCurrentTalentState()
 
     -- Hide all existing rows
     for _, row in ipairs(buildRows) do
@@ -553,31 +601,9 @@ function TalentManager.RefreshBuildList()
                             elseif reminder.specID and reminder.specID ~= playerSpecID then
                                 -- skip
                             else
-                                -- Check if this build matches current talents
-                                local isMatch = false
-                                if reminder.talents and addonTable.TalentReminder and addonTable.TalentReminder.CompareTalents then
-                                    local mismatches = addonTable.TalentReminder.CompareTalents(reminder.talents)
-                                    isMatch = (#mismatches == 0)
-                                    -- DEBUG: log match details for each build
-                                    local buildName = reminder.name or "Unnamed"
-                                    if #mismatches > 0 then
-                                        Log("TalentManager", string.format("BUILD '%s' (snapshot): %d mismatches", buildName, #mismatches), LogLevel.DEBUG)
-                                        for mi, mm in ipairs(mismatches) do
-                                            Log("TalentManager", string.format("  mismatch %d: type=%s node=%s name=%s",
-                                                mi, tostring(mm.type), tostring(mm.nodeID), tostring(mm.name)), LogLevel.DEBUG)
-                                        end
-                                    else
-                                        Log("TalentManager", string.format("BUILD '%s' (snapshot): MATCH", buildName), LogLevel.DEBUG)
-                                    end
-                                elseif reminder.importString then
-                                    isMatch = ImportStringMatchesCurrent(reminder.importString)
-                                    -- DEBUG: log match result for import-string builds
-                                    local buildName = reminder.name or "Unnamed"
-                                    Log("TalentManager", string.format("BUILD '%s' (import): match=%s", buildName, tostring(isMatch)), LogLevel.DEBUG)
-                                else
-                                    -- DEBUG: no talent data at all
-                                    Log("TalentManager", string.format("BUILD '%s': no talents and no importString", reminder.name or "Unnamed"), LogLevel.DEBUG)
-                                end
+                                local isMatch = BuildMatchesCurrent(reminder, currentTalents)
+                                Log("TalentManager", string.format("BUILD '%s': match=%s",
+                                    reminder.name or "Unnamed", tostring(isMatch)), LogLevel.DEBUG)
 
                                 if tonumber(instanceID) == 0 then
                                     table.insert(uncategorizedBuilds, {
@@ -1506,15 +1532,9 @@ end
 -- Import String Decoding Helpers
 -- ============================================================
 
--- Get TalentsFrame from the Blizzard talent UI (must be loaded)
-local function GetTalentsFrame()
-    if not PlayerSpellsFrame then return nil end
-    return PlayerSpellsFrame.TalentsTab or PlayerSpellsFrame.TalentsFrame
-end
-
--- Decode an import string into sorted loadoutEntryInfo using Blizzard's APIs
--- Returns: loadoutEntryInfo table or nil, errorMessage
-local function DecodeImportString(importString)
+-- Read and validate an import without resolving its nodes against the currently
+-- selected choices. Granted nodes may have different defaults in another build.
+local function ReadImportString(importString)
     local talentsFrame = GetTalentsFrame()
     if not talentsFrame then
         return nil, "Talent UI not loaded - open your talent window first"
@@ -1561,6 +1581,15 @@ local function DecodeImportString(importString)
         return nil, "Failed to parse import string content"
     end
 
+    return loadoutContent, nil, configID, treeID
+end
+
+-- Decode an import string into sorted entry info for loading a build.
+local function DecodeImportString(importString)
+    local loadoutContent, err, configID, treeID = ReadImportString(importString)
+    if not loadoutContent then return nil, err end
+    local talentsFrame = GetTalentsFrame()
+
     -- Convert to structured entry info
     local loadoutEntryInfo = talentsFrame:ConvertToImportLoadoutEntryInfo(configID, treeID, loadoutContent)
     if not loadoutEntryInfo or #loadoutEntryInfo == 0 then
@@ -1571,8 +1600,8 @@ local function DecodeImportString(importString)
     local nodeOrder = {}
     for _, nodeID in pairs(C_Traits.GetTreeNodes(treeID)) do
         local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
-        if nodeInfo.isVisible then
-            nodeOrder[nodeID] = { posY = nodeInfo.posY, posX = nodeInfo.posX }
+        if nodeInfo then
+            nodeOrder[nodeID] = { posY = nodeInfo.posY or 0, posX = nodeInfo.posX or 0 }
         end
     end
 
@@ -1606,61 +1635,64 @@ local function DecodeImportString(importString)
     return loadoutEntryInfo, nil
 end
 
--- Compare an import string against the player's current talents node-by-node.
--- Returns true only if every node in the import string matches the current config
--- AND the current config has no extra user-purchased nodes beyond what the string specifies.
-ImportStringMatchesCurrent = function(importString)
-    if not importString or not C_ClassTalents or not C_Traits then return false end
-    local configID = C_ClassTalents.GetActiveConfigID()
-    if not configID then return false end
-    local specID = PlayerUtil.GetCurrentSpecID and PlayerUtil.GetCurrentSpecID()
-    if not specID then return false end
-    local treeID = C_ClassTalents.GetTraitTreeForSpec(specID)
-    if not treeID then return false end
-
-    -- Decode the saved import string
-    local loadoutEntryInfo, err = DecodeImportString(importString)
-    if not loadoutEntryInfo then return false end
-
-    -- Build a map of what the import string expects: nodeID -> {entryID, rank}
-    local expected = {}
-    for _, entry in ipairs(loadoutEntryInfo) do
-        expected[entry.nodeID] = {
-            entryID = entry.selectionEntryID or entry.entryID,
-            rank    = entry.ranksPurchased or 1,
-        }
+-- Compare the serialized choices directly. Conversion for loading can substitute
+-- the CURRENT entry for granted nodes, which would make matching depend on UI state.
+local function ImportStringMatchesCurrent(importString, state)
+    local content, err, configID, treeID = ReadImportString(importString)
+    if not content or configID ~= state.configID or treeID ~= state.treeID or #content ~= #state.nodes then
+        return false
     end
 
-    -- Build current talent map from the live tree
-    local current = {}
-    for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID)) do
-        local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
-        if nodeInfo and nodeInfo.activeEntry and (nodeInfo.currentRank or 0) > 0 then
-            current[nodeID] = {
-                entryID = nodeInfo.activeEntry.entryID,
-                rank    = nodeInfo.currentRank or 0,
-            }
+    for index, nodeID in ipairs(state.nodes) do
+        local expected = content[index]
+        local current = state.nodeInfo[nodeID]
+        local purchased = current.ranksPurchased or 0
+        local expectedPurchased = 0
+        if expected.isNodeSelected and not expected.isNodeGranted then
+            expectedPurchased = expected.isPartiallyRanked and expected.partialRanksPurchased or current.maxRanks
         end
-    end
-
-    -- Every node in expected must match current
-    for nodeID, exp in pairs(expected) do
-        local cur = current[nodeID]
-        if not cur then return false end
-        if exp.entryID and cur.entryID ~= exp.entryID then return false end
-        if cur.rank < exp.rank then return false end
-    end
-
-    -- No extra user-purchased nodes beyond what the import expects.
-    -- Use CanRefundRank to distinguish user-purchased nodes from auto-granted ones.
-    for nodeID, cur in pairs(current) do
-        if not expected[nodeID] then
-            if C_Traits.CanRefundRank(configID, nodeID) then
+        -- Refundability depends on prerequisites and combat; it does not tell us
+        -- whether points were spent. Compare purchased ranks exactly instead.
+        if purchased ~= expectedPurchased then return false end
+        if expected.isNodeGranted then
+            local activeRank = current.activeRank or current.currentRank or 0
+            if activeRank - purchased <= 0 then return false end
+        end
+        if expected.isNodeSelected and expected.isChoiceNode then
+            local entryID = current.entryIDs[expected.choiceNodeSelection]
+            if not entryID or not current.activeEntry or current.activeEntry.entryID ~= entryID then
                 return false
             end
         end
     end
+    return true
+end
 
+BuildMatchesCurrent = function(reminder, state)
+    if not state then return false end
+    if reminder.importString then return ImportStringMatchesCurrent(reminder.importString, state) end
+    if not reminder.talents or not next(reminder.talents) then return false end
+
+    local expectedNodes = {}
+    for nodeID, saved in pairs(reminder.talents) do
+        nodeID = tonumber(nodeID) or nodeID
+        expectedNodes[nodeID] = true
+        local current = state.nodeInfo[nodeID]
+        if not current then return false end
+        -- Legacy snapshots can contain retained ranks from an inactive hero tree.
+        -- The hero selection node itself still has to match the saved selection.
+        if current.subTreeActive ~= false then
+            if not current.activeEntry or current.activeEntry.entryID ~= saved.entryID
+                or (current.currentRank or 0) ~= saved.rank then
+                return false
+            end
+        end
+    end
+    for nodeID, current in pairs(state.nodeInfo) do
+        if current.subTreeActive ~= false and (current.ranksPurchased or 0) > 0 and not expectedNodes[nodeID] then
+            return false
+        end
+    end
     return true
 end
 
@@ -1835,19 +1867,18 @@ StaticPopupDialogs["LUNA_TALENTMGR_UPDATE_CONFIRM"] = {
 -- ============================================================
 
 function TalentManager.UpdateSettings()
-    if not CanUseTalents() then
-        if mainPanel then mainPanel:Hide() end
+    local settings = UIThingsDB.talentManager
+    if not CanUseTalents() or not settings or not settings.enabled then
+        OnTalentFrameHide()
         return
     end
+    HookTalentFrame()
     if mainPanel then
-        local settings = UIThingsDB.talentManager
         mainPanel:SetWidth(settings.panelWidth or 280)
-        if scrollContent then
-            scrollContent:SetWidth((settings.panelWidth or 280) - 40)
-        end
+        if scrollContent then scrollContent:SetWidth((settings.panelWidth or 280) - 40) end
         TalentManager.ApplyVisuals()
-        TalentManager.RefreshBuildList()
     end
+    OnTalentFrameShow()
 end
 
 -- ============================================================
@@ -1901,10 +1932,7 @@ local function OnTalentManagerEnteringWorld()
 end
 
 local function OnTalentConfigUpdated()
-    -- Refresh check marks when talents change
-    if mainPanel and mainPanel:IsShown() then
-        TalentManager.RefreshBuildList()
-    end
+    QueueBuildListRefresh()
 end
 
 addonTable.EventBus.Register("ADDON_LOADED", OnTalentManagerAddonLoaded, "TalentManager")
@@ -1915,3 +1943,12 @@ addonTable.EventBus.Register("PLAYER_LEVEL_UP", function()
 end, "TalentManager")
 addonTable.EventBus.Register("TRAIT_CONFIG_UPDATED", OnTalentConfigUpdated, "TalentManager")
 addonTable.EventBus.Register("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", OnTalentConfigUpdated, "TalentManager")
+
+-- Cover native loadout switches, commits, previews/undo, and hero-tree changes.
+addonTable.EventBus.Register("PLAYER_TALENT_UPDATE", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("ACTIVE_COMBAT_CONFIG_CHANGED", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("SELECTED_LOADOUT_CHANGED", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("TRAIT_NODE_CHANGED", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("TRAIT_NODE_CHANGED_PARTIAL", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("TRAIT_SUB_TREE_CHANGED", OnTalentConfigUpdated, "TalentManager")
+addonTable.EventBus.Register("CONFIG_COMMIT_FAILED", OnTalentConfigUpdated, "TalentManager")

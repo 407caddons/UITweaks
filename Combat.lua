@@ -149,7 +149,6 @@ end
 local ttdFrame
 local ttdLabel
 local ttdText
-local ttdLockBtn
 
 local TTD_SAMPLE_INTERVAL = 0.5   -- seconds between health% samples
 local TTD_MIN_DATA_SECS   = 3     -- seconds of data required before showing
@@ -215,7 +214,7 @@ local function TtdEstimate()
 end
 
 TtdApplySettings = function()
-    if not ttdFrame or not ttdLockBtn then return end
+    if not ttdFrame then return end
     local s = UIThingsDB.combat
     -- Font — same as combat timer
     if s.font and s.fontSize then
@@ -240,8 +239,6 @@ TtdApplySettings = function()
     if locked then
         ttdFrame:EnableMouse(false)
         ttdFrame:SetBackdrop(nil)
-        ttdLockBtn:SetAlpha(0.45)
-        ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
     else
         ttdFrame:EnableMouse(true)
         ttdFrame:SetBackdrop({
@@ -251,8 +248,6 @@ TtdApplySettings = function()
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
         })
         ttdFrame:SetBackdropColor(0, 0, 0, 0.5)
-        ttdLockBtn:SetAlpha(1)
-        ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
     end
     TtdRefreshDisplay()
 end
@@ -334,21 +329,9 @@ local function InitTTD()
     -- Time value (large, matches combat timer)
     ttdText = ttdFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     ttdText:SetPoint("BOTTOMLEFT", 6, 6)
-    ttdText:SetPoint("BOTTOMRIGHT", -22, 6)
+    ttdText:SetPoint("BOTTOMRIGHT", -6, 6)
     ttdText:SetJustifyH("CENTER")
     ttdText:SetText("--:--")
-
-    -- Lock button (always interactive, even when frame mouse is disabled)
-    ttdLockBtn = CreateFrame("Button", nil, ttdFrame)
-    ttdLockBtn:SetSize(16, 16)
-    ttdLockBtn:SetPoint("RIGHT", ttdFrame, "RIGHT", -3, 0)
-    ttdLockBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
-    ttdLockBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    ttdLockBtn:SetScript("OnClick", function()
-        UIThingsDB.combat.ttdLocked = not UIThingsDB.combat.ttdLocked
-        TtdApplySettings()
-    end)
-    ttdLockBtn:EnableMouse(true)
 
     -- Event frame: reset samples on target change or combat transitions
     local evtFrame = CreateFrame("Frame")

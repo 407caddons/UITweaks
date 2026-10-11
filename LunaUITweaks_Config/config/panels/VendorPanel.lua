@@ -91,17 +91,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
         if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
     end)
 
-    -- Lock Alert Checkbox
-    local vendorLockBtn = CreateFrame("CheckButton", "UIThingsVendorLockCheck", panel,
-        "ChatConfigCheckButtonTemplate")
-    vendorLockBtn:SetPoint("TOPLEFT", 20, -240)
-    _G[vendorLockBtn:GetName() .. "Text"]:SetText("Lock Repair Alert")
-    vendorLockBtn:SetChecked(UIThingsDB.vendor.warningLocked)
-    vendorLockBtn:SetScript("OnClick", function(self)
-        local locked = not not self:GetChecked()
-        UIThingsDB.vendor.warningLocked = locked
-        if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
-    end)
+    Helpers.CreateLayoutModeHint(panel, 20, -245)
 
     -- Vendor Font Selector
     Helpers.CreateFontDropdown(
@@ -179,6 +169,6 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     bagHelpText:SetWidth(500)
     bagHelpText:SetJustifyH("LEFT")
     bagHelpText:SetText(
-        "Displays a warning when you have this many or fewer free bag slots remaining.\nShares font settings with durability warning. Unlock to position separately.")
+        "Displays a warning when you have this many or fewer free bag slots remaining.\nShares font settings with durability warning. Use Layout Mode to position each warning.")
     bagHelpText:SetTextColor(0.7, 0.7, 0.7)
 end

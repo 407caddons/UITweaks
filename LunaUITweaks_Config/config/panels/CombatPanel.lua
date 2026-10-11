@@ -49,17 +49,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.combat.enabled)
 
-    -- Lock Timer
-    local combatLockBtn = CreateFrame("CheckButton", "UIThingsCombatLockCheck", child,
-        "ChatConfigCheckButtonTemplate")
-    combatLockBtn:SetPoint("TOPLEFT", 20, -70)
-    _G[combatLockBtn:GetName() .. "Text"]:SetText("Lock Combat Timer")
-    combatLockBtn:SetChecked(UIThingsDB.combat.locked)
-    combatLockBtn:SetScript("OnClick", function(self)
-        local locked = not not self:GetChecked()
-        UIThingsDB.combat.locked = locked
-        UpdateCombat()
-    end)
+    Helpers.CreateLayoutModeHint(child, 20, -75)
 
     -- Time to Die Timer
     Helpers.CreateSectionHeader(child, "Time to Die Timer", -98)
@@ -79,15 +69,6 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         UpdateCombat()
     end)
 
-    local lockTTDBtn = CreateFrame("CheckButton", "UIThingsTTDLockCheck", child,
-        "ChatConfigCheckButtonTemplate")
-    lockTTDBtn:SetPoint("TOPLEFT", 20, -160)
-    _G[lockTTDBtn:GetName() .. "Text"]:SetText("Lock Time to Die Timer")
-    lockTTDBtn:SetChecked(UIThingsDB.combat.ttdLocked ~= false)
-    lockTTDBtn:SetScript("OnClick", function(self)
-        UIThingsDB.combat.ttdLocked = not not self:GetChecked()
-        UpdateCombat()
-    end)
 
     -- Font Selector (Simple Dropdown)
     Helpers.CreateSectionHeader(child, "Timer Font & Color", -198)
@@ -277,19 +258,10 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
         end
     end
 
-    local reminderLockBtn = CreateFrame("CheckButton", "UIThingsReminderLockCheck", child,
-        "ChatConfigCheckButtonTemplate")
-    reminderLockBtn:SetPoint("TOPLEFT", 20, -548)
-    _G[reminderLockBtn:GetName() .. "Text"]:SetText("Lock Reminder Frame")
-    reminderLockBtn:SetChecked(UIThingsDB.combat.reminders.locked)
-    reminderLockBtn:SetScript("OnClick", function(self)
-        UIThingsDB.combat.reminders.locked = not not self:GetChecked()
-        UpdateReminders()
-    end)
 
     local reminderGroupCheck = CreateFrame("CheckButton", "UIThingsReminderGroupCheck", child,
         "ChatConfigCheckButtonTemplate")
-    reminderGroupCheck:SetPoint("TOPLEFT", 180, -548) -- Right of Lock
+    reminderGroupCheck:SetPoint("TOPLEFT", 20, -548)
     _G[reminderGroupCheck:GetName() .. "Text"]:SetText("Only in Group")
     reminderGroupCheck:SetChecked(UIThingsDB.combat.reminders.onlyInGroup)
     reminderGroupCheck:SetScript("OnClick", function(self)

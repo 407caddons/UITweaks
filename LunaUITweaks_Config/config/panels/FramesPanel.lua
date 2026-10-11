@@ -109,7 +109,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
 
         table.insert(UIThingsDB.frames.list, {
             name = name,
-            locked = false,
+            locked = not addonTable.LayoutMode.IsActive(),
             width = 100,
             height = 100,
             x = 0,
@@ -188,8 +188,8 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
             newFrameData.y = newFrameData.y + 10
         end
 
-        -- Ensure it's unlocked
-        newFrameData.locked = false
+        -- New frames follow the current global editing state.
+        newFrameData.locked = not addonTable.LayoutMode.IsActive()
 
         table.insert(UIThingsDB.frames.list, newFrameData)
         selectedFrameIndex = #UIThingsDB.frames.list
@@ -248,22 +248,10 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
         end
     end)
 
-    -- Lock Checkbox
-    local lockFrameBtn = CreateFrame("CheckButton", nil, frameControls, "ChatConfigCheckButtonTemplate")
-    lockFrameBtn:SetPoint("TOPLEFT", 0, -30)
-    local lockText = lockFrameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lockText:SetPoint("LEFT", lockFrameBtn, "RIGHT", 5, 0)
-    lockText:SetText("Lock Frame")
-    lockFrameBtn:SetScript("OnClick", function(self)
-        if selectedFrameIndex then
-            UIThingsDB.frames.list[selectedFrameIndex].locked = self:GetChecked()
-            UpdateFrames()
-        end
-    end)
 
     -- Anchor Checkbox
     local anchorFrameBtn = CreateFrame("CheckButton", nil, frameControls, "ChatConfigCheckButtonTemplate")
-    anchorFrameBtn:SetPoint("TOPLEFT", 140, -30) -- Next to Lock
+    anchorFrameBtn:SetPoint("TOPLEFT", 140, -30)
     local anchorText = anchorFrameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     anchorText:SetPoint("LEFT", anchorFrameBtn, "RIGHT", 5, 0)
     anchorText:SetText("Is Widget Anchor")
@@ -601,7 +589,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     Place(nameLabel, 16, -42)
     Place(nameEdit, 72, -36)
     nameEdit:SetSize(230, 24)
-    Place(lockFrameBtn, 12, -76)
+    Helpers.CreateLayoutModeHint(frameControls, 16, -82, 150)
     Place(anchorFrameBtn, 180, -76)
     Place(dockLabel, 394, -44)
     Place(dockDropdown, 378, -62)
@@ -645,7 +633,6 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
             local f = UIThingsDB.frames.list[selectedFrameIndex]
 
             nameEdit:SetText(f.name or "")
-            lockFrameBtn:SetChecked(f.locked)
             anchorFrameBtn:SetChecked(f.isAnchor)
 
             widthSlider:SetValue(f.width)

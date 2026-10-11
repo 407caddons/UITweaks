@@ -212,6 +212,17 @@ function Helpers.CreateSectionHeader(parent, text, yOffset)
     return header
 end
 
+-- Persistent frame positions are edited through the global Layout Mode.
+function Helpers.CreateLayoutModeHint(parent, x, y, width)
+    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", x, y)
+    hint:SetWidth(width or 240)
+    hint:SetJustifyH("LEFT")
+    hint:SetTextColor(0.65, 0.65, 0.65)
+    hint:SetText("Use Layout Mode to position frames.")
+    return hint
+end
+
 --- Helper: Create Color Picker
 -- @param parent frame Parent frame
 -- @param name string Unique name for the button
