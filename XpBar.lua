@@ -96,7 +96,7 @@ local function UpdateDisplay()
 
     local settings = UIThingsDB.xpBar
     local level = UnitLevel("player")
-    local maxLevel = GetMaxPlayerLevel()
+    local maxLevel = (addonTable.Client and addonTable.Client.GetMaxLevel() or GetMaxPlayerLevel())
     local isMaxLevel = level >= maxLevel
 
     if isMaxLevel then
@@ -312,7 +312,7 @@ function addonTable.XpBar.UpdateSettings()
 
     local settings = UIThingsDB.xpBar
     local level = UnitLevel("player")
-    local maxLevel = GetMaxPlayerLevel()
+    local maxLevel = (addonTable.Client and addonTable.Client.GetMaxLevel() or GetMaxPlayerLevel())
     local isMaxLevel = level and maxLevel and level >= maxLevel
 
     ApplyBlizzardBarVisibility()
@@ -461,7 +461,7 @@ local function Init()
         end
 
         local level = UnitLevel("player")
-        local maxLevel = GetMaxPlayerLevel()
+        local maxLevel = (addonTable.Client and addonTable.Client.GetMaxLevel() or GetMaxPlayerLevel())
         if level >= maxLevel then
             if not UIThingsDB.xpBar.repBarEnabled then return end
             -- Reputation tooltip at max level

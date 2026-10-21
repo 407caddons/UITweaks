@@ -78,6 +78,8 @@ local function CompactNumber(value)
             {breakpoint=1000,abbreviation="k",significandDivisor=100,fractionDivisor=10,abbreviationIsGlobal=false},
             {breakpoint=1,abbreviation="",significandDivisor=1,fractionDivisor=1,abbreviationIsGlobal=false},
         }
+        -- Forever restricts abbreviation below ten thousand.
+        if addonTable.Client and addonTable.Client.isForever then breakpoints[4].breakpoint=10000 end
         numberOptions=CreateAbbreviateConfig and {config=CreateAbbreviateConfig(breakpoints)} or {breakpointData=breakpoints}
     end
     return AbbreviateNumbers(value,numberOptions)

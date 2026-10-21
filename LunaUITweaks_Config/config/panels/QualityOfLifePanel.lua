@@ -25,6 +25,7 @@ function addon.ConfigSetup.QualityOfLife(panel,nav)
     local function Check(key,text,y)
         local check=CreateFrame("CheckButton",nil,child,"ChatConfigCheckButtonTemplate")
         check:SetPoint("TOPLEFT",20,y); check.Text:SetText(text); check:SetChecked(DB()[key])
+        if addon.Client and not addon.Client.SupportsQoL(key) then check:SetEnabled(false); check:SetChecked(false) end
         check:SetScript("OnClick",function(self) DB()[key]=not not self:GetChecked(); Apply() end)
         controls[key]=check; return check
     end

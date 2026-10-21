@@ -7,7 +7,7 @@ local ITEM_CLASS_TRADEGOODS = 7
 local SCAN_DELAY = 0.5
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
 -- Reagent bag is a separate slot beyond the normal bag range (Enum.BagIndex.ReagentBag = 5)
-local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 5
+local REAGENT_BAG_SLOT = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or (addonTable.Client and addonTable.Client.isForever and NUM_BAG_SLOTS or 5)
 
 -- State
 local scanTimer = nil
@@ -119,7 +119,10 @@ end
 -- @return table itemID -> count mapping
 local function ScanCharacterBank()
     local containers = {}
-    if Enum and Enum.BagIndex and Enum.BagIndex.CharacterBankTab_1 then
+    if addonTable.Client and addonTable.Client.isForever then
+        containers=addonTable.Client.GetBankIDs(Enum.BankType.Character)
+        if not containers then return nil end
+    elseif Enum and Enum.BagIndex and Enum.BagIndex.CharacterBankTab_1 then
         if not C_Bank or not C_Bank.FetchPurchasedBankTabIDs then return nil end
         if C_Bank.CanViewBank and not C_Bank.CanViewBank(Enum.BankType.Character) then return nil end
         containers = C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Character)
@@ -147,14 +150,18 @@ end
 -- @return table itemID -> count mapping
 local function ScanWarbandBank()
     local items = {}
-    if not C_Bank or not C_Bank.FetchPurchasedBankTabIDs then return items end
-    if not Enum or not Enum.BagIndex or not Enum.BagIndex.AccountBankTab_1 then return items end
+    local tabIDs
+    if addonTable.Client and addonTable.Client.isForever then
+        tabIDs=addonTable.Client.GetBankIDs(Enum and Enum.BankType and Enum.BankType.Account)
+        if not tabIDs then return nil end
+    else
+        if not C_Bank or not C_Bank.FetchPurchasedBankTabIDs then return items end
+        if not Enum or not Enum.BagIndex or not Enum.BagIndex.AccountBankTab_1 then return items end
+        tabIDs=C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Account)
+        if not tabIDs then return items end
+    end
 
-    local tabIDs = C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Account)
-    if not tabIDs then return items end
-
-    -- Account bank container IDs start at Enum.BagIndex.AccountBankTab_1
-    local baseContainerID = Enum.BagIndex.AccountBankTab_1
+    -- Use the reported container IDs, including non-contiguous Forever IDs.
     for i = 1, #tabIDs do
         local containerID = tabIDs[i]
         local numSlots = C_Container.GetContainerNumSlots(containerID)
@@ -247,6 +254,7 @@ local function DoWarbandScan()
     if not UIThingsDB.reagents.enabled then return end
     EnsureDB()
     local warbandItems = ScanWarbandBank()
+    if not warbandItems then return end -- preserve the snapshot when bank data is unavailable
     LunaUITweaks_ReagentData.warband.items = warbandItems
     LunaUITweaks_ReagentData.warband.lastSeen = time()
 end

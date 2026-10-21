@@ -419,6 +419,10 @@ logFrame:SetScript("OnEvent", function(self, event)
 end)
 
 ApplyLogFrameEvents = function()
+    if addonTable.Client and not addonTable.Client.Supports("autoLogging") then
+        logFrame:UnregisterAllEvents()
+        return
+    end
     local settings = UIThingsDB.combat.combatLog or {}
     -- Check if any combat log option is enabled
     local anyEnabled = false
@@ -1318,6 +1322,7 @@ UpdateReminderFrame = function()
 end
 
 local function InitReminders()
+    if addonTable.Client and not addonTable.Client.Supports("consumableReminders") then return end
     -- Must be SecureFrame for StateDriver
     reminderFrame = CreateFrame("Frame", "LunaCombatReminders", UIParent, "SecureHandlerStateTemplate, BackdropTemplate")
     reminderFrame:SetSize(160, 100)
@@ -1434,6 +1439,7 @@ function addonTable.Combat.ApplyReminderEvents()
 end
 
 function addonTable.Combat.UpdateReminders()
+    if addonTable.Client and not addonTable.Client.Supports("consumableReminders") then return end
     ApplyReminderEvents()
     UpdateReminderFrame()
 end

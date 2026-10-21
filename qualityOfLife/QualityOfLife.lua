@@ -5,7 +5,7 @@ function QoL.Public(value) return not (issecretvalue and issecretvalue(value)) e
 function QoL.Settings() return UIThingsDB and UIThingsDB.qualityOfLife end
 function QoL.Enabled(key)
     local db=QoL.Settings()
-    return db and db.enabled and db[key] == true
+    return db and db.enabled and db[key] == true and (not addon.Client or addon.Client.SupportsQoL(key))
 end
 function QoL.UpdateSettings()
     for _, module in ipairs(QoL.modules) do module.UpdateSettings() end

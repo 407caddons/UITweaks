@@ -26,6 +26,7 @@ AddonVersions.onVersionsUpdated = nil
 
 -- Get the player's keystone info from bags
 local function GetPlayerKeystone()
+    if addonTable.Client and addonTable.Client.isForever then return nil, nil, nil end
     for bag = 0, NUM_BAG_SLOTS do
         for slot = 1, C_Container.GetContainerNumSlots(bag) do
             local itemInfo = C_Container.GetContainerItemInfo(bag, slot)

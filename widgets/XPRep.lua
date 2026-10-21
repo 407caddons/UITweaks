@@ -34,7 +34,7 @@ table.insert(Widgets.moduleInits, function()
 
     local function RefreshCache()
         local level = UnitLevel("player")
-        local maxLevel = GetMaxPlayerLevel()
+        local maxLevel = (addonTable.Client and addonTable.Client.GetMaxLevel() or GetMaxPlayerLevel())
         isMaxLevel = level >= maxLevel
 
         if not isMaxLevel then
@@ -122,7 +122,7 @@ table.insert(Widgets.moduleInits, function()
             local currentXP = UnitXP("player")
             local maxXP = UnitXPMax("player")
             local level = UnitLevel("player")
-            local maxLevel = GetMaxPlayerLevel()
+            local maxLevel = (addonTable.Client and addonTable.Client.GetMaxLevel() or GetMaxPlayerLevel())
 
             if maxXP and maxXP > 0 then
                 local pct = (currentXP / maxXP) * 100

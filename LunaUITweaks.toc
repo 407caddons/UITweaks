@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r
 ## Notes: UI enhancements for WoW 12.0
 ## Author: 407c
-## Version: 1.33.1
+## Version: 1.34.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## SavedVariablesPerCharacter:
@@ -22,6 +22,7 @@
 ## Category-zhTW: 使用者介面
 
 # Core initialization
+compat\Client.lua
 Core.lua
 EventBus.lua
 LayoutMode.lua

@@ -187,6 +187,16 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         {key="objectiveTracker", variable="LunaObjectiveTrackerDB", name="Objective Tracker"},
     }
     local function ValidateImportData(data)
+        local client=addonTable.Client
+        if client then
+            if data.gameFlavor and data.gameFlavor~=client.flavor then
+                return nil, "This export belongs to a different WoW version (Retail/Forever)."
+            end
+            if client.isForever and not data.gameFlavor and (data.settings or data.talentBuilds or data.companions) then
+                return nil, "This older export has no game version. Create a Forever settings export instead of importing Retail settings."
+            end
+            if client.isForever and data.talentBuilds then return nil, "Talent build import is disabled in the Forever first pass." end
+        end
         if data.settings ~= nil and type(data.settings) ~= "table" then return nil, "Invalid settings data" end
         if data.talentBuilds ~= nil and type(data.talentBuilds) ~= "table" then return nil, "Invalid talent build data" end
         if data.version ~= nil and type(data.version) ~= "string" and type(data.version) ~= "number" then return nil, "Invalid version" end
@@ -212,6 +222,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     local function BuildExportString(includeSettings, includeTalentBuilds)
         local exportData = {}
+        if addonTable.Client then exportData.gameFlavor=addonTable.Client.flavor end
         if includeSettings and UIThingsDB then
             exportData.settings = UIThingsDB
             local companions={}
@@ -220,6 +231,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             end
             if next(companions) then exportData.companions=companions end
         end
+        if includeTalentBuilds and addonTable.Client and addonTable.Client.isForever then return nil, "Talent build export is disabled in the Forever first pass." end
         if includeTalentBuilds and LunaUITweaks_TalentReminders then
             exportData.talentBuilds = LunaUITweaks_TalentReminders
         end
@@ -300,6 +312,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             LunaUITweaks_TalentReminders=data.talentBuilds
             count=count+1
         end
+        if addonTable.Client then addonTable.Client.ApplySettings(UIThingsDB) end
         return count
     end
 

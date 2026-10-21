@@ -47,6 +47,7 @@ function Widgets.CreateWidgetFrame(name, configKey)
     if addonTable.LayoutMode then
         addonTable.LayoutMode.RegisterTarget("Widget: " .. name, function() return f end, function()
             local db=UIThingsDB.widgets
+            if addonTable.Client and not addonTable.Client.SupportsWidget(configKey) then return false end
             if not db or not db.enabled or not db[configKey] or not db[configKey].enabled then return false end
             local anchorName=db[configKey].anchor
             if anchorName and UIThingsDB.frames and UIThingsDB.frames.enabled then
@@ -346,7 +347,7 @@ function Widgets.UpdateVisuals()
     local unanchoredWidgets = {}
 
     for key, frame in pairs(frames) do
-        if db.enabled and db[key] and db[key].enabled then
+        if db.enabled and db[key] and db[key].enabled and (not addonTable.Client or addonTable.Client.SupportsWidget(key)) then
             frame:Show()
             SetTracking(frame, true)
 

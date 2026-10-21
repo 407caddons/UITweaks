@@ -24,6 +24,7 @@ LunaUITweaksAPI = {
     -- @param icon     string   Optional sidebar icon texture path
     -- @param setupFunc function Called as setupFunc(panel, navBtn, configWindow)
     RegisterConfigPanel = function(key, name, icon, setupFunc)
+        if addonTable.Client and not addonTable.Client.Supports(key) then return end
         table.insert(LunaUITweaksAPI._pendingPanels, {
             key   = key,
             name  = name,
@@ -832,11 +833,14 @@ local function OnEvent(self, event, ...)
             },
         }
 
+        if addonTable.Client then addonTable.Client.ApplySettings(DEFAULTS) end
+
         -- Expose defaults for config panels (used by reset buttons)
         addonTable.Core.DEFAULTS = DEFAULTS
 
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
+        if addonTable.Client then addonTable.Client.ApplySettings(UIThingsDB) end
 
         -- Apply debug mode from saved settings
         if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then
@@ -880,7 +884,10 @@ local function OnEvent(self, event, ...)
         -- LunaUITweaks_OpenConfig is a lightweight loader defined in Loaders.lua.
         SlashCmdList["UITHINGS"] = function(msg)
             local cmd = msg and msg:lower():match("^(%S+)") or ""
-            if cmd == "paste" then
+            if cmd == "compat" then
+                addonTable.Client.PrintStatus()
+                return
+            elseif cmd == "paste" then
                 if addonTable.Coordinates and addonTable.Coordinates.ShowPasteDialog then
                     addonTable.Coordinates.ShowPasteDialog()
                 end

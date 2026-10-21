@@ -70,7 +70,7 @@ local function Step()
             pending=nil
         else frame:Hide(); Schedule(.5); return end
     end
-    local maxBag=math.max(NUM_BAG_SLOTS or 4,Enum.BagIndex and Enum.BagIndex.ReagentBag or 5)
+    local maxBag=math.max(NUM_BAG_SLOTS or 4,Enum.BagIndex and Enum.BagIndex.ReagentBag or (addon.Client and addon.Client.isForever and (NUM_BAG_SLOTS or 4) or 5))
     for _=1,12 do
         if bag>maxBag then frame:Hide(); return end
         if slot>C_Container.GetContainerNumSlots(bag) then bag=bag+1; slot=1

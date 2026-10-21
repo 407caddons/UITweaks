@@ -214,6 +214,14 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "pullTimer",        label = "Pull Timer" },
     }
 
+    if addonTable.Client and addonTable.Client.isForever then
+        local supported={}
+        for _,widget in ipairs(widgets) do
+            if addonTable.Client.SupportsWidget(widget.key) then supported[#supported+1]=widget end
+        end
+        widgets=supported
+    end
+
     local CONDITIONS = {
         { value = "always",   text = "Always" },
         { value = "combat",   text = "In Combat" },
