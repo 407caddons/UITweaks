@@ -224,7 +224,7 @@ local function ScanBags()
                 local ilvl = C_Item.GetDetailedItemLevelInfo(info.hyperlink)
                 local itemID = C_Item.GetItemInfoInstant(info.hyperlink)
                 local itemName = C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID)
-                    or GetItemInfo(info.hyperlink)
+                    or (C_Item.GetItemInfo or GetItemInfo)(info.hyperlink)
                 table.insert(items, {
                     bag = bag, slot = slot,
                     link = info.hyperlink,

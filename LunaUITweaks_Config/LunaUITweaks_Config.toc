@@ -34,6 +34,9 @@ config\panels\DestroyPanel.lua
 config\panels\GearReviewPanel.lua
 config\panels\TankDebuffsPanel.lua
 config\panels\BuffAlertsPanel.lua
+config\panels\ProcAlertsPanel.lua
+config\panels\QualityOfLifePanel.lua
+config\panels\CooldownManagerPanel.lua
 config\panels\CompactGroupFinderPanel.lua
 config\panels\CustomEncounterTimersPanel.lua
 config\panels\EncounterBarsPanel.lua

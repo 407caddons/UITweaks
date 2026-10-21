@@ -63,6 +63,13 @@ Destroy.lua
 GearReview.lua
 TankDebuffs.lua
 BuffAlerts.lua
+ProcAlerts.lua
+CooldownManager.lua
+qualityOfLife\QualityOfLife.lua
+qualityOfLife\Cursor.lua
+qualityOfLife\AutoOpen.lua
+qualityOfLife\Convenience.lua
+qualityOfLife\GameplayAlerts.lua
 CompactGroupFinder.lua
 widgets\Widgets.lua
 widgets\Time.lua

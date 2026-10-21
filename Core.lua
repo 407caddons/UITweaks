@@ -3,6 +3,13 @@ _G[addonName]                                           = addonTable
 
 addonTable.Core                                         = {}
 
+-- Retail currency helpers are namespaced; retain compatibility with older clients.
+function addonTable.Core.FormatMoney(copper, fontHeight)
+    local formatter = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString or _G.GetCoinTextureString
+    if type(formatter) == "function" then return formatter(copper, fontHeight) end
+    return string.format("%dg %ds %dc", math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100)
+end
+
 -- ============================================================
 -- Companion Addon Integration API
 -- Companion addons can call LunaUITweaksAPI.RegisterConfigPanel()
@@ -389,6 +396,30 @@ local function OnEvent(self, event, ...)
                 emphasizePos = { point = "CENTER", x = -330, y = 100 },
                 encounterPos = { point = "CENTER", x = 330, y = 100 },
                 timerPos = { point = "CENTER", x = 0, y = 180 },
+            },
+            cooldownManager = {
+                enabled = true,
+                essential = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=40, spacing=4, pos={point="CENTER",x=-130,y=-180}},
+                utility = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=32, spacing=4, pos={point="CENTER",x=-106,y=-260}},
+                buffs = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=40, spacing=4, pos={point="CENTER",x=-130,y=-80}},
+            },
+            qualityOfLife = {
+                enabled = true, cursor = true, cursorSize = 28, cursorAlpha = 1,
+                cursorClassColor = true, cursorColor = {r=0.05,g=0.82,b=0.62},
+                autoOpen = true, excludeWarbound = true, unwrapCollections = true,
+                skipCinematics = true, hideTutorials = true, hideTalkingHead = true,
+                movement = true, movementTts = true, movementVoice = 0,
+                timeSpiral = true, gateway = true, battleRes = true,
+                alertFontSize = 24,
+                movementPos = {point="CENTER",x=0,y=100},
+                spiralPos = {point="CENTER",x=0,y=150},
+                gatewayPos = {point="CENTER",x=0,y=190},
+                battleResPos = {point="CENTER",x=220,y=-100},
+                movementExtraSpells = "",
+            },
+            procAlerts = {
+                enabled = false, combatOnly = true, outputChannel = "Master",
+                rules = {}, discovered = {},
             },
             buffAlerts = {
                 enabled = true,

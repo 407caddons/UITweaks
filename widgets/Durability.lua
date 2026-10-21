@@ -83,7 +83,7 @@ table.insert(Widgets.moduleInits, function()
 
         if repairCost and repairCost > 0 then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddDoubleLine("Repair Cost:", GetCoinTextureString(repairCost), 1, 0.82, 0, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Repair Cost:", addonTable.Core.FormatMoney(repairCost), 1, 0.82, 0, 1, 1, 1)
         elseif repairCost == 0 or (cachedRepairCost and cachedRepairCost == 0) then
             GameTooltip:AddLine(" ")
             GameTooltip:AddDoubleLine("Repair Cost:", "Fully repaired", 1, 0.82, 0, 0, 1, 0)

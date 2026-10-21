@@ -31,7 +31,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     local trackAllBtn = CreateFrame("CheckButton", "UIThingsReagentsTrackAllCheck", panel,
         "ChatConfigCheckButtonTemplate")
     trackAllBtn:SetPoint("TOPLEFT", 20, -70)
-    _G[trackAllBtn:GetName() .. "Text"]:SetText("Also track non-soulbound items (potions, gear, etc.)")
+    _G[trackAllBtn:GetName() .. "Text"]:SetText("Also track other non-soulbound items (potions, gear, etc.)")
     trackAllBtn:SetChecked(UIThingsDB.reagents.trackAllItems)
     trackAllBtn:SetScript("OnClick", function(self)
         UIThingsDB.reagents.trackAllItems = not not self:GetChecked()
@@ -46,7 +46,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
     desc:SetText(
-        "Tracks profession reagents across all your characters. Hover over any reagent item to see counts from all alts.\n" ..
+        "Tracks profession reagents and Warbound items across your characters. Hover an item to see saved counts.\n" ..
         "Bag counts update in real-time. Bank counts update when you visit a banker.")
     desc:SetTextColor(0.7, 0.7, 0.7)
 

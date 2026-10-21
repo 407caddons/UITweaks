@@ -1,7 +1,20 @@
 local _, addon = ...
 local Layout = { active = false }
 addon.LayoutMode = Layout
-local targets, handles = {}, {}
+local targets, handles, participants = {}, {}, {}
+local function NotifyParticipant(callback)
+    xpcall(callback,geterrorhandler(),Layout.active)
+end
+local function NotifyParticipants()
+    for _,callback in pairs(participants) do NotifyParticipant(callback) end
+end
+-- Companions keep ownership of their frames, previews and saved variables.
+function Layout.RegisterParticipant(key,callback)
+    participants[key]=callback
+    C_Timer.After(0,function()
+        if participants[key]==callback and not InCombatLockdown() then NotifyParticipant(callback) end
+    end)
+end
 local toolbar, ticker, pendingLock
 local function Call(module, method, ...)
     local m = addon[module]
@@ -89,6 +102,9 @@ local function Apply(locked)
         if UIThingsDB.encounterBars and UIThingsDB.encounterBars.enabled then Call("EncounterBars","TogglePreview") end
     end
     Call("TankDebuffs","UpdateSettings")
+    Call("QualityOfLife","UpdateSettings")
+    Call("CooldownManager","UpdateSettings")
+    NotifyParticipants()
     Call("Config","RefreshFrameControls")
 end
 function Layout.LockAll()
@@ -131,6 +147,14 @@ function Layout.Start()
     ticker=C_Timer.NewTicker(.25,RefreshHandles)
 end
 function Layout.Toggle() if Layout.active then Layout.LockAll() else Layout.Start() end end
+
+-- Optional API: companions continue to work standalone when Luna is absent.
+LunaUITweaksAPI.RegisterLayoutParticipant=Layout.RegisterParticipant
+LunaUITweaksAPI.RegisterLayoutTarget=Layout.RegisterTarget
+LunaUITweaksAPI.IsLayoutModeActive=Layout.IsActive
+LunaUITweaksAPI.SetLayoutMode=function(active)
+    if active then Layout.Start() else Layout.LockAll() end
+end
 local function Enabled(key, extra)
     return function()
         local db=UIThingsDB[key]
@@ -188,6 +212,8 @@ addon.EventBus.Register("PLAYER_REGEN_ENABLED",function()
     if pendingLock then
         for _,handle in pairs(handles) do StopDrag(handle) end
         Layout.LockAll()
+    else
+        NotifyParticipants() -- includes companions loaded during combat
     end
 end,"LayoutMode")
 addon.EventBus.Register("PLAYER_LOGOUT",function() if UIThingsDB then SetFlags(true) end end,"LayoutMode")

@@ -54,7 +54,7 @@ table.insert(Widgets.moduleInits, function()
 
         -- Show current toon gold
         local currentGold = GetMoney()
-        local goldText = GetCoinTextureString(currentGold)
+        local goldText = addonTable.Core.FormatMoney(currentGold)
         local currentKey = GetCharacterKey()
         GameTooltip:AddLine("Gold: " .. goldText, 1, 1, 1)
 
@@ -72,7 +72,7 @@ table.insert(Widgets.moduleInits, function()
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("Other Characters:", 1, 0.82, 0)
             for _, toon in ipairs(otherToons) do
-                GameTooltip:AddDoubleLine(toon.name, GetCoinTextureString(toon.gold), 1, 1, 1, 1, 1, 1)
+                GameTooltip:AddDoubleLine(toon.name, addonTable.Core.FormatMoney(toon.gold), 1, 1, 1, 1, 1, 1)
             end
         end
 
@@ -90,9 +90,9 @@ table.insert(Widgets.moduleInits, function()
 
         GameTooltip:AddLine(" ")
         if warbandGold > 0 then
-            GameTooltip:AddDoubleLine("Warband Bank:", GetCoinTextureString(warbandGold), 0.4, 0.78, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Warband Bank:", addonTable.Core.FormatMoney(warbandGold), 0.4, 0.78, 1, 1, 1, 1)
         end
-        GameTooltip:AddDoubleLine("Total:", GetCoinTextureString(total), 0, 1, 0, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Total:", addonTable.Core.FormatMoney(total), 0, 1, 0, 1, 1, 1)
 
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Currencies:", 1, 0.82, 0)

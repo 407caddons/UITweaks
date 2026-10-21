@@ -27,7 +27,7 @@ local function AutoRepair()
     local repairCost, canRepair = GetRepairAllCost()
     if not canRepair or repairCost <= 0 then return end
 
-    local costStr = GetCoinTextureString(repairCost)
+    local costStr = addonTable.Core.FormatMoney(repairCost)
 
     -- Try Guild Repair
     if UIThingsDB.vendor.useGuildRepair and CanGuildBankRepair() then

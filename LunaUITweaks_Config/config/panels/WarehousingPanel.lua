@@ -205,7 +205,8 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     local CLASS_NAMES = {}
     local function GetClassName(classID)
         if CLASS_NAMES[classID] then return CLASS_NAMES[classID] end
-        local name = GetItemClassInfo(classID)
+        local getClassInfo = C_Item and C_Item.GetItemClassInfo or GetItemClassInfo
+        local name = type(getClassInfo) == "function" and getClassInfo(classID) or nil
         CLASS_NAMES[classID] = name or ("Class " .. classID)
         return CLASS_NAMES[classID]
     end
@@ -556,7 +557,11 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
                 row.nameText:SetText(data.name or ("Item " .. itemID))
 
                 -- Color by quality if available
-                local _, _, quality = GetItemInfo(itemID)
+                local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+                local quality
+                if type(getItemInfo) == "function" then
+                    quality = select(3, getItemInfo(itemID))
+                end
                 if quality then
                     local r, g, b = C_Item.GetItemQualityColor(quality)
                     if r then row.nameText:SetTextColor(r, g, b) end
@@ -633,7 +638,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
                             GameTooltip:AddLine("Vendor: " .. item.vendorName, 0.7, 0.7, 0.7)
                         end
                         if item.vendorPrice then
-                            GameTooltip:AddLine("Price: " .. GetCoinTextureString(item.vendorPrice), 0.7, 0.7, 0.7)
+                            GameTooltip:AddLine("Price: " .. addonTable.Core.FormatMoney(item.vendorPrice), 0.7, 0.7, 0.7)
                         end
                         GameTooltip:AddLine("Click to disable.", 0.5, 0.5, 0.5)
                     else

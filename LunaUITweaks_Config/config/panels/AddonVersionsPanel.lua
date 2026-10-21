@@ -180,10 +180,45 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         return result
     end
 
+    -- Companions keep their own saved variables; UIThingsDB alone does not
+    -- include their options or positions. Optional fields preserve LUIT1 imports.
+    local companionSettings = {
+        {key="unitFrames", variable="LunaUFDB", name="Unit Frames"},
+        {key="objectiveTracker", variable="LunaObjectiveTrackerDB", name="Objective Tracker"},
+    }
+    local function ValidateImportData(data)
+        if data.settings ~= nil and type(data.settings) ~= "table" then return nil, "Invalid settings data" end
+        if data.talentBuilds ~= nil and type(data.talentBuilds) ~= "table" then return nil, "Invalid talent build data" end
+        if data.version ~= nil and type(data.version) ~= "string" and type(data.version) ~= "number" then return nil, "Invalid version" end
+        if data.companions ~= nil then
+            if type(data.companions) ~= "table" then return nil, "Invalid companion settings" end
+            local known={}
+            for _,entry in ipairs(companionSettings) do
+                known[entry.key]=true
+                local settings=data.companions[entry.key]
+                if settings ~= nil then
+                    if type(settings) ~= "table" then return nil, "Invalid "..entry.name.." settings" end
+                    if type(_G[entry.variable]) ~= "table" then
+                        return nil, "Enable LunaUITweaks "..entry.name.." and /reload before importing this export."
+                    end
+                end
+            end
+            for key in pairs(data.companions) do
+                if not known[key] then return nil, "Unsupported companion settings in this export" end
+            end
+        end
+        return true
+    end
+
     local function BuildExportString(includeSettings, includeTalentBuilds)
         local exportData = {}
         if includeSettings and UIThingsDB then
             exportData.settings = UIThingsDB
+            local companions={}
+            for _,entry in ipairs(companionSettings) do
+                if type(_G[entry.variable]) == "table" then companions[entry.key]=_G[entry.variable] end
+            end
+            if next(companions) then exportData.companions=companions end
         end
         if includeTalentBuilds and LunaUITweaks_TalentReminders then
             exportData.talentBuilds = LunaUITweaks_TalentReminders
@@ -219,33 +254,51 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             return nil, err
         end
 
+        local valid, validationError=ValidateImportData(data)
+        if not valid then return nil, validationError end
         return data
     end
 
+    local function DeepMerge(target, source)
+        for k, v in pairs(source) do
+            -- Lists are snapshots, not dictionaries: replace them completely,
+            -- including empty imported lists, so removed entries stay removed.
+            if type(v) == "table" and (rawget(v, 1) ~= nil
+                or (next(v) == nil and type(target[k]) == "table" and rawget(target[k], 1) ~= nil)) then
+                target[k] = v
+            elseif type(v) == "table" and type(target[k]) == "table" then
+                -- Check if it's a color table (has 'r' field)
+                if v.r ~= nil then
+                    target[k] = v
+                else
+                    DeepMerge(target[k], v)
+                end
+            else
+                target[k] = v
+            end
+        end
+    end
     local function ApplyImportData(data)
-        local count = 0
-        if data.settings and type(data.settings) == "table" then
-            -- Deep copy imported settings into UIThingsDB
-            local function DeepMerge(target, source)
-                for k, v in pairs(source) do
-                    if type(v) == "table" and type(target[k]) == "table" then
-                        -- Check if it's a color table (has 'r' field)
-                        if v.r ~= nil then
-                            target[k] = v
-                        else
-                            DeepMerge(target[k], v)
-                        end
-                    else
-                        target[k] = v
-                    end
+        -- Validate every section before touching any saved variables.
+        local valid, err=ValidateImportData(data)
+        if not valid then return nil, err end
+        local count=0
+        if data.settings then
+            DeepMerge(UIThingsDB,data.settings)
+            count=count+1
+        end
+        if data.companions then
+            for _,entry in ipairs(companionSettings) do
+                local settings=data.companions[entry.key]
+                if settings then
+                    DeepMerge(_G[entry.variable],settings)
+                    count=count+1
                 end
             end
-            DeepMerge(UIThingsDB, data.settings)
-            count = count + 1
         end
-        if data.talentBuilds and type(data.talentBuilds) == "table" then
-            LunaUITweaks_TalentReminders = data.talentBuilds
-            count = count + 1
+        if data.talentBuilds then
+            LunaUITweaks_TalentReminders=data.talentBuilds
+            count=count+1
         end
         return count
     end
@@ -277,7 +330,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         -- Checkboxes
         local settingsCheck = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
         settingsCheck:SetPoint("TOPLEFT", 15, -45)
-        settingsCheck.Text:SetText("Include Settings (UIThingsDB)")
+        settingsCheck.Text:SetText("Include Settings (Luna + enabled companions)")
         settingsCheck.Text:SetFontObject("GameFontHighlight")
         settingsCheck:SetChecked(true)
 
@@ -394,6 +447,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
             local what = {}
             if data.settings then table.insert(what, "settings") end
+            if data.companions then
+                for _,entry in ipairs(companionSettings) do
+                    if data.companions[entry.key] then table.insert(what,entry.name.." settings") end
+                end
+            end
             if data.talentBuilds then table.insert(what, "talent builds") end
             local desc = table.concat(what, " and ")
             if data.version then desc = desc .. " (from v" .. data.version .. ")" end
@@ -418,7 +476,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         button1 = "Import & Reload",
         button2 = "Cancel",
         OnAccept = function(self, popupData)
-            ApplyImportData(popupData.data)
+            local count, err=ApplyImportData(popupData.data)
+            if not count then
+                print("|cffff0000LunaUITweaks import:|r "..err)
+                return
+            end
             if popupData.frame then
                 popupData.frame:Hide(); popupData.frame:SetParent(nil)
             end

@@ -66,6 +66,22 @@ local DPS_TYPES = { damage=true, healing=true, damageTaken=true, enemyDamageTake
 local COUNT_TYPES = { interrupts=true, deaths=true, dispels=true }
 local function Public(value) return not (issecretvalue and issecretvalue(value)) end
 local function Present(value) return not Public(value) or value ~= nil end
+-- Native abbreviation accepts secret combat numbers. Only these public,
+-- static breakpoints are inspected in Lua; the result goes to native text sinks.
+local numberOptions
+local function CompactNumber(value)
+    if not numberOptions then
+        local breakpoints={
+            {breakpoint=1000000000000,abbreviation="t",significandDivisor=100000000000,fractionDivisor=10,abbreviationIsGlobal=false},
+            {breakpoint=1000000000,abbreviation="b",significandDivisor=100000000,fractionDivisor=10,abbreviationIsGlobal=false},
+            {breakpoint=1000000,abbreviation="m",significandDivisor=100000,fractionDivisor=10,abbreviationIsGlobal=false},
+            {breakpoint=1000,abbreviation="k",significandDivisor=100,fractionDivisor=10,abbreviationIsGlobal=false},
+            {breakpoint=1,abbreviation="",significandDivisor=1,fractionDivisor=1,abbreviationIsGlobal=false},
+        }
+        numberOptions=CreateAbbreviateConfig and {config=CreateAbbreviateConfig(breakpoints)} or {breakpointData=breakpoints}
+    end
+    return AbbreviateNumbers(value,numberOptions)
+end
 local function GetEnumType(mtype)
     return Enum.DamageMeterType and Enum.DamageMeterType[ENUM_NAMES[mtype]]
 end
@@ -117,7 +133,7 @@ end
 local function FetchEntries(sessKey, mtype)
     local key = tostring(sessKey) .. "|" .. mtype
     local cached = entryCache[key]
-    if cached and GetTime() < cached.expiry then return cached.entries, cached.max end
+    if cached and (not InCombatLockdown() or GetTime() < cached.expiry) then return cached.entries, cached.max end
     local data = ReadSession(sessKey, mtype)
     local entries = {}
     if data then
@@ -191,6 +207,13 @@ end
 local GetClassColor
 local function ApplyEnemyTooltip(row, guid, displayName, sessKey, creatureID)
     row:SetScript("OnEnter", function(self)
+        if InCombatLockdown() then return end
+        local context = self.context
+        local guid, displayName, sessKey, creatureID = guid, displayName, sessKey, creatureID
+        if context then
+            guid, displayName = context.guid, context.name
+            sessKey, creatureID = context.session, context.creatureID
+        end
         if not UIThingsDB.damageMeter.showTooltip or InCombatLockdown() then return end
         if not Public(displayName) or not Public(guid) or not Public(creatureID) then return end
         if not Present(guid) and not Present(creatureID) then return end
@@ -201,7 +224,7 @@ local function ApplyEnemyTooltip(row, guid, displayName, sessKey, creatureID)
         for i = 1, math.min(5, #entries) do
             local entry = entries[i]
             local r, g, b = GetClassColor(entry.class)
-            GameTooltip:AddDoubleLine(i .. ". " .. entry.name, AbbreviateNumbers(entry.total), r, g, b, 1, .82, 0)
+            GameTooltip:AddDoubleLine(i .. ". " .. entry.name, CompactNumber(entry.total), r, g, b, 1, .82, 0)
         end
         GameTooltip:Show()
     end)
@@ -209,10 +232,18 @@ local function ApplyEnemyTooltip(row, guid, displayName, sessKey, creatureID)
 
 end
 
+-- Rates are fractional API values. Bound their display precision without doing
+-- arithmetic or comparisons on secret combat numbers.
+local function FormatRate(value)
+    if not Present(value) then return "—" end
+    if Public(value) then return CompactNumber(math.floor(value + 0.5)) end
+    return CompactNumber(value)
+end
+
 local function FormatVal(val, mtype)
     if not Present(val) then return "—" end
     if COUNT_TYPES[mtype] then return string.format("%d", val) end
-    return AbbreviateNumbers(val)
+    return CompactNumber(val)
 end
 
 -- Class Color
@@ -295,6 +326,14 @@ end
 -- Skipped during combat to avoid secret-value arithmetic/sort failures.
 local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey, creatureID)
     row:SetScript("OnEnter", function(self)
+        if InCombatLockdown() then return end
+        local context = self.context
+        local guid, displayName, sessKey, creatureID = guid, displayName, sessKey, creatureID
+        if context then
+            guid, displayName = context.guid, context.name
+            sessKey, creatureID = context.session, context.creatureID
+        end
+        local mtype = context and context.mtype or mtype
         if not UIThingsDB.damageMeter.showTooltip then return end
         if InCombatLockdown() then return end
         if not Present(guid) and not Present(creatureID) then return end
@@ -309,7 +348,7 @@ local function ApplyRowTooltip(row, guid, displayName, mtype, sessKey, creatureI
         for i = 1, n do
             local sp = spells[i]
             if not Public(sp.name) or not Public(sp.total) then GameTooltip:Hide(); return end
-            local valText = COUNT_TYPES[mtype] and tostring(sp.total) or AbbreviateNumbers(sp.total)
+            local valText = COUNT_TYPES[mtype] and tostring(sp.total) or CompactNumber(sp.total)
             GameTooltip:AddDoubleLine(i .. ". " .. (sp.name or "?"), valText, 0.9, 0.9, 0.9, 1, 0.82, 0)
         end
         GameTooltip:Show()
@@ -319,6 +358,7 @@ end
 
 local function ApplyDeathTooltip(row, entry)
     row:SetScript("OnEnter", function(self)
+        local entry = self.context and self.context.entry or entry
         if not UIThingsDB.damageMeter.showTooltip then return end
         if InCombatLockdown() or not Public(entry.name) then return end
         local recapID = entry.deathRecapID
@@ -340,7 +380,7 @@ local function ApplyDeathTooltip(row, entry)
             if caster then leftText = leftText .. " |cffaaaaaa(" .. caster .. ")|r" end
             local rightText = ""
             if ev.amount then
-                local amt = AbbreviateNumbers(ev.amount)
+                local amt = CompactNumber(ev.amount)
                 rightText = isHeal and ("|cff44ff44+" .. amt .. "|r") or ("|cffff7777-" .. amt .. "|r")
             end
             if ev.currentHP and maxHealth and maxHealth > 0 then
@@ -374,12 +414,11 @@ local HEADER_H = 26
 -- Row Pool (per pane)
 -- ============================================================
 
-local function AcquireRow(pool, parent)
-    for _, row in ipairs(pool) do
-        if not row:IsShown() then
-            row:Show()
-            return row
-        end
+local function AcquireRow(pool, parent, index)
+    local existing = pool[index]
+    if existing then
+        if not existing:IsShown() then existing:Show() end
+        return existing
     end
     local row = CreateFrame("Button", nil, parent)
     row:SetScript("OnHide", function(self)
@@ -412,14 +451,11 @@ local function AcquireRow(pool, parent)
     return row
 end
 
-local function HideAllRows(pool)
-    for _, row in ipairs(pool) do
-        if row:IsShown() then
-            row:Hide()
-            row:SetScript("OnClick", nil)
-            row:SetScript("OnEnter", nil)
-            row:SetScript("OnLeave", nil)
-        end
+local function HideUnusedRows(pool, used)
+    for index = used + 1, #pool do
+        local row = pool[index]
+        row.context = nil
+        if row:IsShown() then row:Hide() end
     end
 end
 
@@ -449,7 +485,6 @@ local function RenderPane(idx)
     local entries, maximum
     if dd then entries, maximum = FetchSpellEntries(sess, mtype, dd.guid, dd.creatureID)
     else entries, maximum = FetchEntries(sess, mtype) end
-    HideAllRows(pane.rowPool)
     local barH = s.barHeight or 18
     local barCol = s.barColor or {r=.2,g=.5,b=.9,a=1}
     local bg = s.barBgColor or {r=.12,g=.12,b=.12,a=1}
@@ -464,9 +499,9 @@ local function RenderPane(idx)
         if dd or not s.pinSelf or not entry.isLocalPlayer then order[#order+1] = i end
     end
     local y = 0
-    for _, rank in ipairs(order) do
+    for rowIndex, rank in ipairs(order) do
         local entry = entries[rank]
-        local row = AcquireRow(pane.rowPool, pane.scrollContent)
+        local row = AcquireRow(pane.rowPool, pane.scrollContent, rowIndex)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, -y)
         row:SetSize(width, barH)
         row.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a or 1)
@@ -483,7 +518,7 @@ local function RenderPane(idx)
         row.nameFS:SetTextColor(txt.r, txt.g, txt.b, txt.a or 1)
         local amount = FormatVal(entry.total, mtype)
         if DPS_TYPES[mtype] and not dd and Present(entry.rate) then
-            row.valFS:SetFormattedText("%s  |cffaaaaaa%s/s|r", amount, AbbreviateNumbers(entry.rate))
+            row.valFS:SetFormattedText("%s  |cffaaaaaa%s/s|r", amount, FormatRate(entry.rate))
         else row.valFS:SetText(amount) end
         row.valFS:SetTextColor(txt.r, txt.g, txt.b, txt.a or 1)
         row.dpsFS:Hide()
@@ -492,27 +527,59 @@ local function RenderPane(idx)
         elseif entry.isLocalPlayer then ApplyRowIcon(row, "player")
         else ApplyRowIcon(row, "class", entry.class) end
         row.nameFS:SetPoint("RIGHT", row.valFS, "LEFT", -8, 0)
-        if not dd then
-            if mtype == "enemyDamageTaken" then ApplyEnemyTooltip(row, entry.guid, name, sess, entry.creatureID)
-            elseif entry.deathRecapID then ApplyDeathTooltip(row, entry)
-            else ApplyRowTooltip(row, entry.guid, name, mtype, sess, entry.creatureID) end
+        local previous = row.context
+        -- Never compare secret source identities in Lua. Combat already suppresses
+        -- breakdowns; outside combat close a tooltip if this row changes source.
+        if GameTooltip:IsOwned(row) then
+            local changed = InCombatLockdown() or not previous
+            if not changed then
+                for _, pair in ipairs({{previous.guid,entry.guid},{previous.creatureID,entry.creatureID},
+                    {previous.name,name},{previous.session,sess},{previous.mtype,mtype},
+                    {previous.deathRecapID,entry.deathRecapID}}) do
+                    if not Public(pair[1]) or not Public(pair[2]) or pair[1] ~= pair[2] then changed=true; break end
+                end
+                if previous.drilldown ~= (dd ~= nil) then changed=true end
+            end
+            if changed then GameTooltip:Hide() end
         end
-        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-        row:SetScript("OnClick", function(_, button)
-            if button == "RightButton" then drilldown[idx] = nil
-            elseif button == "LeftButton" and not dd then
-                if mtype == "enemyDamageTaken" then return end
-                if entry.deathRecapID then OpenDeathRecapUI(entry.deathRecapID); return end
-                drilldown[idx] = {guid=entry.guid, creatureID=entry.creatureID, name=name}
-            else return end
-            RenderPane(idx)
-        end)
+        row.context = {guid=entry.guid, creatureID=entry.creatureID, name=name, mtype=mtype,
+            session=sess, drilldown=dd ~= nil, entry=entry, deathRecapID=entry.deathRecapID}
+        local mode = dd and "none" or (entry.deathRecapID and "death" or mtype)
+        if row.tooltipMode ~= mode then
+            row.tooltipMode = mode
+            if mode == "none" then
+                row:SetScript("OnEnter", nil)
+                row:SetScript("OnLeave", nil)
+            elseif mode == "enemyDamageTaken" then ApplyEnemyTooltip(row, nil, nil, nil, nil)
+            elseif mode == "death" then ApplyDeathTooltip(row, nil)
+            else ApplyRowTooltip(row, nil, nil, nil, nil, nil) end
+        end
+        if not row.clickBound then
+            row.clickBound = true
+            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+            row:SetScript("OnClick", function(self, button)
+                local context = self.context
+                if not context then return end
+                if button == "RightButton" then drilldown[idx] = nil
+                elseif button == "LeftButton" and not context.drilldown then
+                    if context.mtype == "enemyDamageTaken" then return end
+                    if context.deathRecapID then OpenDeathRecapUI(context.deathRecapID); return end
+                    drilldown[idx] = {guid=context.guid, creatureID=context.creatureID, name=context.name}
+                else return end
+                RenderPane(idx)
+            end)
+        end
         y = y + barH + 1
     end
     if #entries == 0 then
-        local row = AcquireRow(pane.rowPool, pane.scrollContent)
+        local row = AcquireRow(pane.rowPool, pane.scrollContent, 1)
         row:SetPoint("TOPLEFT", pane.scrollContent, "TOPLEFT", 0, 0)
         row:SetSize(width, barH)
+        if GameTooltip:IsOwned(row) then GameTooltip:Hide() end
+        row.context = nil
+        row.tooltipMode = "none"
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
         row.bg:SetColorTexture(0, 0, 0, 0)
         row.bar:SetMinMaxValues(0, 1)
         row.bar:SetValue(0)
@@ -523,6 +590,7 @@ local function RenderPane(idx)
         ApplyRowIcon(row, "none")
         y = barH
     end
+    HideUnusedRows(pane.rowPool, math.max(1, #entries))
     -- Do not inspect secret status-bar geometry through the scroll template.
     if not InCombatLockdown() then pane.scrollContent:SetSize(width, math.max(y + 4, 20)) end
 end
@@ -971,6 +1039,7 @@ local function CreateMainFrame()
     -- Periodic refresh (0.75s) to keep live numbers up to date
     local updateTimer = 0
     mainFrame:SetScript("OnUpdate", function(_, elapsed)
+        if not InCombatLockdown() then updateTimer = 0; return end
         updateTimer = updateTimer + elapsed
         if updateTimer < 0.75 then return end
         updateTimer = 0
@@ -1056,6 +1125,7 @@ end
 
 function addonTable.DamageMeter.GetFrame() return mainFrame end
 function addonTable.DamageMeter.GetMeterTypes() return METER_TYPES end
+function addonTable.DamageMeter.GetMeterTypeLabel(key) return TYPE_LABEL[key] or key end
 function addonTable.DamageMeter.GetTypeLabel(t) return TYPE_LABEL[t] or t end
 
 -- Coalesce the paired Overall/Current notifications into one refresh.

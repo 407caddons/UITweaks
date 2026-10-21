@@ -272,9 +272,8 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     yBase = yBase - 30
 
     -- Meter type / session for each meter
-    local METER_TYPES  = { "damage", "healing", "interrupts", "deaths", "dispels", "damageTaken", "enemyDamageTaken", "avoidableDamageTaken" }
-    local TYPE_LABELS  = { damage="Damage", healing="Healing", interrupts="Interrupts", deaths="Deaths",
-                           dispels="Dispels", damageTaken="Dmg Taken", enemyDamageTaken="Enemy Damage Taken", avoidableDamageTaken="Avoidable Damage Taken" }
+    local METER_TYPES = addonTable.DamageMeter.GetMeterTypes()
+    local TypeLabel = addonTable.DamageMeter.GetMeterTypeLabel
 
     for mIdx = 1, 2 do
         local captMIdx = mIdx
@@ -290,13 +289,13 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         -- Type dropdown
         local typeItems = {}
         for _, t in ipairs(METER_TYPES) do
-            typeItems[#typeItems + 1] = { label = TYPE_LABELS[t] or t, value = t }
+            typeItems[#typeItems + 1] = { label = TypeLabel(t), value = t }
         end
         MakeDropdown(child, controlY, 130,
             function() return typeItems end,
             function()
                 local cfg = (captMIdx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2
-                return TYPE_LABELS[cfg.type] or cfg.type
+                return TypeLabel(cfg.type)
             end,
             function(val)
                 local cfg = (captMIdx == 1) and UIThingsDB.damageMeter.meter1 or UIThingsDB.damageMeter.meter2

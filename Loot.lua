@@ -2,6 +2,21 @@ local addonName, addonTable = ...
 local Loot = {}
 addonTable.Loot = Loot
 
+-- Retail moved these item helpers to C_Item; older clients retain globals.
+local function GetItemInfo(...)
+    local fn = C_Item and C_Item.GetItemInfo or _G.GetItemInfo
+    if type(fn) == "function" then return fn(...) end
+end
+local function GetDetailedItemLevelInfo(...)
+    local fn = C_Item and C_Item.GetDetailedItemLevelInfo or _G.GetDetailedItemLevelInfo
+    if type(fn) == "function" then return fn(...) end
+end
+local function GetItemQualityColor(...)
+    local fn = C_Item and C_Item.GetItemQualityColor or _G.GetItemQualityColor
+    if type(fn) == "function" then return fn(...) end
+    return 1, 1, 1
+end
+
 local PAGE_NAME = "UIThingsLootToast"
 local activeToasts = {}
 local itemPool = {} -- Recycled frames
@@ -130,6 +145,12 @@ local function AcquireToast()
 
     end
 
+    -- Keep acquired frames inactive while their content is being prepared.
+    -- New frames are shown by default, so an interrupted setup could otherwise
+    -- leave OnUpdate running without a timer.
+    toast:Hide()
+    toast.timeParams = { duration = UIThingsDB.loot.duration or 3, elapsed = 0 }
+
     -- Reset type fields for reuse
     toast.toastType = nil
     toast.currencyID = nil
@@ -137,8 +158,14 @@ local function AcquireToast()
 
     -- Restore OnUpdate script (cleared by RecycleToast on pooled frames)
     toast:SetScript("OnUpdate", function(self, elapsed)
-        self.timeParams.elapsed = self.timeParams.elapsed + elapsed
-        local remaining = self.timeParams.duration - self.timeParams.elapsed
+        local timer = self.timeParams
+        if not timer then
+            self:SetScript("OnUpdate", nil)
+            self:Hide()
+            return
+        end
+        timer.elapsed = timer.elapsed + elapsed
+        local remaining = timer.duration - timer.elapsed
 
         if remaining <= 0 then
             Loot.RecycleToast(self)
@@ -327,6 +354,10 @@ end
 
 local function SpawnGoldToast(copperAmount)
     if not copperAmount or copperAmount <= 0 then return end
+    local formatMoney = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString or GetCoinTextureString
+    if type(formatMoney) ~= "function" then return end
+    local moneyText = formatMoney(copperAmount)
+
 
     local toast = AcquireToast()
 
@@ -334,7 +365,7 @@ local function SpawnGoldToast(copperAmount)
 
     toast.icon:SetTexture(133784) -- Gold coin icon
 
-    toast.text:SetText(GetCoinTextureString(copperAmount))
+    toast.text:SetText(moneyText)
     toast.text:SetTextColor(1, 1, 1)
 
     toast.winner:Hide()
@@ -483,81 +514,105 @@ local function OnLootReady()
     end
 end
 
--- Dedup helper: returns true if this item was already toasted recently
-local function IsDuplicate(itemLink)
-    if not itemLink then return false end
-    local now = GetTime()
-    -- Clean expired entries
-    for k, v in pairs(recentToasts) do
-        if v < now then recentToasts[k] = nil end
+-- Match localized Blizzard loot formats, including numbered placeholders.
+local lootFormats
+local function BuildLootFormats()
+    local result = {}
+    for _, spec in ipairs({
+        {"LOOT_ITEM_SELF",true}, {"LOOT_ITEM_SELF_MULTIPLE",true},
+        {"LOOT_ITEM_PUSHED_SELF",true}, {"LOOT_ITEM_PUSHED_SELF_MULTIPLE",true},
+        {"LOOT_ITEM_CREATED_SELF",true}, {"LOOT_ITEM_CREATED_SELF_MULTIPLE",true},
+        {"LOOT_ITEM",false}, {"LOOT_ITEM_MULTIPLE",false},
+        {"LOOT_ITEM_PUSHED",false}, {"LOOT_ITEM_PUSHED_MULTIPLE",false},
+    }) do
+        local format = _G[spec[1]]
+        if type(format) == "string" then
+            local pattern, captures, index, pos = {}, {}, 0, 1
+            while pos <= #format do
+                local tail = format:sub(pos)
+                local token, number, kind = tail:match("^(%%(%d+)%$([sd]))")
+                if not token then token, kind = tail:match("^(%%([sd]))") end
+                if token then
+                    index = index + 1
+                    captures[#captures+1] = tonumber(number) or index
+                    pattern[#pattern+1] = kind == "d" and "(%d+)" or "(.-)"
+                    pos = pos + #token
+                else
+                    local char = format:sub(pos,pos)
+                    pattern[#pattern+1] = char:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+                    pos = pos + 1
+                end
+            end
+            result[#result+1] = {pattern="^"..table.concat(pattern).."$", captures=captures, self=spec[2]}
+        end
     end
-    if recentToasts[itemLink] then return true end
-    recentToasts[itemLink] = now + 2 -- 2 second dedup window
+    table.sort(result, function(a,b) return #a.captures > #b.captures end)
+    return result
+end
+local function ParseLootMessage(msg)
+    lootFormats = lootFormats or BuildLootFormats()
+    for _, format in ipairs(lootFormats) do
+        local values = {msg:match(format.pattern)}
+        if #values > 0 then
+            local args = {}
+            for i, value in ipairs(values) do args[format.captures[i]] = value end
+            local recipient = format.self and UnitName("player") or args[1]
+            if recipient then
+                recipient = recipient:match("|h%[(.-)%]|h") or recipient:match("|h(.-)|h") or recipient
+            end
+            local link = args[format.self and 1 or 2]
+            -- Extract the hyperlink independently of its legacy/modern color prefix.
+            link = link and link:match("(|Hitem:.-|h.-|h)")
+            if link then return link, recipient, tonumber(args[format.self and 2 or 3]) or 1 end
+        end
+    end
+end
+
+-- Pair reports across event channels, never suppress successive drops from the
+-- same channel. Each occurrence can consume one report from each channel.
+local function IsDuplicate(itemLink, recipient, quantity, channel)
+    local now = GetTime()
+    local payload = itemLink:match("|H(item:.-)|h") or itemLink
+    local key = payload .. "\031" .. (recipient or "") .. "\031" .. tostring(quantity or 1)
+    for k, occurrences in pairs(recentToasts) do
+        for i = #occurrences, 1, -1 do
+            if occurrences[i].expires <= now then table.remove(occurrences, i) end
+        end
+        if #occurrences == 0 then recentToasts[k] = nil end
+    end
+    local occurrences = recentToasts[key] or {}
+    recentToasts[key] = occurrences
+    for _, occurrence in ipairs(occurrences) do
+        if not occurrence.channels[channel] then
+            occurrence.channels[channel] = true
+            return true
+        end
+    end
+    occurrences[#occurrences+1] = {expires=now+2, channels={[channel]=true}}
     return false
 end
 
-local function OnShowLootToast(event, typeIdentifier, itemLink, quantity, specID, sex, personalLootToast, toastMethod)
-    if not UIThingsDB.loot.enabled then return end
-    if typeIdentifier ~= "item" then return end
-    if not itemLink then return end
-
+local function OnShowLootToast(event, typeIdentifier, itemLink, quantity)
+    if not UIThingsDB.loot.enabled or typeIdentifier ~= "item" or not itemLink then return end
     local _, _, quality = GetItemInfo(itemLink)
-    if not quality then return end
-    if quality < UIThingsDB.loot.minQuality then return end
-    if IsDuplicate(itemLink) then return end
-
-    local looterName = UnitName("player")
-    local looterClass = rosterCache[looterName]
-    local count = quantity or 1
-    SpawnToast(itemLink, nil, count, looterName, looterClass)
+    if not quality or quality < UIThingsDB.loot.minQuality then return end
+    local recipient, count = UnitName("player"), quantity or 1
+    if IsDuplicate(itemLink, recipient, count, event) then return end
+    SpawnToast(itemLink, nil, count, recipient, rosterCache[recipient])
 end
-
-local function OnShowLootToastUpgrade(event, itemLink, quantity, specID, sex, baseQuality, isPersonal, lessAwesome)
-    if not UIThingsDB.loot.enabled then return end
-    if not itemLink then return end
-
-    local _, _, quality = GetItemInfo(itemLink)
-    if not quality then return end
-    if quality < UIThingsDB.loot.minQuality then return end
-    if IsDuplicate(itemLink) then return end
-
-    local looterName = UnitName("player")
-    local looterClass = rosterCache[looterName]
-    local count = quantity or 1
-    SpawnToast(itemLink, nil, count, looterName, looterClass)
+local function OnShowLootToastUpgrade(event, itemLink, quantity)
+    OnShowLootToast(event, "item", itemLink, quantity)
 end
-
 local function OnChatMsgLoot(event, msg)
-    if not UIThingsDB.loot.enabled then return end
-    if issecretvalue(msg) then return end
-    local itemLink = string.match(msg, "|c%x+|Hitem:.-|h.-|h|r")
-    if itemLink then
-        local _, _, quality = GetItemInfo(itemLink)
-        if not quality then return end
-        if quality >= UIThingsDB.loot.minQuality then
-            local looterName, looterClass = nil, nil
-            if string.find(msg, "^You receive") then
-                looterName = UnitName("player")
-                looterClass = rosterCache[looterName]
-            else
-                local otherName = string.match(msg, "^([^%s]+) receive")
-                if otherName then
-                    looterName = otherName
-                    local shortName = string.match(looterName, "^([^%-]+)")
-                    if shortName then looterName = shortName end
-                    looterClass = rosterCache[looterName]
-                end
-            end
-            if not UIThingsDB.loot.showAll then
-                if looterName ~= UnitName("player") then return end
-            end
-            if IsDuplicate(itemLink) then return end
-            local count = 1
-            local matchCount = string.match(msg, "x(%d+)")
-            if matchCount then count = tonumber(matchCount) end
-            SpawnToast(itemLink, nil, count, looterName, looterClass)
-        end
-    end
+    if not UIThingsDB.loot.enabled or (issecretvalue and issecretvalue(msg)) then return end
+    local itemLink, recipient, count = ParseLootMessage(msg)
+    if not itemLink then return end
+    local _, _, quality = GetItemInfo(itemLink)
+    if not quality or quality < UIThingsDB.loot.minQuality then return end
+    if not UIThingsDB.loot.showAll and recipient ~= UnitName("player") then return end
+    if IsDuplicate(itemLink, recipient, count, event) then return end
+    local shortName = recipient and recipient:match("^([^%-]+)")
+    SpawnToast(itemLink, nil, count, recipient, rosterCache[shortName or recipient])
 end
 
 local function OnStartLootRoll(event, rollID)

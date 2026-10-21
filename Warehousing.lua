@@ -316,6 +316,7 @@ local function ScheduleBagScan()
         LunaUITweaks_WarehousingData.characters[key] = LunaUITweaks_WarehousingData.characters[key] or {}
         LunaUITweaks_WarehousingData.characters[key].lastSeen = time()
         LunaUITweaks_WarehousingData.characters[key].bagCounts = bagCounts
+        LunaUITweaks_WarehousingData.characters[key].bagUpdatedAt = time()
         -- Refresh popup if visible
         if popupFrame and popupFrame:IsShown() then
             Warehousing.RefreshPopup()
@@ -1158,7 +1159,12 @@ function Warehousing.AddItem(itemLink)
 
     -- Get item info
     local _, _, _, _, icon, classID, subclassID = C_Item.GetItemInfoInstant(itemID)
-    local name, _, _, _, _, _, _, _, _, _, _, _, _, bindType = GetItemInfo(itemID)
+    local getItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+    local name, bindType
+    if type(getItemInfo) == "function" then
+        local info = { getItemInfo(itemID) }
+        name, bindType = info[1], info[14]
+    end
 
     if not name then
         -- Item not cached yet, try to get basic info
@@ -1378,7 +1384,7 @@ local function RunAutoBuy()
                     remaining = remaining - quantity
                 end
                 Log("AutoBuy: requested " .. p.quantity .. "x " .. (p.name or p.itemID)
-                    .. " for " .. GetCoinTextureString(p.cost), 1)
+                    .. " for " .. addonTable.Core.FormatMoney(p.cost), 1)
             else
                 pendingPurchases[p.itemID] = nil
             end
@@ -1389,7 +1395,7 @@ local function RunAutoBuy()
     if totalCost > (UIThingsDB.warehousing.confirmAbove or 100) * 10000 then
         StaticPopupDialogs["LUNA_WAREHOUSING_AUTOBUY_CONFIRM"].OnAccept = DoPurchases
         StaticPopup_Show("LUNA_WAREHOUSING_AUTOBUY_CONFIRM",
-            "Auto-buy " .. #purchases .. " item type(s) for up to " .. GetCoinTextureString(totalCost) .. "?")
+            "Auto-buy " .. #purchases .. " item type(s) for up to " .. addonTable.Core.FormatMoney(totalCost) .. "?")
     else
         DoPurchases()
     end
@@ -1612,6 +1618,11 @@ EventBus.Register("PLAYER_LOGIN", function()
     -- Register current character locally
     local key = GetCharacterKey()
     LunaUITweaks_WarehousingData.characters[key] = LunaUITweaks_WarehousingData.characters[key] or {}
+    local character = LunaUITweaks_WarehousingData.characters[key]
+    -- Preserve the age of legacy bag snapshots before updating login presence.
+    if character.bagCounts and not character.bagUpdatedAt then
+        character.bagUpdatedAt = character.lastSeen or 0
+    end
     LunaUITweaks_WarehousingData.characters[key].lastSeen = time()
 
     -- Register in central character registry
