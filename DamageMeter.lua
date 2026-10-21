@@ -467,7 +467,9 @@ end
 
 local function RenderPane(idx)
     local pane = panes[idx]
-    if not pane or not pane.frame:IsShown() then return end
+    if not pane then return end
+    if pane.RefreshBtnLabels then pane.RefreshBtnLabels() end
+    if not pane.frame:IsShown() then return end
     local s = UIThingsDB.damageMeter
     local cfg = idx == 1 and s.meter1 or s.meter2
     local mtype, sess, dd = cfg.type, cfg.session, drilldown[idx]
@@ -652,9 +654,6 @@ local function SetupSessBtn(btn, sessionVal, label, isSelected, menuW, setting)
         drilldown[pidx] = nil
         entryCache = {}
         RenderPane(pidx)
-        if panes[pidx] and panes[pidx].RefreshBtnLabels then
-            panes[pidx].RefreshBtnLabels()
-        end
         sessMenuFrame:Hide()
     end)
 end
@@ -863,6 +862,7 @@ local function BuildPane(idx, parent)
         end
         sessBtn:SetText(sl)
     end
+    pane.RefreshBtnLabels()
 
     return pane
 end
@@ -1048,7 +1048,6 @@ local function CreateMainFrame()
         if not (UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled) then return end
         local n = UIThingsDB.damageMeter.numMeters or 1
         for i = 1, n do
-            if panes[i] and panes[i].RefreshBtnLabels then panes[i].RefreshBtnLabels() end
             RenderPane(i)
         end
     end)

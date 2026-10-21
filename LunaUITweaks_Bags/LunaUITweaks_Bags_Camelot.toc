@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: |cff00ff96Luna's UI Tweaks|r - Bags
+## Notes: Categorized combined bags and banks
+## Author: 407c
+## Version: 1.34.0
+## Dependencies: LunaUITweaks
+## SavedVariables: LunaUITweaksBagsDB
+## X-Part-Of: LunaUITweaks
+## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
+
+Model.lua
+NewItems.lua
+Deposit.lua
+Views.lua
+Config.lua
+Bags.lua

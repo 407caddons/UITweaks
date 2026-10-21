@@ -1,0 +1,20 @@
+local _, Bags = ...
+function Bags.RegisterConfig()
+    if not LunaUITweaksAPI then return end
+    LunaUITweaksAPI.RegisterConfigPanel("bags","Bags","Interface\\Icons\\INV_Misc_Bag_08",function(panel,nav)
+        local title=panel:CreateFontString(nil,"OVERLAY","GameFontNormalHuge")
+        title:SetPoint("TOPLEFT",16,-16); title:SetText("Bags")
+        local enabled=CreateFrame("CheckButton",nil,panel,"ChatConfigCheckButtonTemplate")
+        enabled:SetPoint("TOPLEFT",16,-55); enabled.Text:SetText("Enable categorized bags and bank")
+        enabled:SetScript("OnClick",function(self)
+            LunaUITweaksBagsDB.enabled=not not self:GetChecked(); Bags.ApplySettings()
+        end)
+        local info=panel:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+        info:SetPoint("TOPLEFT",20,-100); info:SetWidth(570); info:SetJustifyH("LEFT")
+        info:SetText("Player bags and both banks are combined and grouped into Gear, Consumables, Quest Items, Junk, Crafting Reagents and Other. New Items appears first in inventory for items gained since login or reload.\n\nConsumables include items with a Use action. Gear, quest items and reagents keep their more specific category.\n\nThe bank opens to Warband Bank and shows every purchased tab together. Switch to Bank for your character's bank. One free-space tile shows the total free slots and accepts dropped items. Deposit Warbound transfers eligible account-bound items and non-soulbound crafting reagents from your inventory; refundable items require confirmation.\n\nDrag the bag window by its title to move it. Disable categorized bags temporarily to use Blizzard's bag and bank management.\n\n/luitbags toggles your bags. /luitbags reset restores their position.\n\nDisable other bag replacements, including Ellesmere's bags, before testing.")
+        panel:HookScript("OnShow",function()
+            enabled:SetChecked(LunaUITweaksBagsDB.enabled~=false)
+        end)
+        enabled:SetChecked(LunaUITweaksBagsDB.enabled~=false)
+    end)
+end

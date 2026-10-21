@@ -15,8 +15,8 @@ if [[ ! -d "$1" ]]; then
     exit 1
 fi
 DEST=$(cd -- "$1" && pwd -P)
-addons=(LunaUITweaks LunaUITweaks_Config LunaUITweaks_Games)
-sources=("$SOURCE" "$SOURCE/LunaUITweaks_Config" "$SOURCE/LunaUITweaks_Games")
+addons=(LunaUITweaks LunaUITweaks_Config LunaUITweaks_Games LunaUITweaks_Bags)
+sources=("$SOURCE" "$SOURCE/LunaUITweaks_Config" "$SOURCE/LunaUITweaks_Games" "$SOURCE/LunaUITweaks_Bags")
 
 # Validate everything before creating any links, including dangling symlinks.
 for i in "${!addons[@]}"; do

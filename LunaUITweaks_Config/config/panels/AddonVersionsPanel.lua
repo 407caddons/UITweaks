@@ -183,6 +183,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     -- Companions keep their own saved variables; UIThingsDB alone does not
     -- include their options or positions. Optional fields preserve LUIT1 imports.
     local companionSettings = {
+        {key="bags", variable="LunaUITweaksBagsDB", name="Bags"},
         {key="unitFrames", variable="LunaUFDB", name="Unit Frames"},
         {key="objectiveTracker", variable="LunaObjectiveTrackerDB", name="Objective Tracker"},
     }
