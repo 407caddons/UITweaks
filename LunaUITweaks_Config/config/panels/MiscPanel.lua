@@ -19,7 +19,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 790)
+    scrollChild:SetSize(panel:GetWidth() - 30, 1100)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -251,4 +251,5 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     end)
 
 
+    addonTable.ConfigSetup.GeneralConvenience(panel,-670)
 end

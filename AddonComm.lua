@@ -67,11 +67,13 @@ end
 --- Get the channel to use for group communication
 -- @return string|nil  "RAID", "PARTY", "INSTANCE_CHAT", or nil if not in group
 function Comm.GetChannel()
-    if IsInRaid(LE_PARTY_CATEGORY_HOME) then return "RAID" end
-    if IsInGroup(LE_PARTY_CATEGORY_HOME) then return "PARTY" end
-    -- LFG/dungeon-finder groups are instance-category only; "PARTY" generates
-    -- "You aren't in a party" for these groups — use INSTANCE_CHAT instead.
-    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
+    if not IsInGroup() then return nil end
+    -- Keep the categories explicit even on clients without the legacy globals.
+    local home = LE_PARTY_CATEGORY_HOME or 1
+    local instance = LE_PARTY_CATEGORY_INSTANCE or 2
+    if IsInRaid(home) then return "RAID" end
+    if IsInGroup(home) then return "PARTY" end
+    if IsInGroup(instance) then return "INSTANCE_CHAT" end
     return nil
 end
 

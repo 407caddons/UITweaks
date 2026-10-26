@@ -25,6 +25,36 @@ function Client.ApplySettings(db)
     end
     if db.encounterBars then db.encounterBars.timeline=false;db.encounterBars.hideTimeline=false end
 end
+-- Filter a copy: importing a Retail profile must not overwrite Forever-only
+-- values with settings for systems which do not exist on this client.
+function Client.FilterImportedSettings(settings)
+    local function Copy(value)
+        if type(value)~="table" then return value end
+        local result={};for key,item in pairs(value) do result[key]=Copy(item) end
+        return result
+    end
+    local result=Copy(settings)
+    local skipped={}
+    if not Client.isForever then return result,skipped end
+    local function Remove(parent,key,label)
+        if type(parent)=="table" and parent[key]~=nil then
+            parent[key]=nil;skipped[#skipped+1]=label
+        end
+    end
+    for key in pairs(disabled) do Remove(result,key,key) end
+    for key in pairs(disabledWidgets) do Remove(result.widgets,key,"widget: "..key) end
+    for key in pairs(disabledQoL) do Remove(result.qualityOfLife,key,"alert: "..key) end
+    if type(result.combat)=="table" then
+        Remove(result.combat,"combatLog","Retail combat logging")
+        Remove(result.combat,"reminders","Retail consumable reminders")
+    end
+    if type(result.encounterBars)=="table" then
+        Remove(result.encounterBars,"timeline","Retail encounter timeline")
+        Remove(result.encounterBars,"hideTimeline","Retail timeline visibility")
+    end
+    table.sort(skipped)
+    return result,skipped
+end
 -- Never treat the first bank bag as a reagent bag on clients without that slot.
 function Client.GetBagIDs()
     local ids={}

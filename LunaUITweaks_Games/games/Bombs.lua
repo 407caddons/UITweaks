@@ -700,6 +700,7 @@ function addonTable.Bombs.CloseGame()
 end
 
 function addonTable.Bombs.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then
         BuildUI()
     end

@@ -5,6 +5,7 @@ local groups = {
     {key="essential", name="Essential cooldowns", viewer="EssentialCooldownViewer"},
     {key="utility", name="Utility cooldowns", viewer="UtilityCooldownViewer"},
     {key="buffs", name="Buff cooldowns", viewer="BuffIconCooldownViewer"},
+    {key="buffBars", name="Buff duration bars", viewer="BuffBarCooldownViewer", bars=true},
 }
 local dirty, applying = false, false
 local worker = CreateFrame("Frame")
@@ -46,6 +47,8 @@ local function Restore(group)
     -- positions and order, including icons which disappeared while managed.
     if InCombatLockdown() then return end
     group.managed=false
+    for item,width in pairs(group.originalWidths or {}) do item:SetWidth(width) end
+    group.originalWidths=nil
     group.viewerFrame:RefreshLayout()
 end
 local function CreateAnchor(group)
@@ -95,10 +98,12 @@ local function PositionAnchor(group,count,preview)
     local horizontal=direction=="RIGHT" or direction=="LEFT"
     local stride=db.columns
     local lines=math.max(preview and 2 or 1,math.ceil(count/stride))
-    local cols,rows=horizontal and stride or lines,horizontal and lines or stride
-    local size,gap=db.iconSize,db.spacing
+    local primary=math.min(stride,math.max(preview and 2 or 1,count))
+    local cols,rows=horizontal and primary or lines,horizontal and lines or primary
+    local width,height=group.bars and db.barWidth or db.iconSize,group.bars and db.barHeight or db.iconSize
+    local gap=db.spacing
     local anchor=group.anchor
-    anchor:SetSize(cols*size+(cols-1)*gap,rows*size+(rows-1)*gap)
+    anchor:SetSize(cols*width+(cols-1)*gap,rows*height+(rows-1)*gap)
     anchor:ClearAllPoints(); anchor:SetPoint(Origin(db),UIParent,db.pos.point,db.pos.x,db.pos.y)
     anchor:SetBackdropColor(.04,.12,.14,preview and .45 or 0)
     anchor:SetBackdropBorderColor(.3,.9,.75,preview and 1 or 0)
@@ -133,7 +138,8 @@ local function Layout(group)
     end
     table.sort(items,function(a,b) return a.index<b.index end)
     local db=DB()[group.key]
-    local size, gap, columns=db.iconSize,db.spacing,db.columns
+    local width,height=group.bars and db.barWidth or db.iconSize,group.bars and db.barHeight or db.iconSize
+    local gap, columns=db.spacing,db.columns
     local count=#items
     local direction=Direction(db)
     local horizontal=direction=="RIGHT" or direction=="LEFT"
@@ -142,14 +148,20 @@ local function Layout(group)
     -- visibility/geometry value leaves the last valid layout in place.
     for _,entry in ipairs(items) do
         local item=entry.frame
-        local w=item:GetWidth()
+        local w=group.bars and item:GetHeight() or item:GetWidth()
         local parentScale=item:GetParent():GetEffectiveScale()
         if not Public(w) or not Public(parentScale) or type(w)~="number" or w<=0 or type(parentScale)~="number" or parentScale<=0 then return end
-        entry.scale=size/w*UIParent:GetEffectiveScale()/parentScale
+        entry.scale=(group.bars and height or width)/w*UIParent:GetEffectiveScale()/parentScale
+        if group.bars then entry.nativeWidth=width*w/height end
     end
     PositionAnchor(group,count,preview)
     for i,entry in ipairs(items) do
         local item=entry.frame
+        if group.bars then
+            group.originalWidths=group.originalWidths or setmetatable({},{__mode="k"})
+            if not group.originalWidths[item] then group.originalWidths[item]=item:GetWidth() end
+            item:SetWidth(entry.nativeWidth)
+        end
         item:SetScale(entry.scale)
         local ratio=item:GetEffectiveScale()/anchor:GetEffectiveScale()
         item:ClearAllPoints()
@@ -157,7 +169,7 @@ local function Layout(group)
         local x,y=horizontal and primary or secondary,horizontal and secondary or primary
         if direction=="LEFT" then x=-x end
         if direction=="DOWN" then y=-y end
-        item:SetPoint(Origin(db),anchor,Origin(db),x*(size+gap)/ratio,y*(size+gap)/ratio)
+        item:SetPoint(Origin(db),anchor,Origin(db),x*(width+gap)/ratio,y*(height+gap)/ratio)
     end
     group.managed=true
 end

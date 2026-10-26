@@ -57,6 +57,7 @@ Coordinates.lua
 Destroy.lua
 BuffAlerts.lua
 ProcAlerts.lua
+NameplateColors.lua
 CooldownManager.lua
 qualityOfLife\QualityOfLife.lua
 qualityOfLife\Cursor.lua

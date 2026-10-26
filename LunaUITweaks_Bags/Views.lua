@@ -1,5 +1,27 @@
 local _, Bags = ...
 local SIZE, STEP, COLUMNS = 36, 40, 12
+local searchText=""
+local function ApplySearch(button)
+    if searchText=="" or not button.searchItemID then button.searchOverlay:Hide(); return end
+    local name=button.searchName or ""
+    if name=="" and button.searchItemID then
+        name=(C_Item.GetItemInfo(button.searchItemID) or ""):lower()
+        button.searchName=name
+    end
+    local matches=searchText=="" or not button.searchItemID or name:find(searchText,1,true)~=nil
+    button.searchOverlay:SetShown(not matches)
+end
+function Bags.UpdateSearch()
+    for _,view in pairs({Bags.inventory,Bags.bank}) do
+        if view:IsShown() then
+            for _,button in ipairs(view.buttons) do if button:IsShown() then ApplySearch(button) end end
+        end
+    end
+end
+function Bags.SetSearchText(value)
+    searchText=(value or ""):match("^%s*(.-)%s*$"):lower()
+    Bags.UpdateSearch()
+end
 local function Text(parent, text, x, y, template)
     local label=parent:CreateFontString(nil,"OVERLAY",template or "GameFontNormal")
     label:SetPoint("TOPLEFT",x,y); label:SetText(text); return label
@@ -26,20 +48,50 @@ end
 function Bags.UpdateEscapeRegistration()
     local name="LunaUITweaks_BagsInventory"
     for i=#UISpecialFrames,1,-1 do if UISpecialFrames[i]==name then table.remove(UISpecialFrames,i) end end
-    if not InCombatLockdown() then UISpecialFrames[#UISpecialFrames+1]=name end
+    -- Generic CloseSpecialWindows calls Hide from insecure Lua. This window
+    -- instead owns secure bindings only while shown.
+    Bags.RefreshCloseBindings()
+end
+function Bags.RefreshCloseBindings()
+    local view=Bags.inventory
+    if not view or InCombatLockdown() then return end
+    local keys,seen={"ESCAPE"},{ESCAPE=true}
+    if GetBindingKey then
+        for _,action in ipairs({"TOGGLEBACKPACK","OPENALLBAGS","TOGGLEALLBAGS","TOGGLEBAG1","TOGGLEBAG2","TOGGLEBAG3","TOGGLEBAG4","TOGGLEBAG5","TOGGLEREAGENTBAG"}) do
+            for _,key in ipairs({GetBindingKey(action)}) do
+                if not seen[key] then keys[#keys+1]=key;seen[key]=true end
+            end
+        end
+    end
+    for i,key in ipairs(keys) do view:SetAttribute("close-key-"..i,key) end
+    view:SetAttribute("close-key-count",#keys)
+    if view:IsShown() then view:Execute(view:GetAttribute("_onshow")) end
 end
 local function NewView(name,parent,isBank)
-    local view=CreateFrame("Frame",name,parent,"BackdropTemplate")
+    local view=CreateFrame("Frame",name,parent,isBank and "BackdropTemplate" or "BackdropTemplate,SecureHandlerShowHideTemplate")
     view:SetSize(540,math.min(620,UIParent:GetHeight()-100)); view:SetFrameStrata("HIGH")
     view:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
     view:SetBackdropColor(.035,.045,.06,1); view:SetBackdropBorderColor(.25,.3,.35,1)
     view:EnableMouse(true); view:SetClampedToScreen(true); view:Hide()
     view.title=Text(view,isBank and "Luna Bags — Bank" or "Luna Bags",14,-12,"GameFontNormalLarge")
-    local close=CreateFrame("Button",nil,view,"UIPanelCloseButton")
+    local close=CreateFrame("Button",not isBank and "LunaUITweaks_BagsSecureClose" or nil,view,
+        isBank and "UIPanelCloseButton" or "UIPanelButtonTemplate,SecureHandlerClickTemplate")
+    view.close=close
     close:SetPoint("TOPRIGHT",-2,-2)
-    close:SetScript("OnClick",function()
-        if isBank then HideUIPanel(BankFrame) else Bags.SetInventoryShown(false) end
-    end)
+    if isBank then close:SetScript("OnClick",function() HideUIPanel(BankFrame) end)
+    else
+        close:SetSize(24,24);close:SetText("X");close:RegisterForClicks("AnyUp")
+        close:SetFrameRef("inventory",view)
+        close:SetAttribute("_onclick",[[self:GetFrameRef("inventory"):Hide()]])
+        view:SetAttribute("_onshow",[[
+            self:ClearBindings()
+            for i=1,(self:GetAttribute("close-key-count") or 0) do
+                self:SetBindingClick(true,self:GetAttribute("close-key-"..i),"LunaUITweaks_BagsSecureClose","LeftButton")
+            end
+        ]])
+        view:SetAttribute("_onhide",[[self:ClearBindings()]])
+        view:HookScript("OnHide",function() Bags.pendingInventoryShown=nil end)
+    end
     view.status=Text(view,"",14,isBank and -73 or -40,"GameFontHighlightSmall")
     view.scroll=CreateFrame("ScrollFrame",nil,view,"UIPanelScrollFrameTemplate")
     view.scroll:SetPoint("TOPLEFT",14,isBank and -96 or -63); view.scroll:SetPoint("BOTTOMRIGHT",-32,40)
@@ -50,6 +102,20 @@ local function NewView(name,parent,isBank)
     view.footer=Text(view,"",14,0,"GameFontHighlightSmall")
     view.footer:ClearAllPoints(); view.footer:SetPoint("BOTTOMLEFT",14,14)
     if not isBank then
+        local search=CreateFrame("EditBox",nil,view,"InputBoxTemplate")
+        view.search=search
+        search:SetSize(220,23); search:SetPoint("TOPLEFT",160,-9)
+        search:SetAutoFocus(false); search:SetMaxLetters(120)
+        local hint=Text(search,"Search items...",4,-5,"GameFontDisableSmall")
+        search:SetScript("OnTextChanged",function(self)
+            hint:SetShown(self:GetText()=="")
+            Bags.SetSearchText(self:GetText())
+        end)
+        search:SetScript("OnEditFocusGained",function() hint:Hide() end)
+        search:SetScript("OnEditFocusLost",function(self) hint:SetShown(self:GetText()=="") end)
+        search:SetScript("OnEnterPressed",function(self) self:ClearFocus() end)
+        search:SetScript("OnEscapePressed",function(self) self:SetText(""); self:ClearFocus() end)
+        search:SetScript("OnHide",function(self) self:ClearFocus() end)
         view:SetMovable(true); view:RegisterForDrag("LeftButton")
         view:SetScript("OnDragStart",function(self) if not InCombatLockdown() then self:StartMoving() end end)
         view.finishDrag=function(self)
@@ -64,7 +130,7 @@ local function NewView(name,parent,isBank)
         view.characterTab=Button(view,"Bank",159,-40,100,function() Bags.SelectBank(Enum.BankType.Character) end)
         view.deposit=Button(view,"Deposit Warbound",269,-40,160,function() Bags.DepositWarbound() end)
     end
-    view:SetScript("OnShow",function(self)
+    view:HookScript("OnShow",function(self)
         Bags.QueueRefresh()
     end)
     return view
@@ -72,7 +138,7 @@ end
 function Bags.CreateInventory()
     if not Bags.inventory then
         Bags.inventory=NewView("LunaUITweaks_BagsInventory",UIParent,false)
-        Bags.RestorePosition()
+        Bags.RestorePosition(); Bags.UpdateEscapeRegistration()
     end
     return Bags.inventory
 end
@@ -97,20 +163,19 @@ local function RetargetEmpty(button)
     button:SetBagID(entry.bag); button:SetID(entry.slot)
     return true
 end
-local function HasItemInteraction()
-    for _,name in ipairs({"MerchantFrame","BankFrame","GuildBankFrame","MailFrame","TradeFrame",
-        "AuctionHouseFrame","AuctionFrame","ItemUpgradeFrame","ChallengesKeystoneFrame","RuneforgeFrame",
-        "AzeriteRespecFrame","ObliterumForgeFrame"}) do
-        local frame=_G[name]
-        if frame and frame:IsShown() then return true end
+local function FreeSpaceClick(self, mouse)
+    -- An aggregate tile must never use an item or act on a stale occupied slot.
+    if mouse == "LeftButton" and RetargetEmpty(self) then
+        C_Container.PickupContainerItem(self:GetBagID(), self:GetID())
     end
-    return false
 end
 local function SlotButton(view,index)
     local button=view.buttons[index]
     if not button then
         local inventory=view==Bags.inventory
-        local template="ContainerFrameItemButtonTemplate"..(inventory and ",SecureActionButtonTemplate" or "")
+        -- Put the native container template last so its secure XML OnClick is
+        -- the hardware entry point, including vendor/bank/refund handling.
+        local template=(inventory and "SecureActionButtonTemplate," or "").."ContainerFrameItemButtonTemplate"
         button=CreateFrame("ItemButton",nil,view.content,template)
         button.secureInventory=inventory
         if not inventory then
@@ -119,47 +184,20 @@ local function SlotButton(view,index)
                 return ItemButtonUtil.ItemContextMatchResult.DoesNotApply
             end
         end
-        if inventory then
-            button:RegisterForClicks("LeftButtonUp","RightButtonUp")
-            button:SetAttribute("useOnKeyDown",false)
-            -- Modified clicks belong to the native link/preview/stack-splitting handler.
-            for _,prefix in ipairs({"shift-","ctrl-","alt-","ctrl-shift-","alt-shift-","alt-ctrl-","alt-ctrl-shift-"}) do
-                button:SetAttribute(prefix.."type2","")
-            end
-        end
+        button.searchOverlay=button:CreateTexture(nil,"OVERLAY",nil,7)
+        button.searchOverlay:SetAllPoints()
+        button.searchOverlay:SetColorTexture(0,0,0,.75)
+        button.searchOverlay:Hide()
         button:SetSize(SIZE,SIZE)
         button:SetFrameLevel(view.content:GetFrameLevel()+1)
         -- The Blizzard template owns click, split-stack, drag, refund and tooltip behavior.
         button:HookScript("OnHide",function(self)
             if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
         end)
-        local click,receive,drag=button:GetScript("OnClick"),button:GetScript("OnReceiveDrag"),button:GetScript("OnDragStart")
-        local function NativeClick(self,mouse,...)
-            if self.freeSpaceIDs and (mouse~="LeftButton" or not RetargetEmpty(self)) then return end
-            if inventory then
-                -- Never invoke the secure OnClick from addon Lua; it must run as a hardware click.
-                if IsModifiedClick() then self:OnModifiedClick(mouse)
-                else self:OnClick(mouse) end
-            elseif click then click(self,mouse,...) end
-        end
-        if inventory then
-            -- Retain the template's secure OnClick. Only adjust actions outside lockdown.
-            button:SetScript("PreClick",function(self,mouse)
-                self.nativeRightClick=IsModifiedClick()
-                self.targetingItem=mouse=="LeftButton" and (SpellCanTargetItem() or SpellCanTargetItemID())
-                if not InCombatLockdown() then
-                    local action=self.secureItem and not self.freeSpaceIDs and not IsModifiedClick()
-                        and not GetCursorInfo() and not HasItemInteraction()
-                    self:SetAttribute("type2",action and "item" or nil)
-                    self.nativeRightClick=not action
-                end
-            end)
-            button:SetScript("PostClick",function(self,mouse,...)
-                if not self.targetingItem and (mouse~="RightButton" or self.nativeRightClick) then NativeClick(self,mouse,...) end
-                -- Restore the preconfigured action for a subsequent click during combat.
-                if not InCombatLockdown() then self:SetAttribute("type2",self.secureItem and "item" or nil) end
-            end)
-        else button:SetScript("OnClick",NativeClick) end
+        button.nativeClickScript=button:GetScript("OnClick")
+        local receive,drag=button:GetScript("OnReceiveDrag"),button:GetScript("OnDragStart")
+        -- Do not call self:OnClick or the saved native script from addon Lua.
+        -- The native template must receive the actual hardware click itself.
         button:SetScript("OnReceiveDrag",function(self,...)
             if self.freeSpaceIDs and not RetargetEmpty(self) then return end
             if receive then receive(self,...) end
@@ -191,17 +229,23 @@ local function UpdateSlotCooldown(button)
     end
 end
 local function Populate(button,entry)
+    if button.freeSpaceIDs then button:SetScript("OnClick",button.nativeClickScript) end
     button.freeSpaceIDs=nil
     if button.freeCount then button.freeCount:Hide() end
     button:SetBagID(entry.bag); button:SetID(entry.slot)
     local info=entry.info
-    if button.secureInventory then
-        button.secureItem=info~=nil
-        button:SetAttribute("item2",info and (entry.bag.." "..entry.slot) or nil)
-        button:SetAttribute("type2",info and "item" or nil)
-        button:SetAttribute("target-bag1",entry.bag)
-        button:SetAttribute("target-slot1",entry.slot)
+    local level=Bags.GearItemLevel(info)
+    if level and not button.itemLevel then
+        button.itemLevel=button:CreateFontString(nil,"OVERLAY","NumberFontNormalSmall")
+        button.itemLevel:SetFont(STANDARD_TEXT_FONT,9,"OUTLINE")
+        button.itemLevel:SetPoint("BOTTOMRIGHT",-2,2)
     end
+    if button.itemLevel then
+        button.itemLevel:SetText(level or "")
+        button.itemLevel:SetShown(level~=nil)
+    end
+    button.searchItemID=info and info.itemID
+    button.searchName=(entry.name or ""):lower()
     SetItemButtonTexture(button,info and info.iconFileID)
     SetItemButtonCount(button,info and info.stackCount or 0)
     SetItemButtonDesaturated(button,info and info.isLocked or false)
@@ -222,6 +266,7 @@ local function Populate(button,entry)
     end
     SuppressItemGlow(button)
     button.ItemSlotBackground:Show(); button:Show()
+    ApplySearch(button)
 end
 function Bags.Render(view,ids,available)
     if not view or not view:IsShown() then return end
@@ -254,6 +299,7 @@ function Bags.Render(view,ids,available)
         -- One tile represents every free slot, with a visible count even when only one remains.
         local button=view.buttons[index]
         button.freeSpaceIDs=ids
+        button:SetScript("OnClick",FreeSpaceClick)
         if not button.freeCount then
             button.freeCount=Text(button,"",0,0,"GameFontHighlightSmall")
             button.freeCount:ClearAllPoints(); button.freeCount:SetPoint("BOTTOMRIGHT",-2,2)

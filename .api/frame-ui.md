@@ -215,3 +215,15 @@ local function RecycleToast(f)
     -- reset any state fields
 end
 ```
+
+## Independent action button geometry
+
+`Region:SetIgnoreParentScale(true)` and `Region:IsIgnoringParentScale()` allow a
+button to retain its native parent/visibility/action-paging chain while using an
+independent scale. LunaUITweaks_ActionBars sets its effective scale relative to
+UIParent and anchors it to an addon-owned frame, rather than resizing native
+action bars or containers. Both the button and anchor ignore native parent scale;
+the anchor is parented to UIParent so native ResizeLayoutFrame traversal never
+reads addon-owned helper fields. Setup and
+restoration are guarded by InCombatLockdown. Original button points, scale and
+ignore-parent-scale flag are restored when management is disabled.

@@ -5,6 +5,7 @@ Optional companion addon for Retail and the Forever test client. Requires LunaUI
 ## Features
 
 - Combined player inventory, including the reagent bag.
+- A search box beside the bags title performs a case-insensitive partial name search across inventory and both bank views. Non-matching items dim without changing their positions. Escape in the search box clears the search.
 - New Items at the top of inventory for items gained since login/reload, including increases to existing stacks. Closing bags or hovering items does not clear this session category. Bank views keep their normal categories.
 - Gear, Consumables, Quest Items, Junk, Crafting Reagents, and Other categories.
 - Consumables include items with a Use spell. Quest items, gear and reagents take priority over this broad rule.
@@ -27,3 +28,11 @@ The source lives at `LunaUITweaks/LunaUITweaks_Bags`. WoW must also see it as a 
 No cached bank viewing away from a banker, category editor, search, bag equipment controls, automatic physical sorting, or custom gold-management controls yet. The native bank remains active behind an opaque custom panel so Blizzard retains its interaction and close lifecycle. Item layout changes wait until combat and stack splitting finish. Inventory open/close requests during combat apply after combat ends. Existing visible slots retain their locations and use Blizzard's secure item actions during combat; the game still decides which items can be used.
 
 This implementation has syntax and mocked regression checks; real-client interaction and taint checks still need in-game testing on Retail and Forever.
+
+Gear icons show their effective item level in small text at the bottom-right, including upgraded variants. Labels refresh when item information arrives and are cleared when pooled buttons display other items.
+
+Inventory closing uses a secure close button. While open, Escape and the configured bag keys temporarily click that button, so they can close the protected window during combat. These overrides are cleared on hide; other keys are unaffected. Programmatic show/hide requests still defer during combat.
+
+Item slots retain Blizzard's native container OnClick as the hardware click handler, including item use, vendor sales, bank transfers and modified clicks. Addon PreClick/PostClick callbacks never invoke the protected item-use path. The combined free-space tile only picks up/drops a cursor item into a freshly checked empty slot.
+
+The login inventory baseline uses a fixed startup deadline. Self-loot messages preserve confirmed acquisitions during that window, including stack quantities; later bag updates do not extend the deadline.

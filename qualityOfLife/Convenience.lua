@@ -15,12 +15,49 @@ end
 local function HideTips()
     if QoL.Enabled("hideTutorials") and HelpTip and HelpTip.HideAll then HelpTip:HideAll() end
 end
+local function SkipSceneFromKey()
+    if not QoL.Enabled("skipCinematics") or not CinematicFrame or not CinematicFrame:IsShown() then return end
+    if CinematicFrame.isRealCinematic then
+        if StopCinematic then StopCinematic() end
+    elseif CanCancelScene and CanCancelScene() and CancelScene then
+        -- Called only from an actual keyboard/gamepad event. A timer or a
+        -- programmatic click cannot supply the hardware input scenes require.
+        CancelScene()
+    end
+end
+local function FinishMovie()
+    if not QoL.Enabled("skipCinematics") or not MovieFrame or not MovieFrame:IsShown() then return end
+    if MovieFrame.FinishMovie then
+        -- Preserve Blizzard's cinematic-finished and subtitle notifications.
+        MovieFrame:FinishMovie()
+    else
+        if MovieFrame.StopMovie then MovieFrame:StopMovie() end
+        MovieFrame:Hide()
+    end
+end
+local function ConfirmCinematicFromKey(self)
+    local dialog=self.closeDialog
+    if dialog and dialog:IsShown() then SkipSceneFromKey() end
+end
+local function ConfirmMovieFromKey(self)
+    local dialog=self.CloseDialog
+    if dialog and dialog:IsShown() then FinishMovie() end
+end
 local function HookFrames()
     if TalkingHeadFrame and not hooks.talking then
         TalkingHeadFrame:HookScript("OnShow",HideTalkingHead); hooks.talking=true
     end
     if HelpTip and HelpTip.Show and not hooks.tips then
         hooksecurefunc(HelpTip,"Show",HideTips); hooks.tips=true
+    end
+    if CinematicFrame and hooks.cinematic~=CinematicFrame then
+        CinematicFrame:HookScript("OnKeyDown",ConfirmCinematicFromKey)
+        CinematicFrame:HookScript("OnGamePadButtonDown",ConfirmCinematicFromKey)
+        hooks.cinematic=CinematicFrame
+    end
+    if MovieFrame and hooks.movie~=MovieFrame then
+        MovieFrame:HookScript("OnKeyUp",ConfirmMovieFromKey)
+        hooks.movie=MovieFrame
     end
     HideTalkingHead(); HideTips()
 end
@@ -53,19 +90,15 @@ local function Skip()
     end
 end
 keyFrame:SetScript("OnKeyDown",function()
-    if QoL.Enabled("skipCinematics") and CanCancelScene and CanCancelScene() then CancelScene() end
+    SkipSceneFromKey()
     keyFrame:Hide()
 end)
 local function OnEvent(event)
-    if event=="CINEMATIC_START" then C_Timer.After(0,Skip)
+    if event=="CINEMATIC_START" then HookFrames(); C_Timer.After(0,Skip)
     elseif event=="CINEMATIC_STOP" then keyFrame:Hide()
     elseif event=="PLAY_MOVIE" then
-        C_Timer.After(0,function()
-            if QoL.Enabled("skipCinematics") and MovieFrame and MovieFrame:IsShown() then
-                if MovieFrame.StopMovie then MovieFrame:StopMovie() end
-                MovieFrame:Hide()
-            end
-        end)
+        HookFrames()
+        C_Timer.After(0,FinishMovie)
     elseif event=="NEW_MOUNT_ADDED" then QueueUnwrap("mount")
     elseif event=="NEW_PET_ADDED" then QueueUnwrap("pet")
     elseif event=="NEW_TOY_ADDED" then QueueUnwrap("toy")

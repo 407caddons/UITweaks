@@ -576,6 +576,24 @@ local classBuffID = nil
 local classBuffName = nil
 local classBuffIconFrame = nil
 
+-- Blizzard already determines when this class buff needs refreshing on the
+-- group. Use that public glow state instead of inspecting other players' auras.
+local function ClassBuffMissing()
+    if not classBuffID or InCombatLockdown() then return false end
+    local overlay=C_SpellActivationOverlay and C_SpellActivationOverlay.IsSpellOverlayed
+    if overlay then
+        local ok,glowing=pcall(overlay,classBuffID)
+        if ok and not (issecretvalue and issecretvalue(glowing)) and glowing then return true end
+    end
+    local name=C_Spell.GetSpellName(classBuffID)
+    if (issecretvalue and issecretvalue(name)) or not name then return false end
+    local find=AuraUtil and AuraUtil.FindAuraByName
+    if not find then return false end
+    local ok,aura=pcall(find,name,"player","HELPFUL")
+    if not ok or (issecretvalue and issecretvalue(aura)) then return false end
+    return aura==nil
+end
+
 local PET_SUMMON_SPELLS = {
     [1]  = nil, -- Warrior
     [2]  = nil, -- Paladin
@@ -1187,15 +1205,9 @@ UpdateReminderFrame = function()
     local flaskMissing, foodMissing, weaponMissing = false, false, false
     local classBuffMissing = false
 
-    if settings.classBuff and classBuffID then
-        local name = C_Spell.GetSpellName(classBuffID)
-        if name then
-            local hasBuff = AuraUtil.FindAuraByName(name, "player", "HELPFUL")
-            if not hasBuff then
-                table.insert(missing, { text = "|cFFCCCCFFClass Buff|r", type = "classBuff" })
-                classBuffMissing = true
-            end
-        end
+    if settings.classBuff and ClassBuffMissing() then
+        table.insert(missing, { text = "|cFFCCCCFFClass Buff|r", type = "classBuff" })
+        classBuffMissing = true
     end
 
     if settings.flask and not HasFlaskBuff() then
@@ -1390,6 +1402,10 @@ local function InitReminders()
     -- Register events for ongoing checks
     reminderEventFrame = CreateFrame("Frame")
     reminderEventFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
+        if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" or event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+            -- For these events the second argument is a spell ID, not a unit.
+            if (issecretvalue and issecretvalue(unit)) or unit ~= classBuffID then return end
+        end
         if event == "BAG_UPDATE_DELAYED" then
             InvalidateBagScanCache()
         end
@@ -1424,6 +1440,13 @@ local function ApplyReminderEvents()
         reminderEventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
         reminderEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
         reminderEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+        if settings.classBuff and classBuffID then
+            reminderEventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
+            reminderEventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+        else
+            reminderEventFrame:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
+            reminderEventFrame:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+        end
     else
         reminderEventFrame:UnregisterAllEvents()
         StopWeaponBuffTicker()

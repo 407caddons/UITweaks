@@ -7,7 +7,7 @@ function addon.ConfigSetup.CooldownManager(panel,nav)
     title:SetPoint("TOPLEFT",16,-16); title:SetText("Cooldown Manager")
     local scroll=CreateFrame("ScrollFrame",nil,panel,"UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT",0,-45); scroll:SetPoint("BOTTOMRIGHT",-30,10)
-    local child=CreateFrame("Frame",nil,scroll); child:SetSize(620,1100); scroll:SetScrollChild(child)
+    local child=CreateFrame("Frame",nil,scroll); child:SetSize(620,1450); scroll:SetScrollChild(child)
     local function DB() return UIThingsDB.cooldownManager end
     local function Label(text,y)
         local f=child:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
@@ -66,15 +66,21 @@ function addon.ConfigSetup.CooldownManager(panel,nav)
             refreshing=true; s:SetValue(DB()[group][key]); Text(DB()[group][key]); refreshing=false
         end
     end
-    for i,entry in ipairs({{"essential","Essential cooldowns"},{"utility","Utility cooldowns"},{"buffs","Buff icons"}}) do
+    for i,entry in ipairs({{"essential","Essential cooldowns"},{"utility","Utility cooldowns"},{"buffs","Buff icons"},{"buffBars","Buff duration bars"}}) do
         local key,name=entry[1],entry[2]
         local y=-215-(i-1)*280
         Helpers.CreateSectionHeader(child,name,y)
         Check(function() return DB()[key] end,"enabled","Manage this group",y-26)
         Growth(key,y-60)
-        Slider(key,"columns","Icons per row / column",y-125,1,20)
-        Slider(key,"iconSize","Icon size",y-185,16,80)
-        Slider(key,"spacing","Spacing",y-245,0,20)
+        Slider(key,"columns",key=="buffBars" and "Bars per row / column" or "Icons per row / column",y-125,1,20)
+        if key=="buffBars" then
+            Slider(key,"barHeight","Bar height",y-185,16,80)
+            Slider(key,"barWidth","Bar width",y-245,100,600)
+            Slider(key,"spacing","Spacing",y-305,0,20)
+        else
+            Slider(key,"iconSize","Icon size",y-185,16,80)
+            Slider(key,"spacing","Spacing",y-245,0,20)
+        end
     end
     local function Refresh()
         for _,fn in ipairs(controls) do fn() end

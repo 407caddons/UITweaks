@@ -114,6 +114,42 @@ end
 -- @param dbKey string The key in UIThingsDB (and DEFAULTS) to reset, e.g. "combat"
 -- @param label string Optional button label (defaults to "Reset Defaults")
 -- @return button The created button
+-- Page scopes follow the visible controls rather than storage-table boundaries.
+-- General UI and Notifications share misc; moved convenience controls retain
+-- their existing qualityOfLife storage for import/export compatibility.
+local pageResetScopes = {
+    misc = {misc = {"ahFilter","allowRL","autoAcceptEveryone","autoAcceptFriends","autoAcceptGuild","autoInviteEnabled","autoInviteKeywords","classColorTooltips","enabled","quickDestroy","showSpellID","uiScale","uiScaleEnabled","workOrderFilter"}, qualityOfLife = {"cursor","cursorClassColor","cursorSize","cursorAlpha","cursorColor","skipCinematics","hideTutorials","hideTalkingHead"}},
+    notifications = {misc = {"alertColor","alertDuration","boeAlert","boeAlertColor","boeAlertDuration","boeMinQuality","deathMaxCount","deathNotify","deathTtsEnabled","deathTtsMessage","deathTtsVoice","mailAlertColor","mailAlertDuration","mailNotification","mailTtsEnabled","mailTtsMessage","mailTtsVoice","personalOrders","personalOrdersCheckAtLogon","ttsEnabled","ttsMessage","ttsVoice","whisperAlert","whisperAlertColor","whisperAlertDuration","whisperTtsEnabled","whisperTtsMessage","whisperTtsVoice"}, qualityOfLife = {"movement","movementTts","movementVoice","timeSpiral","gateway","battleRes","alertFontSize","movementExtraSpells"}},
+    loot = {loot = true, qualityOfLife = {"autoOpen","excludeWarbound","unwrapCollections"}},
+}
+local pageResetNames = {misc="General UI", notifications="Notifications", loot="Loot"}
+local function CopyResetValue(value)
+    if type(value)~="table" then return value end
+    local copy={}
+    for key,item in pairs(value) do copy[key]=CopyResetValue(item) end
+    return copy
+end
+function Helpers.ResetPageSettings(key)
+    local defaults=addonTable.Core and addonTable.Core.DEFAULTS
+    if not defaults or not UIThingsDB then return false end
+    local scope=pageResetScopes[key] or (defaults[key] and {[key]=true})
+    if not scope then return false end
+    for section,fields in pairs(scope) do
+        local source=defaults[section]
+        if type(source)=="table" then
+            if type(UIThingsDB[section])~="table" then UIThingsDB[section]={} end
+            local target=UIThingsDB[section]
+            if fields==true then
+                wipe(target)
+                for field,value in pairs(source) do target[field]=CopyResetValue(value) end
+            else
+                for _,field in ipairs(fields) do target[field]=CopyResetValue(source[field]) end
+            end
+        end
+    end
+    return true
+end
+
 function Helpers.CreateResetButton(panel, dbKey, label)
     local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     btn:SetSize(120, 22)
@@ -122,7 +158,7 @@ function Helpers.CreateResetButton(panel, dbKey, label)
     btn:SetText(label or "Reset Defaults")
 
     btn:SetScript("OnClick", function()
-        StaticPopup_Show("LUNA_RESET_MODULE_CONFIRM", dbKey, nil, dbKey)
+        StaticPopup_Show("LUNA_RESET_MODULE_CONFIRM", pageResetNames[dbKey] or dbKey, nil, dbKey)
     end)
 
     return btn
@@ -135,24 +171,7 @@ if not StaticPopupDialogs["LUNA_RESET_MODULE_CONFIRM"] then
         button1 = "Reset & Reload",
         button2 = "Cancel",
         OnAccept = function(self, data)
-            local key = data
-            local defaults = addonTable and addonTable.Core and addonTable.Core.DEFAULTS
-            if defaults and defaults[key] and UIThingsDB and UIThingsDB[key] then
-                wipe(UIThingsDB[key])
-                -- Deep copy defaults for this key back into UIThingsDB
-                local function DeepCopyInto(target, source)
-                    for k, v in pairs(source) do
-                        if type(v) == "table" then
-                            target[k] = {}
-                            DeepCopyInto(target[k], v)
-                        else
-                            target[k] = v
-                        end
-                    end
-                end
-                DeepCopyInto(UIThingsDB[key], defaults[key])
-            end
-            ReloadUI()
+            if Helpers.ResetPageSettings(data) then ReloadUI() end
         end,
         timeout = 0,
         whileDead = true,

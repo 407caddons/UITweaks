@@ -9,6 +9,7 @@ table.insert(Widgets.moduleInits, function()
 
     local pullActive = false
     local pullStartTime = nil
+    local countdownGeneration = 0
     local pullCancelled = false   -- guards the fallback chat countdown
     local pullDuration = PULL_DURATION
     local cachedText = "|cFF888888Pull|r"
@@ -40,11 +41,17 @@ table.insert(Widgets.moduleInits, function()
     -- Fallback chat countdown (used when no raid timer addon)
     -- --------------------------------------------------------
     local function DoChatCountdown()
+        countdownGeneration = countdownGeneration + 1
+        local generation = countdownGeneration
         pullCancelled = false
         local count = PULL_DURATION
         local function Tick()
-            if pullCancelled then return end
-            local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
+            if pullCancelled or generation ~= countdownGeneration then return end
+            local channel = addonTable.Comm.GetChannel()
+            if not channel then
+                pullCancelled = true
+                return
+            end
             if count <= 0 then
                 if channel then SendChatMessage("PULL!", channel) end
                 return
@@ -61,11 +68,25 @@ table.insert(Widgets.moduleInits, function()
 
     local function CancelChatCountdown()
         pullCancelled = true
-        local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
+        countdownGeneration = countdownGeneration + 1
+        local channel = addonTable.Comm.GetChannel()
         if channel then
             SendChatMessage("Pull cancelled.", channel)
         end
     end
+
+    pullFrame:RegisterEvent("GROUP_LEFT")
+    pullFrame:SetScript("OnEvent", function(_, event)
+        if event ~= "GROUP_LEFT" then return end
+        -- Invalidate queued ticks so leaving and quickly joining another group
+        -- cannot resume the previous group's countdown.
+        countdownGeneration = countdownGeneration + 1
+        pullCancelled = true
+        pullActive = false
+        pullStartTime = nil
+        cachedText = "|cFF888888Pull|r"
+        pullFrame.text:SetText(cachedText)
+    end)
 
     -- --------------------------------------------------------
     -- Start / Cancel

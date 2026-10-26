@@ -1,6 +1,8 @@
 local _, Bags = ...
 -- Session-only inventory history: deliberately excluded from saved settings/export.
 local previous, slotKeys, initialized = {}, {}, false
+local startupLoot = {}
+local warmTotals, warmGains, lastWarmScan = {}, {}, nil
 local function Key(bag,slot)
     if ItemLocation and C_Item.GetItemGUID then
         local guid=C_Item.GetItemGUID(ItemLocation:CreateFromBagAndSlot(bag,slot))
@@ -23,18 +25,27 @@ function Bags.TrackNewItems(reset)
             end
         end
     end
-    if not reset then
+    if not reset or next(startupLoot) then
+        if reset then
+            -- Explicit self-loot messages distinguish gameplay gains from login
+            -- hydration even before the short startup window has ended.
+            for id,credit in pairs(startupLoot) do
+                pool[id]=math.min(credit.count,math.max(0,(totals[id] or 0)-credit.base))
+            end
+        end
         for _,record in pairs(previous) do
             oldTotals[record.id]=(oldTotals[record.id] or 0)+record.count
-            pool[record.id]=(pool[record.id] or 0)+record.newCount
+            if not reset then pool[record.id]=(pool[record.id] or 0)+record.newCount end
         end
-        for id,count in pairs(totals) do pool[id]=(pool[id] or 0)+math.max(0,count-(oldTotals[id] or 0)) end
+        if not reset then
+            for id,count in pairs(totals) do pool[id]=(pool[id] or 0)+math.max(0,count-(oldTotals[id] or 0)) end
+        end
         -- Preserve existing new stacks by GUID when they move between bags.
         for _,key in ipairs(order) do
             local record,old=current[key],previous[key]
             if old and old.id==record.id then
-                record.newCount=math.min(old.newCount,record.count)
-                pool[record.id]=pool[record.id]-record.newCount
+                record.newCount=math.min(old.newCount,record.count,pool[record.id] or 0)
+                pool[record.id]=(pool[record.id] or 0)-record.newCount
             end
         end
         -- Allocate newly gained units to new/increased stacks, then carry markers through merges.
@@ -51,6 +62,12 @@ function Bags.TrackNewItems(reset)
             end
         end
     end
+    if reset then
+        local before={}
+        for _,record in pairs(previous) do before[record.id]=(before[record.id] or 0)+record.count end
+        warmTotals, warmGains, lastWarmScan=totals,{},GetTime()
+        for id,count in pairs(totals) do warmGains[id]=math.max(0,count-(before[id] or 0)) end
+    end
     previous,slotKeys,initialized=current,keys,true
 end
 function Bags.IsNewItem(bag,slot,itemID)
@@ -58,3 +75,73 @@ function Bags.IsNewItem(bag,slot,itemID)
     return record and record.id==itemID and record.newCount>0 or false
 end
 function Bags.HasNewItemBaseline() return initialized end
+
+-- PLAYER_LOGIN can precede inventory hydration. The settling deadline starts
+-- once per login, never sliding indefinitely with subsequent bag updates.
+local warming,worldReady,generation=false,false,0
+function Bags.BeginNewItemSession()
+    generation=generation+1
+    warming=true; worldReady=false
+    startupLoot={}
+    warmTotals,warmGains,lastWarmScan={},{},nil
+    Bags.TrackNewItems(true)
+end
+function Bags.OnNewItemWorldReady()
+    if not warming or worldReady then return end
+    worldReady=true
+    local token=generation
+    C_Timer.After(.75,function()
+        if not warming or generation~=token then return end
+        Bags.TrackNewItems(true)
+        warming=false
+        startupLoot={}
+        warmTotals,warmGains,lastWarmScan={},{},nil
+        Bags.QueueRefresh()
+    end)
+end
+function Bags.OnNewItemBagUpdate()
+    Bags.TrackNewItems(warming)
+end
+
+local function EscapePattern(value)
+    return (value:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])","%%%1"))
+end
+function Bags.OnNewItemLoot(message)
+    if not warming or not worldReady or (issecretvalue and issecretvalue(message)) or type(message)~="string" then return end
+    for _,name in ipairs({"LOOT_ITEM_SELF","LOOT_ITEM_SELF_MULTIPLE","LOOT_ITEM_PUSHED_SELF","LOOT_ITEM_PUSHED_SELF_MULTIPLE",
+        "LOOT_ITEM_CREATED_SELF","LOOT_ITEM_CREATED_SELF_MULTIPLE"}) do
+        local format=_G[name]
+        if type(format)=="string" then
+            local parts,fields,cursor={},{},1
+            while true do
+                local first,last=format:find("%%[%d%$]*[sd]",cursor)
+                if not first then parts[#parts+1]=EscapePattern(format:sub(cursor));break end
+                parts[#parts+1]=EscapePattern(format:sub(cursor,first-1))
+                local kind=format:sub(last,last)
+                fields[#fields+1]=kind
+                parts[#parts+1]=kind=="s" and "(.-)" or "(%d+)"
+                cursor=last+1
+            end
+            local captures={message:match("^"..table.concat(parts).."$")}
+            if #captures>0 then
+                local itemID,count=nil,1
+                for i,kind in ipairs(fields) do
+                    if kind=="s" then itemID=tonumber((captures[i] or ""):match("|Hitem:(%d+)"))
+                    else count=tonumber(captures[i]) or 1 end
+                end
+                if itemID then
+                    local credit=startupLoot[itemID]
+                    if not credit then
+                        local base=warmTotals[itemID] or 0
+                        -- Chat can follow BAG_UPDATE_DELAYED in the same frame.
+                        if lastWarmScan==GetTime() then base=math.max(0,base-(warmGains[itemID] or 0)) end
+                        credit={base=base,count=0};startupLoot[itemID]=credit
+                    end
+                    credit.count=credit.count+count
+                    Bags.QueueRefresh()
+                end
+                return
+            end
+        end
+    end
+end

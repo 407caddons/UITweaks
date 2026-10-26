@@ -47,6 +47,7 @@ function addonTable.Minimap.Initialize()
     button:SetSize(32, 32)
     button:SetMovable(true)
     button:RegisterForDrag("LeftButton")
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:SetHighlightTexture([[Interface\Minimap\UI-Minimap-ZoomButton-Highlight]])
 
     local overlay = button:CreateTexture(nil, "OVERLAY")
@@ -60,7 +61,9 @@ function addonTable.Minimap.Initialize()
     icon:SetPoint("CENTER", 0, 1)
 
     button:SetScript("OnClick", function(self, btn)
-        if addonTable.Config and addonTable.Config.ToggleWindow then
+        if btn == "RightButton" then
+            if addonTable.LayoutMode then addonTable.LayoutMode.Toggle() end
+        elseif btn == "LeftButton" and addonTable.Config and addonTable.Config.ToggleWindow then
             addonTable.Config.ToggleWindow()
         end
     end)
@@ -91,7 +94,8 @@ function addonTable.Minimap.Initialize()
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Luna's UI Tweaks")
-        GameTooltip:AddLine("Click to open config", 1, 1, 1)
+        GameTooltip:AddLine("Left-click to open config", 1, 1, 1)
+        GameTooltip:AddLine("Right-click to toggle Layout Mode", 1, 1, 1)
         GameTooltip:AddLine("Drag to move button", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)

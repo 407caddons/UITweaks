@@ -51,9 +51,7 @@ Objective Tracker and Unit Frames companion addons.
 ## Settings and storage
 
 Forever has its own WTF directory, separate from Retail. Do not copy Retail WTF
-settings into it. New settings exports identify the client: Retail/Forever
-cross-imports are rejected. Older untagged settings cannot be imported on Forever.
-Talent build import/export is disabled on Forever until its backend is adapted.
+settings into it. New settings exports identify the client. Forever accepts Retail and older untagged exports on a best-effort basis: compatible settings and loaded companions (including Action Bars) are imported. Unsupported Retail systems, Retail talent/quest reminders and unavailable companions are skipped and listed before confirmation. Retail still rejects Forever exports. Talent build export remains disabled on Forever until its backend is adapted.
 
 Carried bags are discovered without assuming a fifth reagent bag. Inventory-count
 tooltips use Forever's reported purchased bank container IDs and preserve cached

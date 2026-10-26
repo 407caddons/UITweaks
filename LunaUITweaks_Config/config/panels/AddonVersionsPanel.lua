@@ -3,6 +3,7 @@ local addonName, addonTable = "LunaUITweaks", _G["LunaUITweaks"]
 addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 
 local Helpers = addonTable.ConfigHelpers
+local exportFrame, importFrame
 
 function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
@@ -95,7 +96,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     end
 
     local function Base64Decode(data)
-        data = data:gsub("[^A-Za-z0-9+/=]", "")
+        if #data%4~=0 or not data:match("^[A-Za-z0-9+/]*=?=?$") then return nil end
         local lookup = {}
         for i = 1, 64 do lookup[B64_CHARS:sub(i, i)] = i - 1 end
         local out = {}
@@ -148,6 +149,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 for k in pairs(val) do keys[#keys + 1] = k end
                 table.sort(keys, function(a, b)
                     if type(a) ~= type(b) then return type(a) < type(b) end
+                    if type(a)=="boolean" then return a==false and b==true end
                     return a < b
                 end)
                 for _, k in ipairs(keys) do
@@ -167,22 +169,15 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     end
 
     local function DeserializeString(str)
-        -- Safely deserialize a Lua table string
-        if not str or str == "" then return nil, "Empty string" end
-        if #str > MAX_SETTINGS_BYTES then return nil, SIZE_ERROR end
-        local func, err = loadstring("return " .. str)
-        if not func then return nil, "Parse error: " .. (err or "unknown") end
-        -- Sandbox: no access to globals
-        setfenv(func, {})
-        local ok, result = pcall(func)
-        if not ok then return nil, "Execution error: " .. tostring(result) end
-        if type(result) ~= "table" then return nil, "Expected table, got " .. type(result) end
-        return result
+        if not str or str=="" then return nil,"Empty string" end
+        if #str>MAX_SETTINGS_BYTES then return nil,SIZE_ERROR end
+        return addonTable.SettingsData.Parse(str)
     end
 
     -- Companions keep their own saved variables; UIThingsDB alone does not
     -- include their options or positions. Optional fields preserve LUIT1 imports.
     local companionSettings = {
+        {key="actionBars", variable="LunaUITweaksActionBarsDB", name="Action Bars"},
         {key="bags", variable="LunaUITweaksBagsDB", name="Bags"},
         {key="unitFrames", variable="LunaUFDB", name="Unit Frames"},
         {key="objectiveTracker", variable="LunaObjectiveTrackerDB", name="Objective Tracker"},
@@ -190,16 +185,14 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
     local function ValidateImportData(data)
         local client=addonTable.Client
         if client then
-            if data.gameFlavor and data.gameFlavor~=client.flavor then
+            if data.gameFlavor and data.gameFlavor~=client.flavor and not (client.isForever and data.gameFlavor=="retail") then
                 return nil, "This export belongs to a different WoW version (Retail/Forever)."
             end
-            if client.isForever and not data.gameFlavor and (data.settings or data.talentBuilds or data.companions) then
-                return nil, "This older export has no game version. Create a Forever settings export instead of importing Retail settings."
-            end
-            if client.isForever and data.talentBuilds then return nil, "Talent build import is disabled in the Forever first pass." end
+
         end
         if data.settings ~= nil and type(data.settings) ~= "table" then return nil, "Invalid settings data" end
         if data.talentBuilds ~= nil and type(data.talentBuilds) ~= "table" then return nil, "Invalid talent build data" end
+        if data.questReminders ~= nil and type(data.questReminders) ~= "table" then return nil, "Invalid quest reminder data" end
         if data.version ~= nil and type(data.version) ~= "string" and type(data.version) ~= "number" then return nil, "Invalid version" end
         if data.companions ~= nil then
             if type(data.companions) ~= "table" then return nil, "Invalid companion settings" end
@@ -209,13 +202,38 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 local settings=data.companions[entry.key]
                 if settings ~= nil then
                     if type(settings) ~= "table" then return nil, "Invalid "..entry.name.." settings" end
-                    if type(_G[entry.variable]) ~= "table" then
+                    if type(_G[entry.variable]) ~= "table" and not (client and client.isForever) then
                         return nil, "Enable LunaUITweaks "..entry.name.." and /reload before importing this export."
                     end
                 end
             end
             for key in pairs(data.companions) do
-                if not known[key] then return nil, "Unsupported companion settings in this export" end
+                if not known[key] and not (client and client.isForever) then return nil, "Unsupported companion settings in this export" end
+            end
+        end
+        local checker=addonTable.SettingsData
+        local valid,err=checker.Validate(data,nil,"export")
+        if not valid then return nil,err end
+        local settings=data.settings
+        if settings and client and client.isForever and client.FilterImportedSettings then
+            settings=client.FilterImportedSettings(settings)
+        end
+        if settings then
+            local schema=addonTable.Core and addonTable.Core.DEFAULTS or UIThingsDB
+            valid,err=checker.Validate(settings,schema,"settings")
+            if not valid then return nil,err end
+            valid,err=checker.ValidateMainSettings(settings)
+            if not valid then return nil,err end
+        end
+        for _,entry in ipairs(companionSettings) do
+            local value=data.companions and data.companions[entry.key]
+            if value and type(_G[entry.variable])=="table" then
+                valid,err=checker.Validate(value,_G[entry.variable],entry.name)
+                if not valid then return nil,err end
+                if entry.key=="actionBars" then
+                    valid,err=checker.ValidateActionBars(value)
+                    if not valid then return nil,err end
+                end
             end
         end
         return true
@@ -226,6 +244,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         if addonTable.Client then exportData.gameFlavor=addonTable.Client.flavor end
         if includeSettings and UIThingsDB then
             exportData.settings = UIThingsDB
+            if type(LunaUITweaks_QuestReminders)=="table" then exportData.questReminders=LunaUITweaks_QuestReminders end
             local companions={}
             for _,entry in ipairs(companionSettings) do
                 if type(_G[entry.variable]) == "table" then companions[entry.key]=_G[entry.variable] end
@@ -239,6 +258,8 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         exportData.version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
         exportData.exportDate = date("%Y-%m-%d %H:%M:%S")
 
+        local valid,err=ValidateImportData(exportData)
+        if not valid then return nil,err end
         local serialized = SerializeValue(exportData)
         if #serialized > MAX_SETTINGS_BYTES then return nil, SIZE_ERROR end
         return "LUIT1:" .. Base64Encode(serialized)
@@ -291,10 +312,36 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
             end
         end
     end
+    local function ImportPlan(data)
+        local client=addonTable.Client
+        local forever=client and client.isForever
+        local plan={settings=data.settings,companions={},questReminders=data.questReminders,talentBuilds=data.talentBuilds}
+        local skipped={}
+        if forever then
+            if data.settings and client.FilterImportedSettings then plan.settings,skipped=client.FilterImportedSettings(data.settings) end
+            if data.talentBuilds then plan.talentBuilds=nil;skipped[#skipped+1]="Retail talent builds/reminders" end
+            if data.questReminders and data.gameFlavor~="forever" then plan.questReminders=nil;skipped[#skipped+1]="Retail quest reminders" end
+        end
+        local known={}
+        for _,entry in ipairs(companionSettings) do
+            known[entry.key]=true
+            local settings=data.companions and data.companions[entry.key]
+            if settings then
+                if type(_G[entry.variable])=="table" then plan.companions[entry.key]=settings
+                else skipped[#skipped+1]=entry.name.." (companion not loaded)" end
+            end
+        end
+        for key in pairs(data.companions or {}) do
+            if not known[key] then skipped[#skipped+1]="unknown companion: "..tostring(key) end
+        end
+        return plan,skipped
+    end
     local function ApplyImportData(data)
         -- Validate every section before touching any saved variables.
         local valid, err=ValidateImportData(data)
         if not valid then return nil, err end
+        local skipped
+        data,skipped=ImportPlan(data)
         local count=0
         if data.settings then
             DeepMerge(UIThingsDB,data.settings)
@@ -309,16 +356,26 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 end
             end
         end
+        if data.questReminders then
+            LunaUITweaks_QuestReminders=data.questReminders
+            count=count+1
+        end
         if data.talentBuilds then
             LunaUITweaks_TalentReminders=data.talentBuilds
             count=count+1
         end
+        if count==0 then return nil,"This export contains no compatible settings for this client." end
         if addonTable.Client then addonTable.Client.ApplySettings(UIThingsDB) end
-        return count
+        return count,nil,skipped
     end
 
     -- Export dialog
     local function ShowExportDialog()
+        if exportFrame then
+            exportFrame.editBox:SetText("")
+            exportFrame:Show()
+            return
+        end
         local f = CreateFrame("Frame", "LunaSettingsExportFrame", UIParent, "BackdropTemplate")
         f:SetSize(500, 380)
         f:SetPoint("CENTER")
@@ -372,6 +429,8 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         editBox:SetWidth(450)
         editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
         scrollFrame:SetScrollChild(editBox)
+        exportFrame=f; f.editBox=editBox
+        f:HookScript("OnHide",function() editBox:ClearFocus() end)
 
         generateBtn:SetScript("OnClick", function()
             local includeSettings = settingsCheck:GetChecked()
@@ -396,7 +455,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         closeBtn:SetPoint("BOTTOMRIGHT", -10, 10)
         closeBtn:SetText("Close")
         closeBtn:SetScript("OnClick", function()
-            f:Hide(); f:SetParent(nil)
+            f:Hide()
         end)
 
         f:Show()
@@ -404,6 +463,12 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
 
     -- Import dialog
     local function ShowImportDialog()
+        if importFrame then
+            importFrame.editBox:SetText("")
+            importFrame:Show()
+            importFrame.editBox:SetFocus()
+            return
+        end
         local f = CreateFrame("Frame", "LunaSettingsImportFrame", UIParent, "BackdropTemplate")
         f:SetSize(500, 320)
         f:SetPoint("CENTER")
@@ -445,6 +510,8 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         editBox:SetWidth(450)
         editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
         scrollFrame:SetScrollChild(editBox)
+        importFrame=f; f.editBox=editBox
+        f:HookScript("OnHide",function() editBox:ClearFocus() end)
 
         -- Import button
         local importBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -459,17 +526,21 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 return
             end
 
+            local plan,skipped=ImportPlan(data)
             local what = {}
-            if data.settings then table.insert(what, "settings") end
+            if plan.settings then table.insert(what, "settings") end
             if data.companions then
                 for _,entry in ipairs(companionSettings) do
-                    if data.companions[entry.key] then table.insert(what,entry.name.." settings") end
+                    if plan.companions[entry.key] then table.insert(what,entry.name.." settings") end
                 end
             end
-            if data.talentBuilds then table.insert(what, "talent builds") end
+            if plan.questReminders then table.insert(what, "quest reminders") end
+            if plan.talentBuilds then table.insert(what, "talent builds") end
+            if #what==0 then editBox:SetText("No compatible settings in this export.");return end
             local desc = table.concat(what, " and ")
             if data.version then desc = desc .. " (from v" .. data.version .. ")" end
 
+            if #skipped>0 then desc=desc.."\n\nSkipped: "..table.concat(skipped,", ") end
             StaticPopup_Show("LUNA_IMPORT_CONFIRM", desc, nil, { data = data, frame = f })
         end)
 
@@ -479,7 +550,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
         cancelBtn:SetPoint("BOTTOMRIGHT", -10, 10)
         cancelBtn:SetText("Cancel")
         cancelBtn:SetScript("OnClick", function()
-            f:Hide(); f:SetParent(nil)
+            f:Hide()
         end)
 
         f:Show()
@@ -496,7 +567,7 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                 return
             end
             if popupData.frame then
-                popupData.frame:Hide(); popupData.frame:SetParent(nil)
+                popupData.frame:Hide()
             end
             ReloadUI()
         end,

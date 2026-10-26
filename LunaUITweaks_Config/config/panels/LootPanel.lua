@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(650, 980)
+    child:SetSize(650, 1300)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -392,4 +392,5 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     bonusHelp:SetPoint("TOPLEFT", 45, -930)
     bonusHelp:SetTextColor(0.5, 0.5, 0.5)
     bonusHelp:SetText("Works even when loot toasts are disabled.")
+    addonTable.ConfigSetup.LootConvenience(child,-995)
 end

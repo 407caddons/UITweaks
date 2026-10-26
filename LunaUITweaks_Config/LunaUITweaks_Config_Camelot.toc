@@ -8,7 +8,9 @@
 ## X-Part-Of: LunaUITweaks
 ## IconTexture: Interface\AddOns\LunaUITweaks\Icon.tga
 
+config\SettingsData.lua
 config\Theme.lua
+config\panels\ConvenienceSections.lua
 config\panels\VendorPanel.lua
 config\panels\CombatPanel.lua
 config\panels\FramesPanel.lua
@@ -35,7 +37,6 @@ config\panels\GearReviewPanel.lua
 config\panels\TankDebuffsPanel.lua
 config\panels\BuffAlertsPanel.lua
 config\panels\ProcAlertsPanel.lua
-config\panels\QualityOfLifePanel.lua
 config\panels\CooldownManagerPanel.lua
 config\panels\CompactGroupFinderPanel.lua
 config\panels\CustomEncounterTimersPanel.lua

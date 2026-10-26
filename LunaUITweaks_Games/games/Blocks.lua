@@ -533,7 +533,7 @@ end
 local StartFlash, GameOver, StartMPGame, EndMPGame, StartGame, AddScore, RestartGravity, BuildUI, CheckMPWinner
 
 local function AnnounceGameStart()
-    local channel = IsInRaid() and "RAID" or (IsInGroup() and "PARTY" or nil)
+    local channel = addonTable.Comm.GetChannel()
     if not channel then return end
     local names = {}
     for name in pairs(MP.accepted) do table.insert(names, name) end
@@ -1534,6 +1534,7 @@ function addonTable.Blocks.CloseGame()
 end
 
 function addonTable.Blocks.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then
         BuildUI()  -- BuildUI is forward-declared so this is always valid
     end

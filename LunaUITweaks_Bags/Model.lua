@@ -35,6 +35,18 @@ function Bags.Classify(info, quest)
     if data.usable or data.classID==classes.Consumable then return "consumables", data.name end
     return "other", data.name
 end
+-- Use each full link rather than caching by item ID: upgrades and bonuses can
+-- give two copies of the same item different effective levels.
+function Bags.GearItemLevel(info)
+    if not info then return end
+    local data=ItemData(info.itemID)
+    if data.classID~=Enum.ItemClass.Weapon and data.classID~=Enum.ItemClass.Armor then return end
+    local getLevel=C_Item.GetDetailedItemLevelInfo or _G.GetDetailedItemLevelInfo
+    if not getLevel or not info.hyperlink then return end
+    local level=getLevel(info.hyperlink)
+    if issecretvalue and issecretvalue(level) then return end
+    if type(level)=="number" and level>0 then return math.floor(level+.5) end
+end
 function Bags.InventoryIDs()
     local ids={}
     for id=0,(NUM_BAG_SLOTS or 4) do ids[#ids+1]=id end

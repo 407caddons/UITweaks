@@ -528,6 +528,10 @@ function addonTable.Config.Initialize()
     end
 end
 
+function addonTable.Config.CloseWindow()
+    if configWindow then configWindow:Hide() end
+end
+
 function addonTable.Config.ToggleWindow()
     if not configWindow then
         addonTable.Config.Initialize()

@@ -218,7 +218,8 @@ local function ApplyDefaults(db, defaults)
             else
                 ApplyDefaults(db[key], value)
             end
-        elseif db[key] == nil then
+        elseif db[key] == nil or type(db[key]) ~= type(value)
+            or (type(value) == "number" and (db[key] ~= db[key] or db[key] == math.huge or db[key] == -math.huge)) then
             db[key] = value
         end
     end
@@ -286,6 +287,13 @@ local function OnEvent(self, event, ...)
 
         -- Default Settings Table
         local DEFAULTS = {
+            nameplateColors = {
+                enabled = true,
+                idle = { r = 0.65, g = 0.55, b = 0.18 },
+                noTank = { r = 0.85, g = 0.20, b = 0.20 },
+                otherTank = { r = 0.25, g = 0.50, b = 0.90 },
+                selfTank = { r = 0.25, g = 0.75, b = 0.35 },
+            },
             vendor = {
                 enabled = false,
                 autoRepair = true,
@@ -403,6 +411,7 @@ local function OnEvent(self, event, ...)
                 essential = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=40, spacing=4, pos={point="CENTER",x=-130,y=-180}},
                 utility = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=32, spacing=4, pos={point="CENTER",x=-106,y=-260}},
                 buffs = {enabled=true, growthDirection="RIGHT", columns=6, iconSize=40, spacing=4, pos={point="CENTER",x=-130,y=-80}},
+                buffBars = {enabled=true, growthDirection="DOWN", columns=10, barWidth=260, barHeight=30, spacing=4, pos={point="CENTER",x=180,y=-80}},
             },
             qualityOfLife = {
                 enabled = true, cursor = true, cursorSize = 28, cursorAlpha = 1,

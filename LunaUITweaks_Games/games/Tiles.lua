@@ -587,6 +587,7 @@ function addonTable.Game2048.CloseGame()
 end
 
 function addonTable.Game2048.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then
         BuildUI()
     end

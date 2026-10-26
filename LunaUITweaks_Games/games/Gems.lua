@@ -489,6 +489,7 @@ function addonTable.Gems.CloseGame()
 end
 
 function addonTable.Gems.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then BuildUI() end
     if gameFrame:IsShown() then
         gameFrame:Hide()

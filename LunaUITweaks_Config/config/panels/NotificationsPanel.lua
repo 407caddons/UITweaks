@@ -5,7 +5,7 @@ addonTable.ConfigSetup = addonTable.ConfigSetup or {}
 local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
-    Helpers.CreateResetButton(panel, "misc")
+    Helpers.CreateResetButton(panel, "notifications")
     local function UpdateNavColor()
         local anyEnabled = UIThingsDB.misc.personalOrders or UIThingsDB.misc.mailNotification
             or UIThingsDB.misc.boeAlert or UIThingsDB.misc.deathNotify or UIThingsDB.misc.whisperAlert
@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(panel:GetWidth() - 30, 1400)
+    scrollChild:SetSize(panel:GetWidth() - 30, 1800)
     scrollFrame:SetScrollChild(scrollChild)
 
     scrollFrame:SetScript("OnShow", function()
@@ -37,7 +37,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     noteLabel:SetWidth(560)
     noteLabel:SetJustifyH("LEFT")
     noteLabel:SetTextColor(0.5, 0.5, 0.5)
-    noteLabel:SetText("Notifications require the General UI module to be enabled.")
+    noteLabel:SetText("Order, mail, item, death and whisper notifications require General UI. Gameplay alerts have their own switches.")
 
     -- == Personal Orders Section ==
     Helpers.CreateSectionHeader(panel, "Personal Orders", -25)
@@ -699,4 +699,5 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
         end
     end)
     UIDropDownMenu_SetSelectedValue(whisperVoiceDropdown, UIThingsDB.misc.whisperTtsVoice or 0)
+    addonTable.ConfigSetup.GameplayAlerts(panel,-1380)
 end

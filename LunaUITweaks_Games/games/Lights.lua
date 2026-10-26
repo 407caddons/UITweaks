@@ -414,6 +414,7 @@ function addonTable.Lights.CloseGame()
 end
 
 function addonTable.Lights.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then
         BuildUI()
         if UIThingsDB.games and UIThingsDB.games.lights then

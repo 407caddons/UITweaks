@@ -1949,6 +1949,7 @@ function addonTable.Boxes.CloseGame()
 end
 
 function addonTable.Boxes.ShowGame()
+    if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
     if not gameFrame then
         BuildUI()
         -- Load best scores from saved vars
