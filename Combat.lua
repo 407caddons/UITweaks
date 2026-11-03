@@ -9,9 +9,6 @@ local startTime = 0
 local inCombat = false
 local timeElapsed = 0
 
-local TtdApplySettings   -- forward declaration; defined in TTD section below
-local TtdRefreshDisplay  -- forward declaration; defined in TTD section below
-
 local function SetFormattedTime(fontString, seconds)
     local m = math.floor(seconds / 60)
     local s = math.floor(seconds % 60)
@@ -72,7 +69,16 @@ function addonTable.Combat.UpdateSettings()
         })
         timerFrame:SetBackdropColor(0, 0, 0, 0.5)
     end
-    TtdApplySettings()
+end
+
+-- Combat transitions only change the text colour; a full UpdateSettings would
+-- also re-register events and re-apply position, font and backdrop settings.
+local function ApplyTimerColor()
+    local settings = UIThingsDB.combat
+    local color = inCombat and settings.colorInCombat or settings.colorOutCombat
+    if color then
+        timerText:SetTextColor(color.r, color.g, color.b)
+    end
 end
 
 local function Init()
@@ -102,7 +108,7 @@ local function Init()
             startTime = GetTime()
             timeElapsed = 0
             timerText:SetText("00:00")
-            addonTable.Combat.UpdateSettings() -- Update color
+            ApplyTimerColor()
         elseif event == "PLAYER_REGEN_ENABLED" then
             inCombat = false
             -- Final update
@@ -110,7 +116,7 @@ local function Init()
                 timeElapsed = GetTime() - startTime
                 SetFormattedTime(timerText, timeElapsed)
             end
-            addonTable.Combat.UpdateSettings() -- Update color
+            ApplyTimerColor()
         end
     end)
     addonTable.Combat.ApplyTimerEvents()
@@ -140,218 +146,6 @@ function addonTable.Combat.ApplyTimerEvents()
         timerFrame:SetScript("OnUpdate", nil)
         updateTimer = 0
     end
-end
-
--- ============================================================
--- Time to Die (TTD) Timer
--- ============================================================
-
-local ttdFrame
-local ttdLabel
-local ttdText
-
-local TTD_SAMPLE_INTERVAL = 0.5   -- seconds between health% samples
-local TTD_MIN_DATA_SECS   = 3     -- seconds of data required before showing
-local TTD_WINDOW_SECS     = 10    -- rolling window size in seconds
-
--- Returns health percent (0-100) as a plain number, or nil when the value is
--- secret and cannot be read. Secret values cannot be laundered: a StatusBar
--- SetValue/GetValue round-trip returns the value STILL SECRET, and arithmetic
--- on a secret in addon-tainted execution is a Lua error. When Blizzard marks
--- target health secret there is no way to compute TTD -- skip the sample.
-local function TtdGetHealthPct()
-    if not UnitExists("target") then return nil end
-    -- Native percent first: C-level, may stay readable in more contexts
-    if UnitHealthPercent then
-        local pct = UnitHealthPercent("target")
-        if type(pct) == "number" and not issecretvalue(pct) then
-            return pct
-        end
-    end
-    local hp    = UnitHealth("target")
-    local hpMax = UnitHealthMax("target")
-    if not hp or not hpMax then return nil end
-    if issecretvalue(hp) or issecretvalue(hpMax) then return nil end
-    if hpMax <= 0 then return nil end
-    return hp / hpMax * 100
-end
-
-local ttdSamples     = {}   -- array of { pct=number (non-secret), t=number }
-local ttdSampleAccum = 0
-local ttdDispAccum   = 0
-
-local function TtdClear()
-    for i = #ttdSamples, 1, -1 do ttdSamples[i] = nil end
-    ttdSampleAccum = 0
-    ttdDispAccum   = 0
-end
-
-local function TtdPushSample()
-    if not UnitExists("target") then return end
-    if not UnitCanAttack("player", "target") then return end
-    local pct = TtdGetHealthPct()
-    if not pct then return end -- health is secret or unavailable; no sample
-    local t   = GetTime()
-    ttdSamples[#ttdSamples + 1] = { pct = pct, t = t }
-    -- Trim entries older than the rolling window
-    local cutoff = t - TTD_WINDOW_SECS
-    while #ttdSamples > 1 and ttdSamples[1].t < cutoff do
-        table.remove(ttdSamples, 1)
-    end
-end
-
-local function TtdEstimate()
-    if #ttdSamples < 2 then return nil end
-    local oldest = ttdSamples[1]
-    local newest = ttdSamples[#ttdSamples]
-    local elapsed = newest.t - oldest.t
-    if elapsed < TTD_MIN_DATA_SECS then return nil end
-    local lost = oldest.pct - newest.pct
-    if lost <= 0 then return nil end            -- target not taking damage
-    local secs = newest.pct / (lost / elapsed)
-    if secs < 0 then return nil end
-    return secs
-end
-
-TtdApplySettings = function()
-    if not ttdFrame then return end
-    local s = UIThingsDB.combat
-    -- Font — same as combat timer
-    if s.font and s.fontSize then
-        local smallSize = math.max(8, math.floor(s.fontSize * 0.65))
-        ttdLabel:SetFont(s.font, smallSize, "OUTLINE")
-        ttdText:SetFont(s.font, s.fontSize, "OUTLINE")
-    end
-    -- Color — same in-combat color as combat timer
-    local c = s.colorInCombat or { r = 1, g = 1, b = 1 }
-    ttdText:SetTextColor(c.r, c.g, c.b)
-    ttdLabel:SetTextColor(c.r * 0.6, c.g * 0.6, c.b * 0.6)
-    -- Position (CENTER anchor, stored as x/y offsets from UIParent center)
-    ttdFrame:ClearAllPoints()
-    local pos = s.ttdPos
-    if pos then
-        ttdFrame:SetPoint("CENTER", UIParent, "CENTER", pos.x, pos.y)
-    else
-        ttdFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -30)
-    end
-    -- Lock
-    local locked = (s.ttdLocked ~= false)
-    if locked then
-        ttdFrame:EnableMouse(false)
-        ttdFrame:SetBackdrop(nil)
-    else
-        ttdFrame:EnableMouse(true)
-        ttdFrame:SetBackdrop({
-            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 16,
-            insets = { left = 4, right = 4, top = 4, bottom = 4 }
-        })
-        ttdFrame:SetBackdropColor(0, 0, 0, 0.5)
-    end
-    TtdRefreshDisplay()
-end
-
-function addonTable.Combat.TtdApplySettings()
-    TtdApplySettings()
-    TtdRefreshDisplay()
-end
-
-TtdRefreshDisplay = function()
-    if not ttdFrame then return end
-    local s = UIThingsDB.combat
-    if not s.enabled or s.ttdEnabled == false then
-        ttdFrame:Hide(); return
-    end
-    -- Show anchor text when unlocked so the frame can be positioned out of combat
-    if not inCombat or not UnitExists("target") or not UnitCanAttack("player", "target") then
-        if s.ttdLocked == false then
-            ttdLabel:SetText("TTD")
-            ttdText:SetText("|cFF00FF00Anchor|r")
-            ttdFrame:Show()
-        else
-            ttdFrame:Hide()
-        end
-        return
-    end
-    ttdFrame:Show()
-    ttdLabel:SetText("TTD")
-    local secs = TtdEstimate()
-    if secs then
-        local m = math.floor(secs / 60)
-        local sec = math.floor(secs % 60)
-        ttdText:SetFormattedText("%02d:%02d", m, sec)
-    else
-        ttdText:SetText("--:--")
-    end
-end
-
-local ttdOnUpdateAccum = 0
-local function TtdOnUpdate(self, elapsed)
-    if not inCombat then return end
-    ttdSampleAccum = ttdSampleAccum + elapsed
-    if ttdSampleAccum >= TTD_SAMPLE_INTERVAL then
-        ttdSampleAccum = 0
-        TtdPushSample()
-    end
-    ttdOnUpdateAccum = ttdOnUpdateAccum + elapsed
-    if ttdOnUpdateAccum >= 1.0 then
-        ttdOnUpdateAccum = 0
-        TtdRefreshDisplay()
-    end
-end
-
-local function InitTTD()
-    ttdFrame = CreateFrame("Frame", "UIThingsTTDTimer", UIParent, "BackdropTemplate")
-    ttdFrame:SetSize(130, 42)
-    ttdFrame:SetMovable(true)
-    ttdFrame:SetClampedToScreen(true)
-    ttdFrame:RegisterForDrag("LeftButton")
-    ttdFrame:SetFrameStrata("MEDIUM")
-
-    ttdFrame:SetScript("OnDragStart", ttdFrame.StartMoving)
-    ttdFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local cx, cy = self:GetCenter()
-        local ux, uy = UIParent:GetCenter()
-        UIThingsDB.combat.ttdPos = {
-            x = math.floor(cx - ux + 0.5),
-            y = math.floor(cy - uy + 0.5),
-        }
-    end)
-    ttdFrame:SetScript("OnUpdate", TtdOnUpdate)
-
-    -- "TTD" label (small, dim — sits above the time value)
-    ttdLabel = ttdFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ttdLabel:SetPoint("TOPLEFT", 6, -4)
-    ttdLabel:SetText("TTD")
-
-    -- Time value (large, matches combat timer)
-    ttdText = ttdFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    ttdText:SetPoint("BOTTOMLEFT", 6, 6)
-    ttdText:SetPoint("BOTTOMRIGHT", -6, 6)
-    ttdText:SetJustifyH("CENTER")
-    ttdText:SetText("--:--")
-
-    -- Event frame: reset samples on target change or combat transitions
-    local evtFrame = CreateFrame("Frame")
-    evtFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
-    evtFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    evtFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    evtFrame:SetScript("OnEvent", function(self, event)
-        TtdClear()
-        if event == "PLAYER_REGEN_DISABLED" then
-            -- Defer: timerFrame also handles this event (sets inCombat = true).
-            -- Event processing order between frames is not guaranteed, so defer
-            -- TtdRefreshDisplay to the next timer tick to ensure inCombat is set.
-            C_Timer.After(0, TtdRefreshDisplay)
-        else
-            TtdRefreshDisplay()
-        end
-    end)
-
-    TtdApplySettings()
-    ttdFrame:Hide()
 end
 
 -- Combat Logging by Instance Difficulty
@@ -502,32 +296,52 @@ local PATTERN_FLASK = "flask"
 local PATTERN_PHIAL = "phial"
 local PATTERN_WELL_FED = "well%s-fed"
 
+-- Player aura slots can stay secret after combat ends (encounters, challenge
+-- modes); GetBuffDataByIndex then errors when called from addon code.
+local function PlayerAurasRestricted()
+    if InCombatLockdown() then return true end
+    if IsEncounterInProgress and IsEncounterInProgress() then return true end
+    local restricted = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
+    if restricted then
+        for restrictionType = 0, 2 do -- Combat, Encounter, ChallengeMode
+            local ok, active = pcall(restricted, restrictionType)
+            if not ok or active then return true end
+        end
+    end
+    return false
+end
+
 local function ScanConsumableBuffs()
     -- Cache results within the same frame to avoid redundant scans
     local now = GetTime()
     if now == lastAuraScanTime then return end
     lastAuraScanTime = now
 
-    hasFlaskCache = false
-    hasFoodCache = false
+    -- Keep the last known result while auras cannot be read, rather than
+    -- reporting a flask or food buff as missing.
+    if PlayerAurasRestricted() then return end
 
+    local hasFlask, hasFood = false, false
     for i = 1, 40 do
-        local auraData = C_UnitAuras.GetBuffDataByIndex("player", i)
+        -- pcall covers the gap before restriction state updates.
+        local ok, auraData = pcall(C_UnitAuras.GetBuffDataByIndex, "player", i)
+        if not ok then return end
         if not auraData then break end
 
         local name = auraData.name
         if name and not issecretvalue(name) then
             local lowerName = string.lower(name)
-            if not hasFlaskCache and (string.find(lowerName, PATTERN_FLASK) or string.find(lowerName, PATTERN_PHIAL)) then
-                hasFlaskCache = true
+            if not hasFlask and (string.find(lowerName, PATTERN_FLASK) or string.find(lowerName, PATTERN_PHIAL)) then
+                hasFlask = true
             end
-            if not hasFoodCache and string.find(lowerName, PATTERN_WELL_FED) then
+            if not hasFood and string.find(lowerName, PATTERN_WELL_FED) then
                 -- Exclude "Food" (regen) and "Drink" (mana) but allow "Well Fed"
-                hasFoodCache = true
+                hasFood = true
             end
-            if hasFlaskCache and hasFoodCache then break end
+            if hasFlask and hasFood then break end
         end
     end
+    hasFlaskCache, hasFoodCache = hasFlask, hasFood
 end
 
 local function HasFlaskBuff()
@@ -827,7 +641,62 @@ local consumableIgnoreSet = {
     ["moll-e"] = true,
 }
 
-local function TrackConsumableUsage(itemID, retries)
+-- Name and item-class guesses also match non-enchant items (Reaves modules,
+-- Venomstones, ...). A weapon item is only learned once a temporary weapon
+-- enchant actually appears or is refreshed within 20s of using it (oils are
+-- applied by clicking the weapon after the use).
+local weaponWatch = nil
+local function WeaponEnchantSnapshot()
+    local hasMH, mhLeft, _, mhID, hasOH, ohLeft, _, ohID = GetWeaponEnchantInfo()
+    local Public = addonTable.Secret.IsPublic
+    for _, v in ipairs({ hasMH, mhLeft, mhID, hasOH, ohLeft, ohID }) do
+        if not Public(v) then return nil end
+    end
+    return { time = GetTime(), mh = hasMH and mhLeft or 0, mhID = hasMH and mhID or 0,
+        oh = hasOH and ohLeft or 0, ohID = hasOH and ohID or 0 }
+end
+local function WeaponEnchantApplied(before, now)
+    if not before or not now then return false end
+    local elapsed = (now.time - before.time) * 1000
+    if now.mhID ~= 0 and (now.mhID ~= before.mhID or now.mh > before.mh - elapsed + 5000) then return true end
+    if now.ohID ~= 0 and (now.ohID ~= before.ohID or now.oh > before.oh - elapsed + 5000) then return true end
+    return false
+end
+local function WatchWeaponEnchant(itemID, onConfirmed)
+    if weaponWatch then weaponWatch.ticker:Cancel() end
+    local before = WeaponEnchantSnapshot()
+    if not before then weaponWatch = nil; return end
+    local watch = { itemID = itemID }
+    watch.ticker = C_Timer.NewTicker(0.5, function()
+        if WeaponEnchantApplied(before, WeaponEnchantSnapshot()) then
+            watch.ticker:Cancel()
+            if weaponWatch == watch then weaponWatch = nil end
+            onConfirmed()
+        end
+    end, 40)
+    weaponWatch = watch
+end
+
+-- Static check from the item's Use line: a timed buff on your weapon
+-- ("...your weapon... for 2 hours"). Returns nil while item data is loading.
+-- English text only; other locales still learn items by enchant confirmation.
+local function IsWeaponBuffItem(itemID)
+    local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(itemID)
+    if classID ~= 0 then return false end
+    local data = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
+    if not data or not data.lines then return nil end
+    local Public = addonTable.Secret.IsPublic
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if Public(text) and type(text) == "string" and text:find("^Use:") then
+            text = text:lower():gsub("%b()", "")
+            if text:find("weapon") and (text:find("%d+%s*hour") or text:find("%d+%s*min")) then return true end
+        end
+    end
+    return false
+end
+
+local function TrackConsumableUsage(itemID, retries, weaponConfirmed)
     if not itemID then return end
 
     -- Exclude toys
@@ -842,7 +711,7 @@ local function TrackConsumableUsage(itemID, retries)
         if C_Item and C_Item.RequestLoadItemDataByID then
             C_Item.RequestLoadItemDataByID(itemID)
         end
-        C_Timer.After(0.5, function() TrackConsumableUsage(itemID, retries) end)
+        C_Timer.After(0.5, function() TrackConsumableUsage(itemID, retries, weaponConfirmed) end)
         return
     end
 
@@ -864,6 +733,17 @@ local function TrackConsumableUsage(itemID, retries)
         end
     end
 
+    -- Weapon buff items found by tooltip need not match the name/class guesses.
+    if weaponConfirmed and not category then category = "weapon" end
+    if category == "weapon" and not weaponConfirmed then
+        if IsWeaponBuffItem(itemID) then
+            weaponConfirmed = "static"
+        else
+            WatchWeaponEnchant(itemID, function() TrackConsumableUsage(itemID, nil, "enchant") end)
+            return
+        end
+    end
+
     if category then
         local usage = UIThingsDB.combat.reminders.consumableUsage[category]
         local foundIndex = nil
@@ -882,7 +762,8 @@ local function TrackConsumableUsage(itemID, retries)
         end
 
         -- Add to end of list
-        table.insert(usage, { id = itemID, name = itemName, icon = itemIcon })
+        table.insert(usage, { id = itemID, name = itemName, icon = itemIcon,
+            confirmed = weaponConfirmed == "enchant" or nil })
 
         -- Trim older items if list is too long
         if #usage > 5 then
@@ -948,6 +829,33 @@ local bagScanCacheDirty = true
 local function InvalidateBagScanCache()
     bagScanCacheDirty = true
     wipe(bagScanCache)
+end
+
+-- Drop remembered weapon items whose tooltip is not a timed weapon buff (unless
+-- an enchant was seen after using them), then learn weapon buff items already
+-- in the bags so they show without being used first.
+local function RefreshWeaponUsage()
+    local usage = UIThingsDB.combat.reminders.consumableUsage
+    usage = usage and usage.weapon
+    if not usage then return end
+    local known = {}
+    for i = #usage, 1, -1 do
+        local item = usage[i]
+        if not item.confirmed and item.id and IsWeaponBuffItem(item.id) == false then
+            table.remove(usage, i)
+        elseif item.id then
+            known[item.id] = true
+        end
+    end
+    for bag = 0, 4 do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local itemID = C_Container.GetContainerItemID(bag, slot)
+            if itemID and not known[itemID] and IsWeaponBuffItem(itemID) then
+                known[itemID] = true
+                TrackConsumableUsage(itemID, nil, "static")
+            end
+        end
+    end
 end
 
 -- Helper to scan bags and group items by name
@@ -1393,6 +1301,7 @@ local function InitReminders()
     -- Pre-create secure pet icon buttons (must happen out of combat)
     CreatePetIconButtons()
     CreateClassBuffButton()
+    RefreshWeaponUsage()
     CreateConsumableIconButtons()
     HookConsumableUsage()
 
@@ -1408,6 +1317,7 @@ local function InitReminders()
         end
         if event == "BAG_UPDATE_DELAYED" then
             InvalidateBagScanCache()
+            RefreshWeaponUsage()
         end
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
             -- Consumable usage is tracked via UseAction/UseContainerItem/UseItemByName hooks.
@@ -1451,8 +1361,20 @@ local function ApplyReminderEvents()
         reminderEventFrame:UnregisterAllEvents()
         StopWeaponBuffTicker()
         if reminderFrame then
-            reminderFrame:Hide()
-            UnregisterStateDriver(reminderFrame, "visibility")
+            -- Secure frame: Hide/UnregisterStateDriver are blocked in combat.
+            if InCombatLockdown() then
+                local function DeferredHide()
+                    EventBus.Unregister("PLAYER_REGEN_ENABLED", DeferredHide)
+                    local s = UIThingsDB.combat.reminders
+                    if UIThingsDB.combat.enabled and s and s.enabled ~= false then return end
+                    reminderFrame:Hide()
+                    UnregisterStateDriver(reminderFrame, "visibility")
+                end
+                EventBus.Register("PLAYER_REGEN_ENABLED", DeferredHide, "Combat")
+            else
+                reminderFrame:Hide()
+                UnregisterStateDriver(reminderFrame, "visibility")
+            end
         end
     end
 end
@@ -1480,13 +1402,33 @@ end
 EventBus.Register("PLAYER_LOGIN", function()
     if addonTable.Core and addonTable.Core.SafeAfter then
         addonTable.Core.SafeAfter(1, Init)
-        addonTable.Core.SafeAfter(1, InitTTD)
         addonTable.Core.SafeAfter(1, InitReminders)
         addonTable.Core.SafeAfter(1, ApplyLogFrameEvents)
     elseif C_Timer and C_Timer.After then
         C_Timer.After(1, Init)
-        C_Timer.After(1, InitTTD)
         C_Timer.After(1, InitReminders)
         C_Timer.After(1, ApplyLogFrameEvents)
     end
 end, "Combat")
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("Combat", {
+    setLocked = function(locked)
+        local db = UIThingsDB.combat
+        if not db then return end
+        db.locked = locked
+        if db.reminders then db.reminders.locked = locked end
+    end,
+    apply = function()
+        addonTable.Combat.UpdateSettings()
+        addonTable.Combat.UpdateReminders()
+    end,
+})
+addonTable.LayoutMode.RegisterTarget("Combat timer", function() return _G.UIThingsCombatTimer end, function()
+    local db = UIThingsDB.combat
+    return db and db.enabled
+end)
+addonTable.LayoutMode.RegisterTarget("Consumable reminders", function() return _G.LunaCombatReminders end, function()
+    local db = UIThingsDB.combat
+    return db and db.enabled and db.reminders ~= nil
+end)

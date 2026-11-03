@@ -50,7 +50,7 @@ local pct    = UnitHealthPercent(unit [, usePredicted [, curve]])
 
 `UnitHealthPercent` is the C-level percent accessor (used with color curves by Blizzard UI); check its return with `issecretvalue()` before doing math — it is also secret when health is secret.
 
-**Used in:** Combat.lua (TTD timer — samples are skipped when health is secret).
+**Used in:** nothing currently (the Combat.lua time-to-die timer was removed because target health is secret in combat).
 
 ---
 

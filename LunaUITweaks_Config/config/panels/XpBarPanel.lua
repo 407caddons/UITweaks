@@ -150,7 +150,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     local showTimersBtn = CreateFrame("CheckButton", "UIThingsXpBarShowTimersCheck", child,
         "ChatConfigCheckButtonTemplate")
     showTimersBtn:SetPoint("TOPLEFT", 20, -356)
-    _G[showTimersBtn:GetName() .. "Text"]:SetText("Show est. time-to-level in percent text")
+    _G[showTimersBtn:GetName() .. "Text"]:SetText("Show levelling estimates (time-to-level text, kills-to-level on enemy tooltips)")
     showTimersBtn:SetChecked(UIThingsDB.xpBar.showTimers)
     showTimersBtn:SetScript("OnClick", function(self)
         UIThingsDB.xpBar.showTimers = not not self:GetChecked()

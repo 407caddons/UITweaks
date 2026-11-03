@@ -25,6 +25,13 @@ function Secret.CanAccessValue(value)
     return true
 end
 
+-- True unless the value is a secret. Unlike CanAccessValue, this never
+-- treats a secret as usable, even where canaccessvalue would allow it.
+-- Use it before comparing, doing arithmetic, or using a value as a key.
+function Secret.IsPublic(value)
+    return not (issecretvalue and issecretvalue(value))
+end
+
 function Secret.CanAccessSecrets()
     if canaccesssecrets then
         return canaccesssecrets()

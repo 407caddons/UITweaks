@@ -666,6 +666,11 @@ function addonTable.ConfigSetup.AddonVersions(panel, tab, configWindow)
                     addonTable.Blocks.ShowGame()
                 end
             end)
+            rootDescription:CreateButton("Barrels", function()
+                if addonTable.Barrels and addonTable.Barrels.ShowGame then
+                    addonTable.Barrels.ShowGame()
+                end
+            end)
         end)
     end)
 

@@ -3,6 +3,7 @@ addonTable.XpBar = {}
 
 local EventBus = addonTable.EventBus
 local AbbreviateNumber = addonTable.Core.AbbreviateNumber
+local Secret = addonTable.Secret
 
 -- Frame references
 local barFrame
@@ -15,9 +16,80 @@ local xpText
 local pctText
 local pendingQuestText
 
--- Session tracking
+-- Session tracking. XP gained is accumulated from XP deltas, so loading
+-- screens and level-ups do not restart the rate; the session starts at
+-- login/reload.
 local sessionStartTime = nil
-local sessionStartXP = nil
+local sessionGainedXP = 0
+local lastXP, lastMaxXP
+
+local function AccountXP()
+    local current, max = UnitXP("player"), UnitXPMax("player")
+    if lastXP then
+        if current >= lastXP then
+            sessionGainedXP = sessionGainedXP + (current - lastXP)
+        elseif lastMaxXP then
+            -- XP dropped: a level-up. Count the rest of the old level plus the new XP.
+            sessionGainedXP = sessionGainedXP + math.max(0, lastMaxXP - lastXP) + current
+        end
+    end
+    lastXP, lastMaxXP = current, max
+end
+
+local function SessionXPPerHour()
+    if not sessionStartTime then return nil end
+    local elapsed = GetTime() - sessionStartTime
+    if sessionGainedXP <= 0 or elapsed <= 10 then return nil end
+    return sessionGainedXP / elapsed * 3600
+end
+
+-- Average XP per kill and per quest turn-in at the current level (reset on
+-- level-up), plus the last XP each mob name gave, for kills-to-level estimates.
+local killStats = { xp = 0, count = 0 }
+local questStats = { xp = 0, count = 0 }
+local mobXP, mobXPCount = {}, 0 -- [mobName] = { xp = n, level = playerLevel }
+local MOB_XP_LIMIT = 300
+local killPattern
+
+-- "%s dies, you gain %d experience." -> "^(.-) dies, you gain (%d+) experience%."
+-- Matched as a prefix so rested/group bonus suffixes still match.
+local function BuildKillPattern()
+    local format = COMBATLOG_XPGAIN_FIRSTPERSON
+    if type(format) ~= "string" or not format:find("%s", 1, true) or not format:find("%d", 1, true) then
+        return false
+    end
+    if format:find("%s", 1, true) > format:find("%d", 1, true) then return false end
+    local pattern = format:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+    pattern = pattern:gsub("%%%%s", "(.-)"):gsub("%%%%d", "(%%d+)")
+    return "^" .. pattern
+end
+
+local function OnCombatXPGain(_, text)
+    if not Secret.IsPublic(text) or type(text) ~= "string" then return end
+    if killPattern == nil then killPattern = BuildKillPattern() end
+    if not killPattern then return end
+    local name, xp = text:match(killPattern)
+    xp = tonumber(xp)
+    if not name or name == "" or not xp or xp <= 0 then return end
+    killStats.xp, killStats.count = killStats.xp + xp, killStats.count + 1
+    if not mobXP[name] then
+        if mobXPCount >= MOB_XP_LIMIT then wipe(mobXP); mobXPCount = 0 end
+        mobXPCount = mobXPCount + 1
+    end
+    mobXP[name] = { xp = xp, level = UnitLevel("player") }
+end
+
+local function OnQuestTurnedIn(_, _, xpReward)
+    if not Secret.IsPublic(xpReward) or type(xpReward) ~= "number" or xpReward <= 0 then return end
+    questStats.xp, questStats.count = questStats.xp + xpReward, questStats.count + 1
+end
+
+-- "~N" units of the average needed to cover `remaining`, or nil without data.
+local function CountToLevel(stats, remaining)
+    if stats.count == 0 or stats.xp <= 0 or remaining <= 0 then return nil end
+    local average = stats.xp / stats.count
+    return math.ceil(remaining / average), average
+end
 
 local function FormatTime(seconds)
     if not seconds or seconds <= 0 then return "?" end
@@ -55,6 +127,7 @@ local MENTOR_ACHIEVEMENTS = {
 }
 
 local function GetMentorBonus()
+    if type(GetAchievementInfo) ~= "function" then return 0 end -- e.g. clients without achievements
     for _, ach in ipairs(MENTOR_ACHIEVEMENTS) do
         if select(4, GetAchievementInfo(ach.id)) then
             return ach.pct
@@ -63,11 +136,19 @@ local function GetMentorBonus()
     return 0
 end
 
+-- Player aura reads error while auras are secret (encounters, challenge modes).
+-- Returns the aura, nil when absent, or false when it cannot be read.
+local function ReadPlayerAura(spellID)
+    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+    if not ok or (issecretvalue and issecretvalue(aura)) then return false end
+    return aura
+end
+
 -- Returns the total auto-detected XP bonus percentage from active buffs, plus any manual override.
 local function GetXPBonusPct()
     local total = GetMentorBonus()
     for _, buff in ipairs(XP_BOOST_BUFFS) do
-        if C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+        if ReadPlayerAura(buff.id) then
             total = total + buff.pct
         end
     end
@@ -78,15 +159,47 @@ end
 
 -- Sum XP from all quests currently ready to turn in.
 -- GetQuestLogRewardXP already returns XP with all active bonuses applied.
-local function GetPendingQuestXP()
-    local total = 0
+-- Cached: invalidated by every XP/quest event and when the boost set changes.
+-- { xp = total, count = quests, zones = { { name, count, xp }, ... } by xp }
+local pendingXPCache
+local function GetPendingSummary()
+    if pendingXPCache then return pendingXPCache end
+    local summary = { xp = 0, count = 0, zones = {} }
+    local byZone, header = {}, nil
     local numEntries = C_QuestLog.GetNumQuestLogEntries()
     for i = 1, numEntries do
         local info = C_QuestLog.GetInfo(i)
-        if info and not info.isHeader and info.questID and C_QuestLog.IsComplete(info.questID) then
+        if info and info.isHeader then
+            header = info.title
+        elseif info and info.questID and C_QuestLog.IsComplete(info.questID) then
             local xp = (GetQuestLogRewardXP and GetQuestLogRewardXP(info.questID)) or 0
-            total = total + xp
+            summary.xp, summary.count = summary.xp + xp, summary.count + 1
+            local zoneName = header or "Other"
+            local zone = byZone[zoneName]
+            if not zone then
+                zone = { name = zoneName, count = 0, xp = 0 }
+                byZone[zoneName] = zone
+                summary.zones[#summary.zones + 1] = zone
+            end
+            zone.count, zone.xp = zone.count + 1, zone.xp + xp
         end
+    end
+    table.sort(summary.zones, function(a, b) return a.xp > b.xp end)
+    pendingXPCache = summary
+    return summary
+end
+
+local function GetPendingQuestXP()
+    return GetPendingSummary().xp
+end
+
+-- Sum of active boost-buff percentages, or nil when aura data is restricted.
+local function GetBoostSignature()
+    local total = 0
+    for _, buff in ipairs(XP_BOOST_BUFFS) do
+        local aura = ReadPlayerAura(buff.id)
+        if aura == false then return nil end
+        if aura then total = total + buff.pct end
     end
     return total
 end
@@ -149,7 +262,9 @@ local function UpdateDisplay()
             pendingFill:SetColorTexture(pendingColor.r, pendingColor.g, pendingColor.b, pendingColor.a)
             pendingFill:Show()
             if pendingQuestText then
-                pendingQuestText:SetText(AbbreviateNumber(pendingXP) .. " quest xp")
+                -- Turning in the completed quests would level you
+                local nudge = pendingXP >= remaining and " (level up!)" or ""
+                pendingQuestText:SetText(AbbreviateNumber(pendingXP) .. " quest xp" .. nudge)
                 pendingQuestText:Show()
             end
         else
@@ -195,17 +310,10 @@ local function UpdateDisplay()
             local pct = (currentXP / maxXP) * 100
             -- Time-to-level estimate from session data
             local tllStr = ""
-            if settings.showTimers and sessionStartXP and sessionStartTime then
-                local gainedXP = currentXP - sessionStartXP
-                local elapsed = GetTime() - sessionStartTime
-                if gainedXP > 0 and elapsed > 10 then
-                    local xpPerHour = math.floor(gainedXP / elapsed * 3600)
-                    if xpPerHour > 0 then
-                        local remaining2 = maxXP - currentXP
-                        local secondsToLevel = remaining2 / (xpPerHour / 3600)
-                        tllStr = " | TTL: " .. FormatTime(secondsToLevel)
-                    end
-                end
+            local xpPerHour = settings.showTimers and SessionXPPerHour()
+            if xpPerHour and xpPerHour > 0 then
+                local secondsToLevel = (maxXP - currentXP) / (xpPerHour / 3600)
+                tllStr = " | TTL: " .. FormatTime(secondsToLevel)
             end
             pctText:SetText(string.format("%.1f%%%s", pct, tllStr))
         elseif pctText then
@@ -308,6 +416,7 @@ local function ApplyBlizzardBarVisibility()
 end
 
 function addonTable.XpBar.UpdateSettings()
+    pendingXPCache = nil
     if not barFrame then return end
 
     local settings = UIThingsDB.xpBar
@@ -357,9 +466,30 @@ function addonTable.XpBar.UpdateSettings()
     UpdateDisplay()
 end
 
+-- XP and quest-log events often arrive in bursts; redraw once per frame.
+local updateFrame = CreateFrame("Frame")
+updateFrame:Hide()
+updateFrame:SetScript("OnUpdate", function(self)
+    self:Hide()
+    if UIThingsDB.xpBar and UIThingsDB.xpBar.enabled then UpdateDisplay() end
+end)
+
 local function OnXPUpdate()
     if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
-    UpdateDisplay()
+    AccountXP()
+    pendingXPCache = nil
+    updateFrame:Show()
+end
+
+-- Player auras only matter when an XP boost is gained or lost.
+local lastBoostSignature
+local function OnAuraUpdate()
+    if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
+    local signature = GetBoostSignature()
+    if signature == nil or signature == lastBoostSignature then return end
+    lastBoostSignature = signature
+    pendingXPCache = nil
+    updateFrame:Show()
 end
 
 local function OnFactionUpdate()
@@ -371,23 +501,60 @@ end
 
 local function OnLevelUp()
     if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
-    -- Reset session tracking on level up
-    sessionStartXP = UnitXP("player")
-    sessionStartTime = GetTime()
+    -- Session XP carries across levels; per-level kill/quest averages restart.
+    AccountXP()
+    killStats.xp, killStats.count = 0, 0
+    questStats.xp, questStats.count = 0, 0
+    pendingXPCache = nil
     UpdateDisplay()
 end
 
 local function OnEnteringWorld()
     if not UIThingsDB.xpBar or not UIThingsDB.xpBar.enabled then return end
-    sessionStartXP = UnitXP("player")
-    sessionStartTime = GetTime()
+    -- Loading screens keep the session; just resync the XP baseline.
+    AccountXP()
     addonTable.XpBar.UpdateSettings()
+end
+
+-- Enemy tooltips: "~N kills to level" from the XP that mob name last gave at
+-- this level. Covered by the "levelling estimates" (showTimers) option.
+local function AddKillsToLevel(tooltip, tooltipData)
+    if tooltip ~= GameTooltip then return end
+    local settings = UIThingsDB.xpBar
+    if not settings or not settings.enabled or not settings.showTimers then return end
+    -- GetUnit resolves names from the guid; bail out if it is secret.
+    if tooltipData and tooltipData.guid and not Secret.IsPublic(tooltipData.guid) then return end
+    local _, unit = tooltip:GetUnit()
+    if not unit or not Secret.IsPublic(unit) then return end
+    local canAttack, isPlayer = UnitCanAttack("player", unit), UnitIsPlayer(unit)
+    if not Secret.IsPublic(canAttack) or not Secret.IsPublic(isPlayer) or not canAttack or isPlayer then return end
+    local name = Secret.SafeUnitName(unit, nil)
+    local entry = name and mobXP[name]
+    if not entry or entry.level ~= UnitLevel("player") then return end
+    local remaining = UnitXPMax("player") - UnitXP("player")
+    if remaining <= 0 then return end
+    tooltip:AddLine(string.format("~%d kills to level (%s xp each)",
+        math.ceil(remaining / entry.xp), AbbreviateNumber(entry.xp)), 0.6, 1, 0.6)
+end
+
+local enemyTooltipHooked = false
+local function HookEnemyTooltip()
+    if enemyTooltipHooked then return end
+    if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, AddKillsToLevel)
+        enemyTooltipHooked = true
+    elseif GameTooltip:HasScript("OnTooltipSetUnit") then
+        -- Clients without the tooltip data processor
+        GameTooltip:HookScript("OnTooltipSetUnit", function(self) AddKillsToLevel(self) end)
+        enemyTooltipHooked = true
+    end
 end
 
 local function Init()
     -- Seed session tracking now — PLAYER_ENTERING_WORLD already fired before we registered
-    sessionStartXP = UnitXP("player")
     sessionStartTime = GetTime()
+    sessionGainedXP = 0
+    lastXP, lastMaxXP = UnitXP("player"), UnitXPMax("player")
 
     barFrame = CreateFrame("Frame", "LunaUITweaks_XpBar", UIParent, "BackdropTemplate")
     barFrame:SetFrameStrata("LOW")
@@ -539,7 +706,7 @@ local function Init()
                 AbbreviateNumber(pendingXP), pendingPct, bonusStr), 1, 1, 1, 1, 0.85, 0)
             -- List active XP boost buffs
             for _, buff in ipairs(XP_BOOST_BUFFS) do
-                if C_UnitAuras.GetPlayerAuraBySpellID(buff.id) then
+                if ReadPlayerAura(buff.id) then
                     GameTooltip:AddDoubleLine("  " .. buff.label, string.format("+%d%%", buff.pct), 0.8, 0.8, 0.8, 0.4, 1, 0.4)
                 end
             end
@@ -553,21 +720,44 @@ local function Init()
             end
         end
 
-        -- Session stats
-        if sessionStartXP and sessionStartTime then
-            local gainedXP = currentXP - sessionStartXP
-            local elapsed = GetTime() - sessionStartTime
-            if gainedXP > 0 and elapsed > 10 then
-                local xpPerHour = math.floor(gainedXP / elapsed * 3600)
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddDoubleLine("Session XP gained:", AbbreviateNumber(gainedXP), 1, 1, 1, 0.6, 1, 0.6)
-                GameTooltip:AddDoubleLine("XP/hour:", AbbreviateNumber(xpPerHour), 1, 1, 1, 0.6, 1, 0.6)
-                if xpPerHour > 0 and maxXP and maxXP > 0 then
-                    local remaining = maxXP - currentXP
-                    local secondsToLevel = remaining / (xpPerHour / 3600)
-                    GameTooltip:AddDoubleLine("Est. time to level:", FormatTime(secondsToLevel), 1, 1, 1, 1, 0.82, 0)
-                end
+        -- Ready-to-turn-in summary, grouped by quest log zone (largest first)
+        local summary = GetPendingSummary()
+        if summary.count > 0 then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddDoubleLine("Ready to turn in:", string.format("%d quest%s",
+                summary.count, summary.count == 1 and "" or "s"), 1, 1, 1, 1, 0.85, 0)
+            for i = 1, math.min(4, #summary.zones) do
+                local zone = summary.zones[i]
+                GameTooltip:AddDoubleLine("  " .. zone.name, string.format("%d (%s xp)",
+                    zone.count, AbbreviateNumber(zone.xp)), 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
             end
+            if maxXP and maxXP > 0 and summary.xp >= maxXP - currentXP then
+                GameTooltip:AddLine("Turning these in will level you up!", 0.4, 1, 0.4)
+            end
+        end
+
+        -- Session stats (since login/reload; carries across zones and levels)
+        local xpPerHour = SessionXPPerHour()
+        local remaining = (maxXP or 0) - currentXP
+        local kills, killAverage = CountToLevel(killStats, remaining)
+        local quests, questAverage = CountToLevel(questStats, remaining)
+        if xpPerHour or kills or quests then
+            GameTooltip:AddLine(" ")
+        end
+        if xpPerHour then
+            GameTooltip:AddDoubleLine("Session XP gained:", AbbreviateNumber(sessionGainedXP), 1, 1, 1, 0.6, 1, 0.6)
+            GameTooltip:AddDoubleLine("XP/hour:", AbbreviateNumber(math.floor(xpPerHour)), 1, 1, 1, 0.6, 1, 0.6)
+            if remaining > 0 then
+                GameTooltip:AddDoubleLine("Est. time to level:", FormatTime(remaining / (xpPerHour / 3600)), 1, 1, 1, 1, 0.82, 0)
+            end
+        end
+        if kills then
+            GameTooltip:AddDoubleLine("Kills to level:", string.format("~%d (%s xp avg)",
+                kills, AbbreviateNumber(math.floor(killAverage))), 1, 1, 1, 1, 0.82, 0)
+        end
+        if quests then
+            GameTooltip:AddDoubleLine("Quests to level:", string.format("~%d (%s xp avg)",
+                quests, AbbreviateNumber(math.floor(questAverage))), 1, 1, 1, 1, 0.82, 0)
         end
 
         GameTooltip:Show()
@@ -584,7 +774,11 @@ local function Init()
     EventBus.Register("QUEST_LOG_UPDATE", OnXPUpdate, "XpBar")
     EventBus.Register("UPDATE_FACTION", OnFactionUpdate, "XpBar")
     -- Refresh pending XP when XP boost buffs are gained or dropped
-    EventBus.RegisterUnit("UNIT_AURA", "player", OnXPUpdate)
+    EventBus.RegisterUnit("UNIT_AURA", "player", OnAuraUpdate, "XpBar")
+    -- Kill and quest XP for the kills/quests-to-level estimates
+    EventBus.Register("CHAT_MSG_COMBAT_XP_GAIN", OnCombatXPGain, "XpBar")
+    EventBus.Register("QUEST_TURNED_IN", OnQuestTurnedIn, "XpBar")
+    HookEnemyTooltip()
 
     addonTable.XpBar.UpdateSettings()
 end
@@ -593,3 +787,15 @@ EventBus.Register("PLAYER_LOGIN", function()
     addonTable.Core.SafeAfter(0.5, Init)
 end)
 
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("XpBar", {
+    setLocked = function(locked)
+        if UIThingsDB.xpBar then UIThingsDB.xpBar.locked = locked end
+    end,
+    apply = function() addonTable.XpBar.UpdateSettings() end,
+})
+addonTable.LayoutMode.RegisterTarget("XP / reputation", function() return _G.LunaUITweaks_XpBar end, function()
+    local db = UIThingsDB.xpBar
+    return db and db.enabled
+end)

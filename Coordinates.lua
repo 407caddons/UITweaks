@@ -872,3 +872,15 @@ local function OnPlayerLogin()
     Coordinates.ApplyWayCommand()
 end
 EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Coordinates")
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("Coordinates", {
+    setLocked = function(locked)
+        if UIThingsDB.coordinates then UIThingsDB.coordinates.locked = locked end
+    end,
+    apply = function() Coordinates.UpdateSettings() end,
+})
+addonTable.LayoutMode.RegisterTarget("Waypoints", function() return _G.LunaCoordinatesFrame end, function()
+    local db = UIThingsDB.coordinates
+    return db and db.enabled
+end)

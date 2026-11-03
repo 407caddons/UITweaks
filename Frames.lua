@@ -343,3 +343,13 @@ function addonTable.Frames.UpdateFrames()
         end
     end
 end
+
+-- Layout Mode integration (per-frame handles are registered in UpdateFrames)
+addonTable.LayoutMode.RegisterModule("Frames", {
+    setLocked = function(locked)
+        local db = UIThingsDB.frames
+        if not db then return end
+        for _, frame in ipairs(db.list or {}) do frame.locked = locked end
+    end,
+    apply = function() addonTable.Frames.UpdateFrames() end,
+})

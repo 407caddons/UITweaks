@@ -25,8 +25,8 @@
 compat\Client.lua
 Core.lua
 EventBus.lua
-LayoutMode.lua
 Profiler.lua
+LayoutMode.lua
 Loaders.lua
 SharedHelpers.lua
 ConfigHelpers.lua
@@ -58,6 +58,7 @@ Destroy.lua
 BuffAlerts.lua
 ProcAlerts.lua
 NameplateColors.lua
+NameplateQuestMarks.lua
 CooldownManager.lua
 qualityOfLife\QualityOfLife.lua
 qualityOfLife\Cursor.lua
@@ -92,3 +93,5 @@ widgets\Crit.lua
 widgets\WaypointDistance.lua
 widgets\AddonComm.lua
 widgets\PullTimer.lua
+widgets\DeadGroup.lua
+widgets\Jumps.lua

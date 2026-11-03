@@ -12,7 +12,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(620, 870)
+    child:SetSize(620, 1140)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -316,17 +316,63 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     autoSlotHelp:SetText("Automatically places your keystone into the Font of Power when you interact with it.")
     autoSlotHelp:SetTextColor(0.7, 0.7, 0.7)
 
+    local function AutomationCheck(name, key, text, y)
+        local btn = CreateFrame("CheckButton", name, child, "ChatConfigCheckButtonTemplate")
+        btn:SetPoint("TOPLEFT", 20, y)
+        _G[btn:GetName() .. "Text"]:SetText(text)
+        btn:SetChecked(UIThingsDB.mplusTimer[key])
+        btn:SetScript("OnClick", function(self) UIThingsDB.mplusTimer[key] = not not self:GetChecked() end)
+    end
+    AutomationCheck("UIThingsMplusTimerReroll", "rerollReminder",
+        "Remind me to reroll my keystone after a timed run at or above its level", -795)
+    AutomationCheck("UIThingsMplusTimerRerollTts", "rerollTts", "Speak the reroll reminder (text to speech)", -820)
+
+    -- ============================================================
+    -- Xal'atath's Bargain Section
+    -- ============================================================
+    Helpers.CreateSectionHeader(child, "Xal'atath's Bargain", -865)
+
+    local bargainStatus = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bargainStatus:SetPoint("TOPLEFT", 20, -1015)
+    bargainStatus:SetWidth(540)
+    bargainStatus:SetJustifyH("LEFT")
+    bargainStatus:SetTextColor(0.7, 0.7, 0.7)
+    local function UpdateBargain()
+        local Bargain = addonTable.MplusBargainTimer
+        if not Bargain then return end
+        Bargain.UpdateSettings()
+        bargainStatus:SetText("Counts in-combat time (about 60s per spawn) and pauses whenever nobody in the group is in combat. "
+            .. "Shown in the Encounter Bars; no timer at +12 and above. Status: " .. Bargain.GetStatus())
+    end
+    local function BargainCheck(name, key, text, y)
+        local btn = CreateFrame("CheckButton", name, child, "ChatConfigCheckButtonTemplate")
+        btn:SetPoint("TOPLEFT", 20, y)
+        _G[btn:GetName() .. "Text"]:SetText(text)
+        btn:SetChecked(UIThingsDB.mplusTimer[key])
+        btn:SetScript("OnClick", function(self)
+            UIThingsDB.mplusTimer[key] = not not self:GetChecked()
+            UpdateBargain()
+        end)
+    end
+    BargainCheck("UIThingsMplusBargainEnable", "bargainEnabled", "Show a timer for the active Xal'atath's Bargain affix (+5 to +11)", -895)
+    BargainCheck("UIThingsMplusBargainPaused", "bargainShowPaused", "Keep the bar visible (paused) out of combat", -920)
+    BargainCheck("UIThingsMplusBargainCountdown", "bargainCountdown", "Count down the last 5 seconds", -945)
+    BargainCheck("UIThingsMplusBargainSound", "bargainSound", "Play a warning sound when it fires", -970)
+    BargainCheck("UIThingsMplusBargainReport", "bargainReport", "Show a calibration report when the key ends (/lunabargain shows the last one)", -995)
+    child:HookScript("OnShow", UpdateBargain)
+    UpdateBargain()
+
     -- ============================================================
     -- Position Section
     -- ============================================================
-    Helpers.CreateSectionHeader(child, "Position", -795)
+    Helpers.CreateSectionHeader(child, "Position", -1065)
 
-    Helpers.CreateLayoutModeHint(child, 20, -830)
+    Helpers.CreateLayoutModeHint(child, 20, -1100)
 
     -- Test / Demo Button
     local testBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     testBtn:SetSize(120, 26)
-    testBtn:SetPoint("TOPLEFT", 300, -825)
+    testBtn:SetPoint("TOPLEFT", 300, -1095)
     testBtn:SetText("Toggle Demo")
     testBtn:SetScript("OnClick", function()
         if addonTable.MplusTimer and addonTable.MplusTimer.ToggleDemo then

@@ -877,6 +877,7 @@ end
 
 function addonTable.Cards.ShowGame()
     if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
+    if addonTable.Barrels and addonTable.Barrels.CloseGame then addonTable.Barrels.CloseGame() end
     if not gameFrame then BuildUI() end
     if gameFrame:IsShown() then
         gameFrame:Hide()

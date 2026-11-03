@@ -340,3 +340,19 @@ local function OnPlayerLogin()
 end
 
 EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "Vendor")
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("Vendor", {
+    setLocked = function(locked)
+        if UIThingsDB.vendor then UIThingsDB.vendor.warningLocked = locked end
+    end,
+    apply = function() addonTable.Vendor.UpdateSettings() end,
+})
+addonTable.LayoutMode.RegisterTarget("Repair warning", function() return _G.UIThingsRepairWarning end, function()
+    local db = UIThingsDB.vendor
+    return db and db.enabled
+end)
+addonTable.LayoutMode.RegisterTarget("Bag warning", function() return _G.UIThingsBagWarning end, function()
+    local db = UIThingsDB.vendor
+    return db and db.enabled and db.bagWarningEnabled
+end)

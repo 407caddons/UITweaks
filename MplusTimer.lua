@@ -910,6 +910,7 @@ end
 -- Bridge: OnChallengeEvent uses (self, event, ...) but EventBus uses (event, ...)
 local function OnChallengeEventBus(event, ...) OnChallengeEvent(nil, event, ...) end
 
+local MPLUS_DEATH_UNITS = { "player", "party1", "party2", "party3", "party4" }
 local function RegisterChallengeEvents()
     addonTable.EventBus.Register("CHALLENGE_MODE_COMPLETED", OnChallengeEventBus, "MplusTimer")
     addonTable.EventBus.Register("CHALLENGE_MODE_DEATH_COUNT_UPDATED", OnChallengeEventBus, "MplusTimer")
@@ -917,7 +918,8 @@ local function RegisterChallengeEvents()
     addonTable.EventBus.Register("SCENARIO_POI_UPDATE", OnChallengeEventBus, "MplusTimer")
     addonTable.EventBus.Register("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus, "MplusTimer")
     addonTable.EventBus.Register("ENCOUNTER_END", OnChallengeEventBus, "MplusTimer")
-    addonTable.EventBus.Register("UNIT_FLAGS", OnChallengeEventBus, "MplusTimer")
+    -- ScanDeaths only cares about the player and party members.
+    addonTable.EventBus.RegisterUnitEvent("UNIT_FLAGS", MPLUS_DEATH_UNITS, OnChallengeEventBus, "MplusTimer")
 end
 
 local function UnregisterChallengeEvents()
@@ -927,7 +929,7 @@ local function UnregisterChallengeEvents()
     addonTable.EventBus.Unregister("SCENARIO_POI_UPDATE", OnChallengeEventBus)
     addonTable.EventBus.Unregister("SCENARIO_CRITERIA_UPDATE", OnChallengeEventBus)
     addonTable.EventBus.Unregister("ENCOUNTER_END", OnChallengeEventBus)
-    addonTable.EventBus.Unregister("UNIT_FLAGS", OnChallengeEventBus)
+    addonTable.EventBus.UnregisterUnitEvent("UNIT_FLAGS", MPLUS_DEATH_UNITS, OnChallengeEventBus)
 end
 
 local function EnableChallengeMode()
@@ -1049,6 +1051,7 @@ OnChallengeEvent = function(self, event, ...)
         RenderDeaths()
     elseif event == "UNIT_FLAGS" then
         local unit = ...
+        if issecretvalue and issecretvalue(unit) then return end
         if unit == "player" or (unit and unit:match("^party[1-4]$")) then ScanDeaths() end
     elseif event == "WORLD_STATE_TIMER_START" then
         state.timerStarted = true
@@ -1219,4 +1222,46 @@ addonTable.EventBus.Register("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN", function
             end
         end
     end
+end)
+
+-- ============================================================
+-- Keystone Reroll Reminder (always active, independent of timer)
+-- ============================================================
+-- A timed run at or above your own keystone's level lets you reroll it, but
+-- only before leaving the dungeon. Your own key upgrades on completion, so the
+-- owned level is read after the bag update rather than at the event.
+function MplusTimer.CheckKeystoneReroll()
+    local db = UIThingsDB and UIThingsDB.mplusTimer
+    if not db or not db.rerollReminder then return end
+    local info = C_ChallengeMode.GetChallengeCompletionInfo and C_ChallengeMode.GetChallengeCompletionInfo()
+    local Public = addonTable.Secret.IsPublic
+    if not info or not Public(info.onTime) or not Public(info.level) or not Public(info.practiceRun) then return end
+    if not info.onTime or info.practiceRun or type(info.level) ~= "number" then return end
+    local owned = C_MythicPlus.GetOwnedKeystoneLevel()
+    if not Public(owned) or type(owned) ~= "number" or owned <= 0 or owned > info.level then return end
+    local message = string.format("Timed +%d: you can reroll your +%d keystone. Do it before leaving the dungeon.", info.level, owned)
+    if RaidNotice_AddMessage and RaidWarningFrame then
+        RaidNotice_AddMessage(RaidWarningFrame, message, ChatTypeInfo["RAID_WARNING"])
+    end
+    print("|cff00ccffLuna M+:|r " .. message)
+    if db.rerollTts then addonTable.Core.SpeakTTS("Reroll your keystone") end
+end
+addonTable.EventBus.Register("CHALLENGE_MODE_COMPLETED", function()
+    addonTable.Core.SafeAfter(3, MplusTimer.CheckKeystoneReroll)
+end, "MplusTimer")
+
+-- Layout Mode integration: show the demo run while unlocked.
+addonTable.LayoutMode.RegisterModule("MplusTimer", {
+    setLocked = function(locked)
+        if UIThingsDB.mplusTimer then UIThingsDB.mplusTimer.locked = locked end
+    end,
+    apply = function(locked)
+        MplusTimer.UpdateSettings()
+        MplusTimer.CloseDemo()
+        if not locked and UIThingsDB.mplusTimer and UIThingsDB.mplusTimer.enabled then MplusTimer.ToggleDemo() end
+    end,
+})
+addonTable.LayoutMode.RegisterTarget("M+ timer", function() return _G.LunaMplusTimer end, function()
+    local db = UIThingsDB.mplusTimer
+    return db and db.enabled
 end)

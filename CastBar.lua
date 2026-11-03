@@ -174,7 +174,7 @@ local function OnUpdateCasting(self, elapsed)
     end
 
     if UIThingsDB.castBar.showCastTime then
-        castTimeText:SetText(string.format("%.1fs", castEndTime - now))
+        castTimeText:SetFormattedText("%.1fs", castEndTime - now)
     end
 end
 
@@ -199,7 +199,7 @@ local function OnUpdateChanneling(self, elapsed)
     end
 
     if UIThingsDB.castBar.showCastTime then
-        castTimeText:SetText(string.format("%.1fs", castEndTime - now))
+        castTimeText:SetFormattedText("%.1fs", castEndTime - now)
     end
 end
 
@@ -1016,4 +1016,24 @@ EventBus.Register("PLAYER_LOGIN", function()
     else
         C_Timer.After(1, Init)
     end
+end)
+
+-- Layout Mode integration (focus bar flags live in the castBar settings)
+addonTable.LayoutMode.RegisterModule("CastBar", {
+    setLocked = function(locked)
+        local db = UIThingsDB.castBar
+        if not db then return end
+        db.locked = locked
+        if db.targetBar then db.targetBar.locked = locked end
+        if db.focusBar then db.focusBar.locked = locked end
+    end,
+    apply = function() addonTable.CastBar.UpdateSettings() end,
+})
+addonTable.LayoutMode.RegisterTarget("Player cast bar", function() return _G.LunaCastBar end, function()
+    local db = UIThingsDB.castBar
+    return db and db.enabled
+end)
+addonTable.LayoutMode.RegisterTarget("Target cast bar", function() return _G.LunaTargetCastBar end, function()
+    local db = UIThingsDB.castBar
+    return db and db.enabled and db.targetBar and db.targetBar.enabled
 end)

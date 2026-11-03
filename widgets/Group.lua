@@ -1,7 +1,7 @@
 local addonName, addonTable = ...
 local Widgets = addonTable.Widgets
 local EventBus = addonTable.EventBus
-local function Public(value) return not (issecretvalue and issecretvalue(value)) end
+local Public = addonTable.Secret.IsPublic
 local function SortMessage(message) addonTable.Core.Log("Group", message, 1) end
 local function CanSort()
     if InCombatLockdown() then return false, "Raid sorting is unavailable in combat." end

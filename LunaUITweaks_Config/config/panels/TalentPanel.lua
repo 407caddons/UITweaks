@@ -28,7 +28,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     local pageScroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     pageScroll:SetPoint("TOPLEFT"); pageScroll:SetPoint("BOTTOMRIGHT", -30, 0)
     panel = CreateFrame("Frame", nil, pageScroll)
-    panel:SetSize(560, 1020); pageScroll:SetScrollChild(panel)
+    panel:SetSize(560, 1205); pageScroll:SetScrollChild(panel)
     pageScroll:SetScript("OnSizeChanged", function(self, width) panel:SetWidth(width) end)
     pageScroll:SetScript("OnShow", function(self) panel:SetWidth(self:GetWidth()) end)
     local fonts = Helpers.fonts
@@ -380,8 +380,124 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
         OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
     end)
 
+    -- Other difficulties (Timewalking and Follower)
+    local otherLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    otherLabel:SetPoint("TOPLEFT", 20, -653)
+    otherLabel:SetText("Other:")
+
+    local x = 110
+    for _, entry in ipairs({
+        { "dungeonTimewalking", "UIThingsTalentDTimewalkingCheck", "Timewalking" },
+        { "dungeonFollower", "UIThingsTalentDFollowerCheck", "Follower" },
+        { "raidTimewalking", "UIThingsTalentRTimewalkingCheck", "Timewalking raids" },
+    }) do
+        local key, name, text = entry[1], entry[2], entry[3]
+        local check = CreateFrame("CheckButton", name, panel, "ChatConfigCheckButtonTemplate")
+        check:SetPoint("TOPLEFT", x, -650)
+        check:SetHitRectInsets(0, -100, 0, 0)
+        _G[name .. "Text"]:SetText(text)
+        check:SetChecked(UIThingsDB.talentReminders.alertOnDifficulties[key])
+        check:SetScript("OnClick", function(self)
+            local wasEnabled = UIThingsDB.talentReminders.alertOnDifficulties[key]
+            local isNowEnabled = not not self:GetChecked()
+            UIThingsDB.talentReminders.alertOnDifficulties[key] = isNowEnabled
+            OnDifficultyCheckChanged(wasEnabled, isNowEnabled)
+        end)
+        x = x + 140
+    end
+
+    -- Default Builds Section
+    Helpers.CreateSectionHeader(panel, "Default Builds", -695)
+
+    local defaultsDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    defaultsDesc:SetPoint("TOPLEFT", 20, -720)
+    defaultsDesc:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
+    defaultsDesc:SetJustifyH("LEFT")
+    defaultsDesc:SetText("Checked for your current spec in any dungeon or raid with no saved build for it at that difficulty. Only uncategorized builds can be defaults.")
+
+    local defaultsEmptyHint = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    defaultsEmptyHint:SetPoint("TOPLEFT", 20, -815)
+    defaultsEmptyHint:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
+    defaultsEmptyHint:SetJustifyH("LEFT")
+    defaultsEmptyHint:SetText("No uncategorized builds for this spec. In the talent frame's build panel, use Add and choose Uncategorized.")
+
+    local function CurrentClassSpec()
+        local _, _, classID = UnitClass("player")
+        local specIndex = GetSpecialization()
+        return classID, specIndex and select(1, GetSpecializationInfo(specIndex))
+    end
+
+    local defaultDropdowns = {}
+    local function RefreshDefaults()
+        local TR = addonTable.TalentReminder
+        if not TR or not TR.GetUncategorizedBuilds then return end
+        local classID, specID = CurrentClassSpec()
+        local builds = TR.GetUncategorizedBuilds(classID, specID)
+        defaultsEmptyHint:SetShown(#builds == 0)
+        for kind, dropdown in pairs(defaultDropdowns) do
+            local current = TR.GetDefaultBuild(kind, classID, specID)
+            UIDropDownMenu_SetText(dropdown, current and (current.name or "Unnamed Build") or "None")
+            if #builds == 0 then
+                UIDropDownMenu_DisableDropDown(dropdown)
+            else
+                UIDropDownMenu_EnableDropDown(dropdown)
+            end
+        end
+    end
+    addonTable.Config.RefreshTalentDefaults = RefreshDefaults
+
+    -- Routes through TalentManager so the talent-frame build list refreshes too.
+    local function SetDefault(build, kind)
+        if not build then return end
+        if addonTable.TalentManager and addonTable.TalentManager.SetDefaultBuild then
+            addonTable.TalentManager.SetDefaultBuild(build, kind)
+        elseif addonTable.TalentReminder then
+            addonTable.TalentReminder.SetDefaultBuild(build, kind)
+        end
+        RefreshDefaults()
+    end
+
+    for i, entry in ipairs({ { "dungeon", "Dungeons:" }, { "raid", "Raids:" } }) do
+        local kind, labelText = entry[1], entry[2]
+        local y = -748 - (i - 1) * 32
+        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 20, y - 4)
+        label:SetText(labelText)
+
+        local dropdown = CreateFrame("Frame", "UIThingsTalentDefault_" .. kind, panel, "UIDropDownMenuTemplate")
+        dropdown:SetPoint("TOPLEFT", 90, y + 2)
+        UIDropDownMenu_SetWidth(dropdown, 240)
+        UIDropDownMenu_Initialize(dropdown, function(_, level)
+            local TR = addonTable.TalentReminder
+            if not TR or not TR.GetUncategorizedBuilds then return end
+            local classID, specID = CurrentClassSpec()
+            local current = TR.GetDefaultBuild(kind, classID, specID)
+
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = "None"
+            info.checked = current == nil
+            info.func = function() SetDefault(current, nil) end
+            UIDropDownMenu_AddButton(info, level)
+
+            for _, build in ipairs(TR.GetUncategorizedBuilds(classID, specID)) do
+                info = UIDropDownMenu_CreateInfo()
+                info.text = build.name or "Unnamed Build"
+                -- A build has one role; picking the other kind's default moves it here.
+                if build.defaultFor and build.defaultFor ~= kind then
+                    info.text = info.text .. " |cFF888888(" .. build.defaultFor .. " default)|r"
+                end
+                info.checked = build == current
+                info.func = function() SetDefault(build, kind) end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+        defaultDropdowns[kind] = dropdown
+    end
+    RefreshDefaults()
+    panel:HookScript("OnShow", RefreshDefaults)
+
     -- Reminders Section
-    Helpers.CreateSectionHeader(panel, "Saved Builds", -655)
+    Helpers.CreateSectionHeader(panel, "Saved Builds", -840)
 
     -- Declare buttons upfront so they exist before the list
     local snapshotBtn, testBtn, clearBtn
@@ -395,7 +511,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Snapshot Button
     snapshotBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
     snapshotBtn:SetSize(200, 25)
-    snapshotBtn:SetPoint("TOPLEFT", 20, -690)
+    snapshotBtn:SetPoint("TOPLEFT", 20, -875)
     snapshotBtn:SetText("Snapshot Current Talents")
     snapshotBtn:SetNormalFontObject("GameFontNormal")
     snapshotBtn:SetHighlightFontObject("GameFontHighlight")
@@ -419,7 +535,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Reminder List (Scroll Frame) - fills remaining space below buttons
     local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", panel,
         "UIPanelScrollFrameTemplate")
-    reminderScrollFrame:SetPoint("TOPLEFT", 20, -730)
+    reminderScrollFrame:SetPoint("TOPLEFT", 20, -915)
     reminderScrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
 
     local reminderContent = CreateFrame("Frame", nil, reminderScrollFrame)

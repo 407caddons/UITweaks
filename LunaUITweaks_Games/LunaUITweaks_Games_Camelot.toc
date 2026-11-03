@@ -18,3 +18,5 @@ games\Boxes.lua
 games\Slide.lua
 games\Lights.lua
 games\Blocks.lua
+games\BarrelsModel.lua
+games\Barrels.lua

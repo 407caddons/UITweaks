@@ -572,7 +572,7 @@ function Destroy.UpdateSettings()
     local enabled = UIThingsDB.destroy.enabled
     merchantOpen = MerchantFrame and MerchantFrame:IsShown() or false
     if enabled and not eventsRegistered then
-        for _, event in ipairs(disenchantEvents) do EventBus.Register(event, OnDisenchantCast, "Destroy") end
+        for _, event in ipairs(disenchantEvents) do EventBus.RegisterUnitEvent(event, "player", OnDisenchantCast, "Destroy") end
         EventBus.Register("PLAYER_UPDATE_RESTING", OnRestingChanged, "Destroy")
         EventBus.Register("PLAYER_ENTERING_WORLD", OnRestingChanged, "Destroy")
         EventBus.Register("BAG_UPDATE_DELAYED", OnBagsChanged, "Destroy")
@@ -582,7 +582,7 @@ function Destroy.UpdateSettings()
         EventBus.Register("MERCHANT_CLOSED", OnMerchantChanged, "Destroy")
         eventsRegistered = true
     elseif not enabled and eventsRegistered then
-        for _, event in ipairs(disenchantEvents) do EventBus.Unregister(event, OnDisenchantCast) end
+        for _, event in ipairs(disenchantEvents) do EventBus.UnregisterUnitEvent(event, "player", OnDisenchantCast) end
         busyGeneration = busyGeneration + 1
         disenchantBusy, activeDisenchantCast = false, nil
         EventBus.Unregister("PLAYER_UPDATE_RESTING", OnRestingChanged)

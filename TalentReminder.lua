@@ -205,6 +205,157 @@ end
 -- On boss encounter start
 -- On boss encounter start - REMOVED (Combat restriction)
 
+-- ============================================================
+-- Default builds
+-- An uncategorized build (instanceID 0) can be tagged defaultFor = "dungeon"
+-- or "raid". It is checked in any instance of that type when no saved build
+-- for the current spec applies at that instance and difficulty. Each
+-- class/spec has at most one default per kind.
+-- ============================================================
+local DEFAULT_KIND_BY_INSTANCE_TYPE = { party = "dungeon", raid = "raid" }
+local DEFAULT_LABEL = { dungeon = "Default dungeon build", raid = "Default raid build" }
+
+-- Calls fn(reminder) for every uncategorized build; stops when fn returns true.
+local function ForEachUncategorized(fn)
+    local all = LunaUITweaks_TalentReminders and LunaUITweaks_TalentReminders.reminders
+    if not all then return end
+    for instanceID, diffs in pairs(all) do
+        if tonumber(instanceID) == 0 and type(diffs) == "table" then
+            for _, zones in pairs(diffs) do
+                if type(zones) == "table" then
+                    for _, builds in pairs(zones) do
+                        if type(builds) == "table" then
+                            for _, reminder in ipairs(builds) do
+                                if type(reminder) == "table" and fn(reminder) then return end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function BuildMatchesSpec(reminder, classID, specID)
+    return not (reminder.classID and reminder.classID ~= classID)
+        and not (reminder.specID and reminder.specID ~= specID)
+end
+
+function TalentReminder.IsUncategorized(target)
+    local found = false
+    ForEachUncategorized(function(reminder)
+        if reminder == target then found = true; return true end
+    end)
+    return found
+end
+
+-- Uncategorized builds for a class/spec, sorted by name (for default pickers).
+function TalentReminder.GetUncategorizedBuilds(classID, specID)
+    local list = {}
+    ForEachUncategorized(function(reminder)
+        if BuildMatchesSpec(reminder, classID, specID) then list[#list + 1] = reminder end
+    end)
+    table.sort(list, function(a, b) return (a.name or "") < (b.name or "") end)
+    return list
+end
+
+-- kind: "dungeon" or "raid"
+function TalentReminder.GetDefaultBuild(kind, classID, specID)
+    local found
+    ForEachUncategorized(function(reminder)
+        if reminder.defaultFor == kind and not reminder.disabled
+            and BuildMatchesSpec(reminder, classID, specID) then
+            found = reminder
+            return true
+        end
+    end)
+    return found
+end
+
+-- kind: "dungeon", "raid", or nil to clear. Only uncategorized builds can be
+-- defaults; setting one clears the previous default of that kind for the spec.
+function TalentReminder.SetDefaultBuild(target, kind)
+    if kind ~= nil and kind ~= "dungeon" and kind ~= "raid" then return false end
+    if not TalentReminder.IsUncategorized(target) then return false end
+    if kind then
+        ForEachUncategorized(function(reminder)
+            if reminder ~= target and reminder.defaultFor == kind
+                and reminder.classID == target.classID and reminder.specID == target.specID then
+                reminder.defaultFor = nil
+            end
+        end)
+    end
+    target.defaultFor = kind
+    -- Re-evaluate straight away when standing in an instance.
+    if IsActive() then
+        lastZone, lastSubZone = nil, nil
+        TalentReminder.CheckTalentsInInstance()
+    end
+    return true
+end
+
+-- The default for the current instance type, wrapped so alerts read
+-- "Default dungeon build: <name>" while Apply/Compare use the real build.
+local function GetDefaultForCurrentInstance(classID, specID)
+    local _, instanceType = GetInstanceInfo()
+    local kind = DEFAULT_KIND_BY_INSTANCE_TYPE[instanceType]
+    if not kind then return nil end
+    local build = TalentReminder.GetDefaultBuild(kind, classID, specID)
+    if not build then return nil end
+    return setmetatable({ name = DEFAULT_LABEL[kind] .. ": " .. (build.name or "Unnamed") },
+        { __index = build })
+end
+
+-- Builds that apply to the current spec at this instance/difficulty, sorted by
+-- priority: 1 = current subzone match, 2 = instance-wide (zone key 0). When
+-- none apply, the spec's default for this instance type is used (priority 3).
+local function CollectApplicableBuilds(instanceID, difficultyID, currentSubZone, classID, specID)
+    local priorityList = {}
+    local all = LunaUITweaks_TalentReminders.reminders
+    local byDifficulty = all[instanceID] and all[instanceID][difficultyID]
+    if byDifficulty then
+        for zoneKey, builds in pairs(byDifficulty) do
+            if type(builds) == "table" then
+                for buildIndex, reminder in ipairs(builds) do
+                    if reminder and not reminder.disabled and BuildMatchesSpec(reminder, classID, specID) then
+                        local priority
+                        if type(zoneKey) == "string" and zoneKey ~= "" then
+                            if currentSubZone ~= "" and zoneKey == currentSubZone then
+                                priority = 1
+                            end
+                        elseif (tonumber(zoneKey) or 0) == 0 then
+                            priority = 2
+                        end
+                        if priority then
+                            addonTable.Core.Log("TalentReminder",
+                                string.format("Adding build '%s' (zoneKey=%s, priority=%d)",
+                                    reminder.name or "Unnamed", tostring(zoneKey), priority), 0)
+                            table.insert(priorityList, {
+                                zoneKey = zoneKey,
+                                buildIndex = buildIndex,
+                                reminder = reminder,
+                                priority = priority
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #priorityList == 0 then
+        local default = GetDefaultForCurrentInstance(classID, specID)
+        if default then
+            addonTable.Core.Log("TalentReminder", "No saved build for this spec here; using " .. default.name, 0)
+            priorityList[1] = { zoneKey = 0, reminder = default, priority = 3 }
+        end
+    end
+
+    -- Sort by priority (lower number = higher priority)
+    table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+    return priorityList
+end
+
 -- Check talents in instance (for talent changes)
 function TalentReminder.CheckTalentsInInstance()
     if not IsActive() then return end
@@ -221,16 +372,9 @@ function TalentReminder.CheckTalentsInInstance()
     local specIndex = GetSpecialization()
     local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
 
-    -- Check if we should alert for current difficulty
-    if not TalentReminder.ShouldAlertForDifficulty(currentDifficultyID) then
-        return
-    end
-
-    -- Get all reminders for this instance/difficulty
-    local reminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID]
-    if not reminders or not reminders[currentDifficultyID] then
-        return
-    end
+    -- Difficulty checkboxes gate saved builds; defaults apply at any difficulty.
+    if not TalentReminder.IsMaxLevel() then return end
+    local difficultyAllowed = TalentReminder.ShouldAlertForDifficulty(currentDifficultyID)
 
     -- Detect current zone (both mapID and subzone text for matching)
     local currentZone = TalentReminder.GetCurrentZone()
@@ -241,46 +385,11 @@ function TalentReminder.CheckTalentsInInstance()
         "CheckTalentsInInstance: mapID=%s, subZone='%s'",
         tostring(currentZone), currentSubZone), 0)
 
-    -- Build priority list from ALL builds for this instance/difficulty
-    -- Priority 1: exact zone match, Priority 2: instance-wide (key 0)
-    local priorityList = {}
-    for zoneKey, builds in pairs(reminders[currentDifficultyID]) do
-        if type(builds) == "table" then
-            for buildIndex, reminder in ipairs(builds) do
-                if reminder and not reminder.disabled then
-                    local priority
-                    if type(zoneKey) == "string" and zoneKey ~= "" then
-                        if currentSubZone ~= "" and zoneKey == currentSubZone then
-                            priority = 1
-                        else
-                            priority = nil
-                        end
-                    else
-                        local numKey = tonumber(zoneKey) or 0
-                        if numKey == 0 then
-                            priority = 2
-                        else
-                            priority = nil
-                        end
-                    end
-                    if priority then
-                        addonTable.Core.Log("TalentReminder",
-                            string.format("Adding build '%s' (zoneKey=%s, priority=%d)",
-                                reminder.name or "Unnamed", tostring(zoneKey), priority), 0)
-                        table.insert(priorityList, {
-                            zoneKey = zoneKey,
-                            buildIndex = buildIndex,
-                            reminder = reminder,
-                            priority = priority
-                        })
-                    end
-                end
-            end
-        end
-    end
-
-    -- Sort by priority (lower number = higher priority)
-    table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+    -- Priority 1: exact zone match, 2: instance-wide (key 0), 3: spec default
+    local priorityList = CollectApplicableBuilds(currentInstanceID, currentDifficultyID,
+        currentSubZone, classID, specID)
+    local usingDefault = priorityList[1] and priorityList[1].priority == 3
+    if not difficultyAllowed and not usingDefault then return end
 
     -- Check reminders in priority order.
     -- Zone-specific builds (priority 1) take precedence over instance-wide (priority 2).
@@ -306,7 +415,7 @@ function TalentReminder.CheckTalentsInInstance()
             end
             bestPriority = entry.priority
 
-            local mismatches = TalentReminder.CompareTalents(reminder.talents)
+            local mismatches = TalentReminder.CompareReminder(reminder)
             if #mismatches == 0 then
                 -- Perfect match at this priority level — no alert needed
                 bestPriorityMatched = true
@@ -339,56 +448,18 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
     local specIndex = GetSpecialization()
     local specID = specIndex and select(1, GetSpecializationInfo(specIndex))
 
-    if not TalentReminder.ShouldAlertForDifficulty(currentDifficultyID) then
-        return
-    end
+    -- Difficulty checkboxes gate saved builds; defaults apply at any difficulty.
+    if not TalentReminder.IsMaxLevel() then return end
+    local difficultyAllowed = TalentReminder.ShouldAlertForDifficulty(currentDifficultyID)
 
-    -- Check all reminders for this instance
-    local reminders = LunaUITweaks_TalentReminders.reminders[currentInstanceID]
-    if not reminders or not reminders[currentDifficultyID] then
-        return
-    end
-
-    -- Detect current zone (both mapID and subzone text)
-    local currentZone = TalentReminder.GetCurrentZone()
+    -- Detect current subzone (zone-specific builds match on subzone text)
     local currentSubZone = GetSubZoneText() or ""
 
-    -- Build priority list from ALL builds for this instance/difficulty
-    local priorityList = {}
-    for zoneKey, builds in pairs(reminders[currentDifficultyID]) do
-        if type(builds) == "table" then
-            for buildIndex, reminder in ipairs(builds) do
-                if reminder and not reminder.disabled then
-                    local priority
-                    if type(zoneKey) == "string" and zoneKey ~= "" then
-                        if currentSubZone ~= "" and zoneKey == currentSubZone then
-                            priority = 1
-                        else
-                            priority = nil
-                        end
-                    else
-                        local numKey = tonumber(zoneKey) or 0
-                        if numKey == 0 then
-                            priority = 2
-                        else
-                            priority = nil
-                        end
-                    end
-                    if priority then
-                        table.insert(priorityList, {
-                            zoneKey = zoneKey,
-                            buildIndex = buildIndex,
-                            reminder = reminder,
-                            priority = priority
-                        })
-                    end
-                end
-            end
-        end
-    end
-
-    -- Sort by priority (lower number = higher priority)
-    table.sort(priorityList, function(a, b) return a.priority < b.priority end)
+    -- All builds for this key and spec, or the spec's dungeon default if none
+    local priorityList = CollectApplicableBuilds(currentInstanceID, currentDifficultyID,
+        currentSubZone, classID, specID)
+    local usingDefault = priorityList[1] and priorityList[1].priority == 3
+    if not difficultyAllowed and not usingDefault then return end
 
     -- Check all matching builds — if ANY has zero mismatches, no alert needed
     local allMismatches = {}
@@ -404,7 +475,7 @@ function TalentReminder.CheckTalentsOnMythicPlusEntry()
         elseif reminder.specID and reminder.specID ~= specID then
             -- Different spec, skip
         else
-            local mismatches = TalentReminder.CompareTalents(reminder.talents)
+            local mismatches = TalentReminder.CompareReminder(reminder)
             if #mismatches == 0 then
                 -- Perfect match found — no alert needed
                 perfectMatch = true
@@ -587,6 +658,27 @@ function TalentReminder.CompareTalents(savedTalents)
     end
 
     return mismatches
+end
+
+-- Compare a saved build (snapshot or imported string) against current talents.
+-- Imported builds are compared through the snapshot the Talent Builds panel
+-- caches when it sees the build matching (talentsImportString marks which
+-- import string it came from). Without one, the panel's exact matcher is used
+-- when the talent UI is loaded; otherwise the build is skipped (no guess).
+function TalentReminder.CompareReminder(reminder)
+    if not reminder.importString then
+        return TalentReminder.CompareTalents(reminder.talents)
+    end
+    if reminder.talents and reminder.talentsImportString == reminder.importString then
+        return TalentReminder.CompareTalents(reminder.talents)
+    end
+    local TalentManager = addonTable.TalentManager
+    local matches = TalentManager and TalentManager.ImportBuildMatchesCurrent
+        and TalentManager.ImportBuildMatchesCurrent(reminder)
+    if matches == false then
+        return { { type = "build", name = reminder.name or "Unnamed" } }
+    end
+    return {}
 end
 
 -- Validate that saved talents still exist in current talent tree
@@ -871,10 +963,13 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
             [2] = "dungeonHeroic",
             [23] = "dungeonMythic",
             [8] = "mythicPlus",
+            [24] = "dungeonTimewalking",
+            [205] = "dungeonFollower",
             [17] = "raidLFR",
             [14] = "raidNormal",
             [15] = "raidHeroic",
             [16] = "raidMythic",
+            [33] = "raidTimewalking",
         }
         local filterKey = diffMap[difficultyID]
         if filterKey and not filters[filterKey] then
@@ -889,6 +984,9 @@ function TalentReminder.SaveReminder(instanceID, difficultyID, bossID, name, ins
                 raidNormal = "UIThingsTalentRNormalCheck",
                 raidHeroic = "UIThingsTalentRHeroicCheck",
                 raidMythic = "UIThingsTalentRMythicCheck",
+                dungeonTimewalking = "UIThingsTalentDTimewalkingCheck",
+                dungeonFollower = "UIThingsTalentDFollowerCheck",
+                raidTimewalking = "UIThingsTalentRTimewalkingCheck",
             }
             local checkboxName = checkboxMap[filterKey]
             if checkboxName and _G[checkboxName] then
@@ -958,22 +1056,42 @@ function TalentReminder.ShouldAlertForDifficulty(difficultyID)
     if difficultyID == 2 and filters.dungeonHeroic then return true end
     if difficultyID == 23 and filters.dungeonMythic then return true end
     if difficultyID == 8 and filters.mythicPlus then return true end
+    if difficultyID == 24 and filters.dungeonTimewalking then return true end
+    if difficultyID == 205 and filters.dungeonFollower then return true end
 
     -- Raid difficulties
     if difficultyID == 17 and filters.raidLFR then return true end
     if difficultyID == 14 and filters.raidNormal then return true end
     if difficultyID == 15 and filters.raidHeroic then return true end
     if difficultyID == 16 and filters.raidMythic then return true end
+    if difficultyID == 33 and filters.raidTimewalking then return true end
 
     return false
 end
 
 -- Show alert
+-- Entering an instance runs the check from both the entry timer and the zone
+-- change that follows; repeat the sound and chat only for a different alert.
+local lastAlertSignature, lastAlertTime = nil, 0
+local function AlertSignature(reminder, mismatches)
+    local names = {}
+    for _, m in ipairs(mismatches) do names[#names + 1] = (m.type or "") .. ":" .. tostring(m.name) end
+    table.sort(names)
+    return (reminder.name or "") .. "|" .. table.concat(names, ",")
+end
+
 function TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
     if not IsActive() then return end
     if not alertFrame then
         return
     end
+
+    local signature = AlertSignature(reminder, mismatches)
+    if signature == lastAlertSignature and (alertFrame:IsShown() or GetTime() - lastAlertTime < 10) then
+        if alertFrame:IsShown() then TalentReminder.UpdateAlertFrame(reminder, mismatches, zoneKey) end
+        return
+    end
+    lastAlertSignature, lastAlertTime = signature, GetTime()
 
     -- Play sound
     if UIThingsDB.talentReminders and UIThingsDB.talentReminders.playSound then
@@ -1009,6 +1127,14 @@ function TalentReminder.ShowAlert(reminder, mismatches, zoneKey)
 
         -- Header
         print(string.format("|cFFFF0000[LunaUITweaks]|r Talent mismatch for %s:", reminder.name))
+
+        -- Imported builds compared without a cached snapshot have no per-talent detail
+        for _, m in ipairs(mismatches) do
+            if m.type == "build" then
+                print("|cFFFF6B6B  Your talents don't match this imported build.|r")
+                break
+            end
+        end
 
         -- Missing talents
         if #missing > 0 then
@@ -1107,6 +1233,12 @@ function TalentReminder.ApplyTalents(reminder)
         end
         if needsRefund then
             local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            -- A choice (2) or hero subtree (3) node with the wrong selection is
+            -- swapped in place by SetSelection in step 2. Refunding it fails when
+            -- kept talents depend on it, and is never needed.
+            if nodeInfo and savedTalents[nodeID] and (nodeInfo.type == 2 or nodeInfo.type == 3) then
+                nodeInfo = nil
+            end
             if nodeInfo then
                 refundNodes[#refundNodes + 1] = {
                     nodeID = nodeID,
@@ -1365,6 +1497,14 @@ function TalentReminder.UpdateAlertFrame(reminder, mismatches, zoneKey)
         end
     end
 
+    for _, m in ipairs(mismatches) do
+        if m.type == "build" then
+            text = text .. "|cFFFF6B6BYour talents don't match this imported build.|r\n"
+                .. "|cFFAAAAAALoad it once from the Talent Builds panel for per-talent detail next time.|r\n\n"
+            break
+        end
+    end
+
     if #missing > 0 then
         text = text .. "|cFFFF6B6BMissing Talents:|r\n"
         for _, m in ipairs(missing) do
@@ -1592,6 +1732,7 @@ function TalentReminder.ReleaseAlertFrame()
 
     -- Hide and clear all references
     alertFrame:Hide()
+    lastAlertSignature = nil
     alertFrame.currentReminder = nil
     alertFrame.currentMismatches = nil
 

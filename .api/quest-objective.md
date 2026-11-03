@@ -164,3 +164,15 @@ GetNumActiveQuests()       -- number of active quests in current gossip (legacy)
 | `GOSSIP_SHOW` | NPC gossip window opened |
 | `GOSSIP_CLOSED` | NPC gossip window closed |
 | `QUEST_GREETING` | NPC quest greeting dialog opened |
+
+---
+
+## Nameplate quest marks (NameplateQuestMarks.lua)
+
+- `C_TooltipInfo.GetUnit(unit)` — tooltip data; lines of type `Enum.TooltipDataLineType.QuestObjective` carry the objective text with its "N/M" count. **Caveat:** inside instances the lines' `type`/`leftText` are secret — check each with `Secret.IsPublic` before comparing, and treat a secret line as "unreadable".
+- `C_QuestLog.UnitIsRelatedToActiveQuest(unit)` — yes/no fallback when tooltip lines are unreadable. **Caveat:** may return a secret boolean; never branch on it.
+- `Frame:SetAlphaFromBoolean(value, alphaIfTrue, alphaIfFalse)` (12.0) — accepts a secret boolean, so the marker can be shown/hidden from the secret result without reading it. Not confirmed on Forever; without it a secret result shows no mark.
+- `C_QuestLog.GetQuestObjectives(questID)` — `type` ("monster", "item", …) tells a kill from a loot objective.
+
+**Used in:** NameplateQuestMarks.lua. Markers are addon frames parented to non-forbidden plates; Blizzard plate frames are only read for anchoring.
+

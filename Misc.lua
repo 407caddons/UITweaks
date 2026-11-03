@@ -251,9 +251,15 @@ end
 -- == DEATH NOTIFICATION ==
 
 local deathAnnounced = {} -- [unitToken] = true while dead, cleared on resurrection
+local deathNameCache = {} -- [guid] = name, captured whenever the name is readable
+-- Death detection only needs group members; avoid UNIT_HEALTH for every nameplate.
+local DEATH_UNITS = {}
+for i = 1, 4 do DEATH_UNITS[#DEATH_UNITS + 1] = "party" .. i end
+for i = 1, 40 do DEATH_UNITS[#DEATH_UNITS + 1] = "raid" .. i end
 
 local function GetRoleLabel(unit)
     local role = UnitGroupRolesAssigned(unit)
+    if issecretvalue(role) then return "" end
     if role == "TANK" then
         return "Tank"
     elseif role == "HEALER" then
@@ -289,11 +295,18 @@ local function OnUnitHealth(event, unitTarget)
                 for _ in pairs(deathAnnounced) do deadCount = deadCount + 1 end
                 local maxCount = UIThingsDB.misc.deathMaxCount or 3
                 if deadCount <= maxCount then
-                    local name = UnitName(unitTarget) or "Unknown"
+                    local name = addonTable.Secret.SafeUnitName(unitTarget, nil)
+                    if name then
+                        deathNameCache[guid] = name
+                    else
+                        -- Secret in this context: fall back to the last readable name.
+                        name = deathNameCache[guid] or "Someone"
+                    end
                     local role = GetRoleLabel(unitTarget)
                     local msg = UIThingsDB.misc.deathTtsMessage or "{name} died"
-                    msg = msg:gsub("{name}", name)
-                    msg = msg:gsub("{role}", role)
+                    -- Function replacements so "%" in a name is not treated as a pattern.
+                    msg = msg:gsub("{name}", function() return name end)
+                    msg = msg:gsub("{role}", function() return role end)
                     addonTable.Core.SpeakTTS(msg, UIThingsDB.misc.deathTtsVoice or 0)
                 end
             end
@@ -306,6 +319,19 @@ end
 
 -- Drop entries for GUIDs no longer in the group, so stale deaths don't inflate the count
 local function OnGroupRosterUpdate()
+    -- Cache readable names (out of combat they are public) for death TTS.
+    if IsInGroup() then
+        local prefix = IsInRaid() and "raid" or "party"
+        local count = IsInRaid() and GetNumGroupMembers() or GetNumGroupMembers() - 1
+        for i = 1, count do
+            local unit = prefix .. i
+            local guid = UnitGUID(unit)
+            local name = addonTable.Secret.SafeUnitName(unit, nil)
+            if guid and name and not issecretvalue(guid) then deathNameCache[guid] = name end
+        end
+    else
+        wipe(deathNameCache)
+    end
     if not next(deathAnnounced) then return end
     if not IsInGroup() then
         wipe(deathAnnounced)
@@ -857,10 +883,10 @@ ApplyMiscEvents = function()
     end
 
     if UIThingsDB.misc.deathNotify then
-        EventBus.Register("UNIT_HEALTH", OnUnitHealth, "Misc")
+        EventBus.RegisterUnitEvent("UNIT_HEALTH", DEATH_UNITS, OnUnitHealth, "Misc")
         EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "Misc")
     else
-        EventBus.Unregister("UNIT_HEALTH", OnUnitHealth)
+        EventBus.UnregisterUnitEvent("UNIT_HEALTH", DEATH_UNITS, OnUnitHealth)
         EventBus.Unregister("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate)
         wipe(deathAnnounced)
     end

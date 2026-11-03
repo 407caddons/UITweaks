@@ -308,7 +308,7 @@ local function GetOrCreateRow(index)
 
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.text:SetPoint("LEFT", 0, 0)
-    row.text:SetWidth(contentWidth - 110)
+    row.text:SetWidth(contentWidth - 125)
     row.text:SetJustifyH("LEFT")
 
     -- Helper to add tooltip to a button
@@ -330,6 +330,16 @@ local function GetOrCreateRow(index)
     row.editBtn:GetHighlightTexture():SetAlpha(0.5)
     row.editBtn:Hide()
     AddButtonTooltip(row.editBtn, "Edit")
+
+    -- Default button (uncategorized builds only): dungeon/raid default for the spec
+    row.defaultBtn = CreateFrame("Button", nil, row)
+    row.defaultBtn:SetSize(16, 16)
+    row.defaultBtn:SetPoint("RIGHT", row, "RIGHT", -100, 0)
+    row.defaultBtn:SetNormalTexture("Interface\\COMMON\\FavoritesIcon")
+    row.defaultBtn:SetHighlightTexture("Interface\\COMMON\\FavoritesIcon")
+    row.defaultBtn:GetHighlightTexture():SetAlpha(0.5)
+    row.defaultBtn:Hide()
+    AddButtonTooltip(row.defaultBtn, "Set as dungeon or raid default for this spec")
 
     -- Copy button
     row.copyBtn = CreateFrame("Button", nil, row)
@@ -397,6 +407,7 @@ local function SetRowAsHeader(row, text, indent, isCollapsed, onClick)
     row.text:SetText(string.rep("  ", indent) .. arrow .. text)
     row.text:SetTextColor(1, 0.82, 0)
     row.text:SetPoint("LEFT", indent * 8, 0)
+    row.defaultBtn:Hide()
     row.editBtn:Hide()
     row.copyBtn:Hide()
     row.updateBtn:Hide()
@@ -429,7 +440,13 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
     end
 
     row.text:SetFont(font, fontSize, "")
-    row.text:SetText((reminder.name or "Unnamed Build"))
+    local label = reminder.name or "Unnamed Build"
+    if reminder.defaultFor == "dungeon" then
+        label = label .. " |cFF59E6C2(Dungeons default)|r"
+    elseif reminder.defaultFor == "raid" then
+        label = label .. " |cFF59E6C2(Raids default)|r"
+    end
+    row.text:SetText(label)
     if isMatch then
         row.text:SetTextColor(0.4, 1, 0.4)
     else
@@ -450,6 +467,26 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
         buildIndex = buildIndex,
         reminder = reminder,
     }
+
+    -- Default picker: only uncategorized builds can be dungeon/raid defaults
+    if tonumber(instanceID) == 0 then
+        row.defaultBtn:Show()
+        row.defaultBtn:GetNormalTexture():SetAlpha(reminder.defaultFor and 1 or 0.35)
+        row.defaultBtn:SetScript("OnClick", function(self)
+            local d = self:GetParent().buildData
+            MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+                rootDescription:CreateTitle("Default for this spec")
+                for _, option in ipairs({ { "Dungeons", "dungeon" }, { "Raids", "raid" }, { "None", nil } }) do
+                    local text, kind = option[1], option[2]
+                    rootDescription:CreateRadio(text,
+                        function() return d.reminder.defaultFor == kind end,
+                        function() TalentManager.SetDefaultBuild(d.reminder, kind) end)
+                end
+            end)
+        end)
+    else
+        row.defaultBtn:Hide()
+    end
 
     -- Show action buttons
     row.editBtn:Show()
@@ -602,6 +639,17 @@ function TalentManager.RefreshBuildList()
                                 -- skip
                             else
                                 local isMatch = BuildMatchesCurrent(reminder, currentTalents)
+                                -- Talents now equal this imported build: cache a snapshot so
+                                -- reminders can list per-talent mismatches without the talent UI.
+                                if isMatch and reminder.importString
+                                    and reminder.talentsImportString ~= reminder.importString
+                                    and addonTable.TalentReminder and addonTable.TalentReminder.CreateSnapshot then
+                                    local snapshot = addonTable.TalentReminder.CreateSnapshot()
+                                    if snapshot then
+                                        reminder.talents = snapshot
+                                        reminder.talentsImportString = reminder.importString
+                                    end
+                                end
                                 Log("TalentManager", string.format("BUILD '%s': match=%s",
                                     reminder.name or "Unnamed", tostring(isMatch)), LogLevel.DEBUG)
 
@@ -734,7 +782,12 @@ function TalentManager.RefreshBuildList()
 
     -- Render uncategorized builds at the top (no nesting)
     if #uncategorizedBuilds > 0 then
+        -- Dungeon and raid defaults first, then by name
+        local defaultOrder = { dungeon = 1, raid = 2 }
         table.sort(uncategorizedBuilds, function(a, b)
+            local oa = defaultOrder[a.reminder.defaultFor] or 3
+            local ob = defaultOrder[b.reminder.defaultFor] or 3
+            if oa ~= ob then return oa < ob end
             return (a.reminder.name or "") < (b.reminder.name or "")
         end)
         for _, build in ipairs(uncategorizedBuilds) do
@@ -756,6 +809,7 @@ function TalentManager.RefreshBuildList()
             "|cFFAAAAAAAANo talent builds saved for your\ncurrent class/spec.\n\nUse Add to snapshot your\ncurrent talents.|r")
         row.text:SetTextColor(0.7, 0.7, 0.7)
         row.text:SetPoint("LEFT", 5, 0)
+        row.defaultBtn:Hide()
         row.editBtn:Hide()
         row.copyBtn:Hide()
         row.updateBtn:Hide()
@@ -1472,10 +1526,13 @@ function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, r
                     note = reminder.note or "",
                     talents = reminder.talents,
                     importString = reminder.importString,
+                    talentsImportString = reminder.talentsImportString,
                     classID = reminder.classID,
                     className = reminder.className,
                     specID = reminder.specID,
                     specName = reminder.specName,
+                    -- Only uncategorized builds can be defaults
+                    defaultFor = tonumber(saveInstID) == 0 and reminder.defaultFor or nil,
                 })
 
                 Log("TalentManager", "Updated build: " .. newName, LogLevel.INFO)
@@ -1489,6 +1546,27 @@ function TalentManager.ShowEditDialog(instanceID, diffID, zoneKey, buildIndex, r
     end)
 
     f:Show()
+end
+
+-- ============================================================
+-- Default Builds
+-- ============================================================
+
+-- kind: "dungeon", "raid" or nil. Refreshes this panel and the config page.
+function TalentManager.SetDefaultBuild(reminder, kind)
+    local TalentReminder = addonTable.TalentReminder
+    if not reminder or not TalentReminder or not TalentReminder.SetDefaultBuild then return end
+    if not TalentReminder.SetDefaultBuild(reminder, kind) then
+        Log("TalentManager", "Only uncategorized builds can be dungeon or raid defaults", LogLevel.WARN)
+        return
+    end
+    TalentManager.RefreshBuildList()
+    if addonTable.Config and addonTable.Config.RefreshTalentReminderList then
+        addonTable.Config.RefreshTalentReminderList()
+    end
+    if addonTable.Config and addonTable.Config.RefreshTalentDefaults then
+        addonTable.Config.RefreshTalentDefaults()
+    end
 end
 
 -- ============================================================
@@ -1507,6 +1585,7 @@ function TalentManager.CopyBuild(instanceID, diffID, zoneKey, buildIndex, remind
         note = reminder.note or "",
         talents = reminder.talents and Helpers.DeepCopy(reminder.talents),
         importString = reminder.importString,
+        talentsImportString = reminder.talentsImportString,
         classID = reminder.classID,
         className = reminder.className,
         specID = reminder.specID,
@@ -1666,6 +1745,16 @@ local function ImportStringMatchesCurrent(importString, state)
         end
     end
     return true
+end
+
+-- For TalentReminder: true/false when an imported build can be compared now,
+-- nil when it cannot (talent UI not loaded, staged changes, unreadable string).
+function TalentManager.ImportBuildMatchesCurrent(reminder)
+    if not reminder or not reminder.importString or not GetTalentsFrame() then return nil end
+    if not ReadImportString(reminder.importString) then return nil end
+    local state = GetCurrentTalentState()
+    if not state then return nil end
+    return ImportStringMatchesCurrent(reminder.importString, state)
 end
 
 BuildMatchesCurrent = function(reminder, state)

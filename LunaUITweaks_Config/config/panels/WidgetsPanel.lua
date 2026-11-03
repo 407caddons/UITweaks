@@ -23,7 +23,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(630, 1900)
+    scrollChild:SetSize(630, 2000)
     scrollFrame:SetScrollChild(scrollChild)
     panel = scrollChild
 
@@ -212,6 +212,8 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         { key = "addonComm",        label = "Addon Comm Status" },
         { key = "wheeCheck",        label = "DMF WHEE! Buff" },
         { key = "pullTimer",        label = "Pull Timer" },
+        { key = "deadGroup",        label = "Dead Group Members" },
+        { key = "jumps",            label = "Jump Counter" },
     }
 
     if addonTable.Client and addonTable.Client.isForever then
@@ -442,5 +444,14 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     sessionStaticBtn:SetScript("OnClick", function(self)
         UIThingsDB.widgets.sessionStaticOnly = self:GetChecked()
         UpdateWidgets()
+    end)
+
+    -- Jump Counter: the encounter winner posts the board to group chat
+    local jumpPostBtn = CreateFrame("CheckButton", "UIThingsWidgetsJumpPostCheck", panel, "ChatConfigCheckButtonTemplate")
+    jumpPostBtn:SetPoint("TOPLEFT", 20, yOffset - 130)
+    _G[jumpPostBtn:GetName() .. "Text"]:SetText("Jump Counter: post jumping champions to group chat after encounters")
+    jumpPostBtn:SetChecked(UIThingsDB.widgets.jumps.postChampions)
+    jumpPostBtn:SetScript("OnClick", function(self)
+        UIThingsDB.widgets.jumps.postChampions = not not self:GetChecked()
     end)
 end

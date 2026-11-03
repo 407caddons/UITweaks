@@ -423,44 +423,57 @@ end
 
 -- Roster Cache for optimized lookups
 local rosterCache = {}
+local Secret = addonTable.Secret
+
+-- The player's name is compared and used as a key on every loot message.
+-- Cache it once readable; nil until then.
+local cachedPlayerName
+local function PlayerName()
+    if not cachedPlayerName then cachedPlayerName = Secret.SafeUnitName("player", nil) end
+    return cachedPlayerName
+end
+
+-- Names and classes can be secret (e.g. roster changes in combat). Check
+-- before using them as keys or calling match on them. Returns false when an
+-- entry had to be skipped because it was secret.
+local function AddRosterEntry(cache, name, classFileName)
+    if not Secret.IsPublic(name) or not Secret.IsPublic(classFileName) then return false end
+    if name and classFileName then
+        cache[name] = classFileName
+        -- Cache short name
+        local shortName = name:match("^([^%-]+)")
+        if shortName and shortName ~= name then
+            cache[shortName] = classFileName
+        end
+    end
+    return true
+end
 
 local function UpdateRosterCache()
-    table.wipe(rosterCache)
+    local fresh, complete = {}, true
 
     -- Always cache player
-    local playerName = UnitName("player")
     local _, playerClass = UnitClass("player")
-    if playerName and playerClass then
-        rosterCache[playerName] = playerClass
-    end
+    if not AddRosterEntry(fresh, PlayerName(), playerClass) then complete = false end
 
     if IsInRaid() then
         for i = 1, 40 do
             local name, _, _, _, _, classFileName = GetRaidRosterInfo(i)
-            if name and classFileName then
-                -- Cache full name
-                rosterCache[name] = classFileName
-                -- Cache short name
-                local shortName = name:match("^([^%-]+)")
-                if shortName and shortName ~= name then
-                    rosterCache[shortName] = classFileName
-                end
-            end
+            if not AddRosterEntry(fresh, name, classFileName) then complete = false end
         end
     elseif IsInGroup() then
         for i = 1, 4 do
             local unit = "party" .. i
-            local name = UnitName(unit)
             local _, classFileName = UnitClass(unit)
-            if name and classFileName then
-                rosterCache[name] = classFileName
-                -- UnitName usually returns what's expected, but just in case
-                local shortName = name:match("^([^%-]+)")
-                if shortName and shortName ~= name then
-                    rosterCache[shortName] = classFileName
-                end
-            end
+            if not AddRosterEntry(fresh, UnitName(unit), classFileName) then complete = false end
         end
+    end
+
+    if complete then
+        rosterCache = fresh
+    else
+        -- Keep earlier readable entries for members whose data is secret now.
+        for name, classFileName in pairs(fresh) do rosterCache[name] = classFileName end
     end
 end
 
@@ -468,6 +481,7 @@ end
 local EventBus = addonTable.EventBus
 local lastMoney = 0 -- Tracks previous gold amount for locale-independent gold change detection
 local recentToasts = {} -- Dedup: itemLink -> expiry time
+local lastToastPrune = 0
 
 -- Named callbacks for EventBus
 local function OnGroupRosterUpdate()
@@ -552,11 +566,13 @@ end
 local function ParseLootMessage(msg)
     lootFormats = lootFormats or BuildLootFormats()
     for _, format in ipairs(lootFormats) do
-        local values = {msg:match(format.pattern)}
-        if #values > 0 then
+        -- find() tests the pattern without building a table; capture only on a hit.
+        local values = msg:find(format.pattern) and {msg:match(format.pattern)}
+        if values and #values > 0 then
             local args = {}
             for i, value in ipairs(values) do args[format.captures[i]] = value end
-            local recipient = format.self and UnitName("player") or args[1]
+            local recipient
+            if format.self then recipient = PlayerName() else recipient = args[1] end
             if recipient then
                 recipient = recipient:match("|h%[(.-)%]|h") or recipient:match("|h(.-)|h") or recipient
             end
@@ -574,11 +590,21 @@ local function IsDuplicate(itemLink, recipient, quantity, channel)
     local now = GetTime()
     local payload = itemLink:match("|H(item:.-)|h") or itemLink
     local key = payload .. "\031" .. (recipient or "") .. "\031" .. tostring(quantity or 1)
-    for k, occurrences in pairs(recentToasts) do
-        for i = #occurrences, 1, -1 do
-            if occurrences[i].expires <= now then table.remove(occurrences, i) end
+    -- Always expire this key's entries; sweep other keys at most once a second.
+    local current = recentToasts[key]
+    if current then
+        for i = #current, 1, -1 do
+            if current[i].expires <= now then table.remove(current, i) end
         end
-        if #occurrences == 0 then recentToasts[k] = nil end
+    end
+    if now - lastToastPrune >= 1 then
+        lastToastPrune = now
+        for k, occurrences in pairs(recentToasts) do
+            for i = #occurrences, 1, -1 do
+                if occurrences[i].expires <= now then table.remove(occurrences, i) end
+            end
+            if #occurrences == 0 then recentToasts[k] = nil end
+        end
     end
     local occurrences = recentToasts[key] or {}
     recentToasts[key] = occurrences
@@ -596,7 +622,7 @@ local function OnShowLootToast(event, typeIdentifier, itemLink, quantity)
     if not UIThingsDB.loot.enabled or typeIdentifier ~= "item" or not itemLink then return end
     local _, _, quality = GetItemInfo(itemLink)
     if not quality or quality < UIThingsDB.loot.minQuality then return end
-    local recipient, count = UnitName("player"), quantity or 1
+    local recipient, count = PlayerName(), quantity or 1
     if IsDuplicate(itemLink, recipient, count, event) then return end
     SpawnToast(itemLink, nil, count, recipient, rosterCache[recipient])
 end
@@ -609,7 +635,7 @@ local function OnChatMsgLoot(event, msg)
     if not itemLink then return end
     local _, _, quality = GetItemInfo(itemLink)
     if not quality or quality < UIThingsDB.loot.minQuality then return end
-    if not UIThingsDB.loot.showAll and recipient ~= UnitName("player") then return end
+    if not UIThingsDB.loot.showAll and recipient ~= PlayerName() then return end
     if IsDuplicate(itemLink, recipient, count, event) then return end
     local shortName = recipient and recipient:match("^([^%-]+)")
     SpawnToast(itemLink, nil, count, recipient, rosterCache[shortName or recipient])
@@ -852,3 +878,12 @@ EventBus.Register("BONUS_ROLL_STARTED", function()
     InvalidateBonusPrompt()
     TryHookBonusRoll()
 end, "Loot:BonusRoll")
+
+-- Layout Mode integration (the toast anchor has no saved lock flag)
+addonTable.LayoutMode.RegisterModule("Loot", {
+    apply = function() Loot.UpdateSettings() end,
+})
+addonTable.LayoutMode.RegisterTarget("Loot toasts", function() return _G.UIThingsLootAnchor end, function()
+    local db = UIThingsDB.loot
+    return db and db.enabled
+end)

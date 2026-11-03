@@ -3,16 +3,16 @@ local Layout = { active = false }
 addon.LayoutMode = Layout
 local targets, handles, participants = {}, {}, {}
 local function NotifyParticipant(callback)
-    xpcall(callback,geterrorhandler(),Layout.active)
+    xpcall(callback, geterrorhandler(), Layout.active)
 end
 local function NotifyParticipants()
-    for _,callback in pairs(participants) do NotifyParticipant(callback) end
+    for _, callback in pairs(participants) do NotifyParticipant(callback) end
 end
 -- Companions keep ownership of their frames, previews and saved variables.
-function Layout.RegisterParticipant(key,callback)
-    participants[key]=callback
-    C_Timer.After(0,function()
-        if participants[key]==callback and not InCombatLockdown() then NotifyParticipant(callback) end
+function Layout.RegisterParticipant(key, callback)
+    participants[key] = callback
+    C_Timer.After(0, function()
+        if participants[key] == callback and not InCombatLockdown() then NotifyParticipant(callback) end
     end)
 end
 local toolbar, ticker, pendingLock
@@ -20,11 +20,34 @@ local function Call(module, method, ...)
     local m = addon[module]
     if m and m[method] then m[method](...) end
 end
+
+-- Built-in modules own their Layout Mode integration and register it here
+-- (companions use RegisterParticipant instead). Called in registration order,
+-- which is TOC load order, so frames a module docks to are refreshed first.
+--   setLocked(locked)  flip the module's saved lock flags only; runs in combat
+--                      and at logout, so it must not touch frames
+--   apply(locked)      refresh the module's frames; only runs out of combat
+--   combatLocked()     optional; live update when combat forces a lock
+local modules, moduleIndex = {}, {}
+function Layout.RegisterModule(key, spec)
+    local index = moduleIndex[key]
+    if not index then
+        index = #modules + 1
+        moduleIndex[key] = index
+    end
+    modules[index] = spec
+end
+local function EachModule(method, ...)
+    for _, spec in ipairs(modules) do
+        local fn = spec[method]
+        if fn then xpcall(fn, geterrorhandler(), ...) end
+    end
+end
 function Layout.IsActive() return Layout.active end
 
 -- Targets retain their own save logic; the common overlay only handles interaction.
 function Layout.RegisterTarget(key, getFrame, enabled, save)
-    targets[key] = {getFrame=getFrame, enabled=enabled, save=save}
+    targets[key] = {getFrame = getFrame, enabled = enabled, save = save}
 end
 local function StopDrag(handle)
     if not handle.dragging then return end
@@ -45,178 +68,136 @@ local function RefreshHandles()
         if target and spec.enabled() and target:IsShown() then
             if not handle then
                 handle = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-                handle:SetFrameStrata("TOOLTIP"); handle:SetFrameLevel(100)
-                handle:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
-                handle:SetBackdropColor(.04,.12,.14,.8); handle:SetBackdropBorderColor(.3,.9,.75,1)
-                handle.text=handle:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
-                handle.text:SetPoint("CENTER"); handle.text:SetText(key)
-                handle:EnableMouse(true); handle:RegisterForDrag("LeftButton")
-                handle:SetScript("OnDragStart",function(self)
+                handle:SetFrameStrata("TOOLTIP")
+                handle:SetFrameLevel(100)
+                handle:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+                handle:SetBackdropColor(.04, .12, .14, .8)
+                handle:SetBackdropBorderColor(.3, .9, .75, 1)
+                handle.text = handle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                handle.text:SetPoint("CENTER")
+                handle.text:SetText(key)
+                handle:EnableMouse(true)
+                handle:RegisterForDrag("LeftButton")
+                handle:SetScript("OnDragStart", function(self)
                     if not Layout.active or InCombatLockdown() then return end
-                    self.dragging=true
-                    self.target:SetMovable(true); self.target:StartMoving()
+                    self.dragging = true
+                    self.target:SetMovable(true)
+                    self.target:StartMoving()
                 end)
-                handle:SetScript("OnDragStop",StopDrag)
-                handles[key]=handle
+                handle:SetScript("OnDragStop", StopDrag)
+                handles[key] = handle
             end
-            handle.target,handle.spec=target,spec
+            handle.target, handle.spec = target, spec
             -- The overlay is the only drag surface during Layout Mode. This also
             -- keeps deferred combat locking from leaving native drag scripts active.
             target:EnableMouse(false)
             if not handle.dragging then
-                handle:ClearAllPoints(); handle:SetAllPoints(target)
+                handle:ClearAllPoints()
+                handle:SetAllPoints(target)
             end
             handle:Show()
-        elseif handle then StopDrag(handle); handle:Hide() end
+        elseif handle then
+            StopDrag(handle)
+            handle:Hide()
+        end
     end
 end
 local function SetFlags(locked)
-    local db = UIThingsDB
-    for _,key in ipairs({"widgets","combat","castBar","damageMeter","mplusTimer","coordinates","xpBar","encounterBars"}) do
-        if db[key] then db[key].locked=locked end
-    end
-    if db.combat then
-        db.combat.ttdLocked=locked
-        if db.combat.reminders then db.combat.reminders.locked=locked end
-    end
-    if db.castBar and db.castBar.targetBar then db.castBar.targetBar.locked=locked end
-    if db.castBar and db.castBar.focusBar then db.castBar.focusBar.locked=locked end
-    if db.vendor then db.vendor.warningLocked=locked end
-    if db.minimap then db.minimap.minimapDrawerLocked=locked end
-    if db.frames then for _,frame in ipairs(db.frames.list or {}) do frame.locked=locked end end
+    EachModule("setLocked", locked)
 end
 local function Apply(locked)
-    Call("Frames","UpdateFrames")
-    Call("Widgets","UpdateVisuals")
-    for _,name in ipairs({"Combat","CastBar","DamageMeter","MplusTimer","Coordinates","XpBar","Vendor","EncounterBars","Loot"}) do
-        Call(name,"UpdateSettings")
-    end
-    Call("Combat","TtdApplySettings"); Call("Combat","UpdateReminders")
-    for _,method in ipairs({"SetMinimapLocked","SetZoneLocked","SetClockLocked","SetCoordsLocked","SetDrawerLocked"}) do
-        Call("MinimapCustom",method,locked)
-    end
-    Call("MplusTimer","CloseDemo")
-    Call("EncounterBars","ClosePreview")
-    if not locked then
-        if UIThingsDB.mplusTimer and UIThingsDB.mplusTimer.enabled then Call("MplusTimer","ToggleDemo") end
-        if UIThingsDB.encounterBars and UIThingsDB.encounterBars.enabled then Call("EncounterBars","TogglePreview") end
-    end
-    Call("TankDebuffs","UpdateSettings")
-    Call("QualityOfLife","UpdateSettings")
-    Call("CooldownManager","UpdateSettings")
+    EachModule("apply", locked)
     NotifyParticipants()
-    Call("Config","RefreshFrameControls")
+    Call("Config", "RefreshFrameControls")
 end
 function Layout.LockAll()
-    Layout.active=false
-    if ticker then ticker:Cancel(); ticker=nil end
+    Layout.active = false
+    if ticker then
+        ticker:Cancel()
+        ticker = nil
+    end
     if toolbar then toolbar:Hide() end
     -- Do not mutate protected frames in combat; saved lock flags are safe to set.
-    for _,handle in pairs(handles) do
+    for _, handle in pairs(handles) do
         if not InCombatLockdown() then StopDrag(handle) end
         handle:Hide()
     end
     if not UIThingsDB then return end
     SetFlags(true)
+    UIThingsDB.layoutModeActive = nil
     if InCombatLockdown() then
-        pendingLock=true
-        Call("TankDebuffs","RefreshUnits")
+        pendingLock = true
+        EachModule("combatLocked")
         return
     end
-    pendingLock=false
+    pendingLock = false
     Apply(true)
 end
 function Layout.Start()
     if Layout.active then return end
     if InCombatLockdown() or IsEncounterInProgress() then
-        print("LunaUITweaks: Layout Mode is only available outside combat and encounters."); return
+        print("LunaUITweaks: Layout Mode is only available outside combat and encounters.")
+        return
     end
-    Layout.active=true
-    SetFlags(false); Apply(false)
+    Layout.active = true
+    UIThingsDB.layoutModeActive = true
+    SetFlags(false)
+    Apply(false)
     if not toolbar then
-        toolbar=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
-        toolbar:SetSize(440,64); toolbar:SetPoint("TOP",0,-40); toolbar:SetFrameStrata("TOOLTIP"); toolbar:SetFrameLevel(200)
-        toolbar:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"}); toolbar:SetBackdropColor(.04,.08,.1,.97)
-        local text=toolbar:CreateFontString(nil,"OVERLAY","GameFontHighlight")
-        text:SetPoint("TOP",0,-8); text:SetText("Layout Mode — drag handles; docked items follow their frame")
-        local done=CreateFrame("Button",nil,toolbar,"UIPanelButtonTemplate")
-        done:SetSize(150,26); done:SetPoint("BOTTOM",0,6); done:SetText("Done / Lock All")
-        done:SetScript("OnClick",Layout.LockAll)
+        toolbar = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        toolbar:SetSize(440, 64)
+        toolbar:SetPoint("TOP", 0, -40)
+        toolbar:SetFrameStrata("TOOLTIP")
+        toolbar:SetFrameLevel(200)
+        toolbar:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8"})
+        toolbar:SetBackdropColor(.04, .08, .1, .97)
+        local text = toolbar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        text:SetPoint("TOP", 0, -8)
+        text:SetText("Layout Mode — drag handles; docked items follow their frame")
+        local done = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
+        done:SetSize(150, 26)
+        done:SetPoint("BOTTOM", 0, 6)
+        done:SetText("Done / Lock All")
+        done:SetScript("OnClick", Layout.LockAll)
     end
-    toolbar:Show(); RefreshHandles()
-    ticker=C_Timer.NewTicker(.25,RefreshHandles)
+    toolbar:Show()
+    RefreshHandles()
+    ticker = C_Timer.NewTicker(.25, RefreshHandles)
 end
 function Layout.Toggle() if Layout.active then Layout.LockAll() else Layout.Start() end end
 
 -- Optional API: companions continue to work standalone when Luna is absent.
-LunaUITweaksAPI.RegisterLayoutParticipant=Layout.RegisterParticipant
-LunaUITweaksAPI.RegisterLayoutTarget=Layout.RegisterTarget
-LunaUITweaksAPI.IsLayoutModeActive=Layout.IsActive
-LunaUITweaksAPI.SetLayoutMode=function(active)
+LunaUITweaksAPI.RegisterLayoutParticipant = Layout.RegisterParticipant
+LunaUITweaksAPI.RegisterLayoutTarget = Layout.RegisterTarget
+LunaUITweaksAPI.IsLayoutModeActive = Layout.IsActive
+LunaUITweaksAPI.SetLayoutMode = function(active)
     if active then Layout.Start() else Layout.LockAll() end
 end
-local function Enabled(key, extra)
-    return function()
-        local db=UIThingsDB[key]
-        return db and db.enabled and (not extra or extra(db))
-    end
-end
-for _,entry in ipairs({
-    {"Combat timer","UIThingsCombatTimer","combat"},
-    {"Time to die","UIThingsTTDTimer","combat",function(db) return db.ttdEnabled ~= false end},
-    {"Consumable reminders","LunaCombatReminders","combat",function(db) return db.reminders ~= nil end},
-    {"Player cast bar","LunaCastBar","castBar"},
-    {"Target cast bar","LunaTargetCastBar","castBar",function(db) return db.targetBar and db.targetBar.enabled end},
-    {"M+ timer","LunaMplusTimer","mplusTimer"},
-    {"Waypoints","LunaCoordinatesFrame","coordinates"},
-    {"XP / reputation","LunaUITweaks_XpBar","xpBar"},
-    {"Damage meter","LunaUITweaks_DamageMeterMain","damageMeter",function(db) return (db.dockToFrame or 0)==0 end},
-    {"Repair warning","UIThingsRepairWarning","vendor"},
-    {"Bag warning","UIThingsBagWarning","vendor",function(db) return db.bagWarningEnabled end},
-    {"Loot toasts","UIThingsLootAnchor","loot"},
-}) do
-    local name,global,key,extra=unpack(entry)
-    Layout.RegisterTarget(name,function() return _G[global] end,Enabled(key,extra))
-end
-for _,entry in ipairs({
-    {"Minimap","LunaMinimapFrame","minimapPos"},
-    {"Minimap drawer","LunaMinimapDrawer","minimapDrawerPos"},
-}) do
-    local name,global,posKey=unpack(entry)
-    Layout.RegisterTarget(name,function() return _G[global] end,function()
-        local f=_G[global]
-        return UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled and f and f:IsShown()
-    end,function(frame)
-        local point,_,relativePoint,x,y=frame:GetPoint()
-        UIThingsDB.minimap[posKey]={point=point,relPoint=relativePoint,x=x,y=y}
-    end)
-end
-for _,entry in ipairs({
-    {"Minimap zone","LunaMinimapZoneFrame"},
-    {"Minimap clock","LunaMinimapClockFrame"},
-    {"Minimap coordinates","LunaMinimapCoordsFrame"},
-}) do
-    local name,global=unpack(entry)
-    Layout.RegisterTarget(name,function() return _G[global] end,function()
-        local frame=_G[global]
-        return UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled and frame and frame:IsShown()
-    end,function(frame)
-        if frame.dragOverlay then
-            local stop=frame.dragOverlay:GetScript("OnDragStop")
-            if stop then stop(frame.dragOverlay) end
-        end
-    end)
-end
-addon.EventBus.Register("PLAYER_REGEN_DISABLED",function() if Layout.active then Layout.LockAll() end end,"LayoutMode")
-addon.EventBus.Register("PLAYER_REGEN_ENABLED",function()
+addon.EventBus.Register("PLAYER_REGEN_DISABLED", function() if Layout.active then Layout.LockAll() end end, "LayoutMode")
+addon.EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if pendingLock then
-        for _,handle in pairs(handles) do StopDrag(handle) end
+        for _, handle in pairs(handles) do StopDrag(handle) end
         Layout.LockAll()
     else
         NotifyParticipants() -- includes companions loaded during combat
     end
-end,"LayoutMode")
-addon.EventBus.Register("PLAYER_LOGOUT",function() if UIThingsDB then SetFlags(true) end end,"LayoutMode")
-addon.EventBus.Register("PLAYER_LOGIN",function() C_Timer.After(2,function() if not Layout.active then Layout.LockAll() end end) end,"LayoutMode")
-SLASH_LUNALAYOUT1="/lunalayout"
-SlashCmdList.LUNALAYOUT=Layout.Toggle
+end, "LayoutMode")
+addon.EventBus.Register("PLAYER_LOGOUT", function()
+    if UIThingsDB then
+        SetFlags(true)
+        UIThingsDB.layoutModeActive = nil
+    end
+end, "LayoutMode")
+addon.EventBus.Register("PLAYER_LOGIN", function()
+    if not UIThingsDB then return end
+    if UIThingsDB.layoutModeActive then
+        -- The last session ended with Layout Mode open (e.g. a crash): run a
+        -- full lock once modules have initialised.
+        C_Timer.After(2, function() if not Layout.active then Layout.LockAll() end end)
+    else
+        -- Normal login: saved flags only; modules initialise themselves locked.
+        SetFlags(true)
+    end
+end, "LayoutMode")
+SLASH_LUNALAYOUT1 = "/lunalayout"
+SlashCmdList.LUNALAYOUT = Layout.Toggle

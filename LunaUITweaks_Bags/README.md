@@ -36,3 +36,7 @@ Inventory closing uses a secure close button. While open, Escape and the configu
 Item slots retain Blizzard's native container OnClick as the hardware click handler, including item use, vendor sales, bank transfers and modified clicks. Addon PreClick/PostClick callbacks never invoke the protected item-use path. The combined free-space tile only picks up/drops a cursor item into a freshly checked empty slot.
 
 The login inventory baseline uses a fixed startup deadline. Self-loot messages preserve confirmed acquisitions during that window, including stack quantities; later bag updates do not extend the deadline.
+
+Item buttons are retained by physical bag/slot, so category changes only reposition them. The aggregate free-space tile has a separate button and never shares its click or drag handlers with a real item. Native item input scripts are never replaced or reinstalled.
+
+Pets, Mounts and Housing Decor have separate categories in inventory and both banks. Pet items and caged battle pets are recognised separately from generic usable items; mount equipment and non-decor housing items keep their normal categories.

@@ -13,6 +13,7 @@ local journalSearchComplete
 local searchUpdateCallback
 local searchUpdateListeners = {}
 local lastError
+local SyncAuraWatch
 
 BuffAlerts.SOUND_PRESETS = {
     { value = "none",       label = "None" },
@@ -426,6 +427,7 @@ end
 
 function BuffAlerts.Refresh()
     BuffAlerts.MigrateLegacySounds()
+    SyncAuraWatch()
     if GetRestrictionType() ~= nil then
         pendingRefresh = true
         return false, "Changes queued until combat and encounter restrictions end."
@@ -484,13 +486,20 @@ local function OnRestrictionChanged(_, _, state)
     end
 end
 
+-- Passive aura discovery only feeds the config search catalogue, and every
+-- hit is persisted to SavedVariables. Only collect while the module is enabled.
+local function Enabled()
+    local db = UIThingsDB and UIThingsDB.buffAlerts
+    return db and db.enabled
+end
+
 local function OnPlayerLogin()
-    BuffAlerts.ScanPlayerAuras()
+    if Enabled() then BuffAlerts.ScanPlayerAuras() end
     BuffAlerts.Refresh()
 end
 
 local function OnPlayerRegenEnabled()
-    BuffAlerts.ScanPlayerAuras()
+    if Enabled() then BuffAlerts.ScanPlayerAuras() end
     if pendingRefresh and GetRestrictionType() == nil then
         BuffAlerts.Refresh()
     end
@@ -508,4 +517,16 @@ end
 EventBus.Register("PLAYER_LOGIN", OnPlayerLogin, "BuffAlerts")
 EventBus.Register("ADDON_RESTRICTION_STATE_CHANGED", OnRestrictionChanged, "BuffAlerts")
 EventBus.Register("PLAYER_REGEN_ENABLED", OnPlayerRegenEnabled, "BuffAlerts")
-EventBus.Register("UNIT_AURA", OnUnitAura, "BuffAlerts")
+
+-- Player-only aura subscription, held only while the module is enabled.
+local auraWatching = false
+SyncAuraWatch = function()
+    local want = Enabled() and true or false
+    if want == auraWatching then return end
+    auraWatching = want
+    if want then
+        EventBus.RegisterUnitEvent("UNIT_AURA", "player", OnUnitAura, "BuffAlerts")
+    else
+        EventBus.UnregisterUnitEvent("UNIT_AURA", "player", OnUnitAura)
+    end
+end

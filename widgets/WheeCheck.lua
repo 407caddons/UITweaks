@@ -11,8 +11,9 @@ local DMF_BUFFS = {
 -- Returns the first active DMF buff aura, or nil
 local function GetActiveDMFBuff()
     for _, buff in ipairs(DMF_BUFFS) do
-        local aura = C_UnitAuras.GetPlayerAuraBySpellID(buff.id)
-        if aura then return aura, buff.label end
+        -- Aura reads error while auras are secret (encounters, challenge modes)
+        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, buff.id)
+        if ok and not (issecretvalue and issecretvalue(aura)) and aura then return aura, buff.label end
     end
     return nil, nil
 end
@@ -65,23 +66,23 @@ table.insert(Widgets.moduleInits, function()
     end
 
     local function OnCombatStart()
-        EventBus.Unregister("UNIT_AURA", OnAura)
+        EventBus.UnregisterUnitEvent("UNIT_AURA", "player", OnAura)
         wheeFrame.text:SetText("")
     end
 
     local function OnCombatEnd()
-        EventBus.Register("UNIT_AURA", OnAura, "W:WheeCheck")
+        EventBus.RegisterUnitEvent("UNIT_AURA", "player", OnAura, "W:WheeCheck")
         Refresh()
     end
 
     wheeFrame.ApplyEvents = function(enabled)
         if enabled then
-            EventBus.Register("UNIT_AURA", OnAura, "W:WheeCheck")
+            EventBus.RegisterUnitEvent("UNIT_AURA", "player", OnAura, "W:WheeCheck")
             EventBus.Register("PLAYER_REGEN_DISABLED", OnCombatStart, "W:WheeCheck")
             EventBus.Register("PLAYER_REGEN_ENABLED", OnCombatEnd, "W:WheeCheck")
             Refresh()
         else
-            EventBus.Unregister("UNIT_AURA", OnAura)
+            EventBus.UnregisterUnitEvent("UNIT_AURA", "player", OnAura)
             EventBus.Unregister("PLAYER_REGEN_DISABLED", OnCombatStart)
             EventBus.Unregister("PLAYER_REGEN_ENABLED", OnCombatEnd)
             wheeFrame.text:SetText("")

@@ -293,6 +293,16 @@ local function OnEvent(self, event, ...)
                 noTank = { r = 0.85, g = 0.20, b = 0.20 },
                 otherTank = { r = 0.25, g = 0.50, b = 0.90 },
                 selfTank = { r = 0.25, g = 0.75, b = 0.35 },
+                questMarks = {
+                    enabled = true,
+                    icon = true,
+                    border = true,
+                    borderColor = { r = 1, g = 0.82, b = 0, a = 1 },
+                    progress = true,
+                    size = 20,
+                    anchor = "RIGHT",
+                    hideInInstances = false,
+                },
             },
             vendor = {
                 enabled = false,
@@ -308,7 +318,9 @@ local function OnEvent(self, event, ...)
                 -- Bag Space Warnings
                 bagWarningEnabled = true,
                 bagWarningThreshold = 5, -- Warn when 5 or fewer free slots
-                bagWarningPos = { point = "TOP", x = 0, y = -200 }
+                bagWarningPos = { point = "TOP", x = 0, y = -200 },
+                -- Shift-click (unstackable) / Alt-click merchant items to buy several
+                bulkBuy = true,
             },
             loot = {
                 enabled = false,
@@ -340,9 +352,6 @@ local function OnEvent(self, event, ...)
                 colorInCombat = { r = 1, g = 1, b = 1 },
                 colorOutCombat = { r = 0.5, g = 0.5, b = 0.5 },
                 pos = { point = "CENTER", x = 0, y = 0 },
-                ttdEnabled = true,
-                ttdLocked = true,
-                ttdPos = { x = 0, y = -30 },
                 combatLog = {
                     dungeonNormal = false,
                     dungeonHeroic = false,
@@ -541,10 +550,13 @@ local function OnEvent(self, event, ...)
                     dungeonHeroic = false,
                     dungeonMythic = false,
                     mythicPlus = true,
+                    dungeonTimewalking = true,
+                    dungeonFollower = true,
                     raidLFR = false,
                     raidNormal = false,
                     raidHeroic = true,
-                    raidMythic = true
+                    raidMythic = true,
+                    raidTimewalking = true
                 },
                 playSound = true,
                 useTTS = true,
@@ -616,6 +628,8 @@ local function OnEvent(self, event, ...)
                 addonComm = { enabled = false, point = "CENTER", x = 0, y = -680, condition = "group" },
                 wheeCheck = { enabled = false, point = "CENTER", x = 0, y = -700, condition = "nocombat" },
                 pullTimer = { enabled = false, point = "CENTER", x = 0, y = -720, condition = "group" },
+                deadGroup = { enabled = false, point = "CENTER", x = 0, y = -740, condition = "group" },
+                jumps = { enabled = false, point = "CENTER", x = 0, y = -760, condition = "always", lifetime = {}, postChampions = false },
             },
             castBar = {
                 enabled = false,
@@ -701,6 +715,14 @@ local function OnEvent(self, event, ...)
                 borderColor = { r = 0.3, g = 0.3, b = 0.3, a = 1 },
                 borderSize = 1,
                 autoSlotKeystone = false,
+                rerollReminder = true,
+                rerollTts = true,
+                -- Xal'atath's Bargain timer (MplusBargainTimer.lua)
+                bargainEnabled = false,
+                bargainShowPaused = true,
+                bargainCountdown = true,
+                bargainSound = false,
+                bargainReport = true,
                 -- Text colors
                 timerColor = { r = 1, g = 1, b = 1 },
                 timerWarningColor = { r = 1, g = 1, b = 0.2 },
@@ -750,6 +772,10 @@ local function OnEvent(self, event, ...)
                 enabled=false, onlyTanking=true, bossOnly=true,
                 player={enabled=true,iconSize=48,maxIcons=5,fontSize=16,x=-280,y=120},
                 other={enabled=true,iconSize=48,maxIcons=5,fontSize=16,x=40,y=120},
+            },
+            tankExternals = {
+                enabled=false, onlyTanking=true, showExternals=true, showCooldowns=true,
+                iconSize=40, maxIcons=5, fontSize=14, x=-280, y=200, extraSpellIDs="",
             },
             gearReview = { enabled = true, notify = true, showEqual = true, ignored = {} },
             destroy = {
@@ -825,6 +851,7 @@ local function OnEvent(self, event, ...)
             },
             games = {
                 closeInCombat = true,
+                barrels = { bestRound = 0 },
                 snek = {
                     highScore = 0,
                 },

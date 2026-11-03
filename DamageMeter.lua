@@ -60,11 +60,13 @@ local ENUM_NAMES = {
 -- Keep the native session's totals, rates and duration together. Never reconstruct
 -- Overall from the bounded historical list or time it with PLAYER_REGEN events.
 local entryCache = {}
+-- Set when a native update arrives in combat; the throttled OnUpdate renders.
+local combatRenderPending = false
 local CACHE_TTL = 0.5
 local sessionDurationByID, sessionNameByID = {}, {}
 local DPS_TYPES = { damage=true, healing=true, damageTaken=true, enemyDamageTaken=true, avoidableDamageTaken=true }
 local COUNT_TYPES = { interrupts=true, deaths=true, dispels=true }
-local function Public(value) return not (issecretvalue and issecretvalue(value)) end
+local Public = addonTable.Secret.IsPublic
 local function Present(value) return not Public(value) or value ~= nil end
 -- Native abbreviation accepts secret combat numbers. Only these public,
 -- static breakpoints are inspected in Lua; the result goes to native text sinks.
@@ -1041,11 +1043,20 @@ local function CreateMainFrame()
     -- Periodic refresh (0.75s) to keep live numbers up to date
     local updateTimer = 0
     mainFrame:SetScript("OnUpdate", function(_, elapsed)
-        if not InCombatLockdown() then updateTimer = 0; return end
+        if not InCombatLockdown() then
+            updateTimer = 0
+            -- Flush an update that arrived after the last in-combat render.
+            if combatRenderPending then
+                combatRenderPending = false
+                if UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled then RenderAllPanes() end
+            end
+            return
+        end
         updateTimer = updateTimer + elapsed
         if updateTimer < 0.75 then return end
         updateTimer = 0
         if not (UIThingsDB.damageMeter and UIThingsDB.damageMeter.enabled) then return end
+        combatRenderPending = false
         local n = UIThingsDB.damageMeter.numMeters or 1
         for i = 1, n do
             RenderPane(i)
@@ -1138,6 +1149,9 @@ local function OnSessionUpdated(_, meterType)
         if meterType ~= GetEnumType(s.meter1.type) and meterType ~= GetEnumType(s.meter2.type) then return end
     end
     entryCache = {}
+    -- In combat the 0.75 s OnUpdate refresh renders; rendering on every native
+    -- notification would bypass that throttle.
+    if InCombatLockdown() then combatRenderPending = true; return end
     if refreshPending then return end
     refreshPending = true
     SafeAfter(0, function()
@@ -1251,3 +1265,16 @@ UnregisterEvents = function()
     eventsRegistered = false
     for event, handler in pairs(handlers) do EventBus.Unregister(event, handler) end
 end
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("DamageMeter", {
+    setLocked = function(locked)
+        if UIThingsDB.damageMeter then UIThingsDB.damageMeter.locked = locked end
+    end,
+    apply = function() addonTable.DamageMeter.UpdateSettings() end,
+})
+-- Docked meters follow their frame, so only the undocked meter gets a handle.
+addonTable.LayoutMode.RegisterTarget("Damage meter", function() return _G.LunaUITweaks_DamageMeterMain end, function()
+    local db = UIThingsDB.damageMeter
+    return db and db.enabled and (db.dockToFrame or 0) == 0
+end)

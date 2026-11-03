@@ -14,7 +14,7 @@ local TIMER_KINDS = { "pull", "break" }
 local Refresh, UpdateLoop
 local UpdateAliases
 local function DB() return UIThingsDB and UIThingsDB.encounterBars end
-local function Public(v) return not (issecretvalue and issecretvalue(v)) end
+local Public = addon.Secret.IsPublic
 local function Number(v) return Public(v) and type(v) == "number" and v == v end
 local function Tell(message) addon.Core.Log("EncounterBars", message, 1) end
 
@@ -68,6 +68,8 @@ function Bars.GetBlocker()
     if C_AddOns.IsAddOnLoaded("DBM-Core") then return "DBM is loaded" end
 end
 function Bars.IsActive() return active and not Bars.GetBlocker() end
+-- Timer providers (e.g. MplusBargainTimer) call this when their state changes.
+function Bars.RequestRefresh() if active and Refresh then Refresh() end end
 
 local function NewAnchor(key, title)
     local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -279,6 +281,7 @@ Refresh = function(suppressTransitions)
             else timeline[id] = nil end
         end
         if addon.CustomEncounterTimers then addon.CustomEncounterTimers.Append(list, GetTime()) end
+        if addon.MplusBargainTimer then addon.MplusBargainTimer.Append(list, GetTime()) end
         table.sort(list, function(a, b)
             if a.remaining == b.remaining then
                 if not not a.custom ~= not not b.custom then return not a.custom end
@@ -320,7 +323,8 @@ end
 
 UpdateLoop = function()
     local running = active and (next(timeline) ~= nil or next(timers) ~= nil
-        or (addon.CustomEncounterTimers and addon.CustomEncounterTimers.HasTimers())) or false
+        or (addon.CustomEncounterTimers and addon.CustomEncounterTimers.HasTimers())
+        or (addon.MplusBargainTimer and addon.MplusBargainTimer.HasTimers())) or false
     if running == loopRunning then return end
     loopRunning = running
     if running then
@@ -593,3 +597,15 @@ UpdateAliases = function()
         end
     end
 end
+
+-- Layout Mode integration: show the preview bars while unlocked.
+addon.LayoutMode.RegisterModule("EncounterBars", {
+    setLocked = function(locked)
+        if UIThingsDB.encounterBars then UIThingsDB.encounterBars.locked = locked end
+    end,
+    apply = function(locked)
+        Bars.UpdateSettings()
+        Bars.ClosePreview()
+        if not locked and UIThingsDB.encounterBars and UIThingsDB.encounterBars.enabled then Bars.TogglePreview() end
+    end,
+})

@@ -88,16 +88,15 @@ Profiler.Wrap = Profiler.WrapCallback
 
 local displayFrame, memoryText, pauseBtn, rowFrames, headerFrame
 
-local function FormatTime(us)
-    local ms = us / 1000
+-- debugprofilestop() returns milliseconds.
+local function FormatTime(ms)
     if ms >= 1000 then
         return ("%.1fs"):format(ms / 1000)
     end
     return ("%.1fms"):format(ms)
 end
 
-local function SpikeColor(spike)
-    local ms = spike / 1000
+local function SpikeColor(ms)
     if ms >= 5 then
         return 1, 0.27, 0.27     -- red
     elseif ms >= 1 then

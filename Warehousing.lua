@@ -1562,7 +1562,8 @@ end
 local function RegisterEvents()
     if eventsRegistered then return end
     eventsRegistered = true
-    EventBus.Register("BAG_UPDATE", OnBagUpdate, "Warehousing")
+    -- Once per batch of bag changes, not once per bag (debounced again below).
+    EventBus.Register("BAG_UPDATE_DELAYED", OnBagUpdate, "Warehousing")
     EventBus.Register("MAIL_SHOW", OnMailShow, "Warehousing")
     EventBus.Register("MAIL_CLOSED", OnMailClosed, "Warehousing")
     EventBus.Register("MAIL_SEND_SUCCESS", OnMailSendSuccess, "Warehousing")
@@ -1578,7 +1579,7 @@ end
 local function UnregisterEvents()
     if not eventsRegistered then return end
     eventsRegistered = false
-    EventBus.Unregister("BAG_UPDATE", OnBagUpdate)
+    EventBus.Unregister("BAG_UPDATE_DELAYED", OnBagUpdate)
     EventBus.Unregister("MAIL_SHOW", OnMailShow)
     EventBus.Unregister("MAIL_CLOSED", OnMailClosed)
     EventBus.Unregister("MAIL_SEND_SUCCESS", OnMailSendSuccess)

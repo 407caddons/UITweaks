@@ -1535,6 +1535,7 @@ end
 
 function addonTable.Blocks.ShowGame()
     if addonTable.Config and addonTable.Config.CloseWindow then addonTable.Config.CloseWindow() end
+    if addonTable.Barrels and addonTable.Barrels.CloseGame then addonTable.Barrels.CloseGame() end
     if not gameFrame then
         BuildUI()  -- BuildUI is forward-declared so this is always valid
     end

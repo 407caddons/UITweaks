@@ -531,3 +531,11 @@ EventBus.Register("GROUP_ROSTER_UPDATE", OnConditionEvent, "W:Widgets")
 EventBus.Register("RAID_ROSTER_UPDATE", OnConditionEvent, "W:Widgets")
 EventBus.Register("PLAYER_ENTERING_WORLD", OnConditionEvent, "W:Widgets")
 EventBus.Register("ZONE_CHANGED_NEW_AREA", OnConditionEvent, "W:Widgets")
+
+-- Layout Mode integration (per-widget handles are registered with each widget)
+addonTable.LayoutMode.RegisterModule("Widgets", {
+    setLocked = function(locked)
+        if UIThingsDB.widgets then UIThingsDB.widgets.locked = locked end
+    end,
+    apply = function() Widgets.UpdateVisuals() end,
+})

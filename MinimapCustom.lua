@@ -22,10 +22,11 @@ local coordsTicker = nil
 -- on map pins. Use Blizzard's EventRegistry notification instead.
 local queueEyeCallbackRegistered = false
 
--- Expose shape for other addons that call GetMinimapShape().
--- Defined once at file scope so it is never recreated on repeated calls to ApplyMinimapShape().
+-- Expose shape for other addons that call GetMinimapShape(). Defined once here
+-- but only published as the global from ApplyMinimapShape, which runs only while
+-- the custom minimap is enabled, so other minimap addons keep their own otherwise.
 local currentMinimapShape = "ROUND"
-function GetMinimapShape() return currentMinimapShape end
+local function MinimapShape() return currentMinimapShape end
 
 local function AnchorQueueEyeToMinimap()
     if not QueueStatusButton or not QueueStatusButton:IsShown() then return end
@@ -158,6 +159,7 @@ local function ApplyMinimapShape(shape)
 
     -- Update the file-scope variable so GetMinimapShape() returns the correct shape
     currentMinimapShape = (shape == "SQUARE") and "SQUARE" or "ROUND"
+    _G.GetMinimapShape = MinimapShape
 end
 
 local function HideDefaultDecorations()
@@ -207,8 +209,23 @@ local function HideDefaultDecorations()
     end
 end
 
+local iconsDeferred = false
 local function PositionMinimapIcons()
     if not minimapFrame then return end
+    -- Reparents/re-anchors Blizzard minimap frames: never in combat. Retry
+    -- once when combat ends (crafting-order updates can arrive mid-combat).
+    if InCombatLockdown() then
+        if not iconsDeferred then
+            iconsDeferred = true
+            local function Retry()
+                addonTable.EventBus.Unregister("PLAYER_REGEN_ENABLED", Retry)
+                iconsDeferred = false
+                PositionMinimapIcons()
+            end
+            addonTable.EventBus.Register("PLAYER_REGEN_ENABLED", Retry, "MinimapCustom")
+        end
+        return
+    end
     local settings = UIThingsDB.minimap
     local yOffset = -5
     local iconSpacing = 28
@@ -1236,3 +1253,47 @@ end
 
 addonTable.EventBus.Register("ADDON_LOADED", OnAddonLoaded, "MinimapCustom")
 addonTable.EventBus.Register("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld, "MinimapCustom")
+
+-- Layout Mode integration
+addonTable.LayoutMode.RegisterModule("MinimapCustom", {
+    setLocked = function(locked)
+        if UIThingsDB.minimap then UIThingsDB.minimap.minimapDrawerLocked = locked end
+    end,
+    apply = function(locked)
+        MinimapCustom.SetMinimapLocked(locked)
+        MinimapCustom.SetZoneLocked(locked)
+        MinimapCustom.SetClockLocked(locked)
+        MinimapCustom.SetCoordsLocked(locked)
+        MinimapCustom.SetDrawerLocked(locked)
+    end,
+})
+for _, entry in ipairs({
+    { "Minimap", "LunaMinimapFrame", "minimapPos" },
+    { "Minimap drawer", "LunaMinimapDrawer", "minimapDrawerPos" },
+}) do
+    local name, global, posKey = unpack(entry)
+    addonTable.LayoutMode.RegisterTarget(name, function() return _G[global] end, function()
+        local f = _G[global]
+        return UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled and f and f:IsShown()
+    end, function(frame)
+        local point, _, relativePoint, x, y = frame:GetPoint()
+        UIThingsDB.minimap[posKey] = { point = point, relPoint = relativePoint, x = x, y = y }
+    end)
+end
+-- Zone, clock and coordinates save through their own drag overlays.
+for _, entry in ipairs({
+    { "Minimap zone", "LunaMinimapZoneFrame" },
+    { "Minimap clock", "LunaMinimapClockFrame" },
+    { "Minimap coordinates", "LunaMinimapCoordsFrame" },
+}) do
+    local name, global = unpack(entry)
+    addonTable.LayoutMode.RegisterTarget(name, function() return _G[global] end, function()
+        local frame = _G[global]
+        return UIThingsDB.minimap and UIThingsDB.minimap.minimapEnabled and frame and frame:IsShown()
+    end, function(frame)
+        if frame.dragOverlay then
+            local stop = frame.dragOverlay:GetScript("OnDragStop")
+            if stop then stop(frame.dragOverlay) end
+        end
+    end)
+end

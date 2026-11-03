@@ -48,7 +48,7 @@ end
 
 local gameModules = {
     "Snek", "Bombs", "Gems", "Cards", "Game2048",
-    "Boxes", "Slide", "Lights", "Blocks",
+    "Boxes", "Slide", "Lights", "Blocks", "Barrels",
 }
 
 for _, moduleName in ipairs(gameModules) do

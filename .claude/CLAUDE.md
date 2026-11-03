@@ -1,18 +1,16 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with LunaUITweaks.
-
-@../.claude/CLAUDE.md
-
 Be surgical with updates and only change the specific section of code required and no other.
 
 ## Project Overview
 
-LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, interrupt cooldown tracker, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
+LunaUITweaks is a World of Warcraft 12.0 (retail) addon providing UI enhancements: quest reminders, quest auto-accept, talent change reminders, talent loadout manager, auto-repair/durability warnings, loot toast notifications, combat timer, custom layout frames, personal order alerts, AH filtering, custom cast bar, M+ dungeon timer, map coordinates, info widgets, damage meter, XP/rep bar, queue timer, warehousing/bank management, addon version checking, performance profiler, and mini-games. Published to CurseForge (project ID 1450486).
 
 ## Build & Release
 
-No build step or test suite. Pure Lua loaded directly by the WoW client.
+No build step. Pure Lua loaded directly by the WoW client.
+
+- **Regression tests:** `tests/*.lua` are standalone Lua scripts with WoW API stubs. Run each from the repository root, e.g. `lua tests/event_bus_regressions.lua`. They need Lua 5.2+ or LuaJIT (`xpcall` with arguments). Many tests load a module with a hand-built `addon` table, so a module that starts using a new shared helper (e.g. `addon.Secret`) needs that helper added to its test.
 
 - **Release:** Push a git tag matching `v*` (e.g. `v0.15`) to trigger the GitHub Actions packager (`.github/workflows/release.yml`), which uses `BigWigsMods/packager@v2` to package and upload to CurseForge.
 - **Local testing:** Reload the WoW client (`/reload`). Use `/luit` or `/luithings` in-game to open the config window.
@@ -37,7 +35,7 @@ The TOC file (`LunaUITweaks.toc`) defines load order. **Core.lua loads first** a
 ### Saved Variables
 
 - **`UIThingsDB`** — All module settings by module key
-- **`LunaUITweaks_TalentReminders`** — User talent reminder definitions
+- **`LunaUITweaks_TalentReminders`** — User talent builds, shared by Talent Reminders and the Talent Builds panel: `reminders[instanceID][difficultyID][zoneKey] = { build, ... }`. Uncategorized builds live at `[0][0][0]`; one per class/spec can carry `defaultFor = "dungeon"` or `"raid"`, checked in instances with no saved build for that spec at that difficulty (`TalentReminder.SetDefaultBuild` / `GetDefaultBuild`)
 - **`LunaUITweaks_ReagentData`** — Cross-character reagent inventory data
 - **`LunaUITweaks_QuestReminders`** — User quest reminder definitions
 - **`LunaUITweaks_WarehousingData`** — Bank/warehouse item tracking data
@@ -47,7 +45,7 @@ Defaults in Core.lua's `DEFAULTS` table, merged via `ApplyDefaults()`. Tables wi
 
 ### Settings Update Flow
 
-Config: `config/ConfigMain.lua` (window + nav), `config/Helpers.lua` (shared factories), `config/panels/*.lua` (one panel per tab). Panel setup registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. Changes write to `UIThingsDB` and call the module's `UpdateSettings()` immediately.
+Config is the load-on-demand `LunaUITweaks_Config` addon: `config/ConfigMain.lua` (window + nav), `config/panels/*.lua` (one panel per tab); shared factories are in the main addon's `ConfigHelpers.lua`. Panel setup registered as `addonTable.ConfigSetup.ModuleName(panel, tab, configWindow)`. Changes write to `UIThingsDB` and call the module's `UpdateSettings()` immediately.
 
 ### Config Visual Style
 
@@ -103,41 +101,78 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 
 | File | Module Key | Purpose |
 |---|---|---|
-| Core.lua | `Core` | Initialization, defaults, logging, timer utility |
+| **Main addon — core** | | |
+| compat/Client.lua | `Client` | Retail vs Forever (Camelot) detection; `Supports`/`SupportsWidget`/`SupportsQoL` feature gates |
+| Core.lua | `Core` | Initialization, defaults, logging, timer utility, character registry, `LunaUITweaksAPI` |
 | EventBus.lua | `EventBus` | Single-frame centralized event dispatcher for all modules |
-| Profiler.lua | `Profiler` | Performance profiling and CPU usage tracking |
+| LayoutMode.lua | `LayoutMode` | Shared unlock/drag mode (`/lunalayout`). Built-in modules call `LayoutMode.RegisterModule(key, {setLocked, apply, combatLocked})` and `RegisterTarget` from their own files; companions use `LunaUITweaksAPI.RegisterLayoutParticipant` / `RegisterLayoutTarget` (signatures must stay stable — used by addons outside this repo) |
+| Profiler.lua | `Profiler` | Performance profiling and CPU usage tracking (`/luit perf`) |
+| Loaders.lua | `Config` (proxy) | Load-on-demand stubs for the Config and Games companions, game key-binding globals |
+| SharedHelpers.lua | `ConfigHelpers` | Runtime-safe helpers shared by feature modules and the config addon |
+| ConfigHelpers.lua | `ConfigHelpers` | Shared config UI factories (section headers, reset buttons, color pickers, font dropdowns) |
+| utils/Secret.lua | `Secret` | Secret-value helpers (`IsPublic`, `SafeUnitName`, `SafeUnitGUID`, `CanAccessValue`, …); use these instead of local copies |
 | MplusData.lua | — | Static M+ dungeon data (mob force counts) for the M+ timer |
-| config/ConfigMain.lua | `Config` | Config window shell, tab navigation, panel wiring |
-| config/Helpers.lua | `ConfigHelpers` | Shared UI helpers (font dropdowns, section headers, color swatches) |
-| config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module |
-| Config.lua | — | Legacy stub entry point for config (delegates to ConfigMain) |
-| QuestReminder.lua | `QuestReminder` | Quest reminder notifications |
-| QuestAuto.lua | — | Quest auto-accept and auto-turn-in |
+| **Main addon — features** | | |
 | MinimapButton.lua | `Minimap` | Draggable minimap button |
-| MinimapCustom.lua | — | Custom minimap frame (shape, border, zone text, clock) |
-| Vendor.lua | `Vendor` | Auto-repair, sell greys, durability warnings |
+| MinimapCustom.lua | — | Custom minimap frame (shape, border, zone text, clock, button drawer) |
+| Vendor.lua | `Vendor` | Auto-repair, sell greys, durability and bag-space warnings |
+| VendorBulkBuy.lua | `VendorBulkBuy` | Quantity dialog for merchant items (Shift-click unstackables, Alt-click any); paced `BuyMerchantItem` with currency/stock/bag-space limits (`vendor.bulkBuy`) |
 | Loot.lua | `Loot` | Loot toast notifications with quality filtering and item level |
-| Combat.lua | `Combat` | In-combat duration display (MM:SS) |
-| Misc.lua | `Misc` | Personal order alerts (with TTS), AH expansion filter, auto-invite |
+| Combat.lua | `Combat` | Combat timer, consumable reminders, auto combat logging |
+| Misc.lua | `Misc` | Personal order alerts, AH filter, auto-invite, death/whisper/BoE alerts with TTS, tooltip tweaks |
 | Frames.lua | `Frames` | User-created colored rectangles for UI layout |
 | TalentReminder.lua | `TalentReminder` | Zone-based talent/spec change alerts |
 | TalentManager.lua | `TalentManager` | Talent loadout management and switching |
-| CastBar.lua | `CastBar` | Custom player cast bar replacing Blizzard's |
-| Kick.lua | `Kick` | Party interrupt cooldown tracker with group frame attachment |
-| MplusTimer.lua | — | Mythic+ dungeon timer display |
-| Coordinates.lua | — | Map coordinates display |
-| XpBar.lua | `XpBar` | Custom XP bar with rested/pending fills and rep bar at max level |
-| DamageMeter.lua | `DamageMeter` | Session damage/healing meter using C_DamageMeter API |
 | AddonComm.lua | `Comm` | Centralized addon communication message bus |
+| DamageMeter.lua | `DamageMeter` | Session damage/healing meter using C_DamageMeter API |
+| CastBar.lua | `CastBar` | Custom player and target cast bars replacing Blizzard's |
+| FocusCastBar.lua | `FocusCastBar` | Focus target cast bar |
+| AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
 | Reagents.lua | `Reagents` | Cross-character reagent tracking with tooltip display |
+| QuestAuto.lua | — | Quest auto-accept and auto-turn-in |
+| QuestReminder.lua | `QuestReminder` | Quest reminder notifications |
+| XpBar.lua | `XpBar` | Custom XP bar with rested/pending fills and rep bar at max level |
+| MplusTimer.lua | — | Mythic+ dungeon timer display |
+| MplusBargainTimer.lua | `MplusBargainTimer` | Xal'atath's Bargain affix timer (60s of group combat time, pauses out of combat), shown via EncounterBars; end-of-key calibration report (`/lunabargain`); settings `mplusTimer.bargain*` |
+| CustomEncounterTimers.lua | `CustomEncounterTimers` | User-defined encounter timers (first/interval, countdown, expiry sound) |
+| EncounterBars.lua | `EncounterBars` | Encounter timeline, pull and break timer bars |
+| Coordinates.lua | — | Map coordinates and waypoint list |
 | Warehousing.lua | — | Bank/warehouse item management |
 | QueueTimer.lua | `QueueTimer` | Queue wait timer display |
 | Destroy.lua | `Destroy` | Disenchant helper: lists unusable/low-ilvl bag gear while resting with one-click disenchant |
-| AddonVersions.lua | `AddonVersions` | Group addon version checking and display |
+| GearReview.lua | `GearReview` | Bag gear review against equipped item level (review hint, not an upgrade score) |
+| TankDebuffs.lua | `TankDebuffs` | Player and co-tank debuff displays via Blizzard's AuraContainer |
+| TankExternals.lua | `TankExternals` | Externals on you (Blizzard `EXTERNAL_DEFENSIVE` filter) and a group-cooldown spell list row, via AuraContainer; settings in `tankExternals`, page shared with Tank Debuffs |
+| BuffAlerts.lua | `BuffAlerts` | Aura sound alerts via `C_UnitAuras.AddAuraSound`; owns the shared sound list |
+| ProcAlerts.lua | `ProcAlerts` | Sound alerts on spell activation overlay (proc) glows |
+| NameplateColors.lua | `NameplateColors` | Tank-threat coloring of Blizzard enemy nameplates |
+| NameplateQuestMarks.lua | `NameplateQuestMarks` | Kill/loot icon, objective progress and a coloured outline (Luna's own textures; Blizzard's border and threat-coloured bar untouched) on nameplates of active-quest units, including world quests (settings in `nameplateColors.questMarks`) |
+| CooldownManager.lua | `CooldownManager` | Repositions Blizzard Cooldown Manager viewer icons/bars into custom grids |
+| CompactGroupFinder.lua | `CompactGroupFinder` | Compact row layout for the Group Finder list |
+| qualityOfLife/QualityOfLife.lua | `QualityOfLife` | QoL framework: settings, `Enabled()`, submodule registry |
+| qualityOfLife/Cursor.lua | `QualityOfLife.Cursor` | Cursor ring |
+| qualityOfLife/AutoOpen.lua | `QualityOfLife.AutoOpen` | Auto-open containers in bags (`/luitautoopen` diagnostics) |
+| qualityOfLife/Convenience.lua | — | Skip cinematics, hide tutorials and talking head, unwrap collections |
+| qualityOfLife/GameplayAlerts.lua | `QualityOfLife.GameplayAlerts` | Movement cooldown, Time Spiral, Gateway and battle-res alerts |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
-| widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, etc.) |
+| widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, keystone, etc.) |
+| **LunaUITweaks_Config** (load-on-demand) | | |
+| Config.lua | — | Entry point for the config UI |
+| config/ConfigMain.lua | `Config` | Config window shell, tab navigation, panel wiring |
+| config/Theme.lua | `ConfigTheme` | Charcoal-and-mint config visual style |
+| config/SettingsData.lua | `SettingsData` | Safe parser/validator for settings import strings (no code execution) |
+| config/ForeverPanels.lua | — | Placeholder panels for features unavailable on Forever |
+| config/panels/*.lua | `ConfigSetup.*` | Individual settings panels, one per module (`NameplatesPanel.lua` covers threat colours and quest marks) |
+| **LunaUITweaks_Games** (load-on-demand) | | |
 | games/Games.lua | `Games` | Mini-game framework and launcher |
-| games/*.lua | — | Individual games (Snek, Bombs, Gems, Cards, Tiles, Boxes, Slide, Lights) |
+| games/BarrelsModel.lua | `BarrelsModel` | Board/round logic for Barrels |
+| games/*.lua | — | Individual games (Snek, Bombs, Gems, Cards, Tiles, Boxes, Slide, Lights, Blocks, Barrels) |
+| **LunaUITweaks_Bags** | | |
+| Bags.lua, Model.lua, Views.lua | — | Categorized combined bags and banks (`/luitbags`) |
+| NewItems.lua, Deposit.lua, Config.lua | — | Session new-item tracking, Warband deposit, config panel |
+| **LunaUITweaks_ActionBars** | | |
+| ActionBars.lua, Layout.lua, Appearance.lua, Settings.lua | — | Prototype square action bars with precise layout (`/luitbars`) |
+| Config.lua, Diagnostics.lua | — | Config panel and taint/state diagnostics report |
 
 ## EventBus
 
@@ -147,8 +182,15 @@ Single-frame centralized event dispatcher. Modules use this instead of creating 
 local EventBus = addonTable.EventBus
 EventBus.Register(event, callback)           -- subscribe
 EventBus.Unregister(event, callback)         -- unsubscribe (reference equality)
-local w = EventBus.RegisterUnit(event, unit, callback)  -- unit-filtered; returns wrapper for Unregister
+-- Unit events (UNIT_*): deliver only the listed units via RegisterUnitEvent frames.
+-- Use these instead of Register for UNIT_* events; the shared bus frame would
+-- otherwise receive the event for every unit (all nameplates and raid members).
+EventBus.RegisterUnitEvent(event, unitOrUnits, callback, moduleName)  -- "player" or {"party1", ...}
+EventBus.UnregisterUnitEvent(event, unitOrUnits, callback)           -- nil units = all
+EventBus.RegisterUnit(event, unit, callback, moduleName)             -- legacy single-unit form
 ```
+
+`EventBus.Unregister(event, callback)` also removes that callback's unit-filtered registrations.
 
 ## AddonComm
 
@@ -161,7 +203,7 @@ addonTable.Comm.IsAllowed()    -- in group + not hidden
 addonTable.Comm.GetChannel()   -- "RAID", "PARTY", or nil
 ```
 
-Legacy prefixes `"LunaVer"` and `"LunaKick"` still supported for older clients.
+Legacy prefix `"LunaVer"` (addon version checks) is still supported for older clients.
 
 ## Companion Addon API
 
@@ -180,9 +222,9 @@ Because the config window is built lazily on first open, companion registrations
 
 ## Config Navigation Order
 
-Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–23. Companion panels are inserted at 24, 25, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID.
+Addon Versions **must always be the last tab**. Built-in modules occupy IDs 1–24 (ID 6 is unused since Kick was removed). Companion panels are inserted at 25, 26, … and Addon Versions shifts accordingly. When adding new built-in modules, insert before Addon Versions and increment its ID, plus the `24 + i` / `25 + #companionPanels` offsets in `ConfigMain.lua`.
 
-Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 6=Kick, 7=MplusTimer, 8=Minimap, 9=Coordinates, 10=Frames, 11=DamageMeter, 12=Vendor, 13=Loot, 14=Notifications, 15=Reagents, 16=TalentManager, 17=Talent, 18=Misc, 19=Widgets, 20=Warehousing, 21=QueueTimer, 22=Destroy, then companions, then AddonVersions (last=23+companions).
+Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 7=MplusTimer, 8=Minimap, 9=Coordinates, 10=Frames, 11=DamageMeter, 12=Vendor, 13=Loot, 14=Notifications, 15=Reagents, 16=TalentManager, 17=Talent, 18=Misc, 19=Widgets, 20=Warehousing, 21=QueueTimer, 22=Destroy, 23=BuffAlerts, 24=CompactGroupFinder, then companions (including panels registered via `RegisterConfigPanel`, e.g. Cooldown Manager, Proc Alerts, Nameplate Colours), then AddonVersions (last=25+companions).
 
 ## LunaUITweaks-Specific Conventions
 
@@ -196,7 +238,7 @@ Current tab order: 1=QuestReminder, 2=QuestAuto, 3=XpBar, 4=Combat, 5=CastBar, 6
 
 Migrated to CENTER anchor ✓: `DamageMeter`, `Frames`, `Widgets`
 
-Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `Kick`, `MinimapCustom`
+Not yet migrated (dynamic GetPoint): `XpBar`, `CastBar`, `Combat`, `MinimapCustom`
 
 ## API Documentation
 

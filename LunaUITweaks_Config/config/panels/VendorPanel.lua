@@ -171,4 +171,24 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     bagHelpText:SetText(
         "Displays a warning when you have this many or fewer free bag slots remaining.\nShares font settings with durability warning. Use Layout Mode to position each warning.")
     bagHelpText:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Bulk Buy Section
+    local bulkSeparator = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    bulkSeparator:SetPoint("TOPLEFT", 16, -570)
+    bulkSeparator:SetText("Buy Multiple")
+
+    local bulkBtn = CreateFrame("CheckButton", "UIThingsVendorBulkBuyCheck", panel, "ChatConfigCheckButtonTemplate")
+    bulkBtn:SetPoint("TOPLEFT", 20, -600)
+    _G[bulkBtn:GetName() .. "Text"]:SetText("Ask how many to buy on Shift-click (items that cannot stack) or Alt-click (any item)")
+    bulkBtn:SetChecked(UIThingsDB.vendor.bulkBuy ~= false)
+    bulkBtn:SetScript("OnClick", function(self)
+        UIThingsDB.vendor.bulkBuy = not not self:GetChecked()
+    end)
+
+    local bulkHelpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bulkHelpText:SetPoint("TOPLEFT", 40, -625)
+    bulkHelpText:SetWidth(500)
+    bulkHelpText:SetJustifyH("LEFT")
+    bulkHelpText:SetText("Shows the total cost and the most you can afford, then buys one at a time. Stops on any error or if the vendor closes.")
+    bulkHelpText:SetTextColor(0.7, 0.7, 0.7)
 end

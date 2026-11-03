@@ -2,41 +2,54 @@ local _, addon = ...
 local Manager = {}
 addon.CooldownManager = Manager
 local groups = {
-    {key="essential", name="Essential cooldowns", viewer="EssentialCooldownViewer"},
-    {key="utility", name="Utility cooldowns", viewer="UtilityCooldownViewer"},
-    {key="buffs", name="Buff cooldowns", viewer="BuffIconCooldownViewer"},
-    {key="buffBars", name="Buff duration bars", viewer="BuffBarCooldownViewer", bars=true},
+    {key = "essential", name = "Essential cooldowns", viewer = "EssentialCooldownViewer"},
+    {key = "utility", name = "Utility cooldowns", viewer = "UtilityCooldownViewer"},
+    {key = "buffs", name = "Buff cooldowns", viewer = "BuffIconCooldownViewer"},
+    {key = "buffBars", name = "Buff duration bars", viewer = "BuffBarCooldownViewer", bars = true},
 }
 local dirty, applying = false, false
 local worker = CreateFrame("Frame")
 worker:Hide()
-local function Public(value) return not (issecretvalue and issecretvalue(value)) end
+local Public = addon.Secret.IsPublic
 local function DB() return UIThingsDB and UIThingsDB.cooldownManager end
 function Manager.GetConflict()
     return C_AddOns and C_AddOns.IsAddOnLoaded("EllesmereUICooldownManager")
 end
 local function Configured(group)
-    local db=DB()
+    local db = DB()
     return db and db.enabled and db[group.key] and db[group.key].enabled
 end
 local function Direction(db)
-    local value=db.growthDirection
-    if value=="LEFT" or value=="UP" or value=="DOWN" then return value end
+    local value = db.growthDirection
+    if value == "LEFT" or value == "UP" or value == "DOWN" then return value end
     return "RIGHT" -- preserves existing layouts and imports without this setting
 end
 local function Origin(db)
-    local direction=Direction(db)
-    return direction=="LEFT" and "BOTTOMRIGHT" or direction=="DOWN" and "TOPLEFT" or "BOTTOMLEFT"
+    local direction = Direction(db)
+    return direction == "LEFT" and "BOTTOMRIGHT" or direction == "DOWN" and "TOPLEFT" or "BOTTOMLEFT"
 end
+-- Queue() re-lays out every group (settings, login, combat end). Hooks on a
+-- group's own viewer, items or anchor only re-lay out that group.
 local function Queue()
     if applying then return end
-    dirty=true; worker:Show()
+    dirty = true
+    worker:Show()
+end
+local function GroupQueue(group)
+    if not group.queue then
+        group.queue = function()
+            if applying then return end
+            group.dirty = true
+            worker:Show()
+        end
+    end
+    return group.queue
 end
 local function Editable(frame)
-    local forbidden=frame:IsForbidden()
+    local forbidden = frame:IsForbidden()
     if not Public(forbidden) or forbidden then return false end
     if InCombatLockdown() then
-        local protected=frame:IsProtected()
+        local protected = frame:IsProtected()
         if not Public(protected) or protected then return false end
     end
     return true
@@ -46,157 +59,188 @@ local function Restore(group)
     -- Releasing/reacquiring the native pool restores current Edit Mode scale,
     -- positions and order, including icons which disappeared while managed.
     if InCombatLockdown() then return end
-    group.managed=false
-    for item,width in pairs(group.originalWidths or {}) do item:SetWidth(width) end
-    group.originalWidths=nil
+    group.managed = false
+    for item, width in pairs(group.originalWidths or {}) do item:SetWidth(width) end
+    group.originalWidths = nil
     group.viewerFrame:RefreshLayout()
 end
 local function CreateAnchor(group)
-    local frame=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
-    frame:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
-    frame.origin=frame:CreateTexture(nil,"OVERLAY")
-    frame.origin:SetColorTexture(1,.8,.2,1); frame.origin:SetSize(8,8)
-    frame:SetMovable(true); frame:SetClampedToScreen(true); frame:EnableMouse(false)
-    group.anchor=frame
-    hooksecurefunc(frame,"StartMoving",function() group.dragging=true end)
-    hooksecurefunc(frame,"StopMovingOrSizing",function() group.dragging=false; Queue() end)
-    addon.LayoutMode.RegisterTarget(group.name,function() return frame end,function() return Configured(group) end,function(f)
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    frame:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    frame.origin = frame:CreateTexture(nil, "OVERLAY")
+    frame.origin:SetColorTexture(1, .8, .2, 1)
+    frame.origin:SetSize(8, 8)
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(false)
+    group.anchor = frame
+    hooksecurefunc(frame, "StartMoving", function() group.dragging = true end)
+    hooksecurefunc(frame, "StopMovingOrSizing", function()
+        group.dragging = false
+        GroupQueue(group)()
+    end)
+    addon.LayoutMode.RegisterTarget(group.name, function() return frame end, function() return Configured(group) end, function(f)
         -- Keep the growth origin fixed when rows/columns appear or disappear.
-        local db=DB()[group.key]
-        local scale=f:GetEffectiveScale()/UIParent:GetEffectiveScale()
-        local left,bottom=f:GetLeft(),f:GetBottom()
+        local db = DB()[group.key]
+        local scale = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        local left, bottom = f:GetLeft(), f:GetBottom()
         if left and bottom then
-            local direction=Direction(db)
-            if direction=="LEFT" then left=left+f:GetWidth() end
-            if direction=="DOWN" then bottom=bottom+f:GetHeight() end
-            db.pos={point="BOTTOMLEFT",x=left*scale,y=bottom*scale}
+            local direction = Direction(db)
+            if direction == "LEFT" then left = left + f:GetWidth() end
+            if direction == "DOWN" then bottom = bottom + f:GetHeight() end
+            db.pos = {point = "BOTTOMLEFT", x = left * scale, y = bottom * scale}
         end
     end)
 end
-local function WatchItem(group,item)
-    local forbidden=item:IsForbidden()
+local function WatchItem(group, item)
+    local forbidden = item:IsForbidden()
     if not Public(forbidden) or forbidden or group.watched[item] then return end
-    group.watched[item]=true
-    item:HookScript("OnShow",Queue); item:HookScript("OnHide",Queue)
+    group.watched[item] = true
+    item:HookScript("OnShow", GroupQueue(group))
+    item:HookScript("OnHide", GroupQueue(group))
 end
 local function Attach(group)
-    local viewer=_G[group.viewer]
+    local viewer = _G[group.viewer]
     if not viewer or not viewer.itemFramePool or not viewer.GetItemContainerFrame then return end
-    if group.viewerFrame~=viewer then
-        group.viewerFrame=viewer; group.watched=setmetatable({},{__mode="k"})
-        hooksecurefunc(viewer,"RefreshLayout",Queue)
-        hooksecurefunc(viewer,"OnAcquireItemFrame",function(_,item) WatchItem(group,item); Queue() end)
-        local container=viewer:GetItemContainerFrame()
-        if container and container.Layout then hooksecurefunc(container,"Layout",Queue) end
-        viewer:HookScript("OnShow",Queue); viewer:HookScript("OnHide",Queue)
+    if group.viewerFrame ~= viewer then
+        group.viewerFrame = viewer
+        group.watched = setmetatable({}, {__mode = "k"})
+        local queue = GroupQueue(group)
+        hooksecurefunc(viewer, "RefreshLayout", queue)
+        hooksecurefunc(viewer, "OnAcquireItemFrame", function(_, item)
+            WatchItem(group, item)
+            queue()
+        end)
+        local container = viewer:GetItemContainerFrame()
+        if container and container.Layout then hooksecurefunc(container, "Layout", queue) end
+        viewer:HookScript("OnShow", queue)
+        viewer:HookScript("OnHide", queue)
     end
     return viewer
 end
-local function PositionAnchor(group,count,preview)
-    local db=DB()[group.key]
-    local direction=Direction(db)
-    local horizontal=direction=="RIGHT" or direction=="LEFT"
-    local stride=db.columns
-    local lines=math.max(preview and 2 or 1,math.ceil(count/stride))
-    local primary=math.min(stride,math.max(preview and 2 or 1,count))
-    local cols,rows=horizontal and primary or lines,horizontal and lines or primary
-    local width,height=group.bars and db.barWidth or db.iconSize,group.bars and db.barHeight or db.iconSize
-    local gap=db.spacing
-    local anchor=group.anchor
-    anchor:SetSize(cols*width+(cols-1)*gap,rows*height+(rows-1)*gap)
-    anchor:ClearAllPoints(); anchor:SetPoint(Origin(db),UIParent,db.pos.point,db.pos.x,db.pos.y)
-    anchor:SetBackdropColor(.04,.12,.14,preview and .45 or 0)
-    anchor:SetBackdropBorderColor(.3,.9,.75,preview and 1 or 0)
-    anchor.origin:ClearAllPoints(); anchor.origin:SetPoint(Origin(db),anchor,Origin(db),0,0)
+local function PositionAnchor(group, count, preview)
+    local db = DB()[group.key]
+    local direction = Direction(db)
+    local horizontal = direction == "RIGHT" or direction == "LEFT"
+    local stride = db.columns
+    local lines = math.max(preview and 2 or 1, math.ceil(count / stride))
+    local primary = math.min(stride, math.max(preview and 2 or 1, count))
+    local cols, rows = horizontal and primary or lines, horizontal and lines or primary
+    local width, height = group.bars and db.barWidth or db.iconSize, group.bars and db.barHeight or db.iconSize
+    local gap = db.spacing
+    local anchor = group.anchor
+    anchor:SetSize(cols * width + (cols - 1) * gap, rows * height + (rows - 1) * gap)
+    anchor:ClearAllPoints()
+    anchor:SetPoint(Origin(db), UIParent, db.pos.point, db.pos.x, db.pos.y)
+    anchor:SetBackdropColor(.04, .12, .14, preview and .45 or 0)
+    anchor:SetBackdropBorderColor(.3, .9, .75, preview and 1 or 0)
+    anchor.origin:ClearAllPoints()
+    anchor.origin:SetPoint(Origin(db), anchor, Origin(db), 0, 0)
     anchor.origin:SetShown(preview)
-    anchor:SetShown(preview or count>0)
+    anchor:SetShown(preview or count > 0)
 end
 local function Layout(group)
     -- Anchors must also exist with no active buffs or before Blizzard loads its
     -- viewers, so every configured group can be positioned in Layout Mode.
     if not group.anchor then CreateAnchor(group) end
-    local viewer=Attach(group)
-    local preview=addon.LayoutMode.IsActive()
-    if not Configured(group) then Restore(group); group.anchor:Hide(); return end
+    local viewer = Attach(group)
+    local preview = addon.LayoutMode.IsActive()
+    if not Configured(group) then
+        Restore(group)
+        group.anchor:Hide()
+        return
+    end
     if group.dragging then return end
     if not viewer or Manager.GetConflict() then
         Restore(group)
-        PositionAnchor(group,0,preview)
+        PositionAnchor(group, 0, preview)
         if not preview then group.anchor:Hide() end
         return
     end
     -- Leave both native viewers and their items parented to Blizzard. Native
     -- visibility, cooldown rendering, tooltips and proc effects remain intact.
-    local items={}
+    local items = {}
     for item in viewer.itemFramePool:EnumerateActive() do
-        WatchItem(group,item)
+        WatchItem(group, item)
         if not Editable(item) then return end
-        local shown=item:IsShown()
-        local index=item.layoutIndex
+        local shown = item:IsShown()
+        local index = item.layoutIndex
         if not Public(shown) or not Public(index) then return end
-        if shown and type(index)=="number" then items[#items+1]={frame=item,index=index} end
+        if shown and type(index) == "number" then items[#items + 1] = {frame = item, index = index} end
     end
-    table.sort(items,function(a,b) return a.index<b.index end)
-    local db=DB()[group.key]
-    local width,height=group.bars and db.barWidth or db.iconSize,group.bars and db.barHeight or db.iconSize
-    local gap, columns=db.spacing,db.columns
-    local count=#items
-    local direction=Direction(db)
-    local horizontal=direction=="RIGHT" or direction=="LEFT"
-    local anchor=group.anchor
+    table.sort(items, function(a, b) return a.index < b.index end)
+    local db = DB()[group.key]
+    local width, height = group.bars and db.barWidth or db.iconSize, group.bars and db.barHeight or db.iconSize
+    local gap, columns = db.spacing, db.columns
+    local count = #items
+    local direction = Direction(db)
+    local horizontal = direction == "RIGHT" or direction == "LEFT"
+    local anchor = group.anchor
     -- Validate geometry for every icon before moving any of them. A secret
     -- visibility/geometry value leaves the last valid layout in place.
-    for _,entry in ipairs(items) do
-        local item=entry.frame
-        local w=group.bars and item:GetHeight() or item:GetWidth()
-        local parentScale=item:GetParent():GetEffectiveScale()
-        if not Public(w) or not Public(parentScale) or type(w)~="number" or w<=0 or type(parentScale)~="number" or parentScale<=0 then return end
-        entry.scale=(group.bars and height or width)/w*UIParent:GetEffectiveScale()/parentScale
-        if group.bars then entry.nativeWidth=width*w/height end
+    for _, entry in ipairs(items) do
+        local item = entry.frame
+        local w = group.bars and item:GetHeight() or item:GetWidth()
+        local parentScale = item:GetParent():GetEffectiveScale()
+        if not Public(w) or not Public(parentScale) or type(w) ~= "number" or w <= 0 or type(parentScale) ~= "number" or parentScale <= 0 then return end
+        entry.scale = (group.bars and height or width) / w * UIParent:GetEffectiveScale() / parentScale
+        if group.bars then entry.nativeWidth = width * w / height end
     end
-    PositionAnchor(group,count,preview)
-    for i,entry in ipairs(items) do
-        local item=entry.frame
+    PositionAnchor(group, count, preview)
+    for i, entry in ipairs(items) do
+        local item = entry.frame
         if group.bars then
-            group.originalWidths=group.originalWidths or setmetatable({},{__mode="k"})
-            if not group.originalWidths[item] then group.originalWidths[item]=item:GetWidth() end
+            group.originalWidths = group.originalWidths or setmetatable({}, {__mode = "k"})
+            if not group.originalWidths[item] then group.originalWidths[item] = item:GetWidth() end
             item:SetWidth(entry.nativeWidth)
         end
         item:SetScale(entry.scale)
-        local ratio=item:GetEffectiveScale()/anchor:GetEffectiveScale()
+        local ratio = item:GetEffectiveScale() / anchor:GetEffectiveScale()
         item:ClearAllPoints()
-        local primary,secondary=(i-1)%columns,math.floor((i-1)/columns)
-        local x,y=horizontal and primary or secondary,horizontal and secondary or primary
-        if direction=="LEFT" then x=-x end
-        if direction=="DOWN" then y=-y end
-        item:SetPoint(Origin(db),anchor,Origin(db),x*(width+gap)/ratio,y*(height+gap)/ratio)
+        local primary, secondary = (i - 1) % columns, math.floor((i - 1) / columns)
+        local x, y = horizontal and primary or secondary, horizontal and secondary or primary
+        if direction == "LEFT" then x = -x end
+        if direction == "DOWN" then y = -y end
+        item:SetPoint(Origin(db), anchor, Origin(db), x * (width + gap) / ratio, y * (height + gap) / ratio)
     end
-    group.managed=true
+    group.managed = true
 end
 local function Run()
     worker:Hide()
-    if not dirty then return end
-    dirty=false; applying=true
-    for _,group in ipairs(groups) do xpcall(Layout,geterrorhandler(),group) end
-    applying=false
+    local all = dirty
+    dirty = false
+    applying = true
+    for _, group in ipairs(groups) do
+        if all or group.dirty then
+            group.dirty = false
+            xpcall(Layout, geterrorhandler(), group)
+        end
+    end
+    applying = false
 end
-worker:SetScript("OnUpdate",Run)
+worker:SetScript("OnUpdate", Run)
 function Manager.UpdateSettings() Queue() end
-addon.EventBus.Register("PLAYER_LOGIN",Queue,"CooldownManager")
-addon.EventBus.Register("ADDON_LOADED",function(_,name)
-    if name=="Blizzard_CooldownViewer" or name=="EllesmereUICooldownManager" then Queue() end
-end,"CooldownManager")
-addon.EventBus.Register("PLAYER_REGEN_ENABLED",Queue,"CooldownManager")
-addon.EventBus.Register("PLAYER_REGEN_DISABLED",function()
+addon.EventBus.Register("PLAYER_LOGIN", Queue, "CooldownManager")
+addon.EventBus.Register("ADDON_LOADED", function(_, name)
+    if name == "Blizzard_CooldownViewer" or name == "EllesmereUICooldownManager" then Queue() end
+end, "CooldownManager")
+addon.EventBus.Register("PLAYER_REGEN_ENABLED", Queue, "CooldownManager")
+addon.EventBus.Register("PLAYER_REGEN_DISABLED", function()
     -- Hide only addon-owned layout decorations; native icons keep updating.
-    for _,group in ipairs(groups) do
-        local anchor=group.anchor
+    for _, group in ipairs(groups) do
+        local anchor = group.anchor
         if anchor then
-            anchor:SetBackdropColor(0,0,0,0); anchor:SetBackdropBorderColor(0,0,0,0)
+            anchor:SetBackdropColor(0, 0, 0, 0)
+            anchor:SetBackdropBorderColor(0, 0, 0, 0)
             anchor.origin:Hide()
         end
     end
-end,"CooldownManager")
-LunaUITweaksAPI.RegisterConfigPanel("cooldownManager","Cooldown Manager","Interface\\Icons\\Spell_Nature_TimeStop",function(...)
+end, "CooldownManager")
+LunaUITweaksAPI.RegisterConfigPanel("cooldownManager", "Cooldown Manager", "Interface\\Icons\\Spell_Nature_TimeStop", function(...)
     addon.ConfigSetup.CooldownManager(...)
 end)
+
+-- Layout Mode integration (group anchors register their own handles)
+addon.LayoutMode.RegisterModule("CooldownManager", {
+    apply = function() Manager.UpdateSettings() end,
+})

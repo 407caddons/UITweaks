@@ -38,6 +38,7 @@ config\panels\TankDebuffsPanel.lua
 config\panels\BuffAlertsPanel.lua
 config\panels\ProcAlertsPanel.lua
 config\panels\CooldownManagerPanel.lua
+config\panels\NameplatesPanel.lua
 config\panels\CompactGroupFinderPanel.lua
 config\panels\CustomEncounterTimersPanel.lua
 config\panels\EncounterBarsPanel.lua
