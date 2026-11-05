@@ -52,6 +52,87 @@ local function ProxyButton(parent, text, x, y, width, postClick)
     button:SetScript("PostClick", postClick)
     return button
 end
+-- Equipped bag slots (bags 1-4 and the reagent bag): see, add, swap or remove
+-- bags. Uses the same cursor actions as Blizzard's bag bar (PutItemInBag /
+-- PickupBagFromSlot); the game decides whether a swap is allowed.
+local BAG_SLOT_SIZE = 24
+local function EquippedBagIDs()
+    local ids = {}
+    for bag = 1, NUM_BAG_SLOTS or 4 do ids[#ids + 1] = bag end
+    if Enum.BagIndex and Enum.BagIndex.ReagentBag then ids[#ids + 1] = Enum.BagIndex.ReagentBag end
+    return ids
+end
+local function BagInventorySlot(bag)
+    local toInventory = C_Container.ContainerIDToInventoryID or ContainerIDToInventoryID
+    return toInventory and toInventory(bag)
+end
+local function BagSlotPlace(self)
+    local slot = BagInventorySlot(self.bagID)
+    if not slot or InCombatLockdown() then return end
+    if CursorHasItem() then
+        PutItemInBag(slot)
+    else
+        PickupBagFromSlot(slot)
+    end
+end
+local function BagSlotTooltip(self)
+    local slot = BagInventorySlot(self.bagID)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    if slot and GetInventoryItemTexture("player", slot) then
+        GameTooltip:SetInventoryItem("player", slot)
+        local free, size = C_Container.GetContainerNumFreeSlots(self.bagID), C_Container.GetContainerNumSlots(self.bagID)
+        GameTooltip:AddLine(string.format("%d / %d slots free", free or 0, size or 0), 1, 1, 1)
+        GameTooltip:AddLine("Drop a bag here to swap it; drag this bag away to remove it.", .6, .6, .6, true)
+    else
+        GameTooltip:SetText(self.bagID == (Enum.BagIndex and Enum.BagIndex.ReagentBag) and "Empty reagent bag slot" or "Empty bag slot")
+        GameTooltip:AddLine("Drop a bag here to equip it.", .6, .6, .6, true)
+    end
+    GameTooltip:Show()
+end
+local function CreateBagSlots(view)
+    view.bagSlots = {}
+    for i, bag in ipairs(EquippedBagIDs()) do
+        local button = CreateFrame("Button", nil, view)
+        button:SetSize(BAG_SLOT_SIZE, BAG_SLOT_SIZE)
+        button:SetPoint("BOTTOMRIGHT", -14 - (#EquippedBagIDs() - i) * (BAG_SLOT_SIZE + 4), 10)
+        button.bagID = bag
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetAllPoints()
+        button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        button.count:SetPoint("BOTTOMRIGHT", -1, 1)
+        button.border = button:CreateTexture(nil, "BACKGROUND")
+        button.border:SetPoint("TOPLEFT", -1, 1)
+        button.border:SetPoint("BOTTOMRIGHT", 1, -1)
+        button.border:SetColorTexture(.19, .25, .29)
+        button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        button:RegisterForClicks("LeftButtonUp")
+        button:RegisterForDrag("LeftButton")
+        button:SetScript("OnClick", BagSlotPlace)
+        button:SetScript("OnReceiveDrag", BagSlotPlace)
+        button:SetScript("OnDragStart", BagSlotPlace)
+        button:SetScript("OnEnter", BagSlotTooltip)
+        button:SetScript("OnLeave", GameTooltip_Hide)
+        view.bagSlots[i] = button
+    end
+end
+function Bags.UpdateBagSlots()
+    local view = Bags.inventory
+    if not view or not view.bagSlots then return end
+    for _, button in ipairs(view.bagSlots) do
+        local slot = BagInventorySlot(button.bagID)
+        local texture = slot and GetInventoryItemTexture("player", slot)
+        if texture then
+            button.icon:SetTexture(texture)
+            button.icon:SetDesaturated(false)
+            button.count:SetText(C_Container.GetContainerNumSlots(button.bagID) or "")
+        else
+            button.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+            button.icon:SetDesaturated(true)
+            button.count:SetText("")
+        end
+        if GameTooltip:IsOwned(button) then BagSlotTooltip(button) end
+    end
+end
 local function SavePosition(view)
     local point, _, relativePoint, x, y = view:GetPoint()
     LunaUITweaksBagsDB.position = {point = point, relativePoint = relativePoint, x = x, y = y}
@@ -140,6 +221,7 @@ local function NewView(name, parent, isBank)
     view.footer:ClearAllPoints()
     view.footer:SetPoint("BOTTOMLEFT", 14, 14)
     if not isBank then
+        CreateBagSlots(view)
         local search = CreateFrame("EditBox", nil, view, "InputBoxTemplate")
         view.search = search
         search:SetSize(220, 23)

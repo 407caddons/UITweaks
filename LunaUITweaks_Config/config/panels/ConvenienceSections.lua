@@ -86,6 +86,7 @@ function Setup.GeneralConvenience(panel, y)
     if addon.Client and addon.Client.isForever then
         Check("spellRanks", "Outline bar spells below your highest known rank and list them in chat at login/reload", y - 355)
     end
+    Check("talentPoints", "Show a reminder while you have unspent talent points (out of combat; move it in Layout Mode)", y - 385)
     Refresh()
 end
 function Setup.LootConvenience(panel, y)

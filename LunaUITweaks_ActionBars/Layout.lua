@@ -38,7 +38,19 @@ function Bars.SetHidden(state, hidden)
     end
     local controller = state.hideController
     if not controller then return end
-    if state.hidden == hidden then return end
+    if state.hidden == hidden then
+        -- Login/Edit Mode can re-show a hidden bar (Micro Menu, Bag Bar) in a way
+        -- the OnShow guard misses. Apply runs every second out of combat, so
+        -- re-hide it here; nothing else changes.
+        if hidden and state.bar:IsShown() then
+            controller:Execute([[ self:GetFrameRef("bar"):Hide() ]])
+            if not state.reHideLogged then
+                state.reHideLogged = true
+                Bars.Log("re-hide " .. tostring(state.bar:GetName()) .. " (shown again by the game)")
+            end
+        end
+        return
+    end
     if hidden then state.beforeHideShown = state.bar:IsShown() end
     state.hidden = hidden
     controller:SetAttribute("hidden", hidden)

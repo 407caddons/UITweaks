@@ -76,6 +76,7 @@ qualityOfLife\Cursor.lua
 qualityOfLife\AutoOpen.lua
 qualityOfLife\Convenience.lua
 qualityOfLife\GameplayAlerts.lua
+qualityOfLife\TalentPoints.lua
 CompactGroupFinder.lua
 widgets\Widgets.lua
 widgets\Time.lua

@@ -12,6 +12,7 @@ Optional companion addon for Retail and the Forever test client. Requires LunaUI
 - **Deposit Warbound** uses Blizzard's native bulk deposit with Include Reagents enabled for the request. The previous reagent preference is restored afterward. Refundable items require confirmation; combat, a held cursor item, or an unavailable bank prevents starting a deposit.
 - One bank window with Warband Bank and Bank tabs. Each combines all purchased tabs of that bank and uses the same categories. The tabs (and the close button) click Blizzard's own bank buttons through secure templates, and the window opens on whichever bank Blizzard opened: setting Blizzard's bank tab from addon code taints right-click withdraw/deposit (`ADDON_ACTION_FORBIDDEN` on `UseContainerItem`).
 - Items moved from the bank into the bags are transfers and are not marked new.
+- Equipped bag slots (bags 1-4 and the reagent bag) at the bottom-right of the inventory: hover for the bag and free slots, drop a bag on a slot to equip or swap it, drag a bag away to remove it (not in combat).
 - One free-space tile with the total number of empty slots. Dropped items go into a compatible empty slot, preferring specialty bags.
 - Blizzard item button interactions, tooltips, quantity labels, quality borders, quest markers and cooldowns.
 - Drag the inventory window by its title. Position and enabled state are saved and included in Luna's settings export.
