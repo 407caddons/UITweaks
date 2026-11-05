@@ -2,7 +2,7 @@
 ## Title: |cff00ff96Luna's UI Tweaks|r - Action Bars
 ## Notes: Prototype square action bars with precise layout controls
 ## Author: 407c
-## Version: 1.34.0
+## Version: 1.35.0
 ## Dependencies: LunaUITweaks
 ## SavedVariables: LunaUITweaksActionBarsDB
 ## X-Part-Of: LunaUITweaks
