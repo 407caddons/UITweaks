@@ -43,6 +43,10 @@ table.insert(Widgets.moduleInits, function()
             GameTooltip:Hide()
             return
         end
+        -- Luna Bags: toggle its window without calling Blizzard's bag functions
+        -- from addon code (that taints the bank and blocks item use).
+        local lunaBags = _G.LunaUITweaksBags
+        if lunaBags and lunaBags.ToggleInventory and lunaBags.ToggleInventory() then return end
         ToggleAllBags()
     end)
 

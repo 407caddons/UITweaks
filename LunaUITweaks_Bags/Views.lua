@@ -39,6 +39,19 @@ local function Button(parent, text, x, y, width, callback)
     button:SetScript("OnClick", callback)
     return button
 end
+-- Secure proxy: a hardware click runs Blizzard's own button OnClick through
+-- SecureActionButtonTemplate, so Blizzard's bank state is never written by
+-- addon code (an addon-set bank tab taints right-click withdraw/deposit).
+local function ProxyButton(parent, text, x, y, width, postClick)
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate,SecureActionButtonTemplate")
+    button:SetPoint("TOPLEFT", x, y)
+    button:SetSize(width, 24)
+    button:SetText(text)
+    button:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+    button:SetAttribute("type", "click")
+    button:SetScript("PostClick", postClick)
+    return button
+end
 local function SavePosition(view)
     local point, _, relativePoint, x, y = view:GetPoint()
     LunaUITweaksBagsDB.position = {point = point, relativePoint = relativePoint, x = x, y = y}
@@ -90,10 +103,13 @@ local function NewView(name, parent, isBank)
     view:Hide()
     view.title = Text(view, isBank and "Luna Bags — Bank" or "Luna Bags", 14, -12, "GameFontNormalLarge")
     local close = CreateFrame("Button", not isBank and "LunaUITweaks_BagsSecureClose" or nil, view,
-        isBank and "UIPanelCloseButton" or "UIPanelButtonTemplate,SecureHandlerClickTemplate")
+        isBank and "UIPanelCloseButton,SecureActionButtonTemplate" or "UIPanelButtonTemplate,SecureHandlerClickTemplate")
     view.close = close
     close:SetPoint("TOPRIGHT", -2, -2)
-    if isBank then close:SetScript("OnClick", function() HideUIPanel(BankFrame) end)
+    if isBank then
+        -- Clicks Blizzard's own bank close button (bound in Bags.BindBankButtons).
+        close:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+        close:SetAttribute("type", "click")
     else
         close:SetSize(24, 24)
         close:SetText("X")
@@ -159,8 +175,10 @@ local function NewView(name, parent, isBank)
         Bags.UpdateEscapeRegistration()
     else
         view.bankTab = Enum.BankType.Account
-        view.accountTab = Button(view, "Warband Bank", 14, -40, 135, function() Bags.SelectBank(Enum.BankType.Account) end)
-        view.characterTab = Button(view, "Bank", 159, -40, 100, function() Bags.SelectBank(Enum.BankType.Character) end)
+        -- Tabs click Blizzard's own bank tabs; the view then follows Blizzard's active bank.
+        local function FollowBlizzard() Bags.SelectBank(Bags.ActiveBankType()) end
+        view.accountTab = ProxyButton(view, "Warband Bank", 14, -40, 135, FollowBlizzard)
+        view.characterTab = ProxyButton(view, "Bank", 159, -40, 100, FollowBlizzard)
         view.deposit = Button(view, "Deposit Warbound", 269, -40, 160, function() Bags.DepositWarbound() end)
     end
     view:HookScript("OnShow", function(self)
@@ -175,6 +193,39 @@ function Bags.CreateInventory()
         Bags.UpdateEscapeRegistration()
     end
     return Bags.inventory
+end
+-- Blizzard creates its bank tab buttons late; bind proxies out of combat each open.
+local function BlizzardTabButton(bankType)
+    local tabID = bankType == Enum.BankType.Account and BankFrame.accountBankTabID or BankFrame.characterBankTabID
+    if BankFrame.GetTabIDForBankType then tabID = BankFrame:GetTabIDForBankType(bankType) end
+    local system = BankFrame.TabSystem
+    return tabID and system and system.GetTabButton and system:GetTabButton(tabID)
+end
+function Bags.BindBankButtons()
+    local view = Bags.bank
+    if not view or InCombatLockdown() then return end
+    for bankType, tab in pairs({[Enum.BankType.Account] = view.accountTab, [Enum.BankType.Character] = view.characterTab}) do
+        local target = BlizzardTabButton(bankType)
+        tab:SetAttribute("clickbutton", target)
+        -- Missing Blizzard tab API: fall back to selecting directly (may taint).
+        if not target then
+            tab:SetScript("PostClick", function()
+                local tabID = bankType == Enum.BankType.Account and BankFrame.accountBankTabID or BankFrame.characterBankTabID
+                if tabID and BankFrame.SetTab then BankFrame:SetTab(tabID) end
+                Bags.SelectBank(bankType)
+            end)
+        end
+    end
+    view.close:SetAttribute("clickbutton", BankFrame.CloseButton)
+    if not BankFrame.CloseButton then view.close:SetScript("PostClick", function() HideUIPanel(BankFrame) end) end
+end
+-- Blizzard's active bank decides where right-click withdraw/deposit goes.
+function Bags.ActiveBankType()
+    if BankFrame.GetActiveBankType then
+        local bankType = BankFrame:GetActiveBankType()
+        if bankType ~= nil then return bankType end
+    end
+    return Bags.bank and Bags.bank.bankTab or Enum.BankType.Character
 end
 function Bags.CreateBank()
     if not Bags.bank then
@@ -301,7 +352,14 @@ local function Populate(button, entry)
     button:UpdateJunkItem(info and info.quality, info and info.hasNoValue)
     SetItemButtonQuality(button, info and info.quality, info and info.hyperlink)
     if not button.ItemSlotBackground then
-        button.ItemSlotBackground = button:CreateTexture(nil, "BACKGROUND", "ItemSlotBackgroundCombinedBagsTemplate", -6)
+        -- The combined-bags slot template is Retail-only; Forever uses the classic slot art.
+        local ok, background = pcall(button.CreateTexture, button, nil, "BACKGROUND", "ItemSlotBackgroundCombinedBagsTemplate", -6)
+        if not ok then
+            background = button:CreateTexture(nil, "BACKGROUND", nil, -6)
+            background:SetTexture("Interface\\Buttons\\UI-Slot-Background")
+            background:SetTexCoord(0, 0.640625, 0, 0.640625)
+        end
+        button.ItemSlotBackground = background
         button.ItemSlotBackground:SetAllPoints()
     end
     if not button.secureInventory then

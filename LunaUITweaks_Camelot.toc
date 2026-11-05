@@ -64,6 +64,7 @@ qualityOfLife\QualityOfLife.lua
 qualityOfLife\Cursor.lua
 qualityOfLife\AutoOpen.lua
 qualityOfLife\Convenience.lua
+qualityOfLife\SpellRanks.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua

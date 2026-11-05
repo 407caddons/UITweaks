@@ -3,6 +3,24 @@ local _, Bags = ...
 local previous, slotKeys, initialized = {}, {}, false
 local startupLoot = {}
 local warmTotals, warmGains, lastWarmScan = {}, {}, nil
+-- Bank contents at the previous scan while the bank is open. Items moved from
+-- the bank into the bags are transfers, not gains, so they are not "new".
+local bankTotals
+local function ScanBank()
+    if not BankFrame or not BankFrame:IsShown() or not Bags.BankIDs then return nil end
+    local totals = {}
+    for _, bankType in ipairs({Enum.BankType.Character, Enum.BankType.Account}) do
+        for _, bag in ipairs((Bags.BankIDs(bankType))) do
+            for slot = 1, C_Container.GetContainerNumSlots(bag) do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                if info and info.itemID then totals[info.itemID] = (totals[info.itemID] or 0) + (info.stackCount or 1) end
+            end
+        end
+    end
+    return totals
+end
+-- Called when the bank opens, before any withdrawal can happen.
+function Bags.SnapshotBankForNewItems() bankTotals = ScanBank() end
 local function Key(bag, slot)
     if ItemLocation and C_Item.GetItemGUID then
         local guid = C_Item.GetItemGUID(ItemLocation:CreateFromBagAndSlot(bag, slot))
@@ -40,7 +58,12 @@ function Bags.TrackNewItems(reset)
             if not reset then pool[record.id] = (pool[record.id] or 0) + record.newCount end
         end
         if not reset then
-            for id, count in pairs(totals) do pool[id] = (pool[id] or 0) + math.max(0, count - (oldTotals[id] or 0)) end
+            local bankNow = ScanBank()
+            for id, count in pairs(totals) do
+                local withdrawn = 0
+                if bankNow and bankTotals then withdrawn = math.max(0, (bankTotals[id] or 0) - (bankNow[id] or 0)) end
+                pool[id] = (pool[id] or 0) + math.max(0, count - (oldTotals[id] or 0) - withdrawn)
+            end
         end
         -- Preserve existing new stacks by GUID when they move between bags.
         for _, key in ipairs(order) do
@@ -72,6 +95,7 @@ function Bags.TrackNewItems(reset)
         for id, count in pairs(totals) do warmGains[id] = math.max(0, count - (before[id] or 0)) end
     end
     previous, slotKeys, initialized = current, keys, true
+    bankTotals = ScanBank()
 end
 function Bags.IsNewItem(bag, slot, itemID)
     local record = previous[slotKeys[bag .. ":" .. slot]]

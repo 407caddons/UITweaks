@@ -83,6 +83,9 @@ function Setup.GeneralConvenience(panel, y)
     Check("skipCinematics", "Skip cinematics and movies (one keypress for scenes; bypass confirmation)", y - 265)
     Check("hideTutorials", "Hide tutorial tips", y - 295)
     Check("hideTalkingHead", "Hide talking-head dialogue frames", y - 325)
+    if addon.Client and addon.Client.isForever then
+        Check("spellRanks", "Outline bar spells below your highest known rank and list them in chat at login/reload", y - 355)
+    end
     Refresh()
 end
 function Setup.LootConvenience(panel, y)

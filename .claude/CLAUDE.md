@@ -154,6 +154,7 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 | qualityOfLife/AutoOpen.lua | `QualityOfLife.AutoOpen` | Auto-open containers in bags (`/luitautoopen` diagnostics) |
 | qualityOfLife/Convenience.lua | — | Skip cinematics, hide tutorials and talking head, unwrap collections |
 | qualityOfLife/GameplayAlerts.lua | `QualityOfLife.GameplayAlerts` | Movement cooldown, Time Spiral, Gateway and battle-res alerts |
+| qualityOfLife/SpellRanks.lua | `QualityOfLife.SpellRanks` | **Forever only** (Camelot TOC): orange outline + rank on action-bar spells below the highest known rank; chat list after login/reload (`qualityOfLife.spellRanks`) |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, keystone, etc.) |
 | **LunaUITweaks_Config** (load-on-demand) | | |

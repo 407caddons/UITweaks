@@ -427,6 +427,7 @@ local function OnEvent(self, event, ...)
                 cursorClassColor = true, cursorColor = {r=0.05,g=0.82,b=0.62},
                 autoOpen = true, excludeWarbound = true, unwrapCollections = true,
                 skipCinematics = true, hideTutorials = true, hideTalkingHead = true,
+                spellRanks = true, -- Forever only (qualityOfLife/SpellRanks.lua)
                 movement = true, movementTts = true, movementVoice = 0,
                 timeSpiral = true, gateway = true, battleRes = true,
                 alertFontSize = 24,

@@ -154,8 +154,43 @@ end
 -- Blizzard's border is never recoloured, so non-quest plates keep the default
 -- and the bar fill keeps its threat colour.
 local BORDER_THICKNESS, BORDER_OUTSET = 2, 1
+-- Blizzard's nameplate border (NamePlateFullBorderTemplate on Forever/classic
+-- plates): a frame on the health bar with Top/Bottom/Left/Right edge textures,
+-- which can sit a few pixels outside the bar. Returns them in our line order.
+local function BlizzardBorderEdges(bar)
+    local border = bar and bar.border
+    if type(border) ~= "table" or (border.IsForbidden and border:IsForbidden()) then return end
+    local edges = { border.Top, border.Bottom, border.Left, border.Right }
+    for i = 1, 4 do
+        if type(edges[i]) ~= "table" or not edges[i].GetObjectType then return end
+    end
+    return edges
+end
+-- Default lines: a frame-relative outline. With Blizzard edges: each line
+-- covers its matching edge exactly, so only one (quest-coloured) border shows.
+local function LayoutLines(border, edges)
+    local lines = border.lines
+    local top, bottom, left, right = lines[1], lines[2], lines[3], lines[4]
+    for i, line in ipairs(border.lines) do
+        line:ClearAllPoints()
+        if edges and pcall(line.SetAllPoints, line, edges[i]) then
+            border.onBlizzardEdges = true
+        else
+            edges = nil
+        end
+    end
+    if edges then return true end
+    border.onBlizzardEdges = false
+    for _, line in ipairs(border.lines) do line:ClearAllPoints() end
+    top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(BORDER_THICKNESS)
+    bottom:SetPoint("BOTTOMLEFT"); bottom:SetPoint("BOTTOMRIGHT"); bottom:SetHeight(BORDER_THICKNESS)
+    left:SetPoint("TOPLEFT"); left:SetPoint("BOTTOMLEFT"); left:SetWidth(BORDER_THICKNESS)
+    right:SetPoint("TOPRIGHT"); right:SetPoint("BOTTOMRIGHT"); right:SetWidth(BORDER_THICKNESS)
+    return false
+end
 local function PlaceBorder(border, bar, plate, db)
     border:ClearAllPoints()
+    LayoutLines(border, BlizzardBorderEdges(bar))
     local placed = pcall(border.SetPoint, border, "TOPLEFT", bar, "TOPLEFT", -BORDER_OUTSET, BORDER_OUTSET)
     placed = placed and pcall(border.SetPoint, border, "BOTTOMRIGHT", bar, "BOTTOMRIGHT", BORDER_OUTSET, -BORDER_OUTSET)
     if not placed then
@@ -208,11 +243,8 @@ local function GetMarker(plate)
     local border = CreateFrame("Frame", nil, marker)
     local top, bottom = border:CreateTexture(nil, "OVERLAY"), border:CreateTexture(nil, "OVERLAY")
     local left, right = border:CreateTexture(nil, "OVERLAY"), border:CreateTexture(nil, "OVERLAY")
-    top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(BORDER_THICKNESS)
-    bottom:SetPoint("BOTTOMLEFT"); bottom:SetPoint("BOTTOMRIGHT"); bottom:SetHeight(BORDER_THICKNESS)
-    left:SetPoint("TOPLEFT"); left:SetPoint("BOTTOMLEFT"); left:SetWidth(BORDER_THICKNESS)
-    right:SetPoint("TOPRIGHT"); right:SetPoint("BOTTOMRIGHT"); right:SetWidth(BORDER_THICKNESS)
     border.lines = { top, bottom, left, right }
+    LayoutLines(border)
     marker.border = border
     marker:Hide()
     markers[plate] = marker
