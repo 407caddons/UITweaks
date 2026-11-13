@@ -9,11 +9,11 @@ function addonTable.ConfigSetup.CompactGroupFinder(panel, tab)
     Helpers.CreateSectionHeader(panel, "Group Details", -218)
     Helpers.CreateSectionHeader(panel, "Leader & Members", -366)
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Compact Group Finder")
 
-    local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local description = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     description:SetPoint("TOPLEFT", 16, -45)
     description:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     description:SetJustifyH("LEFT")
@@ -40,7 +40,7 @@ function addonTable.ConfigSetup.CompactGroupFinder(panel, tab)
 
     Checkbox("LunaUITweaksCompactLFGEnabled", "Enable compact, single-line results", -88, "enabled")
 
-    local heightLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local heightLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     heightLabel:SetPoint("TOPLEFT", 20, -152)
     heightLabel:SetText("Row height: " .. tostring(UIThingsDB.compactGroupFinder.rowHeight) .. " px")
 
@@ -68,7 +68,7 @@ function addonTable.ConfigSetup.CompactGroupFinder(panel, tab)
     Checkbox("LunaUITweaksCompactLFGMembers", "Member count", -430, "showMemberCount")
     Checkbox("LunaUITweaksCompactLFGRoles", "Role data", -462, "showRoleData")
 
-    local note = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local note = panel:CreateFontString(nil, "OVERLAY", "LunaFontDisableSmall")
     note:SetPoint("TOPLEFT", 20, -516)
     note:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     note:SetJustifyH("LEFT")

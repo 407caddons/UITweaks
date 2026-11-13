@@ -24,6 +24,7 @@
 # Core initialization
 compat\Client.lua
 Core.lua
+utils\Style.lua
 EventBus.lua
 Profiler.lua
 LayoutMode.lua
@@ -52,6 +53,8 @@ QuestAuto.lua
 QuestReminder.lua
 XpBar.lua
 CustomEncounterTimers.lua
+DungeonProgress.lua
+SpawnWatch.lua
 EncounterBars.lua
 Coordinates.lua
 Destroy.lua
@@ -66,6 +69,7 @@ qualityOfLife\AutoOpen.lua
 qualityOfLife\Convenience.lua
 qualityOfLife\SpellRanks.lua
 qualityOfLife\TalentPoints.lua
+qualityOfLife\GroupBuffs.lua
 widgets\Widgets.lua
 widgets\Time.lua
 widgets\FPS.lua

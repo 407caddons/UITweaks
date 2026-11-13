@@ -69,7 +69,7 @@ local function Candidate(bag, slot, equipped)
         locked = info.isLocked, ignored = Ignored()[guid] == true}
 end
 local function Label(parent, text, x, y, width)
-    local f = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local f = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     f:SetPoint("TOPLEFT", x, y)
     f:SetWidth(width)
     f:SetJustifyH("LEFT")
@@ -77,7 +77,7 @@ local function Label(parent, text, x, y, width)
     return f
 end
 local function Button(parent, text, width, fn)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    local b = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"))
     b:SetSize(width, 24)
     b:SetText(text)
     b:SetScript("OnClick", fn)

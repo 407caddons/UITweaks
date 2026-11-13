@@ -267,7 +267,7 @@ function QuestReminder.CreatePopupFrame()
     popupFrame:Hide()
 
     -- Title
-    popupFrame.title = popupFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    popupFrame.title = popupFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     popupFrame.title:SetPoint("TOP", 0, -12)
     popupFrame.title:SetText("Quest Reminders")
     popupFrame.title:SetTextColor(1, 0.82, 0)
@@ -285,7 +285,7 @@ function QuestReminder.CreatePopupFrame()
     popupFrame.scrollChild = scrollChild
 
     -- Content font string
-    popupFrame.content = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    popupFrame.content = scrollChild:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     popupFrame.content:SetPoint("TOPLEFT", 5, -5)
     popupFrame.content:SetWidth(width - 60)
     popupFrame.content:SetJustifyH("LEFT")
@@ -297,8 +297,8 @@ function QuestReminder.CreatePopupFrame()
     dismissBtn:SetSize(100, 25)
     dismissBtn:SetPoint("BOTTOM", 0, 15)
     dismissBtn:SetText("Dismiss")
-    dismissBtn:SetNormalFontObject("GameFontNormal")
-    dismissBtn:SetHighlightFontObject("GameFontHighlight")
+    dismissBtn:SetNormalFontObject("LunaFontNormal")
+    dismissBtn:SetHighlightFontObject("LunaFontHighlight")
     dismissBtn:SetScript("OnClick", function() popupFrame:Hide() end)
 
     -- Close button

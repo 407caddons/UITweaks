@@ -90,8 +90,34 @@ table.insert(Widgets.moduleInits, function()
         if not Widgets.SmartAnchorTooltip(self) then return end
         GameTooltip:SetText("Jump Counter")
         GameTooltip:AddDoubleLine("This session:", session, 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine("This character:", (Lifetime()), 1, 1, 1, 1, 1, 1)
+        local mine, myKey = Lifetime()
+        GameTooltip:AddDoubleLine("This character:", mine, 1, 1, 1, 1, 1, 1)
         if inEncounter then GameTooltip:AddDoubleLine("This encounter:", encounterJumps, 1, 1, 1, 1, 0.82, 0) end
+        -- Alts: lifetime jumps saved per character (only characters that have run this widget).
+        local alts, total = {}, mine
+        local classes = {}
+        for _, entry in ipairs(addonTable.Core.CharacterRegistry.GetAll()) do classes[entry.key] = entry.class end
+        for key, count in pairs(DB().lifetime or {}) do
+            if key ~= myKey and type(count) == "number" and count > 0 then
+                alts[#alts + 1] = { key = key, count = count }
+                total = total + count
+            end
+        end
+        if #alts > 0 then
+            table.sort(alts, function(a, b)
+                if a.count ~= b.count then return a.count > b.count end
+                return a.key < b.key
+            end)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Alts", 1, 0.82, 0)
+            for _, alt in ipairs(alts) do
+                local color = classes[alt.key] and C_ClassColor.GetClassColor(classes[alt.key])
+                local r, g, b = 1, 1, 1
+                if color then r, g, b = color.r, color.g, color.b end
+                GameTooltip:AddDoubleLine(alt.key, alt.count, r, g, b, 1, 1, 1)
+            end
+            GameTooltip:AddDoubleLine("Account total:", total, 1, 0.82, 0, 1, 1, 1)
+        end
         local list = Sorted()
         if #list > 0 then
             GameTooltip:AddLine(" ")

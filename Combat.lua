@@ -44,7 +44,7 @@ function addonTable.Combat.UpdateSettings()
 
     -- Font
     if settings.font and settings.fontSize then
-        timerText:SetFont(settings.font, settings.fontSize, "OUTLINE")
+        timerText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     end
 
     -- Color
@@ -95,7 +95,7 @@ local function Init()
         UIThingsDB.combat.pos = { point = point, x = x, y = y }
     end)
 
-    timerText = timerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    timerText = timerFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightLarge")
     timerText:SetPoint("CENTER")
     timerText:SetText("00:00")
 
@@ -811,7 +811,7 @@ local function CreateConsumableIconButtons()
             btn:SetScript("OnLeave", GameTooltip_Hide)
 
             -- Quality/Tier overlay
-            btn.quality = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            btn.quality = btn:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
             btn.quality:SetPoint("TOPLEFT", 2, -2)
             btn.quality:SetTextColor(1, 1, 1, 1) -- White color
             btn.quality:SetJustifyH("LEFT")
@@ -982,7 +982,7 @@ local function ShowConsumableIcons(category, yOffset, mhBuffed, ohBuffed)
 
                             local fontPath = UIThingsDB.combat.reminders.font or "Fonts\\FRIZQT__.TTF"
                             local starSize = math.max(10, iconSize * 0.45)
-                            btn.quality:SetFont(fontPath, starSize, "OUTLINE")
+                            btn.quality:SetFont(LunaUITweaksAPI.Style.Font(), starSize, "OUTLINE")
                             btn.quality:SetText(stars)
                             btn.quality:Show()
                         else
@@ -1071,10 +1071,10 @@ local function ApplyReminderFont()
     local fontPath = settings.font or "Fonts\\FRIZQT__.TTF"
     local fontSize = settings.fontSize or 12
     if reminderTitle then
-        reminderTitle:SetFont(fontPath, fontSize, "OUTLINE")
+        reminderTitle:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     end
     for _, line in ipairs(reminderLines) do
-        line:SetFont(fontPath, fontSize, "OUTLINE")
+        line:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     end
 end
 
@@ -1269,9 +1269,9 @@ local function InitReminders()
     -- Title
     local initFont = UIThingsDB.combat.reminders.font or "Fonts\\FRIZQT__.TTF"
     local initFontSize = UIThingsDB.combat.reminders.fontSize or 12
-    reminderTitle = reminderFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    reminderTitle = reminderFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     reminderTitle:SetPoint("TOPLEFT", 12, -6)
-    reminderTitle:SetFont(initFont, initFontSize, "OUTLINE")
+    reminderTitle:SetFont(LunaUITweaksAPI.Style.Font(), initFontSize, "OUTLINE")
     reminderTitle:SetText("|cFFFFD100Missing Buffs|r")
 
     -- Underline below title (same gold color as title text)
@@ -1284,9 +1284,9 @@ local function InitReminders()
 
     -- Create 5 text lines (one per possible reminder)
     for i = 1, 5 do
-        local line = reminderFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local line = reminderFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         line:SetPoint("TOPLEFT", 12, -8 - (i * 20))
-        line:SetFont(initFont, initFontSize, "OUTLINE")
+        line:SetFont(LunaUITweaksAPI.Style.Font(), initFontSize, "OUTLINE")
         reminderLines[i] = line
     end
 

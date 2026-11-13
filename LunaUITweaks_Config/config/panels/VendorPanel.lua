@@ -12,7 +12,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     local fonts = Helpers.fonts
 
     -- Panel Title
-    local vendorTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local vendorTitle = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     vendorTitle:SetPoint("TOPLEFT", 16, -16)
     vendorTitle:SetText("Vendor Automation")
 
@@ -94,19 +94,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     Helpers.CreateLayoutModeHint(panel, 20, -245)
 
     -- Vendor Font Selector
-    Helpers.CreateFontDropdown(
-        panel,
-        "UIThingsVendorFontDropdown",
-        "Alert Font:",
-        UIThingsDB.vendor.font,
-        function(fontPath, fontName)
-            UIThingsDB.vendor.font = fontPath
-            if addonTable.Vendor.UpdateSettings then addonTable.Vendor.UpdateSettings() end
-        end,
-
-        20,
-        -280
-    )
+    Helpers.CreateGlobalFontNote(panel, 20, -280)
 
     -- Vendor Font Size Slider
     local vendorFontSizeSlider = CreateFrame("Slider", "UIThingsVendorFontSizeSlider", panel,
@@ -128,7 +116,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     end)
 
     -- Separator for Bag Warnings Section
-    local bagSeparator = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local bagSeparator = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     bagSeparator:SetPoint("TOPLEFT", 16, -400)
     bagSeparator:SetText("Bag Space Warnings")
 
@@ -164,7 +152,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     end)
 
     -- Help text for bag warnings
-    local bagHelpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local bagHelpText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     bagHelpText:SetPoint("TOPLEFT", 40, -520)
     bagHelpText:SetWidth(500)
     bagHelpText:SetJustifyH("LEFT")
@@ -173,7 +161,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
     bagHelpText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Bulk Buy Section
-    local bulkSeparator = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local bulkSeparator = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     bulkSeparator:SetPoint("TOPLEFT", 16, -570)
     bulkSeparator:SetText("Buy Multiple")
 
@@ -185,7 +173,7 @@ function addonTable.ConfigSetup.Vendor(panel, tab, configWindow)
         UIThingsDB.vendor.bulkBuy = not not self:GetChecked()
     end)
 
-    local bulkHelpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local bulkHelpText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     bulkHelpText:SetPoint("TOPLEFT", 40, -625)
     bulkHelpText:SetWidth(500)
     bulkHelpText:SetJustifyH("LEFT")

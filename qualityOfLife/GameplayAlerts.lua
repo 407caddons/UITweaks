@@ -266,7 +266,7 @@ function Module.UpdateSettings()
         local pos = QoL.Settings()[({movement = "movementPos", timeSpiral = "spiralPos", gateway = "gatewayPos", battleRes = "battleResPos"})[key]]
         frame:ClearAllPoints()
         frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
-        frame.text:SetFont("Fonts\\FRIZQT__.TTF", key == "battleRes" and 14 or QoL.Settings().alertFontSize, "OUTLINE")
+        frame.text:SetFont(LunaUITweaksAPI.Style.Font(), key == "battleRes" and 14 or QoL.Settings().alertFontSize, "OUTLINE")
         if key == "timeSpiral" then frame.text:SetTextColor(.53, 1, 0) elseif key == "gateway" then frame.text:SetTextColor(.7, 0, 1) end
         if not QoL.Settings().enabled then frame:Hide() end
     end

@@ -12,7 +12,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     -- Visual compatibility with sidebar navigation
     Helpers.UpdateModuleVisuals(panel, navButton, UIThingsDB.minimap.minimapEnabled)
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Minimap Customization")
 
@@ -40,7 +40,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Shape Dropdown
-    local shapeLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local shapeLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     shapeLabel:SetPoint("TOPLEFT", 40, -10)
     shapeLabel:SetText("Shape:")
 
@@ -78,7 +78,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     Helpers.CreateLayoutModeHint(child, 20, -50)
 
     -- Border Color
-    local borderColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local borderColorLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     borderColorLabel:SetPoint("TOPLEFT", 300, -10)
     borderColorLabel:SetText("Border Color:")
 
@@ -211,13 +211,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         end
     end)
 
-    Helpers.CreateFontDropdown(child, "UIThingsZoneFont", "Zone Font:", UIThingsDB.minimap.minimapZoneFont,
-        function(fontPath)
-            UIThingsDB.minimap.minimapZoneFont = fontPath
-            if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateZoneText then
-                addonTable.MinimapCustom.UpdateZoneText()
-            end
-        end, 40, -230)
+    Helpers.CreateGlobalFontNote(child, 40, -230)
 
     local zoneSizeSlider = CreateFrame("Slider", "UIThingsZoneFontSize", child, "OptionsSliderTemplate")
     zoneSizeSlider:SetPoint("TOPLEFT", 40, -300)
@@ -239,7 +233,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Zone Font Color
-    local zoneColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local zoneColorLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     zoneColorLabel:SetPoint("TOPLEFT", 40, -328)
     zoneColorLabel:SetText("Font Color:")
 
@@ -278,7 +272,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     local zoneOff = UIThingsDB.minimap.minimapZoneOffset or { x = 0, y = 4 }
 
-    local zonePosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local zonePosLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     zonePosLabel:SetPoint("TOPLEFT", 40, -383)
     zonePosLabel:SetText("X:")
 
@@ -296,7 +290,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         self:ClearFocus()
     end)
 
-    local zoneYLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local zoneYLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     zoneYLabel:SetPoint("LEFT", zoneXBox, "RIGHT", 10, 0)
     zoneYLabel:SetText("Y:")
 
@@ -328,13 +322,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         end
     end)
 
-    Helpers.CreateFontDropdown(child, "UIThingsClockFont", "Clock Font:", UIThingsDB.minimap.minimapClockFont,
-        function(fontPath)
-            UIThingsDB.minimap.minimapClockFont = fontPath
-            if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateClockText then
-                addonTable.MinimapCustom.UpdateClockText()
-            end
-        end, rightCol + 20, -230)
+    Helpers.CreateGlobalFontNote(child, rightCol + 20, -230)
 
     local clockSizeSlider = CreateFrame("Slider", "UIThingsClockFontSize", child, "OptionsSliderTemplate")
     clockSizeSlider:SetPoint("TOPLEFT", rightCol + 20, -300)
@@ -356,7 +344,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Clock Font Color
-    local clockColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local clockColorLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     clockColorLabel:SetPoint("TOPLEFT", rightCol + 20, -328)
     clockColorLabel:SetText("Font Color:")
 
@@ -393,7 +381,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Clock Format Dropdown (12H/24H)
-    local clockFormatLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local clockFormatLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     clockFormatLabel:SetPoint("TOPLEFT", rightCol + 20, -355)
     clockFormatLabel:SetText("Format:")
 
@@ -450,7 +438,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     local clockOff = UIThingsDB.minimap.minimapClockOffset or { x = 0, y = -4 }
 
-    local clockPosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local clockPosLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     clockPosLabel:SetPoint("TOPLEFT", rightCol + 20, -418)
     clockPosLabel:SetText("X:")
 
@@ -468,7 +456,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         self:ClearFocus()
     end)
 
-    local clockYLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local clockYLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     clockYLabel:SetPoint("LEFT", clockXBox, "RIGHT", 10, 0)
     clockYLabel:SetText("Y:")
 
@@ -500,13 +488,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         end
     end)
 
-    Helpers.CreateFontDropdown(child, "UIThingsCoordsFont", "Font:", UIThingsDB.minimap.minimapCoordsFont,
-        function(fontPath)
-            UIThingsDB.minimap.minimapCoordsFont = fontPath
-            if addonTable.MinimapCustom and addonTable.MinimapCustom.UpdateCoordsText then
-                addonTable.MinimapCustom.UpdateCoordsText()
-            end
-        end, 40, -510)
+    Helpers.CreateGlobalFontNote(child, 40, -510)
 
     local coordsSizeSlider = CreateFrame("Slider", "UIThingsCoordsFontSize", child, "OptionsSliderTemplate")
     coordsSizeSlider:SetPoint("TOPLEFT", 40, -580)
@@ -528,7 +510,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Coords Font Color
-    local coordsColorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local coordsColorLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     coordsColorLabel:SetPoint("TOPLEFT", 40, -608)
     coordsColorLabel:SetText("Font Color:")
 
@@ -567,7 +549,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
     local coordsOff = UIThingsDB.minimap.minimapCoordsOffset or { x = 0, y = -20 }
 
-    local coordsPosLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local coordsPosLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     coordsPosLabel:SetPoint("TOPLEFT", 40, -663)
     coordsPosLabel:SetText("X:")
 
@@ -585,7 +567,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
         self:ClearFocus()
     end)
 
-    local coordsYLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local coordsYLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     coordsYLabel:SetPoint("LEFT", coordsXBox, "RIGHT", 10, 0)
     coordsYLabel:SetText("Y:")
 
@@ -618,7 +600,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
 
 
     -- Background Color
-    local drawerBgLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local drawerBgLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     drawerBgLabel:SetPoint("TOPLEFT", 300, -730)
     drawerBgLabel:SetText("Background:")
 
@@ -666,7 +648,7 @@ function addonTable.ConfigSetup.Minimap(panel, navButton, configWindow)
     end)
 
     -- Border Color
-    local drawerBorderLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local drawerBorderLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     drawerBorderLabel:SetPoint("TOPLEFT", 300, -755)
     drawerBorderLabel:SetText("Border Color:")
 

@@ -32,7 +32,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end
 
     -- Enable Combat Timer Checkbox
-    local combatTitle = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local combatTitle = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     combatTitle:SetPoint("TOPLEFT", 16, -16)
     combatTitle:SetText("Combat")
 
@@ -54,18 +54,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
 
     -- Font Selector (Simple Dropdown)
     Helpers.CreateSectionHeader(child, "Timer Font & Color", -98)
-    Helpers.CreateFontDropdown(
-        child,
-        "UIThingsFontDropdown",
-        "Font:",
-        UIThingsDB.combat.font,
-        function(fontPath, fontName)
-            UIThingsDB.combat.font = fontPath
-            UpdateCombat()
-        end,
-        20,
-        -120
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -120)
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsFontSizeSlider", child, "OptionsSliderTemplate")
@@ -114,7 +103,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     Helpers.CreateSectionHeader(child, "Auto Combat Logging", -305)
 
     -- Dungeons
-    local clDungeonLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local clDungeonLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     clDungeonLabel:SetPoint("TOPLEFT", 20, -333)
     clDungeonLabel:SetText("Dungeons:")
 
@@ -171,7 +160,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Raids
-    local clRaidLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local clRaidLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     clRaidLabel:SetPoint("TOPLEFT", 20, -363)
     clRaidLabel:SetText("Raids:")
 
@@ -230,7 +219,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     -- Combat Reminders Section
     Helpers.CreateSectionHeader(child, "Combat Reminders", -405)
 
-    local reminderDesc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local reminderDesc = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     reminderDesc:SetPoint("TOPLEFT", 20, -428)
     reminderDesc:SetText("Show a reminder frame when loading in without these buffs:")
 
@@ -268,18 +257,7 @@ function addonTable.ConfigSetup.Combat(panel, tab, configWindow)
     end)
 
     -- Reminder Font Selector
-    Helpers.CreateFontDropdown(
-        child,
-        "UIThingsReminderFontDropdown",
-        "Reminder Font:",
-        UIThingsDB.combat.reminders.font,
-        function(fontPath, fontName)
-            UIThingsDB.combat.reminders.font = fontPath
-            UpdateReminders()
-        end,
-        20,
-        -478
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -478)
 
     -- Reminder Font Size Slider
     local reminderFontSizeSlider = CreateFrame("Slider", "UIThingsReminderFontSizeSlider", child, "OptionsSliderTemplate")

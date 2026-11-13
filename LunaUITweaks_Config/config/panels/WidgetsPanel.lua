@@ -14,7 +14,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
         end
     end
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Widgets")
 
@@ -49,18 +49,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     Helpers.CreateSectionHeader(panel, "Appearance", -80)
 
     -- Font Dropdown
-    Helpers.CreateFontDropdown(
-        panel,
-        "UIThingsWidgetsFontDropdown",
-        "Font:",
-        UIThingsDB.widgets.font,
-        function(fontPath, fontName)
-            UIThingsDB.widgets.font = fontPath
-            UpdateWidgets()
-        end,
-        20,
-        -105
-    )
+    Helpers.CreateGlobalFontNote(panel, 20, -105)
 
     -- Font Size Slider (Placed to the right of Font dropdown)
     local sizeSlider = CreateFrame("Slider", "UIThingsWidgetsSizeSlider", panel, "OptionsSliderTemplate")
@@ -81,7 +70,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     end)
 
     -- Strata Dropdown
-    local strataLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local strataLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     strataLabel:SetPoint("TOPLEFT", 20, -170)
     strataLabel:SetText("Strata:")
 
@@ -108,7 +97,7 @@ function addonTable.ConfigSetup.Widgets(panel, tab, configWindow)
     UIDropDownMenu_SetText(strataDropdown, UIThingsDB.widgets.strata or "LOW")
 
     -- Font Color Picker
-    local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local colorLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     colorLabel:SetPoint("TOPLEFT", 250, -173)
     colorLabel:SetText("Font Color:")
 

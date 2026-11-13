@@ -50,11 +50,11 @@ local function SupplementalDisplay(entry)
     display = CreateFrame("Frame", nil, entry)
     display:SetAllPoints(entry)
 
-    display.Rating = display:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    display.Rating = display:CreateFontString(nil, "ARTWORK", "LunaFontNormalSmall")
     display.Rating:SetSize(45, 14)
     display.Rating:SetJustifyH("RIGHT")
 
-    display.Members = display:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    display.Members = display:CreateFontString(nil, "ARTWORK", "LunaFontHighlightSmall")
     display.Members:SetSize(28, 14)
     display.Members:SetJustifyH("RIGHT")
 

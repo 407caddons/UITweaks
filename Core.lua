@@ -293,6 +293,7 @@ local function OnEvent(self, event, ...)
                 noTank = { r = 0.85, g = 0.20, b = 0.20 },
                 otherTank = { r = 0.25, g = 0.50, b = 0.90 },
                 selfTank = { r = 0.25, g = 0.75, b = 0.35 },
+                tapped = { r = 0.55, g = 0.55, b = 0.55 }, -- mob tagged by someone else
                 questMarks = {
                     enabled = true,
                     icon = true,
@@ -341,6 +342,7 @@ local function OnEvent(self, event, ...)
                 showItemLevel = true,
                 highlightBagUpgrades = false,
                 autoGreed = false,
+                autoGreedUnequippable = false,
                 confirmBonusRoll = true,
                 confirmBonusPass = true,
             },
@@ -429,6 +431,7 @@ local function OnEvent(self, event, ...)
                 skipCinematics = true, hideTutorials = true, hideTalkingHead = true,
                 spellRanks = true, -- Forever only (qualityOfLife/SpellRanks.lua)
                 talentPoints = true, talentPointsPos = {point="TOP",x=0,y=-160},
+                groupBuffs = true, groupBuffsPos = {point="CENTER",x=-300,y=150},
                 movement = true, movementTts = true, movementVoice = 0,
                 timeSpiral = true, gateway = true, battleRes = true,
                 alertFontSize = 24,
@@ -462,6 +465,8 @@ local function OnEvent(self, event, ...)
                 showMemberCount = true,
                 showRoleData = true,
             },
+            -- Global font for Luna's own UI (utils/Style.lua); per-module sizes stay in each module.
+            general = { font = "Fonts\\FRIZQT__.TTF" },
             misc = {
                 enabled = false,
                 ahFilter = false,
@@ -698,6 +703,17 @@ local function OnEvent(self, event, ...)
                 showBackground = true,
                 backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.92 },
             },
+            spawnWatch = {
+                pos = { point = "CENTER", x = 0, y = 200 },
+                lastName = "",
+            },
+            dungeonProgress = {
+                enabled = true,
+                locked = true,
+                showToast = true,
+                pos = { point = "CENTER", x = -400, y = 100 },
+                best = {},
+            },
             mplusTimer = {
                 enabled = false,
                 locked = true,
@@ -719,12 +735,6 @@ local function OnEvent(self, event, ...)
                 autoSlotKeystone = false,
                 rerollReminder = true,
                 rerollTts = true,
-                -- Xal'atath's Bargain timer (MplusBargainTimer.lua)
-                bargainEnabled = false,
-                bargainShowPaused = true,
-                bargainCountdown = true,
-                bargainSound = false,
-                bargainReport = true,
                 -- Text colors
                 timerColor = { r = 1, g = 1, b = 1 },
                 timerWarningColor = { r = 1, g = 1, b = 0.2 },
@@ -879,6 +889,7 @@ local function OnEvent(self, event, ...)
         -- Apply all defaults
         ApplyDefaults(UIThingsDB, DEFAULTS)
         if addonTable.Client then addonTable.Client.ApplySettings(UIThingsDB) end
+        if addonTable.Style then addonTable.Style.ApplyFonts() end
 
         -- Apply debug mode from saved settings
         if UIThingsDB.addonComm and UIThingsDB.addonComm.debugMode then

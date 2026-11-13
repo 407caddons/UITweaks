@@ -89,7 +89,7 @@ anchorFrame:SetBackdrop({
     insets = { left = 4, right = 4, top = 4, bottom = 4 }
 })
 anchorFrame:SetBackdropColor(0, 0, 0, 0.8)
-anchorFrame.text = anchorFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+anchorFrame.text = anchorFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
 anchorFrame.text:SetPoint("CENTER")
 anchorFrame.text:SetText("Loot Toasts Anchor")
 anchorFrame:Hide()
@@ -116,13 +116,13 @@ local function AcquireToast()
         toast.icon = toast:CreateTexture(nil, "ARTWORK")
         toast.icon:SetPoint("LEFT", 0, 0)
 
-        toast.text = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        toast.text = toast:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
         toast.text:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 5, 0)
         toast.text:SetPoint("RIGHT", 0, 0)
         toast.text:SetJustifyH("LEFT")
         toast.text:SetWordWrap(false)
 
-        toast.winner = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        toast.winner = toast:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         toast.winner:SetPoint("BOTTOMLEFT", toast.icon, "BOTTOMRIGHT", 5, 0)
         toast.winner:SetPoint("RIGHT", 0, 0)
         toast.winner:SetJustifyH("LEFT")
@@ -180,9 +180,9 @@ local function AcquireToast()
     local settings = UIThingsDB.loot
     toast:SetSize(300, settings.iconSize)
     toast.icon:SetSize(settings.iconSize, settings.iconSize)
-    toast.text:SetFont(settings.font, settings.fontSize, "OUTLINE")
+    toast.text:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     -- Adjust winner font size relative to main font
-    toast.winner:SetFont(settings.font, settings.whoLootedFontSize or 12, "OUTLINE")
+    toast.winner:SetFont(LunaUITweaksAPI.Style.Font(), settings.whoLootedFontSize or 12, "OUTLINE")
 
     return toast
 end
@@ -390,8 +390,8 @@ function Loot.UpdateSettings()
     for _, toast in ipairs(activeToasts) do
         toast:SetSize(300, settings.iconSize)
         toast.icon:SetSize(settings.iconSize, settings.iconSize)
-        toast.text:SetFont(settings.font, settings.fontSize, "OUTLINE")
-        toast.winner:SetFont(settings.font, settings.whoLootedFontSize or 12, "OUTLINE")
+        toast.text:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
+        toast.winner:SetFont(LunaUITweaksAPI.Style.Font(), settings.whoLootedFontSize or 12, "OUTLINE")
     end
     Loot.UpdateLayout()
     Loot.ToggleBlizzardToasts(not settings.enabled)
@@ -641,8 +641,82 @@ local function OnChatMsgLoot(event, msg)
     SpawnToast(itemLink, nil, count, recipient, rosterCache[shortName or recipient])
 end
 
+-- Armor types in ascending order (ITEMCLASS_ARMOR subclass IDs) and the best
+-- one each class can wear. Lower types are wearable, so they are left alone.
+local MAX_ARMOR_TYPE = {
+    WARRIOR = 4, PALADIN = 4, DEATHKNIGHT = 4,
+    HUNTER = 3, SHAMAN = 3, EVOKER = 3,
+    ROGUE = 2, DRUID = 2, MONK = 2, DEMONHUNTER = 2,
+    PRIEST = 1, MAGE = 1, WARLOCK = 1,
+}
+-- Shields: warrior, paladin, shaman.
+local CAN_USE_SHIELD = { WARRIOR = true, PALADIN = true, SHAMAN = true }
+-- Weapon subclass IDs each class can use. Classes missing here are never
+-- treated as unable to use a weapon.
+local W = function(...) local t = {} for _, id in ipairs({...}) do t[id] = true end return t end
+local USABLE_WEAPONS = {
+    WARRIOR = W(0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15, 16, 18),
+    PALADIN = W(0, 1, 4, 5, 6, 7, 8),
+    HUNTER  = W(0, 1, 2, 3, 6, 7, 8, 10, 13, 15, 18),
+    ROGUE   = W(2, 3, 4, 7, 13, 15, 16, 18),
+    PRIEST  = W(4, 10, 15, 19),
+    MAGE    = W(7, 10, 15, 19),
+    WARLOCK = W(7, 10, 15, 19),
+    SHAMAN  = W(0, 1, 4, 5, 10, 13, 15),
+    DRUID   = W(4, 5, 6, 10, 13, 15),
+}
+
+-- True only when the item is armor or a weapon this class can never equip.
+-- Anything uncertain (no item info, trinkets, rings, cloaks, relics, other
+-- classes) returns false so the roll is left for the player.
+local function IsUnequippableForPlayer(link)
+    if not link then return false end
+    local instant = (C_Item and C_Item.GetItemInfoInstant) or _G.GetItemInfoInstant
+    if not instant then return false end
+    local _, _, _, equipLoc, _, classID, subClassID = instant(link)
+    if not classID then return false end
+    local class = select(2, UnitClass("player"))
+    if classID == 4 then
+        if equipLoc == "INVTYPE_CLOAK" then return false end
+        if subClassID == 6 then return not CAN_USE_SHIELD[class] end
+        local maxType = MAX_ARMOR_TYPE[class]
+        return maxType ~= nil and subClassID >= 1 and subClassID <= 4 and subClassID > maxType
+    elseif classID == 2 then
+        local usable = USABLE_WEAPONS[class]
+        return usable ~= nil and not usable[subClassID] and subClassID ~= 14 and subClassID ~= 20
+    end
+    return false
+end
+
+-- Retail only rolls when Need is unavailable, so this mode is for other clients.
+local GREED_UNEQUIPPABLE_SUPPORTED = WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
+
+-- TEMP DEBUG: /greeddebug toggles a printout for each roll
+SLASH_LUNAGREEDDEBUG1 = "/greeddebug"
+local greedDebug = false
+SlashCmdList["LUNAGREEDDEBUG"] = function() greedDebug = not greedDebug; print("greeddebug", greedDebug) end
+local function GreedDebugDump(rollID)
+    local link = GetLootRollItemLink(rollID)
+    local instant = (C_Item and C_Item.GetItemInfoInstant) or _G.GetItemInfoInstant
+    print("greeddebug: projectID", tostring(WOW_PROJECT_ID), "mainline", tostring(WOW_PROJECT_MAINLINE), "supported", tostring(GREED_UNEQUIPPABLE_SUPPORTED))
+    print("greeddebug: opt", tostring(UIThingsDB.loot.autoGreedUnequippable), "autoGreed", tostring(UIThingsDB.loot.autoGreed), "link", tostring(link))
+    if instant and link then print("greeddebug: instant", instant(link)) end
+    print("greeddebug: class", tostring(select(2, UnitClass("player"))), "unequippable", tostring(IsUnequippableForPlayer(link)))
+    print("greeddebug: rollinfo", GetLootRollItemInfo(rollID))
+end
+
 local function OnStartLootRoll(event, rollID)
-    if not UIThingsDB.loot.autoGreed then return end
+    if greedDebug then GreedDebugDump(rollID) end
+    local loot = UIThingsDB.loot
+    if GREED_UNEQUIPPABLE_SUPPORTED and loot.autoGreedUnequippable
+        and IsUnequippableForPlayer(GetLootRollItemLink(rollID)) then
+        -- Gear the player can never use: greed it, even when Need is offered.
+        local _, _, _, _, _, _, canGreed, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
+        if canTransmog then RollOnLoot(rollID, 4) elseif canGreed then RollOnLoot(rollID, 2) end
+        return
+    end
+    -- Without the old option, everything else stays manual.
+    if not loot.autoGreed then return end
     local _, _, _, _, _, canNeed, canGreed, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
     if canNeed then return end -- player can need -- let them decide
     -- Blizzard shows Transmog instead of Greed when it is available.
@@ -668,7 +742,8 @@ function Loot.ApplyEvents()
         EventBus.Register("LOOT_READY", OnLootReady, "Loot")
         EventBus.Register("GROUP_ROSTER_UPDATE", OnGroupRosterUpdate, "Loot")
 
-        if UIThingsDB.loot.autoGreed then
+        if UIThingsDB.loot.autoGreed
+            or (GREED_UNEQUIPPABLE_SUPPORTED and UIThingsDB.loot.autoGreedUnequippable) then
             EventBus.Register("START_LOOT_ROLL", OnStartLootRoll, "Loot")
         else
             EventBus.Unregister("START_LOOT_ROLL", OnStartLootRoll)

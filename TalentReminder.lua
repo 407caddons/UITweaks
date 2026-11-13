@@ -1425,7 +1425,7 @@ function TalentReminder.UpdateVisuals()
     -- Apply font settings
     local font = UIThingsDB.talentReminders.alertFont or "Fonts\\FRIZQT__.TTF"
     local fontSize = UIThingsDB.talentReminders.alertFontSize or 12
-    alertFrame.content:SetFont(font, fontSize)
+    alertFrame.content:SetFont(LunaUITweaksAPI.Style.Font(), fontSize)
 
     -- Apply frame size
     local width = UIThingsDB.talentReminders.frameWidth or 400
@@ -1641,12 +1641,12 @@ function TalentReminder.CreateAlertFrame()
     alertFrame:Hide()
 
     -- Title
-    alertFrame.title = alertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    alertFrame.title = alertFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     alertFrame.title:SetPoint("TOP", 0, -20)
     alertFrame.title:SetTextColor(1, 0, 0)
 
     -- Boss name
-    alertFrame.bossName = alertFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    alertFrame.bossName = alertFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     alertFrame.bossName:SetPoint("TOP", 0, -45)
 
     -- Content
@@ -1669,15 +1669,15 @@ function TalentReminder.CreateAlertFrame()
     -- Apply font settings
     local font = UIThingsDB.talentReminders.alertFont or "Fonts\\FRIZQT__.TTF"
     local fontSize = UIThingsDB.talentReminders.alertFontSize or 12
-    alertFrame.content:SetFont(font, fontSize)
+    alertFrame.content:SetFont(LunaUITweaksAPI.Style.Font(), fontSize)
 
     -- Apply Talents button
     local applyTalentsBtn = CreateFrame("Button", nil, alertFrame, "GameMenuButtonTemplate")
     applyTalentsBtn:SetSize(120, 25)
     applyTalentsBtn:SetPoint("BOTTOM", -130, 20)
     applyTalentsBtn:SetText("Apply Talents")
-    applyTalentsBtn:SetNormalFontObject("GameFontNormal")
-    applyTalentsBtn:SetHighlightFontObject("GameFontHighlight")
+    applyTalentsBtn:SetNormalFontObject("LunaFontNormal")
+    applyTalentsBtn:SetHighlightFontObject("LunaFontHighlight")
     applyTalentsBtn:SetScript("OnClick", function(self)
         if alertFrame.currentReminder then
             TalentReminder.ApplyTalents(alertFrame.currentReminder)
@@ -1692,8 +1692,8 @@ function TalentReminder.CreateAlertFrame()
     openTalentsBtn:SetSize(120, 25)
     openTalentsBtn:SetPoint("BOTTOM", 0, 20)
     openTalentsBtn:SetText("Open Talents")
-    openTalentsBtn:SetNormalFontObject("GameFontNormal")
-    openTalentsBtn:SetHighlightFontObject("GameFontHighlight")
+    openTalentsBtn:SetNormalFontObject("LunaFontNormal")
+    openTalentsBtn:SetHighlightFontObject("LunaFontHighlight")
     openTalentsBtn:SetScript("OnClick", function(self)
         -- Open talent frame
         if PlayerSpellsUtil and PlayerSpellsUtil.ToggleTalentFrame then
@@ -1714,8 +1714,8 @@ function TalentReminder.CreateAlertFrame()
     dismissBtn:SetSize(120, 25)
     dismissBtn:SetPoint("BOTTOM", 130, 20)
     dismissBtn:SetText("Dismiss")
-    dismissBtn:SetNormalFontObject("GameFontNormal")
-    dismissBtn:SetHighlightFontObject("GameFontHighlight")
+    dismissBtn:SetNormalFontObject("LunaFontNormal")
+    dismissBtn:SetHighlightFontObject("LunaFontHighlight")
     dismissBtn:SetScript("OnClick", function(self)
         TalentReminder.ReleaseAlertFrame()
     end)

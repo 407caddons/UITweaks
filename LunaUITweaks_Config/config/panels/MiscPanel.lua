@@ -9,7 +9,7 @@ local Helpers = addonTable.ConfigHelpers
 -- Define the setup function for General UI panel (formerly Misc)
 function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "misc")
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("General UI")
 
@@ -42,6 +42,9 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         end
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.misc.enabled)
+
+    -- Global font (applies everywhere, independent of the General UI module switch)
+    Helpers.CreateGlobalFontDropdown(panel, 380, -40)
 
     -- AH Filter Checkbox
     local ahBtn = CreateFrame("CheckButton", "UIThingsMiscAHFilter", panel, "ChatConfigCheckButtonTemplate")
@@ -207,7 +210,7 @@ function addonTable.ConfigSetup.Misc(panel, tab, configWindow)
         if addonTable.Misc and addonTable.Misc.UpdateAutoInviteKeywords then addonTable.Misc.UpdateAutoInviteKeywords() end
     end)
 
-    local kwLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local kwLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     kwLabel:SetPoint("TOPLEFT", 40, -470)
     kwLabel:SetText("Keywords (comma separated):")
 

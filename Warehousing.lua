@@ -496,7 +496,7 @@ local function CreatePopupFrame()
         true, UIThingsDB.warehousing.frameBgColor)
 
     -- Title
-    popupFrame.title = popupFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    popupFrame.title = popupFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     popupFrame.title:SetPoint("TOPLEFT", 10, -10)
 
     -- Close button
@@ -505,7 +505,7 @@ local function CreatePopupFrame()
     closeBtn:SetScript("OnClick", function() popupFrame:Hide() end)
 
     -- Status text
-    popupFrame.statusText = popupFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    popupFrame.statusText = popupFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     popupFrame.statusText:SetPoint("BOTTOMLEFT", 10, 40)
     popupFrame.statusText:SetTextColor(0.7, 0.7, 0.7)
 
@@ -523,12 +523,12 @@ local function CreatePopupFrame()
     popupFrame.scrollFrame = scrollFrame
 
     -- Action button
-    popupFrame.actionBtn = CreateFrame("Button", nil, popupFrame, "UIPanelButtonTemplate")
+    popupFrame.actionBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, popupFrame, "UIPanelButtonTemplate"))
     popupFrame.actionBtn:SetSize(120, 26)
     popupFrame.actionBtn:SetPoint("BOTTOM", -35, 8)
 
     -- Refresh button
-    popupFrame.refreshBtn = CreateFrame("Button", nil, popupFrame, "UIPanelButtonTemplate")
+    popupFrame.refreshBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, popupFrame, "UIPanelButtonTemplate"))
     popupFrame.refreshBtn:SetSize(60, 26)
     popupFrame.refreshBtn:SetPoint("LEFT", popupFrame.actionBtn, "RIGHT", 4, 0)
     popupFrame.refreshBtn:SetText("Refresh")
@@ -560,18 +560,18 @@ local function GetPopupRow(index)
     row.icon:SetPoint("LEFT", 2, 1)
 
     -- Item name
-    row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.nameText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     row.nameText:SetPoint("LEFT", row.icon, "RIGHT", 4, 1)
     row.nameText:SetWidth(140)
     row.nameText:SetJustifyH("LEFT")
 
     -- Count text
-    row.countText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.countText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     row.countText:SetPoint("RIGHT", -5, 1)
     row.countText:SetJustifyH("RIGHT")
 
     -- Destination text
-    row.destText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.destText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     row.destText:SetPoint("RIGHT", row.countText, "LEFT", -10, 1)
     row.destText:SetJustifyH("RIGHT")
 

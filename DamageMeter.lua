@@ -439,15 +439,15 @@ local function AcquireRow(pool, parent, index)
     row.icon:SetPoint("LEFT", row.bar, "LEFT", 2, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     row.icon:Hide()
-    row.nameFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.nameFS = row.bar:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     row.nameFS:SetPoint("LEFT",  row.bar, "LEFT",  4, 0)
     row.nameFS:SetPoint("RIGHT", row.bar, "RIGHT", -50, 0)
     row.nameFS:SetJustifyH("LEFT")
     row.nameFS:SetWordWrap(false)
-    row.valFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.valFS = row.bar:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     row.valFS:SetPoint("RIGHT", row.bar, "RIGHT", -4, 0)
     row.valFS:SetJustifyH("RIGHT")
-    row.dpsFS = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.dpsFS = row.bar:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     row.dpsFS:SetPoint("BOTTOMRIGHT", row.bar, "BOTTOMRIGHT", -4, 2)
     row.dpsFS:SetJustifyH("RIGHT")
     row.dpsFS:Hide()
@@ -628,12 +628,12 @@ local function AcquireSessMenuBtn()
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
     hl:SetColorTexture(1, 1, 1, 0.08)
-    local dot = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local dot = btn:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     dot:SetPoint("LEFT", 4, 0)
     dot:SetWidth(14)
     dot:SetJustifyH("LEFT")
     btn.dot = dot
-    local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local fs = btn:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     fs:SetPoint("LEFT", dot, "RIGHT", 2, 0)
     fs:SetPoint("RIGHT", -4, 0)
     fs:SetJustifyH("LEFT")
@@ -797,7 +797,7 @@ local function BuildPane(idx, parent)
     pane.header = hdr
 
     -- Title fontstring
-    local tfs = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local tfs = hdr:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     tfs:SetPoint("LEFT", 4, 0)
     tfs:SetPoint("RIGHT", -108, 0)
     tfs:SetJustifyH("LEFT")
@@ -805,7 +805,7 @@ local function BuildPane(idx, parent)
     pane.titleFS = tfs
 
     -- Session toggle button
-    local sessBtn = CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate")
+    local sessBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate"))
     sessBtn:SetSize(52, 20)
     sessBtn:SetPoint("RIGHT", -2, 0)
     local ci3 = idx
@@ -815,7 +815,7 @@ local function BuildPane(idx, parent)
     pane.sessBtn = sessBtn
 
     -- Type selection menu, sharing the session menu's style and selected marker.
-    local typeBtn = CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate")
+    local typeBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate"))
     typeBtn:SetSize(52, 20)
     typeBtn:SetPoint("RIGHT", sessBtn, "LEFT", -2, 0)
     local ci2 = idx
@@ -825,7 +825,7 @@ local function BuildPane(idx, parent)
     pane.typeBtn = typeBtn
 
     -- Back button (drilldown return)
-    local backBtn = CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate")
+    local backBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, hdr, "UIPanelButtonTemplate"))
     backBtn:SetSize(44, 20)
     backBtn:SetPoint("LEFT", 2, 0)
     backBtn:SetText("< Bk")
@@ -1170,7 +1170,6 @@ end
 
 local lastInstance
 local pendingResetInstance
-local RESET_CONFIRM = "LUNA_DAMAGE_METER_INSTANCE_RESET"
 local function InstanceKey()
     local inside = IsInInstance()
     if not inside then return nil end
@@ -1182,19 +1181,39 @@ local function ShouldPromptForReset()
     return eventsRegistered and settings and settings.enabled and settings.clearOnInstance
 end
 
-StaticPopupDialogs[RESET_CONFIRM] = {
-    text = "Clear damage meter history for this instance?\n\nThis clears shared Luna and Blizzard damage meter history.",
-    button1 = "Yes",
-    button2 = "No",
-    OnAccept = function(_, instance)
-        if ShouldPromptForReset() and instance == InstanceKey() then
+-- Luna's own dialog, not StaticPopup: showing/hiding a StaticPopup from addon
+-- code taints Blizzard's shared popup list, and later secure StaticPopup_Hide
+-- calls (e.g. Guild Control UI on leaving an instance) are blocked.
+local resetDialog
+local function ResetDialog()
+    if resetDialog then return resetDialog end
+    local f = CreateFrame("Frame", "LunaDamageMeterResetPrompt", UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(320, 130); f:SetFrameStrata("DIALOG"); f:SetToplevel(true)
+    f:SetPoint("TOP", 0, -135); f:EnableMouse(true); f:Hide()
+    local title = f:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
+    title:SetPoint("TOP", 0, -5); title:SetText("Damage Meter")
+    local text = f:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
+    text:SetPoint("TOPLEFT", 16, -34); text:SetPoint("TOPRIGHT", -16, -34)
+    text:SetText("Clear damage meter history for this instance?\n\nThis clears shared Luna and Blizzard damage meter history.")
+    local yes = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
+    yes:SetSize(90, 24); yes:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -6, 14); yes:SetText(YES or "Yes")
+    local no = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
+    no:SetSize(90, 24); no:SetPoint("BOTTOMLEFT", f, "BOTTOM", 6, 14); no:SetText(NO or "No")
+    yes:SetScript("OnClick", function()
+        local instance = f.instance
+        f:Hide()
+        if ShouldPromptForReset() and instance == InstanceKey() and not InCombatLockdown() then
             addonTable.DamageMeter.ResetData()
         end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-}
+    end)
+    no:SetScript("OnClick", function() f:Hide() end)
+    tinsert(UISpecialFrames, "LunaDamageMeterResetPrompt")
+    resetDialog = f
+    return f
+end
+local function HideResetPrompt()
+    if resetDialog then resetDialog:Hide() end
+end
 
 local function ShowPendingResetPrompt()
     if not pendingResetInstance then return end
@@ -1204,9 +1223,10 @@ local function ShowPendingResetPrompt()
     end
     -- ResetData cannot run in combat; wait until the player can answer and reset.
     if InCombatLockdown() then return end
-    if StaticPopup_Show(RESET_CONFIRM, nil, nil, pendingResetInstance) then
-        pendingResetInstance = nil
-    end
+    local dialog = ResetDialog()
+    dialog.instance = pendingResetInstance
+    dialog:Show()
+    pendingResetInstance = nil
 end
 local function OnZoneChanged()
     local nextInstance = InstanceKey()
@@ -1214,7 +1234,7 @@ local function OnZoneChanged()
     lastInstance = nextInstance
     if changed then
         pendingResetInstance = nil
-        StaticPopup_Hide(RESET_CONFIRM)
+        HideResetPrompt()
         if nextInstance and ShouldPromptForReset() then
             pendingResetInstance = nextInstance
         end
@@ -1260,7 +1280,7 @@ RegisterEvents = function()
 end
 UnregisterEvents = function()
     pendingResetInstance = nil
-    StaticPopup_Hide(RESET_CONFIRM)
+    HideResetPrompt()
     if not eventsRegistered then return end
     eventsRegistered = false
     for event, handler in pairs(handlers) do EventBus.Unregister(event, handler) end

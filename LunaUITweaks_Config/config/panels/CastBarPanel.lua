@@ -24,7 +24,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end
 
     -- Title
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Cast Bar")
 
@@ -115,7 +115,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
     -- == Position ==
     -- X Position
-    local xLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local xLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     xLabel:SetPoint("TOPLEFT", 20, -260)
     xLabel:SetText("X Position:")
 
@@ -144,7 +144,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end)
 
     -- Y Position
-    local yLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local yLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     yLabel:SetPoint("TOPLEFT", 200, -260)
     yLabel:SetText("Y Position:")
 
@@ -169,7 +169,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end)
 
     -- Anchor Point Dropdown
-    local anchorLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local anchorLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     anchorLabel:SetPoint("TOPLEFT", 380, -260)
     anchorLabel:SetText("Anchor:")
 
@@ -224,18 +224,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     Helpers.CreateSectionHeader(child, "Text & Icon", -450)
 
     -- Font Dropdown
-    Helpers.CreateFontDropdown(
-        child,
-        "UIThingsCastBarFontDropdown",
-        "Font:",
-        UIThingsDB.castBar.font,
-        function(fontPath, fontName)
-            UIThingsDB.castBar.font = fontPath
-            UpdateCastBar()
-        end,
-        20,
-        -480
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -480)
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsCastBarFontSize", child, "OptionsSliderTemplate")
@@ -309,7 +298,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
 
 
     -- Target X Position
-    local txLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local txLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     txLabel:SetPoint("TOPLEFT", 20, -655)
     txLabel:SetText("X Position:")
 
@@ -334,7 +323,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end)
 
     -- Target Y Position
-    local tyLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local tyLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     tyLabel:SetPoint("TOPLEFT", 200, -655)
     tyLabel:SetText("Y Position:")
 
@@ -373,7 +362,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     end
     FocusCheck("Enable Focus Cast Bar", "Enable", "enabled", 20)
     local function FocusNumber(label, suffix, key, isPosition, x, y, min, max)
-        local text = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        local text = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
         text:SetPoint("TOPLEFT", x, y); text:SetText(label)
         local box = CreateFrame("EditBox", "UIThingsFocusCastBar"..suffix, child, "InputBoxTemplate")
         box:SetSize(70, 24); box:SetPoint("LEFT", text, "RIGHT", 10, 0); box:SetAutoFocus(false)
@@ -395,7 +384,7 @@ function addonTable.ConfigSetup.CastBar(panel, tab, configWindow)
     FocusNumber("Width:", "Width", "width", false, 20, -880, 80, 1000)
     FocusNumber("Height:", "Height", "height", false, 260, -880, 8, 100)
     Helpers.CreateColorSwatch(child, "Kickable colour", UIThingsDB.castBar.focusBar.barColor, UpdateCastBar, 20, -928)
-    local help = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local help = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     help:SetPoint("TOPLEFT", 20, -975); help:SetWidth(480); help:SetJustifyH("LEFT")
     help:SetText("Independent of the player/target bars. Uses the shared font, texture, icon and non-interruptible colour. Use Layout Mode to position it. Interruptibility does not check your interrupt cooldown or range.")
 end

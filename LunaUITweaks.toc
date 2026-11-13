@@ -24,6 +24,7 @@
 # Core initialization
 compat\Client.lua
 Core.lua
+utils\Style.lua
 EventBus.lua
 Profiler.lua
 LayoutMode.lua
@@ -58,7 +59,6 @@ XpBar.lua
 MplusTimer.lua
 CustomEncounterTimers.lua
 EncounterBars.lua
-MplusBargainTimer.lua
 Coordinates.lua
 Warehousing.lua
 QueueTimer.lua
@@ -77,6 +77,7 @@ qualityOfLife\AutoOpen.lua
 qualityOfLife\Convenience.lua
 qualityOfLife\GameplayAlerts.lua
 qualityOfLife\TalentPoints.lua
+qualityOfLife\GroupBuffs.lua
 CompactGroupFinder.lua
 widgets\Widgets.lua
 widgets\Time.lua

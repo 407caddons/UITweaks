@@ -85,7 +85,7 @@ local function Overlay(button)
         if i <= 2 then edge:SetHeight(2) else edge:SetWidth(2) end
         overlay.edges[i] = edge
     end
-    overlay.text = overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    overlay.text = overlay:CreateFontString(nil, "OVERLAY", "LunaFontNumberSmall")
     overlay.text:SetPoint("TOPLEFT", 2, -2)
     overlay.text:SetTextColor(1, 0.55, 0.1)
     overlay:Hide()

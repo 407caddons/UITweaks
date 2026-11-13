@@ -238,7 +238,7 @@ local function GetMarker(plate)
     marker = CreateFrame("Frame", nil, plate)
     marker.tex = marker:CreateTexture(nil, "OVERLAY")
     marker.tex:SetAllPoints()
-    marker.text = marker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    marker.text = marker:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     -- Outline: a child of the marker so it shares the marker's quest visibility.
     local border = CreateFrame("Frame", nil, marker)
     local top, bottom = border:CreateTexture(nil, "OVERLAY"), border:CreateTexture(nil, "OVERLAY")

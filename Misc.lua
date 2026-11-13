@@ -33,7 +33,7 @@ alertFrame:SetPoint("TOP", 0, -200)
 alertFrame:SetFrameStrata("DIALOG")
 alertFrame:Hide()
 
-alertFrame.text = alertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+alertFrame.text = alertFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 alertFrame.text:SetPoint("CENTER")
 alertFrame.text:SetText("Personal Order Arrived")
 
@@ -72,7 +72,7 @@ mailAlertFrame:SetPoint("TOP", 0, -260)
 mailAlertFrame:SetFrameStrata("DIALOG")
 mailAlertFrame:Hide()
 
-mailAlertFrame.text = mailAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+mailAlertFrame.text = mailAlertFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 mailAlertFrame.text:SetPoint("CENTER")
 mailAlertFrame.text:SetText("New mail arrived")
 
@@ -121,7 +121,7 @@ boeAlertFrame:SetPoint("TOP", 0, -320)
 boeAlertFrame:SetFrameStrata("DIALOG")
 boeAlertFrame:Hide()
 
-boeAlertFrame.text = boeAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+boeAlertFrame.text = boeAlertFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 boeAlertFrame.text:SetPoint("CENTER")
 boeAlertFrame.text:SetText("BoE Item Looted!")
 
@@ -370,7 +370,7 @@ whisperAlertFrame:SetPoint("TOP", 0, -440)
 whisperAlertFrame:SetFrameStrata("DIALOG")
 whisperAlertFrame:Hide()
 
-whisperAlertFrame.text = whisperAlertFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+whisperAlertFrame.text = whisperAlertFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 whisperAlertFrame.text:SetPoint("CENTER")
 
 local function ShowWhisperAlert(senderName)
@@ -557,11 +557,11 @@ function Misc.ToggleQuickDestroy(enabled)
 
                     -- Create or reuse the quick-delete button
                     if not deleteButton then
-                        deleteButton = CreateFrame("Button", "LunaQuickDestroyButton", nil, "UIPanelButtonTemplate")
+                        deleteButton = LunaUITweaksAPI.Style.Button(CreateFrame("Button", "LunaQuickDestroyButton", nil, "UIPanelButtonTemplate"))
                         deleteButton:SetSize(120, 30)
                         deleteButton:SetText("DELETE")
-                        deleteButton:SetNormalFontObject("GameFontNormalHuge")
-                        deleteButton:SetHighlightFontObject("GameFontHighlightHuge")
+                        deleteButton:SetNormalFontObject("LunaFontNormalHuge")
+                        deleteButton:SetHighlightFontObject("LunaFontHighlightHuge")
 
                         local fontStr = deleteButton:GetFontString()
                         if fontStr then fontStr:SetTextColor(1, 0.1, 0.1) end

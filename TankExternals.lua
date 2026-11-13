@@ -63,7 +63,7 @@ local function CreateDisplay()
     local s = DB()
     local frame = CreateFrame("Frame", "LunaTankExternals", UIParent)
     frame:SetFrameStrata("MEDIUM"); frame:SetMovable(true); frame:SetClampedToScreen(true)
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     frame.title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 4)
     frame.title:SetText("Externals on you")
     frame.rows = {}

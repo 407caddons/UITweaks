@@ -10,7 +10,7 @@ function addon.ConfigSetup.Nameplates(panel)
     local db = UIThingsDB.nameplateColors
     Helpers.CreateResetButton(panel, "nameplateColors")
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Nameplates")
 
@@ -24,7 +24,7 @@ function addon.ConfigSetup.Nameplates(panel)
     end
 
     local function Note(text, y)
-        local note = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        local note = panel:CreateFontString(nil, "ARTWORK", "LunaFontHighlightSmall")
         note:SetPoint("TOPLEFT", 20, y)
         note:SetWidth(540)
         note:SetJustifyH("LEFT")
@@ -86,7 +86,7 @@ function addon.ConfigSetup.Nameplates(panel)
         function() return marks.hideInInstances end,
         function(value) marks.hideInInstances = value; Apply() end)
 
-    local sizeLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    local sizeLabel = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormal")
     sizeLabel:SetPoint("TOPLEFT", 20, -518)
     sizeLabel:SetText("Icon size:")
     local slider = CreateFrame("Slider", "LunaNameplateQuestMarkSize", panel, "OptionsSliderTemplate")
@@ -107,7 +107,7 @@ function addon.ConfigSetup.Nameplates(panel)
         Apply()
     end)
 
-    local positionLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    local positionLabel = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormal")
     positionLabel:SetPoint("TOPLEFT", 20, -560)
     positionLabel:SetText("Position:")
     local positions = { { "RIGHT", "Right of health bar" }, { "LEFT", "Left of health bar" }, { "TOP", "Above health bar" } }

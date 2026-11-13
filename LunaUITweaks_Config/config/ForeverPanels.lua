@@ -13,10 +13,10 @@ local unavailable = {
 for key, reason in pairs(unavailable) do
     local text = reason
     addon.ConfigSetup[key] = function(panel)
-        local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
         title:SetPoint("TOPLEFT", 20, -20)
         title:SetText("Forever compatibility")
-        local note = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local note = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         note:SetPoint("TOPLEFT", 20, -65)
         note:SetWidth(580)
         note:SetJustifyH("LEFT")

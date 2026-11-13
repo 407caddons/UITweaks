@@ -10,6 +10,7 @@
 
 Model.lua
 NewItems.lua
+Marks.lua
 Deposit.lua
 Views.lua
 Config.lua

@@ -94,7 +94,7 @@ SlashCmdList.LUNATANKDEBUG = function(input)
             local size = math.max(12, math.min(28, math.floor((UIParent:GetWidth() - 80) / 40) - 4))
             f:SetSize(40 * (size + 4), size)
             f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 30, -120 - (i - 1) * (size + 40))
-            local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            local title = f:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
             title:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, 4)
             title:SetText(key == "player" and "DEBUG: Your debuffs — unfiltered (up to 40)" or "DEBUG: Co-tank debuffs — unfiltered (up to 40)")
             local ok, container = pcall(CreateFrame, "AuraContainer", nil, f, "CustomAuraContainerTemplate")
@@ -137,8 +137,8 @@ end
 StyleAura = function(aura, settings)
     aura:SetSize(settings.iconSize, settings.iconSize)
     if aura.lunaCount then
-        aura.lunaCount:SetFont("Fonts\\FRIZQT__.TTF", settings.fontSize, "OUTLINE")
-        aura.lunaDuration:SetFont("Fonts\\FRIZQT__.TTF", settings.fontSize, "OUTLINE")
+        aura.lunaCount:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
+        aura.lunaDuration:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     end
 end
 -- Shared with TankExternals: binds a Blizzard-managed icon, swipe, stacks and
@@ -159,11 +159,11 @@ local function InitializeAuraWith(aura, settings)
     overlay:SetFrameLevel(cooldown:GetFrameLevel() + 1)
     local count = overlay:CreateFontString(nil, "OVERLAY")
     -- Binding can immediately set text; initialize fonts before handing them to Blizzard.
-    count:SetFont("Fonts\\FRIZQT__.TTF", settings.fontSize, "OUTLINE")
+    count:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
     aura:SetApplicationCount(count)
     local duration = overlay:CreateFontString(nil, "OVERLAY")
-    duration:SetFont("Fonts\\FRIZQT__.TTF", settings.fontSize, "OUTLINE")
+    duration:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     duration:SetPoint("CENTER")
     aura:SetDurationText(duration)
     aura.lunaCount = count
@@ -177,7 +177,7 @@ local function CreateDisplay(key)
     frame:SetFrameStrata("MEDIUM")
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     frame.title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 4)
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, frame, "CustomAuraContainerTemplate")
     if not ok then

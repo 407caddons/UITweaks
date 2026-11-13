@@ -397,7 +397,7 @@ BuildUI = function()
     titleBarBg:SetAllPoints()
     titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 
-    local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     title:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
     title:SetText("|cFF20FF40Snek|r  |cFF888888drag title to move|r")
 
@@ -436,17 +436,17 @@ BuildUI = function()
     local sideX    = BOARD_W + PADDING * 2
     local sideTopY = PADDING + 30
 
-    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     scoreText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -sideTopY)
     scoreText:SetJustifyH("LEFT")
     scoreText:SetText("Score\n0")
 
-    highScoreText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    highScoreText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     highScoreText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(sideTopY + 40))
     highScoreText:SetJustifyH("LEFT")
     highScoreText:SetText("Best\n0")
 
-    lengthText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lengthText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     lengthText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(sideTopY + 80))
     lengthText:SetJustifyH("LEFT")
     lengthText:SetText("Length\n0")
@@ -458,7 +458,7 @@ BuildUI = function()
     local BOTTOM_PAD = 8
 
     local function MakeBtn(label, row, onClick)
-        local btn = CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate")
+        local btn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate"))
         btn:SetSize(BTN_W, BTN_H)
         local by = BOTTOM_PAD + (row - 1) * (BTN_H + BTN_GAP)
         btn:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, by)
@@ -484,14 +484,14 @@ BuildUI = function()
     for i, entry in ipairs(BINDS) do
         local rowY = bindBaseY + (#BINDS - i) * BIND_ROW_H
 
-        local lbl = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local lbl = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         lbl:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, rowY)
         lbl:SetWidth(BIND_W)
         lbl:SetJustifyH("LEFT")
         lbl:SetTextColor(0.6, 0.6, 0.6)
         lbl:SetText(entry.label)
 
-        local key = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local key = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         key:SetPoint("BOTTOMRIGHT", gameFrame, "BOTTOMLEFT", sideX + BIND_W, rowY)
         key:SetWidth(BIND_W)
         key:SetJustifyH("RIGHT")
@@ -524,7 +524,7 @@ BuildUI = function()
     local pauseBg = pauseText:CreateTexture(nil, "ARTWORK")
     pauseBg:SetAllPoints()
     pauseBg:SetColorTexture(0, 0, 0, 0.7)
-    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     pauseLabel:SetPoint("CENTER", pauseText, "CENTER", 0, 0)
     pauseLabel:SetText("|cFFFFD100PAUSED|r")
     pauseText:Hide()
@@ -537,15 +537,15 @@ BuildUI = function()
     goBg:SetAllPoints()
     goBg:SetColorTexture(0, 0, 0, 0.7)
 
-    gameOverFrame.titleText = gameOverFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    gameOverFrame.titleText = gameOverFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     gameOverFrame.titleText:SetPoint("CENTER", gameOverFrame, "CENTER", 0, 30)
     gameOverFrame.titleText:SetText("|cFFFF2020GAME OVER|r")
 
-    gameOverFrame.scoreText = gameOverFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    gameOverFrame.scoreText = gameOverFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     gameOverFrame.scoreText:SetPoint("CENTER", gameOverFrame, "CENTER", 0, -5)
     gameOverFrame.scoreText:SetJustifyH("CENTER")
 
-    local goBtn = CreateFrame("Button", nil, gameOverFrame, "UIPanelButtonTemplate")
+    local goBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameOverFrame, "UIPanelButtonTemplate"))
     goBtn:SetSize(100, 26)
     goBtn:SetPoint("CENTER", gameOverFrame, "CENTER", 0, -40)
     goBtn:SetText("Play Again")

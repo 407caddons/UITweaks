@@ -750,8 +750,8 @@ function CastBar.UpdateSettings()
     ApplyBorders(castBarFrame, borderTextures, settings.borderSize, settings.borderColor)
 
     -- Font
-    spellNameText:SetFont(settings.font, settings.fontSize, "OUTLINE")
-    castTimeText:SetFont(settings.font, settings.fontSize, "OUTLINE")
+    spellNameText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
+    castTimeText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
 
     -- Text visibility
     if settings.showSpellName then spellNameText:Show() else spellNameText:Hide() end
@@ -848,8 +848,8 @@ function CastBar.UpdateTargetSettings()
 
     ApplyBorders(targetCastBarFrame, targetBorderTextures, settings.borderSize, settings.borderColor)
 
-    targetSpellNameText:SetFont(settings.font, settings.fontSize, "OUTLINE")
-    targetCastTimeText:SetFont(settings.font, settings.fontSize, "OUTLINE")
+    targetSpellNameText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
+    targetCastTimeText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
 
     if settings.showSpellName then targetSpellNameText:Show() else targetSpellNameText:Hide() end
     if settings.showCastTime then targetCastTimeText:Show() else targetCastTimeText:Hide() end
@@ -936,12 +936,12 @@ local function Init()
     spark:SetBlendMode("ADD")
 
     -- Spell name
-    spellNameText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    spellNameText = statusBar:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     spellNameText:SetPoint("LEFT", statusBar, "LEFT", 4, 0)
     spellNameText:SetJustifyH("LEFT")
 
     -- Cast time
-    castTimeText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    castTimeText = statusBar:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     castTimeText:SetPoint("RIGHT", statusBar, "RIGHT", -4, 0)
     castTimeText:SetJustifyH("RIGHT")
 
@@ -992,11 +992,11 @@ local function Init()
     targetSpark:SetSize(32, 50)
     targetSpark:SetBlendMode("ADD")
 
-    targetSpellNameText = targetStatusBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    targetSpellNameText = targetStatusBar:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     targetSpellNameText:SetPoint("LEFT", targetStatusBar, "LEFT", 4, 0)
     targetSpellNameText:SetJustifyH("LEFT")
 
-    targetCastTimeText = targetStatusBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    targetCastTimeText = targetStatusBar:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     targetCastTimeText:SetPoint("RIGHT", targetStatusBar, "RIGHT", -4, 0)
     targetCastTimeText:SetJustifyH("RIGHT")
 

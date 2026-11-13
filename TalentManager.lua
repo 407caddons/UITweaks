@@ -188,7 +188,7 @@ local function CreateMainPanel()
     titleBar:SetPoint("TOPLEFT", 0, 0)
     titleBar:SetPoint("TOPRIGHT", 0, 0)
 
-    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     titleText:SetPoint("LEFT", 10, 0)
     titleText:SetText("Talent Builds")
     titleText:SetTextColor(1, 0.82, 0)
@@ -201,25 +201,25 @@ local function CreateMainPanel()
 
     local btnWidth = (panelWidth - 20) / 3
 
-    local importBtn = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
+    local importBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate"))
     importBtn:SetSize(btnWidth, 22)
     importBtn:SetPoint("TOPLEFT", 5, -4)
     importBtn:SetText("Import")
-    importBtn:SetNormalFontObject("GameFontNormalSmall")
+    importBtn:SetNormalFontObject("LunaFontNormalSmall")
     importBtn:SetScript("OnClick", function() TalentManager.ShowImportDialog() end)
 
-    local exportBtn = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
+    local exportBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate"))
     exportBtn:SetSize(btnWidth, 22)
     exportBtn:SetPoint("LEFT", importBtn, "RIGHT", 2, 0)
     exportBtn:SetText("Export")
-    exportBtn:SetNormalFontObject("GameFontNormalSmall")
+    exportBtn:SetNormalFontObject("LunaFontNormalSmall")
     exportBtn:SetScript("OnClick", function() TalentManager.ShowExportDialog() end)
 
-    local addBtn = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
+    local addBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate"))
     addBtn:SetSize(btnWidth, 22)
     addBtn:SetPoint("LEFT", exportBtn, "RIGHT", 2, 0)
     addBtn:SetText("Add")
-    addBtn:SetNormalFontObject("GameFontNormalSmall")
+    addBtn:SetNormalFontObject("LunaFontNormalSmall")
     addBtn:SetScript("OnClick", function() TalentManager.ShowAddDialog() end)
 
     -- Scroll frame for build list
@@ -306,7 +306,7 @@ local function GetOrCreateRow(index)
     local row = CreateFrame("Frame", nil, scrollContent)
     row:SetSize(contentWidth, 24)
 
-    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.text = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     row.text:SetPoint("LEFT", 0, 0)
     row.text:SetWidth(contentWidth - 125)
     row.text:SetJustifyH("LEFT")
@@ -402,7 +402,7 @@ local function SetRowAsHeader(row, text, indent, isCollapsed, onClick)
     local font = settings.font or "Fonts\\FRIZQT__.TTF"
     local fontSize = (settings.fontSize or 11) + 1
 
-    row.text:SetFont(font, fontSize, "OUTLINE")
+    row.text:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     local arrow = isCollapsed and "|cFFAAAAAA+ |r" or "|cFFAAAAAA- |r"
     row.text:SetText(string.rep("  ", indent) .. arrow .. text)
     row.text:SetTextColor(1, 0.82, 0)
@@ -439,7 +439,7 @@ local function SetRowAsBuild(row, reminder, instanceID, diffID, zoneKey, buildIn
         row.tickIcon:Hide()
     end
 
-    row.text:SetFont(font, fontSize, "")
+    row.text:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "")
     local label = reminder.name or "Unnamed Build"
     if reminder.defaultFor == "dungeon" then
         label = label .. " |cFF59E6C2(Dungeons default)|r"
@@ -804,7 +804,7 @@ function TalentManager.RefreshBuildList()
     -- Show empty message if no builds
     if rowIndex == 0 then
         local row = AddRow()
-        row.text:SetFont(UIThingsDB.talentManager.font or "Fonts\\FRIZQT__.TTF", 11, "")
+        row.text:SetFont(LunaUITweaksAPI.Style.Font(), 11, "")
         row.text:SetText(
             "|cFFAAAAAAAANo talent builds saved for your\ncurrent class/spec.\n\nUse Add to snapshot your\ncurrent talents.|r")
         row.text:SetTextColor(0.7, 0.7, 0.7)
@@ -856,13 +856,13 @@ local function GetOrCreateImportExportFrame()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:Hide()
 
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.title = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     f.title:SetPoint("TOP", 0, -10)
 
     local editBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
-    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetFontObject("LunaFontChat")
     editBox:SetMaxLetters(0)
     editBox:SetPoint("TOPLEFT", 10, -35)
     editBox:SetPoint("BOTTOMRIGHT", -10, 40)
@@ -880,13 +880,13 @@ local function GetOrCreateImportExportFrame()
     f.editBox = editBox
 
     -- OK button
-    f.okBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.okBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     f.okBtn:SetSize(80, 22)
     f.okBtn:SetPoint("BOTTOMRIGHT", -10, 10)
     f.okBtn:SetText("Close")
 
     -- Cancel button
-    f.cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.cancelBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     f.cancelBtn:SetSize(80, 22)
     f.cancelBtn:SetPoint("RIGHT", f.okBtn, "LEFT", -5, 0)
     f.cancelBtn:SetText("Cancel")
@@ -980,11 +980,11 @@ local function GetOrCreateAddEditFrame()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:Hide()
 
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title = f:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     f.title:SetPoint("TOP", 0, -12)
 
     -- Name field
-    local nameLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local nameLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     nameLabel:SetPoint("TOPLEFT", 15, -45)
     nameLabel:SetText("Name:")
 
@@ -995,7 +995,7 @@ local function GetOrCreateAddEditFrame()
     f.nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     -- Type dropdown (Uncategorized / Dungeon / Raid)
-    local typeLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local typeLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     typeLabel:SetPoint("TOPLEFT", 15, -80)
     typeLabel:SetText("Type:")
 
@@ -1004,7 +1004,7 @@ local function GetOrCreateAddEditFrame()
     UIDropDownMenu_SetWidth(f.typeDropdown, 180)
 
     -- Instance dropdown
-    local instLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local instLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     instLabel:SetPoint("TOPLEFT", 15, -115)
     instLabel:SetText("Instance:")
 
@@ -1013,7 +1013,7 @@ local function GetOrCreateAddEditFrame()
     UIDropDownMenu_SetWidth(f.instanceDropdown, 180)
 
     -- Difficulty dropdown
-    local diffLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local diffLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     diffLabel:SetPoint("TOPLEFT", 15, -150)
     diffLabel:SetText("Difficulty:")
 
@@ -1025,20 +1025,20 @@ local function GetOrCreateAddEditFrame()
     f.zoneCheck = CreateFrame("CheckButton", "LunaTalentMgrZoneCheck", f, "InterfaceOptionsCheckButtonTemplate")
     f.zoneCheck:SetPoint("TOPLEFT", 15, -185)
     f.zoneCheck.Text:SetText("Zone-specific (current subzone only)")
-    f.zoneCheck.Text:SetFontObject("GameFontHighlight")
+    f.zoneCheck.Text:SetFontObject("LunaFontHighlight")
 
-    f.zoneLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.zoneLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     f.zoneLabel:SetPoint("TOPLEFT", 40, -205)
     f.zoneLabel:SetText("")
     f.zoneLabel:SetTextColor(0.6, 0.6, 0.6)
 
     -- Save / Cancel buttons
-    f.saveBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.saveBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     f.saveBtn:SetSize(100, 25)
     f.saveBtn:SetPoint("BOTTOMRIGHT", -15, 12)
     f.saveBtn:SetText("Save")
 
-    f.cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.cancelBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     f.cancelBtn:SetSize(100, 25)
     f.cancelBtn:SetPoint("RIGHT", f.saveBtn, "LEFT", -10, 0)
     f.cancelBtn:SetText("Cancel")

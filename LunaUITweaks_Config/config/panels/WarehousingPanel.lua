@@ -52,7 +52,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     end)
 
     -- Panel Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Warehousing")
 
@@ -73,7 +73,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.warehousing.enabled)
 
     -- Description
-    local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local desc = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     desc:SetPoint("TOPLEFT", 40, -80)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
@@ -113,7 +113,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     end)
 
     -- Gold reserve editbox
-    local goldReserveLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local goldReserveLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     goldReserveLabel:SetPoint("TOPLEFT", 20, -245)
     goldReserveLabel:SetText("Gold reserve (never spend below this amount):")
     goldReserveLabel:SetTextColor(0.7, 0.7, 0.7)
@@ -137,13 +137,13 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         self:ClearFocus()
     end)
 
-    local goldReserveSuffix = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local goldReserveSuffix = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     goldReserveSuffix:SetPoint("LEFT", goldReserveEditBox, "RIGHT", 4, 0)
     goldReserveSuffix:SetText("gold")
     goldReserveSuffix:SetTextColor(0.7, 0.7, 0.7)
 
     -- Confirm above editbox
-    local confirmLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local confirmLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     confirmLabel:SetPoint("TOPLEFT", 20, -273)
     confirmLabel:SetText("Show confirmation if total purchase exceeds:")
     confirmLabel:SetTextColor(0.7, 0.7, 0.7)
@@ -167,7 +167,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         self:ClearFocus()
     end)
 
-    local confirmSuffix = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local confirmSuffix = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     confirmSuffix:SetPoint("LEFT", confirmEditBox, "RIGHT", 4, 0)
     confirmSuffix:SetText("gold  (0 = always confirm)")
     confirmSuffix:SetTextColor(0.7, 0.7, 0.7)
@@ -175,7 +175,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     -- Item List Section
     Helpers.CreateSectionHeader(panel, "Tracked Items", -300)
 
-    local instrText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local instrText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     instrText:SetPoint("TOPLEFT", 20, -325)
     instrText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -130, -325)
     instrText:SetHeight(28)
@@ -273,7 +273,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         charPickerPopup.clearBtn:SetSize(80, 20)
         charPickerPopup.clearBtn:SetPoint("TOPLEFT", 6, -6)
         charPickerPopup.clearBtn:SetText("All Chars")
-        charPickerPopup.clearBtn:SetNormalFontObject("GameFontNormalSmall")
+        charPickerPopup.clearBtn:SetNormalFontObject("LunaFontNormalSmall")
         charPickerPopup.clearBtn:SetScript("OnClick", function()
             if charPickerItemID and addonTable.Warehousing then
                 addonTable.Warehousing.SetMinKeepChars(charPickerItemID, nil)
@@ -340,7 +340,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         if #keys == 0 then
             -- No other characters known yet
             if not popup.noCharsText then
-                popup.noCharsText = popup:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                popup.noCharsText = popup:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 popup.noCharsText:SetPoint("TOPLEFT", 10, -36)
                 popup.noCharsText:SetTextColor(0.5, 0.5, 0.5)
                 popup.noCharsText:SetText("No other characters found.\nLog in on each character first.")
@@ -409,13 +409,13 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         end)
 
         -- Item name
-        row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.nameText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         row.nameText:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
         row.nameText:SetWidth(120)
         row.nameText:SetJustifyH("LEFT")
 
         -- Min label + editbox
-        row.minLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.minLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         row.minLabel:SetPoint("LEFT", row.icon, "RIGHT", 130, 0)
         row.minLabel:SetText("Min:")
         row.minLabel:SetTextColor(0.7, 0.7, 0.7)
@@ -431,10 +431,10 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         row.charBtn = CreateFrame("Button", "UIThingsWH_CharBtn_" .. index, row, "UIPanelButtonTemplate")
         row.charBtn:SetSize(46, 20)
         row.charBtn:SetPoint("LEFT", row.minEditBox, "RIGHT", 4, 0)
-        row.charBtn:SetNormalFontObject("GameFontNormalSmall")
+        row.charBtn:SetNormalFontObject("LunaFontNormalSmall")
 
         -- Destination dropdown
-        row.destLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.destLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         row.destLabel:SetPoint("LEFT", row.charBtn, "RIGHT", 6, 0)
         row.destLabel:SetText("To:")
         row.destLabel:SetTextColor(0.7, 0.7, 0.7)
@@ -447,14 +447,14 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         row.buyBtn = CreateFrame("Button", "UIThingsWH_Buy_" .. index, row, "UIPanelButtonTemplate")
         row.buyBtn:SetSize(36, 20)
         row.buyBtn:SetPoint("RIGHT", -30, 0)
-        row.buyBtn:SetNormalFontObject("GameFontNormalSmall")
+        row.buyBtn:SetNormalFontObject("LunaFontNormalSmall")
 
         -- Remove button
         row.removeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         row.removeBtn:SetSize(22, 22)
         row.removeBtn:SetPoint("RIGHT", -4, 0)
         row.removeBtn:SetText("X")
-        row.removeBtn:SetNormalFontObject("GameFontNormalSmall")
+        row.removeBtn:SetNormalFontObject("LunaFontNormalSmall")
 
         return row
     end
@@ -469,7 +469,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         row.bg:SetAllPoints()
         row.bg:SetColorTexture(0.15, 0.15, 0.15, 0.6)
 
-        row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.text = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
         row.text:SetPoint("LEFT", 4, 0)
         row.text:SetTextColor(1, 0.82, 0)
 
@@ -670,7 +670,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
         if not hasItems then
             -- Show empty message
             if not scrollChild.emptyText then
-                scrollChild.emptyText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                scrollChild.emptyText = scrollChild:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 scrollChild.emptyText:SetPoint("TOPLEFT", 4, 0)
                 scrollChild.emptyText:SetText("No items tracked. Drag items from your bags and drop them here.")
                 scrollChild.emptyText:SetTextColor(0.5, 0.5, 0.5)
@@ -700,7 +700,7 @@ function addonTable.ConfigSetup.Warehousing(panel, tab, configWindow)
     --   charBtn LEFT+212(46w)
     --   destLabel LEFT+264("To:"), destDropdown LEFT+266 (UIDropDown adds ~16px internal pad → text ~LEFT+282)
     local function MakeColumnHeader(labelText, xOffset, anchorSide)
-        local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local h = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         if anchorSide == "RIGHT" then
             h:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", xOffset, 14)
         else

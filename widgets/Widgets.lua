@@ -90,7 +90,7 @@ function Widgets.CreateWidgetFrame(name, configKey)
         self.coords:SetText(string.format("(%.0f, %.0f)", x, y))
     end)
 
-    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.text = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     f.text:SetPoint("CENTER")
 
     -- Background for dragging visibility
@@ -100,7 +100,7 @@ function Widgets.CreateWidgetFrame(name, configKey)
     f.bg:Hide()
 
     -- Coordinates text (hidden by default)
-    f.coords = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.coords = f:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     f.coords:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, 2)
     f.coords:Hide()
 
@@ -355,7 +355,7 @@ function Widgets.UpdateVisuals()
             local fontName = db.font
             local fontSize = db.fontSize
             local fontFlags = db.fontFlags or "OUTLINE"
-            if frame.text then frame.text:SetFont(fontName, fontSize, fontFlags) end
+            if frame.text then frame.text:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, fontFlags) end
 
             local c = db.fontColor
             if frame.text then frame.text:SetTextColor(c.r, c.g, c.b, c.a) end

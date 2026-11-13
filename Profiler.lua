@@ -233,12 +233,12 @@ local function BuildDisplayFrame()
     titleBg:SetAllPoints()
     titleBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 
-    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     titleText:SetPoint("LEFT", 8, 0)
     titleText:SetText("|cFF00FF96LunaUITweaks Profiler|r")
 
     -- Memory text (right side of title bar)
-    memoryText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    memoryText = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     memoryText:SetPoint("RIGHT", titleBar, "RIGHT", -80, 0)
     memoryText:SetTextColor(0.7, 0.7, 0.7)
 
@@ -254,7 +254,7 @@ local function BuildDisplayFrame()
     end)
 
     -- Pause/Resume button
-    pauseBtn = CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate")
+    pauseBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate"))
     pauseBtn:SetSize(60, 20)
     pauseBtn:SetPoint("RIGHT", memoryText, "LEFT", -8, 0)
     pauseBtn:SetText("Pause")
@@ -288,7 +288,7 @@ local function BuildDisplayFrame()
 
     local xOff = 0
     local function MakeHeader(text, width)
-        local fs = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local fs = headerFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         fs:SetPoint("LEFT", headerFrame, "LEFT", xOff, 0)
         fs:SetWidth(width)
         fs:SetJustifyH("LEFT")
@@ -320,7 +320,7 @@ local function BuildDisplayFrame()
 
         local cx = 0
         local function MakeCell(width)
-            local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            local fs = row:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
             fs:SetPoint("LEFT", row, "LEFT", cx, 0)
             fs:SetWidth(width)
             fs:SetJustifyH("LEFT")

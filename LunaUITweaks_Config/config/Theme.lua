@@ -20,7 +20,7 @@ function Theme.Card(panel, title, x, y, width, height)
     bg:SetPoint("TOPLEFT", x, y)
     bg:SetSize(width, height)
     bg:SetColorTexture(.09, .115, .14, 1)
-    local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local heading = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     heading:SetPoint("TOPLEFT", x + 12, y - 12)
     heading:SetText(title)
     heading:SetTextColor(.35, .9, .76)
@@ -76,16 +76,8 @@ function Theme.SkinTree(root)
         root:SetTextColor(.9, .94, .97)
     elseif kind == "Button" and root:GetNormalFontObject() and not root.selectionMark then
         -- Only text buttons: preserve icon buttons, color swatches and list rows.
-        for _, getter in ipairs({"GetNormalTexture", "GetPushedTexture", "GetDisabledTexture"}) do
-            local texture = root[getter](root)
-            if texture then texture:SetAlpha(0) end
-        end
-        for _, key in ipairs({"Left", "Middle", "Right"}) do
-            if root[key] and root[key].SetAlpha then root[key]:SetAlpha(0) end
-        end
-        Surface(root, .11, .16, .19)
-        root:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
-        root:GetHighlightTexture():SetVertexColor(.35, .9, .76, .17)
+        -- Same flat style as Luna's runtime buttons (utils/Style.lua).
+        addon.Style.Button(root)
     elseif kind == "Slider" then
         local thumb = root:GetThumbTexture()
         if thumb then
@@ -111,7 +103,7 @@ end
 
 function Theme.Window(window)
     Surface(window, .055, .075, .095)
-    local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = window:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     title:SetPoint("TOPLEFT", 20, -17)
     title:SetText("LUNA  /  SETTINGS")
     title:SetTextColor(.45, .95, .8)

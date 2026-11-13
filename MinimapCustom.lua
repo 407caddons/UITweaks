@@ -368,7 +368,7 @@ local function SetupMinimap()
         zoneFrame:SetClampedToScreen(true)
 
         zoneText = zoneFrame:CreateFontString(nil, "OVERLAY")
-        zoneText:SetFont(settings.minimapZoneFont or "Fonts\\FRIZQT__.TTF", settings.minimapZoneFontSize or 12, "OUTLINE")
+        zoneText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapZoneFontSize or 12, "OUTLINE")
         local zc = settings.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
         zoneText:SetTextColor(zc.r, zc.g, zc.b)
         zoneText:SetShadowOffset(1, -1)
@@ -435,7 +435,7 @@ local function SetupMinimap()
         clockFrame:SetClampedToScreen(true)
 
         clockText = clockFrame:CreateFontString(nil, "OVERLAY")
-        clockText:SetFont(settings.minimapClockFont or "Fonts\\FRIZQT__.TTF", settings.minimapClockFontSize or 11,
+        clockText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapClockFontSize or 11,
             "OUTLINE")
         local cc = settings.minimapClockFontColor or { r = 1, g = 1, b = 1 }
         clockText:SetTextColor(cc.r, cc.g, cc.b)
@@ -488,7 +488,7 @@ local function SetupMinimap()
         coordsFrame:SetClampedToScreen(true)
 
         coordsText = coordsFrame:CreateFontString(nil, "OVERLAY")
-        coordsText:SetFont(settings.minimapCoordsFont or "Fonts\\FRIZQT__.TTF", settings.minimapCoordsFontSize or 11, "OUTLINE")
+        coordsText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapCoordsFontSize or 11, "OUTLINE")
         local crc = settings.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
         coordsText:SetTextColor(crc.r, crc.g, crc.b)
         coordsText:SetShadowOffset(1, -1)
@@ -663,7 +663,7 @@ end
 function MinimapCustom.UpdateZoneText()
     if not zoneText then return end
     local settings = UIThingsDB.minimap
-    zoneText:SetFont(settings.minimapZoneFont or "Fonts\\FRIZQT__.TTF", settings.minimapZoneFontSize or 12, "OUTLINE")
+    zoneText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapZoneFontSize or 12, "OUTLINE")
     local zc = settings.minimapZoneFontColor or { r = 1, g = 1, b = 1 }
     zoneText:SetTextColor(zc.r, zc.g, zc.b)
     if minimapFrame and minimapFrame.zoneFrame then
@@ -686,7 +686,7 @@ end
 function MinimapCustom.UpdateClockText()
     if not clockText then return end
     local settings = UIThingsDB.minimap
-    clockText:SetFont(settings.minimapClockFont or "Fonts\\FRIZQT__.TTF", settings.minimapClockFontSize or 11, "OUTLINE")
+    clockText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapClockFontSize or 11, "OUTLINE")
     local cc = settings.minimapClockFontColor or { r = 1, g = 1, b = 1 }
     clockText:SetTextColor(cc.r, cc.g, cc.b)
     if minimapFrame and minimapFrame.clockFrame then
@@ -719,7 +719,7 @@ end
 function MinimapCustom.UpdateCoordsText()
     if not coordsText then return end
     local settings = UIThingsDB.minimap
-    coordsText:SetFont(settings.minimapCoordsFont or "Fonts\\FRIZQT__.TTF", settings.minimapCoordsFontSize or 11, "OUTLINE")
+    coordsText:SetFont(LunaUITweaksAPI.Style.Font(), settings.minimapCoordsFontSize or 11, "OUTLINE")
     local crc = settings.minimapCoordsFontColor or { r = 1, g = 1, b = 1 }
     coordsText:SetTextColor(crc.r, crc.g, crc.b)
     if minimapFrame and minimapFrame.coordsFrame then
@@ -1162,7 +1162,7 @@ local function SetupDrawer()
         })
         drawerToggleBtn:SetBackdropColor(tbg.r, tbg.g, tbg.b, tbg.a or 0.7)
 
-        local toggleText = drawerToggleBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local toggleText = drawerToggleBtn:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
         toggleText:SetPoint("CENTER")
         toggleText:SetText(">")
         drawerToggleBtn.text = toggleText

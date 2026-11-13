@@ -26,13 +26,13 @@ function Bags.SetSearchText(value)
     Bags.UpdateSearch()
 end
 local function Text(parent, text, x, y, template)
-    local label = parent:CreateFontString(nil, "OVERLAY", template or "GameFontNormal")
+    local label = parent:CreateFontString(nil, "OVERLAY", template or "LunaFontNormal")
     label:SetPoint("TOPLEFT", x, y)
     label:SetText(text)
     return label
 end
 local function Button(parent, text, x, y, width, callback)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    local button = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"))
     button:SetPoint("TOPLEFT", x, y)
     button:SetSize(width, 24)
     button:SetText(text)
@@ -43,7 +43,7 @@ end
 -- SecureActionButtonTemplate, so Blizzard's bank state is never written by
 -- addon code (an addon-set bank tab taints right-click withdraw/deposit).
 local function ProxyButton(parent, text, x, y, width, postClick)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate,SecureActionButtonTemplate")
+    local button = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate,SecureActionButtonTemplate"))
     button:SetPoint("TOPLEFT", x, y)
     button:SetSize(width, 24)
     button:SetText(text)
@@ -98,7 +98,7 @@ local function CreateBagSlots(view)
         button.bagID = bag
         button.icon = button:CreateTexture(nil, "ARTWORK")
         button.icon:SetAllPoints()
-        button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        button.count = button:CreateFontString(nil, "OVERLAY", "LunaFontNumberSmall")
         button.count:SetPoint("BOTTOMRIGHT", -1, 1)
         button.border = button:CreateTexture(nil, "BACKGROUND")
         button.border:SetPoint("TOPLEFT", -1, 1)
@@ -182,9 +182,9 @@ local function NewView(name, parent, isBank)
     view:EnableMouse(true)
     view:SetClampedToScreen(true)
     view:Hide()
-    view.title = Text(view, isBank and "Luna Bags — Bank" or "Luna Bags", 14, -12, "GameFontNormalLarge")
-    local close = CreateFrame("Button", not isBank and "LunaUITweaks_BagsSecureClose" or nil, view,
-        isBank and "UIPanelCloseButton,SecureActionButtonTemplate" or "UIPanelButtonTemplate,SecureHandlerClickTemplate")
+    view.title = Text(view, isBank and "Luna Bags — Bank" or "Luna Bags", 14, -12, "LunaFontNormalLarge")
+    local close = LunaUITweaksAPI.Style.Button(CreateFrame("Button", not isBank and "LunaUITweaks_BagsSecureClose" or nil, view,
+        isBank and "UIPanelCloseButton,SecureActionButtonTemplate" or "UIPanelButtonTemplate,SecureHandlerClickTemplate"))
     view.close = close
     close:SetPoint("TOPRIGHT", -2, -2)
     if isBank then
@@ -206,7 +206,7 @@ local function NewView(name, parent, isBank)
         view:SetAttribute("_onhide", [[self:ClearBindings()]])
         view:HookScript("OnHide", function() Bags.pendingInventoryShown = nil end)
     end
-    view.status = Text(view, "", 14, isBank and -73 or -40, "GameFontHighlightSmall")
+    view.status = Text(view, "", 14, isBank and -73 or -40, "LunaFontHighlightSmall")
     view.scroll = CreateFrame("ScrollFrame", nil, view, "UIPanelScrollFrameTemplate")
     view.scroll:SetPoint("TOPLEFT", 14, isBank and -96 or -63)
     view.scroll:SetPoint("BOTTOMRIGHT", -32, 40)
@@ -217,7 +217,7 @@ local function NewView(name, parent, isBank)
     view.buttons = {}
     view.slotButtons = {}
     view.headings = {}
-    view.footer = Text(view, "", 14, 0, "GameFontHighlightSmall")
+    view.footer = Text(view, "", 14, 0, "LunaFontHighlightSmall")
     view.footer:ClearAllPoints()
     view.footer:SetPoint("BOTTOMLEFT", 14, 14)
     if not isBank then
@@ -228,7 +228,7 @@ local function NewView(name, parent, isBank)
         search:SetPoint("TOPLEFT", 160, -9)
         search:SetAutoFocus(false)
         search:SetMaxLetters(120)
-        local hint = Text(search, "Search items...", 4, -5, "GameFontDisableSmall")
+        local hint = Text(search, "Search items...", 4, -5, "LunaFontDisableSmall")
         search:SetScript("OnTextChanged", function(self)
             hint:SetShown(self:GetText() == "")
             Bags.SetSearchText(self:GetText())
@@ -241,6 +241,23 @@ local function NewView(name, parent, isBank)
             self:ClearFocus()
         end)
         search:SetScript("OnHide", function(self) self:ClearFocus() end)
+        -- Blizzard's own sort: merges partial stacks and tidies the bags.
+        local combine = Button(view, "Combine", 386, -8, 70, function()
+            if InCombatLockdown() then return end
+            local sort = C_Container and C_Container.SortBags or SortBags
+            if sort then
+                if Bags.BeginSort then Bags.BeginSort() end
+                sort()
+            end
+        end)
+        combine:SetHeight(23)
+        combine:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText("Combine stacks")
+            GameTooltip:AddLine("Merges partial stacks and sorts your bags (Blizzard's sort).", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        combine:SetScript("OnLeave", GameTooltip_Hide)
         view:SetMovable(true)
         view:RegisterForDrag("LeftButton")
         view:SetScript("OnDragStart", function(self) if not InCombatLockdown() then self:StartMoving() end end)
@@ -378,6 +395,22 @@ local function SlotButton(view, index, entry, aggregate)
             button:SetBagID(entry.bag)
             button:SetID(entry.slot)
             view.slotButtons[key] = button
+            if inventory then
+                -- Post-hooks only (OnClick stays Blizzard's): Alt+right-click removes
+                -- a Favorites/Vendor assignment.
+                button:HookScript("PostClick", function(self, mouse)
+                    if mouse ~= "RightButton" or not IsAltKeyDown() or InCombatLockdown() then return end
+                    if Bags.MarkOf(self:GetBagID(), self:GetID()) and Bags.SetMark(self:GetBagID(), self:GetID(), nil) then
+                        Bags.QueueRefresh()
+                    end
+                end)
+                button:HookScript("OnEnter", function(self)
+                    local mark = Bags.MarkOf(self:GetBagID(), self:GetID())
+                    if not mark or not GameTooltip:IsOwned(self) then return end
+                    GameTooltip:AddLine("Alt+right-click: remove from " .. (mark == "favorite" and "Favorites" or "Vendor"), .35, .9, .76)
+                    GameTooltip:Show()
+                end)
+            end
         end
     end
     view.buttons[index] = button
@@ -412,8 +445,8 @@ local function Populate(button, entry)
     local info = entry.info
     local level = Bags.GearItemLevel(info)
     if level and not button.itemLevel then
-        button.itemLevel = button:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-        button.itemLevel:SetFont(STANDARD_TEXT_FONT, 9, "OUTLINE")
+        button.itemLevel = button:CreateFontString(nil, "OVERLAY", "LunaFontNumberSmall")
+        button.itemLevel:SetFont(LunaUITweaksAPI.Style.Font(), 9, "OUTLINE")
         button.itemLevel:SetPoint("BOTTOMRIGHT", -2, 2)
     end
     if button.itemLevel then
@@ -453,6 +486,49 @@ local function Populate(button, entry)
     button:Show()
     ApplySearch(button)
 end
+-- "+" tile at the end of Favorites / Vendor: drop (or click with) an item to assign it.
+local DROP_HINT = {
+    favorite = { "Favorites", "Drag an item here to keep it in Favorites." },
+    vendor = { "Vendor", "Drag an item here to sell it with your greys at the next vendor." },
+}
+local function DropTile(view, kind)
+    view.dropTiles = view.dropTiles or {}
+    local tile = view.dropTiles[kind]
+    if tile then return tile end
+    tile = CreateFrame("Button", nil, view.content)
+    tile:SetSize(SIZE, SIZE)
+    tile:SetFrameLevel(view.content:GetFrameLevel() + 1)
+    local fill = tile:CreateTexture(nil, "BACKGROUND")
+    fill:SetAllPoints()
+    fill:SetColorTexture(.11, .16, .19, 1)
+    for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+        { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+        local line = tile:CreateTexture(nil, "BORDER")
+        line:SetColorTexture(.19, .25, .29, 1)
+        line:SetPoint(edge[1])
+        line:SetPoint(edge[2])
+        if edge[3] then line:SetHeight(1) else line:SetWidth(1) end
+    end
+    local plus = tile:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
+    plus:SetPoint("CENTER")
+    plus:SetText("+")
+    plus:SetTextColor(.35, .9, .76)
+    tile:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
+    tile:GetHighlightTexture():SetVertexColor(.35, .9, .76, .17)
+    tile:RegisterForClicks("LeftButtonUp")
+    tile:SetScript("OnReceiveDrag", function() Bags.AssignCursorItem(kind) end)
+    tile:SetScript("OnClick", function() Bags.AssignCursorItem(kind) end)
+    tile:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(DROP_HINT[kind][1])
+        GameTooltip:AddLine(DROP_HINT[kind][2], 1, 1, 1, true)
+        GameTooltip:AddLine("Alt+right-click an item in this section to remove it.", .7, .7, .7, true)
+        GameTooltip:Show()
+    end)
+    tile:SetScript("OnLeave", GameTooltip_Hide)
+    view.dropTiles[kind] = tile
+    return tile
+end
 function Bags.Render(view, ids, available)
     if not view or not view:IsShown() then return end
     if InCombatLockdown() then
@@ -467,8 +543,9 @@ function Bags.Render(view, ids, available)
     local index, heading, y = 0, 0, 0
     local used = {}
     view.buttons = {}
-    local function Section(name, items, aggregate)
-        if #items == 0 then return end
+    local usedTiles = {}
+    local function Section(name, items, aggregate, dropKind)
+        if #items == 0 and not dropKind then return end
         heading = heading + 1
         local label = view.headings[heading]
         if not label then
@@ -488,16 +565,28 @@ function Bags.Render(view, ids, available)
             button:SetPoint("TOPLEFT", ((i - 1) % COLUMNS) * STEP, -y - math.floor((i - 1) / COLUMNS) * STEP)
             Populate(button, entry)
         end
-        y = y + math.ceil(#items / COLUMNS) * STEP + 12
+        local count = #items
+        if dropKind then
+            local tile = DropTile(view, dropKind)
+            tile:ClearAllPoints()
+            tile:SetPoint("TOPLEFT", (count % COLUMNS) * STEP, -y - math.floor(count / COLUMNS) * STEP)
+            tile:Show()
+            usedTiles[tile] = true
+            count = count + 1
+        end
+        y = y + math.ceil(count / COLUMNS) * STEP + 12
     end
-    for _, category in ipairs(Bags.categories) do Section(category.name, scan[category.key]) end
+    for _, category in ipairs(Bags.categories) do
+        -- Drop sections (with their "+") exist only in the bags, not the bank.
+        Section(category.name, scan[category.key], nil, view == Bags.inventory and category.dropKind or nil)
+    end
     if #scan.empty > 0 then
         Section("Free Space", {scan.empty[1]}, true)
         -- One tile represents every free slot, with a visible count even when only one remains.
         local button = view.buttons[index]
         button.freeSpaceIDs = ids
         if not button.freeCount then
-            button.freeCount = Text(button, "", 0, 0, "GameFontHighlightSmall")
+            button.freeCount = Text(button, "", 0, 0, "LunaFontHighlightSmall")
             button.freeCount:ClearAllPoints()
             button.freeCount:SetPoint("BOTTOMRIGHT", -2, 2)
         end
@@ -507,6 +596,7 @@ function Bags.Render(view, ids, available)
     end
     for _, button in pairs(view.slotButtons) do if not used[button] then button:Hide() end end
     if view.freeButton and not used[view.freeButton] then view.freeButton:Hide() end
+    for _, tile in pairs(view.dropTiles or {}) do if not usedTiles[tile] then tile:Hide() end end
     for i = heading + 1, #view.headings do view.headings[i]:Hide() end
     view.content:SetHeight(math.max(y, 1))
     view.scroll:SetVerticalScroll(math.min(view.scroll:GetVerticalScroll(), math.max(0, y - view.scroll:GetHeight())))

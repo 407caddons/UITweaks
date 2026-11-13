@@ -73,6 +73,11 @@ function Colors.State(unit)
     local attackable, player = UnitCanAttack("player", unit), UnitIsPlayer(unit)
     if not Public(attackable) or not Public(player) then return end
     if not attackable or player then return end
+    -- Tagged by someone else (exclusive tags, e.g. Forever): grey, whatever the threat.
+    if UnitIsTapDenied then
+        local tapped = UnitIsTapDenied(unit)
+        if Public(tapped) and tapped then return "tapped" end
+    end
     local combat = UnitAffectingCombat(unit)
     if not Public(combat) then return end
     if not combat then return "idle" end
@@ -96,6 +101,7 @@ function Colors.State(unit)
 end
 
 local hooked = false
+local TAPPED_COLOR = { r = 0.55, g = 0.55, b = 0.55 }
 -- Keep native colours in our own table. Values may be secret: store and pass
 -- them directly to the status bar, never inspect or compare the components.
 local nativeColors = setmetatable({}, {__mode = "k"})
@@ -115,7 +121,7 @@ local function Apply(frame, unit)
     if not native or native.unit ~= unit then return end
     local db = UIThingsDB and UIThingsDB.nameplateColors
     local key = db and db.enabled and Colors.State(unit)
-    local color = key and db[key]
+    local color = key and (db[key] or (key == "tapped" and TAPPED_COLOR))
     if color then
         frame.healthBar:SetStatusBarColor(color.r, color.g, color.b)
         native.applied = true

@@ -12,7 +12,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 0)
 
     local child = CreateFrame("Frame", nil, scrollFrame)
-    child:SetSize(620, 1140)
+    child:SetSize(620, 940)
     scrollFrame:SetScrollChild(child)
 
     scrollFrame:SetScript("OnShow", function()
@@ -20,7 +20,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     end)
 
     -- Panel Title
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("M+ Timer")
 
@@ -49,17 +49,9 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     Helpers.CreateSectionHeader(child, "Appearance", -90)
 
     -- Row 1: Font Dropdown (left) | Timer Font Size Slider (right)
-    Helpers.CreateFontDropdown(child, "UIThingsMplusTimerFontDropdown", "Font",
-        UIThingsDB.mplusTimer.font,
-        function(fontPath)
-            UIThingsDB.mplusTimer.font = fontPath
-            if addonTable.MplusTimer and addonTable.MplusTimer.UpdateSettings then
-                addonTable.MplusTimer.UpdateSettings()
-            end
-        end,
-        20, -115)
+    Helpers.CreateGlobalFontNote(child, 20, -115)
 
-    local timerFontLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local timerFontLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     timerFontLabel:SetPoint("TOPLEFT", 300, -115)
     timerFontLabel:SetText("Timer Font Size")
 
@@ -84,7 +76,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     end)
 
     -- Row 2: General Font Size (left) | Bar Height (right)
-    local fontSizeLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local fontSizeLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     fontSizeLabel:SetPoint("TOPLEFT", 20, -185)
     fontSizeLabel:SetText("General Font Size")
 
@@ -108,7 +100,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
         end
     end)
 
-    local barHeightLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local barHeightLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     barHeightLabel:SetPoint("TOPLEFT", 300, -185)
     barHeightLabel:SetText("Bar Height")
 
@@ -133,7 +125,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     end)
 
     -- Row 3: Bar Width (left) | Colors (right)
-    local barWidthLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local barWidthLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     barWidthLabel:SetPoint("TOPLEFT", 20, -245)
     barWidthLabel:SetText("Bar Width")
 
@@ -309,7 +301,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
         UIThingsDB.mplusTimer.autoSlotKeystone = not not self:GetChecked()
     end)
 
-    local autoSlotHelp = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local autoSlotHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     autoSlotHelp:SetPoint("TOPLEFT", 60, -770)
     autoSlotHelp:SetWidth(500)
     autoSlotHelp:SetJustifyH("LEFT")
@@ -328,51 +320,16 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
     AutomationCheck("UIThingsMplusTimerRerollTts", "rerollTts", "Speak the reroll reminder (text to speech)", -820)
 
     -- ============================================================
-    -- Xal'atath's Bargain Section
-    -- ============================================================
-    Helpers.CreateSectionHeader(child, "Xal'atath's Bargain", -865)
-
-    local bargainStatus = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bargainStatus:SetPoint("TOPLEFT", 20, -1015)
-    bargainStatus:SetWidth(540)
-    bargainStatus:SetJustifyH("LEFT")
-    bargainStatus:SetTextColor(0.7, 0.7, 0.7)
-    local function UpdateBargain()
-        local Bargain = addonTable.MplusBargainTimer
-        if not Bargain then return end
-        Bargain.UpdateSettings()
-        bargainStatus:SetText("Counts in-combat time (about 60s per spawn) and pauses whenever nobody in the group is in combat. "
-            .. "Shown in the Encounter Bars; no timer at +12 and above. Status: " .. Bargain.GetStatus())
-    end
-    local function BargainCheck(name, key, text, y)
-        local btn = CreateFrame("CheckButton", name, child, "ChatConfigCheckButtonTemplate")
-        btn:SetPoint("TOPLEFT", 20, y)
-        _G[btn:GetName() .. "Text"]:SetText(text)
-        btn:SetChecked(UIThingsDB.mplusTimer[key])
-        btn:SetScript("OnClick", function(self)
-            UIThingsDB.mplusTimer[key] = not not self:GetChecked()
-            UpdateBargain()
-        end)
-    end
-    BargainCheck("UIThingsMplusBargainEnable", "bargainEnabled", "Show a timer for the active Xal'atath's Bargain affix (+5 to +11)", -895)
-    BargainCheck("UIThingsMplusBargainPaused", "bargainShowPaused", "Keep the bar visible (paused) out of combat", -920)
-    BargainCheck("UIThingsMplusBargainCountdown", "bargainCountdown", "Count down the last 5 seconds", -945)
-    BargainCheck("UIThingsMplusBargainSound", "bargainSound", "Play a warning sound when it fires", -970)
-    BargainCheck("UIThingsMplusBargainReport", "bargainReport", "Show a calibration report when the key ends (/lunabargain shows the last one)", -995)
-    child:HookScript("OnShow", UpdateBargain)
-    UpdateBargain()
-
-    -- ============================================================
     -- Position Section
     -- ============================================================
-    Helpers.CreateSectionHeader(child, "Position", -1065)
+    Helpers.CreateSectionHeader(child, "Position", -865)
 
-    Helpers.CreateLayoutModeHint(child, 20, -1100)
+    Helpers.CreateLayoutModeHint(child, 20, -900)
 
     -- Test / Demo Button
     local testBtn = CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     testBtn:SetSize(120, 26)
-    testBtn:SetPoint("TOPLEFT", 300, -1095)
+    testBtn:SetPoint("TOPLEFT", 300, -895)
     testBtn:SetText("Toggle Demo")
     testBtn:SetScript("OnClick", function()
         if addonTable.MplusTimer and addonTable.MplusTimer.ToggleDemo then
@@ -380,7 +337,7 @@ function addonTable.ConfigSetup.MplusTimer(panel, tab, configWindow)
         end
     end)
 
-    local testHelp = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local testHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     testHelp:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
     testHelp:SetText("Show a demo timer with mock data for positioning")
     testHelp:SetTextColor(0.7, 0.7, 0.7)

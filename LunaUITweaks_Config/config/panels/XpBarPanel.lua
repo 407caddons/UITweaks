@@ -25,7 +25,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     end
 
     -- Title
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("XP Bar")
 
@@ -71,7 +71,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     -------------------------------------------------------------
     Helpers.CreateSectionHeader(child, "Size", -158)
 
-    local widthLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local widthLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     widthLabel:SetPoint("TOPLEFT", 20, -188)
     widthLabel:SetText("Width:")
 
@@ -92,7 +92,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
         UpdateXpBar()
     end)
 
-    local heightLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local heightLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     heightLabel:SetPoint("TOPLEFT", 20, -228)
     heightLabel:SetText("Height:")
 
@@ -157,15 +157,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
         UpdateXpBar()
     end)
 
-    Helpers.CreateFontDropdown(
-        child, "UIThingsXpBarFontDropdown", "Font:",
-        UIThingsDB.xpBar.font,
-        function(fontPath)
-            UIThingsDB.xpBar.font = fontPath
-            UpdateXpBar()
-        end,
-        20, -393
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -393)
 
     local fontSizeSlider = CreateFrame("Slider", "UIThingsXpBarFontSizeSlider", child, "OptionsSliderTemplate")
     fontSizeSlider:SetPoint("TOPLEFT", 20, -463)
@@ -232,12 +224,12 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
     )
 
     -- XP bonus % for Warband Mentor / Midnight achievement bonuses
-    local bonusNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local bonusNote = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     bonusNote:SetPoint("TOPLEFT", 20, -638)
     bonusNote:SetTextColor(0.7, 0.7, 0.7, 1)
     bonusNote:SetText("XP Bonus % — add your Warband Mentor or Midnight achievement bonus here\nif it is not already reflected in the quest log reward values (default 0).")
 
-    local bonusLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local bonusLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     bonusLabel:SetPoint("TOPLEFT", 20, -680)
     bonusLabel:SetText("XP Bonus %:")
 
@@ -286,7 +278,7 @@ function addonTable.ConfigSetup.XpBar(panel, tab, configWindow)
         UpdateXpBar()
     end)
 
-    local repNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local repNote = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     repNote:SetPoint("TOPLEFT", 20, -832)
     repNote:SetTextColor(0.7, 0.7, 0.7, 1)
     repNote:SetText("Watch a faction via the in-game Reputation panel (eye icon) to display it here.")

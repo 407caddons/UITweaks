@@ -13,7 +13,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end
     UpdateNavColor()
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Notifications")
 
@@ -32,7 +32,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
 
     panel = scrollChild
 
-    local noteLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local noteLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     noteLabel:SetPoint("TOPLEFT", 20, -5)
     noteLabel:SetWidth(560)
     noteLabel:SetJustifyH("LEFT")
@@ -79,7 +79,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Alert Color Picker
-    local colorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local colorLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     colorLabel:SetPoint("TOPLEFT", 40, -135)
     colorLabel:SetText("Alert Color:")
 
@@ -132,7 +132,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- TTS Message
-    local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     ttsLabel:SetPoint("TOPLEFT", 40, -215)
     ttsLabel:SetText("TTS Message:")
 
@@ -159,7 +159,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- TTS Voice Dropdown
-    local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     voiceLabel:SetPoint("TOPLEFT", 40, -255)
     voiceLabel:SetText("Voice Type:")
 
@@ -221,7 +221,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Mail Alert Color Picker
-    local mailColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local mailColorLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     mailColorLabel:SetPoint("TOPLEFT", 40, -410)
     mailColorLabel:SetText("Alert Color:")
 
@@ -274,7 +274,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Mail TTS Message
-    local mailTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local mailTtsLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     mailTtsLabel:SetPoint("TOPLEFT", 40, -490)
     mailTtsLabel:SetText("TTS Message:")
 
@@ -301,7 +301,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Mail TTS Voice Dropdown
-    local mailVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local mailVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     mailVoiceLabel:SetPoint("TOPLEFT", 40, -530)
     mailVoiceLabel:SetText("Voice Type:")
 
@@ -346,7 +346,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Minimum Quality Dropdown
-    local boeQualLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local boeQualLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     boeQualLabel:SetPoint("TOPLEFT", 40, -650)
     boeQualLabel:SetText("Minimum Quality:")
 
@@ -394,7 +394,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- BoE Alert Color Picker
-    local boeColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local boeColorLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     boeColorLabel:SetPoint("TOPLEFT", 40, -740)
     boeColorLabel:SetText("Alert Color:")
 
@@ -474,7 +474,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Death TTS Message
-    local deathTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local deathTtsLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     deathTtsLabel:SetPoint("TOPLEFT", 40, -900)
     deathTtsLabel:SetText("TTS Message:")
 
@@ -501,13 +501,13 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Placeholder hint
-    local deathHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local deathHint = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     deathHint:SetPoint("TOPLEFT", 40, -928)
     deathHint:SetTextColor(0.5, 0.5, 0.5)
     deathHint:SetText("Placeholders: {name} = player name   {role} = Tank / Healer / DPS")
 
     -- Death TTS Voice Dropdown
-    local deathVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local deathVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     deathVoiceLabel:SetPoint("TOPLEFT", 40, -960)
     deathVoiceLabel:SetText("Voice Type:")
 
@@ -586,7 +586,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Whisper Alert Color Picker
-    local whisperColorLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local whisperColorLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     whisperColorLabel:SetPoint("TOPLEFT", 40, -1160)
     whisperColorLabel:SetText("Alert Color:")
 
@@ -639,7 +639,7 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Whisper TTS Message
-    local whisperTtsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local whisperTtsLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     whisperTtsLabel:SetPoint("TOPLEFT", 40, -1240)
     whisperTtsLabel:SetText("TTS Message:")
 
@@ -666,13 +666,13 @@ function addonTable.ConfigSetup.Notifications(panel, navButton, configWindow)
     end)
 
     -- Placeholder hint
-    local whisperHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local whisperHint = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     whisperHint:SetPoint("TOPLEFT", 40, -1268)
     whisperHint:SetTextColor(0.5, 0.5, 0.5)
     whisperHint:SetText("Placeholder: {name} = whisperer's name")
 
     -- Whisper TTS Voice Dropdown
-    local whisperVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local whisperVoiceLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     whisperVoiceLabel:SetPoint("TOPLEFT", 40, -1300)
     whisperVoiceLabel:SetText("Voice Type:")
 

@@ -10,7 +10,8 @@ local function Tick(self)
         self:Hide()
         return
     end
-    local hidden = IsMouselooking and IsMouselooking() or false
+    -- Stays visible while clicking/mouse-looking (it holds the spot the cursor was left).
+    local hidden = false
     if hidden ~= lastHidden then
         texture:SetShown(not hidden)
         lastHidden = hidden

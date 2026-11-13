@@ -442,7 +442,7 @@ local function LayoutOpponentPanels()
                     contBg:SetAllPoints()
                     contBg:SetColorTexture(0.06, 0.06, 0.08, 0.97)
 
-                    local nameLabel = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                    local nameLabel = container:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                     nameLabel:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -2)
                     nameLabel:SetWidth(OPP_W)
                     nameLabel:SetJustifyH("LEFT")
@@ -674,11 +674,11 @@ local function OnGameInvite(senderShort, payload, senderFull)
     f:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
     MP.promptFrame = f
 
-    local label = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = f:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     label:SetPoint("TOP", 0, -12)
     label:SetText(senderShort .. " invites you to play Block Game!\nAuto-declines in 5s.")
 
-    local timerLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local timerLabel = f:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     timerLabel:SetPoint("TOP", 0, -38)
     timerLabel:SetTextColor(0.7, 0.7, 0.7)
     timerLabel:SetText("")
@@ -707,13 +707,13 @@ local function OnGameInvite(senderShort, payload, senderFull)
         end
     end
 
-    local acceptBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local acceptBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     acceptBtn:SetSize(100, 22)
     acceptBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 15, 10)
     acceptBtn:SetText("Accept")
     acceptBtn:SetScript("OnClick", AcceptInvite)
 
-    local declineBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local declineBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     declineBtn:SetSize(100, 22)
     declineBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -15, 10)
     declineBtn:SetText("Decline")
@@ -1251,7 +1251,7 @@ BuildUI = function()
     titleBarBg:SetAllPoints()
     titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 
-    local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     title:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
     title:SetText("|cFFFFD100Block Game|r  |cFF888888drag title to move|r")
 
@@ -1296,7 +1296,7 @@ BuildUI = function()
     local sideTopY = PADDING + 30
 
     -- Preview label
-    local previewLabel = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local previewLabel = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     previewLabel:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -sideTopY)
     previewLabel:SetText("Next")
 
@@ -1324,28 +1324,28 @@ BuildUI = function()
     -- HUD text
     local hudY = sideTopY + 16 + PREVIEW_CELL * 4 + 12
 
-    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     scoreText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -hudY)
     scoreText:SetJustifyH("LEFT")
     scoreText:SetText("Score\n0")
 
-    levelText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    levelText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     levelText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(hudY + 40))
     levelText:SetJustifyH("LEFT")
     levelText:SetText("Level\n0")
 
-    linesText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    linesText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     linesText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(hudY + 80))
     linesText:SetJustifyH("LEFT")
     linesText:SetText("Lines\n0")
 
-    highScoreText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    highScoreText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     highScoreText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(hudY + 120))
     highScoreText:SetJustifyH("LEFT")
     highScoreText:SetText("Best\n0")
 
     -- Status text (multiplayer messages)
-    MP.statusText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    MP.statusText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     MP.statusText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(hudY + 165))
     MP.statusText:SetWidth(SIDE_W - 4)
     MP.statusText:SetJustifyH("LEFT")
@@ -1353,7 +1353,7 @@ BuildUI = function()
     MP.statusText:Hide()
 
     -- Multiplayer button (shown only when party members have addon)
-    multiBtn = CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate")
+    multiBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate"))
     multiBtn:SetSize(SIDE_W - 4, 24)
     multiBtn:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -(hudY + 200))
     multiBtn:SetText("Multiplayer")
@@ -1385,14 +1385,14 @@ BuildUI = function()
     for i, entry in ipairs(BINDS) do
         local rowY = bindBaseY + (#BINDS - i) * BIND_ROW_H
 
-        local lbl = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local lbl = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         lbl:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, rowY)
         lbl:SetWidth(BIND_W)
         lbl:SetJustifyH("LEFT")
         lbl:SetTextColor(0.6, 0.6, 0.6)
         lbl:SetText(entry.label)
 
-        local key = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local key = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         key:SetPoint("BOTTOMRIGHT", gameFrame, "BOTTOMLEFT", sideX + BIND_W, rowY)
         key:SetWidth(BIND_W)
         key:SetJustifyH("RIGHT")
@@ -1415,7 +1415,7 @@ BuildUI = function()
     gameFrame:HookScript("OnShow", RefreshBindings)
 
     local function MakeBtn(label, col, row, onClick)
-        local btn = CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate")
+        local btn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate"))
         btn:SetSize(BTN_W, BTN_H)
         -- row 1 = bottom row, row 4 = top row (building upward from bottom)
         local bx = sideX + (col - 1) * (BTN_W + BTN_GAP)
@@ -1446,7 +1446,7 @@ BuildUI = function()
     local pauseBg = pauseText:CreateTexture(nil, "ARTWORK")
     pauseBg:SetAllPoints()
     pauseBg:SetColorTexture(0, 0, 0, 0.7)
-    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local pauseLabel = pauseText:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     pauseLabel:SetPoint("CENTER", pauseText, "CENTER", 0, 0)
     pauseLabel:SetText("|cFFFFD100PAUSED|r")
     pauseText:Hide()
@@ -1459,15 +1459,15 @@ BuildUI = function()
     goBg:SetAllPoints()
     goBg:SetColorTexture(0, 0, 0, 0.7)
 
-    gameOverFrame.titleText = gameOverFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    gameOverFrame.titleText = gameOverFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     gameOverFrame.titleText:SetPoint("CENTER", gameOverFrame, "CENTER", 0, 30)
     gameOverFrame.titleText:SetText("|cFFFF2020GAME OVER|r")
 
-    gameOverFrame.scoreText = gameOverFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    gameOverFrame.scoreText = gameOverFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     gameOverFrame.scoreText:SetPoint("CENTER", gameOverFrame, "CENTER", 0, -5)
     gameOverFrame.scoreText:SetJustifyH("CENTER")
 
-    local goBtn = CreateFrame("Button", nil, gameOverFrame, "UIPanelButtonTemplate")
+    local goBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameOverFrame, "UIPanelButtonTemplate"))
     goBtn:SetSize(100, 26)
     goBtn:SetPoint("CENTER", gameOverFrame, "CENTER", 0, -40)
     goBtn:SetText("Play Again")

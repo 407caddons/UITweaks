@@ -401,7 +401,7 @@ BuildUI = function()
     titleBarBg:SetAllPoints()
     titleBarBg:SetColorTexture(0.12, 0.12, 0.16, 1)
 
-    local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     title:SetPoint("LEFT", titleBar, "LEFT", 8, 0)
     title:SetText("|cFF00FFFFGems|r  |cFF888888drag title to move|r")
 
@@ -434,12 +434,12 @@ BuildUI = function()
     local sideX = BOARD_W + PADDING * 2
     local sideTopY = PADDING + 30
 
-    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    scoreText = gameFrame:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     scoreText:SetPoint("TOPLEFT", gameFrame, "TOPLEFT", sideX, -sideTopY)
     scoreText:SetJustifyH("LEFT")
     scoreText:SetText("Score\n0")
 
-    local newGameBtn = CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate")
+    local newGameBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, gameFrame, "UIPanelButtonTemplate"))
     newGameBtn:SetSize(SIDE_W - 4, 26)
     newGameBtn:SetPoint("BOTTOMLEFT", gameFrame, "BOTTOMLEFT", sideX, PADDING)
     newGameBtn:SetText("New Game")
@@ -452,7 +452,7 @@ BuildUI = function()
     local pauseOvBg = pauseOverlay:CreateTexture(nil, "ARTWORK")
     pauseOvBg:SetAllPoints()
     pauseOvBg:SetColorTexture(0, 0, 0, 0.7)
-    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local pauseOvText = pauseOverlay:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     pauseOvText:SetPoint("CENTER", pauseOverlay, "CENTER", 0, 0)
     pauseOvText:SetText("|cFFFFD100PAUSED|r")
     pauseOverlay:Hide()

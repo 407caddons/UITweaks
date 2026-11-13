@@ -70,7 +70,7 @@ All colors below are WoW RGB values in the range 0–1; surfaces are opaque unle
 | Input text | `.9, .94, .97` |
 | Button hover | `.35, .9, .76`, alpha `.17` |
 
-Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontNormalLarge` for the window title and shared section headers, `GameFontNormal` for card headings, and highlight/disabled small fonts for descriptions and hints. Prefer mint section headings and muted disabled navigation over the old gold/red navigation colors. Preserve semantic colors in content such as item quality, errors, and enabled/disabled ability rows.
+Use Luna's font objects (`LunaFontNormalHuge` etc., see `utils/Style.lua`; same sizes as the Blizzard `GameFont*` objects but in the global font): `LunaFontNormalHuge` for page titles, `LunaFontNormalLarge` for the window title and shared section headers, `LunaFontNormal` for card headings, and highlight/disabled small fonts for descriptions and hints. Prefer mint section headings and muted disabled navigation over the old gold/red navigation colors. Preserve semantic colors in content such as item quality, errors, and enabled/disabled ability rows.
 
 #### Window, navigation, and spacing
 
@@ -110,6 +110,7 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 | Loaders.lua | `Config` (proxy) | Load-on-demand stubs for the Config and Games companions, game key-binding globals |
 | SharedHelpers.lua | `ConfigHelpers` | Runtime-safe helpers shared by feature modules and the config addon |
 | ConfigHelpers.lua | `ConfigHelpers` | Shared config UI factories (section headers, reset buttons, color pickers, font dropdowns) |
+| utils/Style.lua | `Style` (also `LunaUITweaksAPI.Style`) | Global font (`UIThingsDB.general.font`, picker on General UI) and flat buttons. Use `LunaFont*` objects (copies of `GameFont*` with the global face) for Luna labels, `Style.Font()` as the face in `SetFont`, and wrap text buttons as `LunaUITweaksAPI.Style.Button(CreateFrame("Button", ..., "UIPanelButtonTemplate"))`. Per-module font pickers were removed; sizes stay per module |
 | utils/Secret.lua | `Secret` | Secret-value helpers (`IsPublic`, `SafeUnitName`, `SafeUnitGUID`, `CanAccessValue`, …); use these instead of local copies |
 | MplusData.lua | — | Static M+ dungeon data (mob force counts) for the M+ timer |
 | **Main addon — features** | | |
@@ -133,7 +134,6 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 | QuestReminder.lua | `QuestReminder` | Quest reminder notifications |
 | XpBar.lua | `XpBar` | Custom XP bar with rested/pending fills and rep bar at max level |
 | MplusTimer.lua | — | Mythic+ dungeon timer display |
-| MplusBargainTimer.lua | `MplusBargainTimer` | Xal'atath's Bargain affix timer (60s of group combat time, pauses out of combat), shown via EncounterBars; end-of-key calibration report (`/lunabargain`); settings `mplusTimer.bargain*` |
 | CustomEncounterTimers.lua | `CustomEncounterTimers` | User-defined encounter timers (first/interval, countdown, expiry sound) |
 | EncounterBars.lua | `EncounterBars` | Encounter timeline, pull and break timer bars |
 | Coordinates.lua | — | Map coordinates and waypoint list |
@@ -172,6 +172,7 @@ Use existing game font objects: `GameFontNormalHuge` for page titles, `GameFontN
 | **LunaUITweaks_Bags** | | |
 | Bags.lua, Model.lua, Views.lua | — | Categorized combined bags and banks (`/luitbags`) |
 | NewItems.lua, Deposit.lua, Config.lua | — | Session new-item tracking, Warband deposit, config panel |
+| Marks.lua | — | Favorites / Vendor sections: per-character, per-exact-item (GUID) marks set by dropping on a section's "+" tile (Alt+right-click removes); Vendor items sold with greys via `LunaUITweaksAPI.BagsSellVendorItems` (called from Vendor.lua) |
 | **LunaUITweaks_ActionBars** | | |
 | ActionBars.lua, Layout.lua, Appearance.lua, Settings.lua | — | Prototype square action bars with precise layout (`/luitbars`) |
 | Config.lua, Diagnostics.lua | — | Config panel and taint/state diagnostics report |

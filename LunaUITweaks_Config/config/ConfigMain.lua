@@ -364,7 +364,7 @@ function addonTable.Config.Initialize()
             btn:SetPoint("TOPLEFT", 0, -((i - 1) * BUTTON_HEIGHT))
 
             -- Visuals
-            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
             btn.Text = btn.text -- Compatibility with Helpers.UpdateModuleVisuals
             btn.text:SetPoint("LEFT", 6, 0)
             btn.text:SetText(mod.name)
@@ -389,7 +389,7 @@ function addonTable.Config.Initialize()
         search:SetSize(SIDEBAR_WIDTH - 40, 24)
         search:SetPoint("TOPLEFT", 20, -52)
         search:SetAutoFocus(false)
-        local hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        local hint = search:CreateFontString(nil, "OVERLAY", "LunaFontDisableSmall")
         hint:SetPoint("LEFT", 5, 0)
         hint:SetText("Find a settings page…")
         search:SetScript("OnTextChanged", function(self)

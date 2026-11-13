@@ -7,7 +7,7 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "questAuto")
     -- Panel Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Quest Automation")
 
@@ -67,7 +67,7 @@ function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
     end)
 
     -- Turn-in help text
-    local turnInHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local turnInHelp = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     turnInHelp:SetPoint("TOPLEFT", 60, -210)
     turnInHelp:SetWidth(500)
     turnInHelp:SetJustifyH("LEFT")
@@ -92,7 +92,7 @@ function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
     end)
 
     -- Gossip help text
-    local gossipHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local gossipHelp = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     gossipHelp:SetPoint("TOPLEFT", 60, -310)
     gossipHelp:SetWidth(500)
     gossipHelp:SetJustifyH("LEFT")
@@ -112,7 +112,7 @@ function addonTable.ConfigSetup.QuestAuto(panel, tab, configWindow)
         UIThingsDB.questAuto.shiftToPause = not not self:GetChecked()
     end)
 
-    local shiftHelp = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local shiftHelp = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     shiftHelp:SetPoint("TOPLEFT", 60, -410)
     shiftHelp:SetWidth(500)
     shiftHelp:SetJustifyH("LEFT")

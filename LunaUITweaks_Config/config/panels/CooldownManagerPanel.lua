@@ -3,7 +3,7 @@ addon.ConfigSetup = addon.ConfigSetup or {}
 local Manager, Helpers = addon.CooldownManager, addon.ConfigHelpers
 function addon.ConfigSetup.CooldownManager(panel, nav)
     Helpers.CreateResetButton(panel, "cooldownManager")
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Cooldown Manager")
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
@@ -14,7 +14,7 @@ function addon.ConfigSetup.CooldownManager(panel, nav)
     scroll:SetScrollChild(child)
     local function DB() return UIThingsDB.cooldownManager end
     local function Label(text, y)
-        local f = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local f = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         f:SetPoint("TOPLEFT", 24, y)
         f:SetWidth(565)
         f:SetJustifyH("LEFT")

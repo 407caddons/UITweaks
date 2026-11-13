@@ -11,6 +11,11 @@ local EventBus = addonTable.EventBus
 local Helpers  -- resolved lazily from the shared core helper table
 
 local DISENCHANT_SPELL_ID = 13262
+-- Forever mages: Comprehension deciphers class scrolls ("Requires Comprehension").
+-- Spell 1296017 "Comprehend Scroll"; the name is only a fallback lookup.
+local COMPREHEND_SPELL_ID = 1296017
+local COMPREHEND_NAMES = { "Comprehend Scroll" }
+local comprehendID
 
 -- Enum.ItemArmorSubclass: 1=Cloth 2=Leather 3=Mail 4=Plate
 local CLASS_ARMOR = {
@@ -34,10 +39,10 @@ local EQUIP_SLOTS = {
 }
 
 local mainFrame = nil
-local deButton  = nil
-local rowPool   = {}
-local items     = {}   -- { bag, slot, link, icon, ilvl, reason }
-local closedByUser  = false
+local deButton = nil
+local rowPool = {}
+local items = {}   -- { bag, slot, link, icon, ilvl, reason }
+local closedByUser = false
 local pendingRefresh = false
 local merchantOpen = false
 local RefreshList
@@ -47,7 +52,10 @@ local activeDisenchantCast
 
 local function SetDisenchantBusy(busy)
     disenchantBusy = busy
-    if InCombatLockdown() then pendingRefresh = true; return end
+    if InCombatLockdown() then
+        pendingRefresh = true
+        return
+    end
     if busy then
         if deButton then
             deButton:Disable()
@@ -71,7 +79,7 @@ end
 
 local function OnDisenchantClick(self, button)
     if button ~= "LeftButton" or disenchantBusy or InCombatLockdown() then return end
-    if not IsPlayerSpell(DISENCHANT_SPELL_ID) and not IsSpellKnown(DISENCHANT_SPELL_ID) then return end
+    if not Destroy.CanDestroy() then return end
     if not self:GetAttribute("macrotext1") or self:GetAttribute("macrotext1") == "" then return end
     SetDisenchantBusy(true)
     -- Failed attempts may never produce a cast event. Do not leave the UI stuck.
@@ -79,7 +87,7 @@ local function OnDisenchantClick(self, button)
 end
 
 local function OnDisenchantCast(event, unit, castGUID, spellID)
-    if unit ~= "player" or spellID ~= DISENCHANT_SPELL_ID then return end
+    if unit ~= "player" or (spellID ~= DISENCHANT_SPELL_ID and spellID ~= comprehendID) then return end
     if event == "UNIT_SPELLCAST_START" then
         busyGeneration = busyGeneration + 1
         activeDisenchantCast = castGUID
@@ -110,13 +118,37 @@ local function IsEnchanter()
     return IsPlayerSpell(DISENCHANT_SPELL_ID) or IsSpellKnown(DISENCHANT_SPELL_ID)
 end
 
+-- Spell ID of the Comprehension skill when this character knows it.
+local function ComprehendSpell()
+    if comprehendID and (IsPlayerSpell(comprehendID) or IsSpellKnown(comprehendID)) then return comprehendID end
+    comprehendID = nil
+    local _, classFile = UnitClass("player")
+    if classFile ~= "MAGE" or not C_Spell or not C_Spell.GetSpellInfo then return nil end
+    if IsPlayerSpell(COMPREHEND_SPELL_ID) or IsSpellKnown(COMPREHEND_SPELL_ID) then
+        comprehendID = COMPREHEND_SPELL_ID
+        return comprehendID
+    end
+    for _, name in ipairs(COMPREHEND_NAMES) do
+        local ok, info = pcall(C_Spell.GetSpellInfo, name)
+        local id = ok and type(info) == "table" and info.spellID
+        if id and (IsPlayerSpell(id) or IsSpellKnown(id)) then
+            comprehendID = id
+            return id
+        end
+    end
+end
+
+function Destroy.CanDestroy()
+    return IsEnchanter() or ComprehendSpell() ~= nil
+end
+
 local function IsVendorMode()
     return not IsEnchanter() and merchantOpen and MerchantFrame and MerchantFrame:IsShown()
 end
 
 local function SellItem(item)
     if InCombatLockdown() or not UIThingsDB.destroy.enabled or not IsVendorMode() or not item then return end
-    if IsItemExcluded(item.itemID) then return end
+    if item.scroll or IsItemExcluded(item.itemID) then return end
     local info = C_Container.GetContainerItemInfo(item.bag, item.slot)
     -- Revalidate the slot at click time; bag contents can change between updates.
     if not info or info.isLocked or info.hyperlink ~= item.link then return end
@@ -175,9 +207,27 @@ local function IsCraftedItem(bag, slot)
     return false
 end
 
+-- True for a scroll whose tooltip says "Requires Comprehension (n)".
+local function IsComprehensionScroll(bag, slot)
+    if not C_TooltipInfo or not C_TooltipInfo.GetBagItem then return false end
+    local tooltipData = C_TooltipInfo.GetBagItem(bag, slot)
+    local lines = tooltipData and tooltipData.lines
+    local Secret = addonTable.Secret
+    if not lines or (Secret and not Secret.CanAccessValue(lines)) then return false end
+    for _, line in ipairs(lines) do
+        local text = (not Secret or Secret.CanAccessValue(line)) and line.leftText
+        if text and (not Secret or Secret.CanAccessValue(text)) and type(text) == "string"
+            and text:find("Comprehension", 1, true) and MatchesFormatString(text, _G.ITEM_MIN_SKILL) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Returns reason string if the item should be listed, nil otherwise
 local function EvaluateItem(info, bag, slot)
     if not info or not info.hyperlink or info.isLocked then return nil end
+    if ComprehendSpell() and IsComprehensionScroll(bag, slot) then return "Scroll" end
     local quality = info.quality
     -- Only Uncommon..Epic gear can be disenchanted
     if not quality or quality < 2 or quality > 4 then return nil end
@@ -221,7 +271,7 @@ local function ScanBags()
             local info = C_Container.GetContainerItemInfo(bag, slot)
             local reason = EvaluateItem(info, bag, slot)
             if reason then
-                local ilvl = C_Item.GetDetailedItemLevelInfo(info.hyperlink)
+                local ilvl = C_Item.GetDetailedItemLevelInfo(info.hyperlink) or 0
                 local itemID = C_Item.GetItemInfoInstant(info.hyperlink)
                 local itemName = C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID)
                     or (C_Item.GetItemInfo or GetItemInfo)(info.hyperlink)
@@ -234,6 +284,7 @@ local function ScanBags()
                     quality = info.quality,
                     ilvl = ilvl,
                     reason = reason,
+                    scroll = reason == "Scroll",
                     excluded = IsItemExcluded(itemID),
                 })
             end
@@ -279,13 +330,13 @@ local function GetRow(index)
     row.icon:SetPoint("LEFT", 2, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    row.nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.nameFS = row:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     row.nameFS:SetPoint("LEFT", row.icon, "RIGHT", 5, 0)
     row.nameFS:SetPoint("RIGHT", row, "RIGHT", -70, 0)
     row.nameFS:SetJustifyH("LEFT")
     row.nameFS:SetWordWrap(false)
 
-    row.infoFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.infoFS = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     row.infoFS:SetPoint("RIGHT", -4, 0)
     row.infoFS:SetJustifyH("RIGHT")
 
@@ -327,15 +378,19 @@ local function GetRow(index)
     return row
 end
 
-local function BuildMacroText(bag, slot)
-    if not IsEnchanter() then return "" end
-    return "/cast " .. (C_Spell.GetSpellName(DISENCHANT_SPELL_ID) or "Disenchant")
+local function BuildMacroText(bag, slot, scroll)
+    local spellID = scroll and ComprehendSpell() or (not scroll and IsEnchanter() and DISENCHANT_SPELL_ID)
+    if not spellID then return "" end
+    return "/cast " .. (C_Spell.GetSpellName(spellID) or (scroll and "Comprehend Scroll" or "Disenchant"))
         .. "\n/use " .. bag .. " " .. slot
 end
 
 local function UpdateDisenchantButton()
     if InCombatLockdown() then return end
-    if disenchantBusy then SetDisenchantBusy(true); return end
+    if disenchantBusy then
+        SetDisenchantBusy(true)
+        return
+    end
     local first
     for _, item in ipairs(items) do
         if not item.excluded then
@@ -345,9 +400,9 @@ local function UpdateDisenchantButton()
     end
     if first then
         deButton.sellItem = first
-        deButton:SetAttribute("macrotext1", BuildMacroText(first.bag, first.slot))
+        deButton:SetAttribute("macrotext1", BuildMacroText(first.bag, first.slot, first.scroll))
         deButton:SetText(IsVendorMode() and "Sell Next" or "Disenchant Next")
-        deButton:SetEnabled(IsEnchanter() or not not IsVendorMode())
+        deButton:SetEnabled(Destroy.CanDestroy() or not not IsVendorMode())
     else
         deButton.sellItem = nil
         deButton:SetAttribute("macrotext1", "")
@@ -379,7 +434,7 @@ RefreshList = function()
         -- from nil back to "macro" during a click can leave the row inert;
         -- an empty macro safely disables excluded rows instead.
         row:SetAttribute("type1", "macro")
-        row:SetAttribute("macrotext1", item.excluded and "" or BuildMacroText(item.bag, item.slot))
+        row:SetAttribute("macrotext1", item.excluded and "" or BuildMacroText(item.bag, item.slot, item.scroll))
         row.icon:SetTexture(item.icon)
         row.icon:SetDesaturated(item.excluded)
         row.nameFS:SetText(item.name or item.link)
@@ -429,11 +484,11 @@ local function CreateWindow()
     local pos = UIThingsDB.destroy.framePos
     mainFrame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
 
-    mainFrame.title = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    mainFrame.title = mainFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     mainFrame.title:SetPoint("TOPLEFT", 10, -10)
     mainFrame.title:SetText("Disenchant")
 
-    mainFrame.countFS = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mainFrame.countFS = mainFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     mainFrame.countFS:SetPoint("BOTTOMLEFT", 10, 14)
     mainFrame.countFS:SetTextColor(0.7, 0.7, 0.7)
 
@@ -459,8 +514,8 @@ local function CreateWindow()
     -- Secure button: insecure code cannot cast Disenchant directly, so the
     -- click runs a macro that casts Disenchant and targets it at the first
     -- listed bag item. Attributes are only written out of combat.
-    deButton = CreateFrame("Button", "LunaUITweaks_DestroyDEButton", mainFrame,
-        "SecureActionButtonTemplate, UIPanelButtonTemplate")
+    deButton = LunaUITweaksAPI.Style.Button(CreateFrame("Button", "LunaUITweaks_DestroyDEButton", mainFrame,
+        "SecureActionButtonTemplate, UIPanelButtonTemplate"))
     deButton:SetSize(180, 26)
     deButton:SetPoint("BOTTOM", 0, 34)
     deButton:SetAttribute("type1", "macro")
@@ -488,7 +543,7 @@ end
 -- ============================================================
 
 local function ShouldOffer()
-    return UIThingsDB.destroy.enabled and ((IsEnchanter() and IsResting()) or IsVendorMode())
+    return UIThingsDB.destroy.enabled and ((Destroy.CanDestroy() and IsResting()) or IsVendorMode())
 end
 
 function Destroy.ShowWindow(force)

@@ -30,7 +30,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         child:SetWidth(scrollFrame:GetWidth())
     end)
 
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Loot Toasts")
 
@@ -76,7 +76,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end)
 
     -- Min Quality Dropdown
-    local qualityLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local qualityLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     qualityLabel:SetPoint("TOPLEFT", 20, -175)
     qualityLabel:SetText("Minimum Quality:")
 
@@ -117,18 +117,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
     end
 
     -- Font Dropdown
-    Helpers.CreateFontDropdown(
-        child,
-        "UIThingsLootFontDropdown",
-        "Font:",
-        UIThingsDB.loot.font,
-        function(fontPath, fontName)
-            UIThingsDB.loot.font = fontPath
-            LootUpdateSettings()
-        end,
-        20,
-        -225
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -225)
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsLootFontSize", child, "OptionsSliderTemplate")
@@ -262,10 +251,28 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         LootUpdateSettings()
     end)
 
-    local autoGreedHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local autoGreedHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     autoGreedHelp:SetPoint("TOPLEFT", 45, -513)
     autoGreedHelp:SetTextColor(0.5, 0.5, 0.5)
     autoGreedHelp:SetText("When you can't need on an item, automatically rolls greed or transmog so you only click for need")
+
+    if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then
+        local greedUnequipBtn = CreateFrame("CheckButton", "UIThingsLootAutoGreedUnequipCheck", child,
+            "ChatConfigCheckButtonTemplate")
+        greedUnequipBtn:SetPoint("TOPLEFT", 300, -490)
+        _G[greedUnequipBtn:GetName() .. "Text"]:SetText("Greed gear I can't equip")
+        greedUnequipBtn:SetChecked(UIThingsDB.loot.autoGreedUnequippable)
+        greedUnequipBtn:SetScript("OnClick", function(self)
+            UIThingsDB.loot.autoGreedUnequippable = self:GetChecked()
+            LootUpdateSettings()
+        end)
+        greedUnequipBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Auto greed only on armor and weapons your class can never use (e.g. mail and plate on a cloth class). Every other roll is left for you. Ignored while Auto Greed is on.", nil, nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+        greedUnequipBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
 
     -- == Currency & Gold Notifications ==
     Helpers.CreateSectionHeader(child, "Currency & Gold Notifications", -535)
@@ -281,7 +288,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         LootUpdateSettings()
     end)
 
-    local currencyHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local currencyHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     currencyHelp:SetPoint("TOPLEFT", 45, -583)
     currencyHelp:SetTextColor(0.5, 0.5, 0.5)
     currencyHelp:SetText("Shows a toast when you gain currency (Valorstones, Crests, Conquest, etc.)")
@@ -341,7 +348,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         end
     end)
 
-    local goldHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local goldHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     goldHelp:SetPoint("TOPLEFT", 45, -627)
     goldHelp:SetTextColor(0.5, 0.5, 0.5)
     goldHelp:SetText("Shows a toast when you loot gold above the minimum threshold")
@@ -356,7 +363,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         UIThingsDB.loot.showItemLevel = self:GetChecked()
     end)
 
-    local ilvlHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local ilvlHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     ilvlHelp:SetPoint("TOPLEFT", 45, -735)
     ilvlHelp:SetTextColor(0.5, 0.5, 0.5)
     ilvlHelp:SetText("Shows item level on gear toasts with green +X for upgrades")
@@ -372,7 +379,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         LootUpdateSettings()
     end)
 
-    local bagUpgradeHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local bagUpgradeHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     bagUpgradeHelp:SetPoint("TOPLEFT", 45, -797)
     bagUpgradeHelp:SetTextColor(0.5, 0.5, 0.5)
     bagUpgradeHelp:SetText("Highlights bag items with a green overlay when they beat your equipped ilvl (checks both ring/trinket slots)")
@@ -388,7 +395,7 @@ function addonTable.ConfigSetup.Loot(panel, tab, configWindow)
         check:SetChecked(UIThingsDB.loot[key] ~= false)
         check:SetScript("OnClick", function(self) UIThingsDB.loot[key] = self:GetChecked() end)
     end
-    local bonusHelp = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local bonusHelp = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     bonusHelp:SetPoint("TOPLEFT", 45, -930)
     bonusHelp:SetTextColor(0.5, 0.5, 0.5)
     bonusHelp:SetText("Works even when loot toasts are disabled.")

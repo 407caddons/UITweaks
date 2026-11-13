@@ -25,11 +25,11 @@ function addonTable.ConfigSetup.QueueTimer(panel, tab, configWindow)
     end
 
     -- Title
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Queue Timer")
 
-    local desc = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local desc = child:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     desc:SetPoint("TOPLEFT", 16, -44)
     desc:SetText("|cFFAAAAAAAAShows a countdown bar when a dungeon or LFR queue pops, attached below the acceptance dialog.|r")
 
@@ -73,7 +73,7 @@ function addonTable.ConfigSetup.QueueTimer(panel, tab, configWindow)
     -------------------------------------------------------------
     Helpers.CreateSectionHeader(child, "Size", -152)
 
-    local widthLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local widthLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     widthLabel:SetPoint("TOPLEFT", 20, -182)
     widthLabel:SetText("Width:")
 
@@ -94,7 +94,7 @@ function addonTable.ConfigSetup.QueueTimer(panel, tab, configWindow)
         UpdateQueueTimer()
     end)
 
-    local heightLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local heightLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     heightLabel:SetPoint("TOPLEFT", 20, -222)
     heightLabel:SetText("Height:")
 

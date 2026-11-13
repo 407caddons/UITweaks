@@ -17,11 +17,11 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
     end
 
     -- Panel Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Destroy (Disenchant / Sell Gear)")
 
-    local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local desc = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     desc:SetPoint("TOPLEFT", 16, -44)
     desc:SetPoint("RIGHT", -16, 0)
     desc:SetJustifyH("LEFT")
@@ -81,7 +81,7 @@ function addonTable.ConfigSetup.Destroy(panel, tab, configWindow)
     Helpers.CreateColorSwatch(panel, "Background Color:", UIThingsDB.destroy.bgColor, ApplyVisuals, 20, -232, true)
     Helpers.CreateColorSwatch(panel, "Border Color:", UIThingsDB.destroy.borderColor, ApplyVisuals, 20, -262, true)
 
-    local strataLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local strataLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     strataLabel:SetPoint("TOPLEFT", 20, -296)
     strataLabel:SetText("Frame Strata:")
 

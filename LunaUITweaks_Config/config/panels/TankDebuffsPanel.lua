@@ -11,14 +11,14 @@ local function Setup(panel, tab)
     host:HookScript("OnShow", function() child:SetWidth(scroll:GetWidth()) end)
     panel = child
     local function Label(text, y)
-        local f = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local f = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         f:SetPoint("TOPLEFT", 20, y)
         f:SetWidth(510)
         f:SetJustifyH("LEFT")
         f:SetText(text)
         return f
     end
-    Label("Tank Debuffs", -20):SetFontObject("GameFontNormalHuge")
+    Label("Tank Debuffs", -20):SetFontObject("LunaFontNormalHuge")
     Label("Two independent displays, powered by Blizzard's combat-safe aura containers. No addon is needed on your co-tank.", -64)
     local status = Label("", -118)
     local function Update()
@@ -49,7 +49,7 @@ local function Setup(panel, tab)
         f:SetObeyStepOnDrag(true)
         if f.Low then f.Low:SetText(lo) end
         if f.High then f.High:SetText(hi) end
-        local caption = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local caption = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         caption:SetPoint("BOTTOM", f, "TOP", 0, 5)
         f:SetValue(s[key])
         caption:SetText(text .. ": " .. s[key])
@@ -110,7 +110,7 @@ local function Setup(panel, tab)
         f:SetObeyStepOnDrag(true)
         if f.Low then f.Low:SetText(lo) end
         if f.High then f.High:SetText(hi) end
-        local caption = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local caption = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         caption:SetPoint("BOTTOM", f, "TOP", 0, 5)
         f:SetValue(ext[key])
         caption:SetText(text .. ": " .. ext[key])
@@ -125,7 +125,7 @@ local function Setup(panel, tab)
     ExtSlider("fontSize", "Text size", 8, 24, 400)
     local names = {}
     for _, entry in ipairs(Ext.GROUP_COOLDOWNS) do names[#names + 1] = entry[2] end
-    Label("Built-in list: " .. table.concat(names, ", ") .. ".", -990):SetFontObject("GameFontHighlightSmall")
+    Label("Built-in list: " .. table.concat(names, ", ") .. ".", -990):SetFontObject("LunaFontHighlightSmall")
     Label("Extra spell IDs (comma separated):", -1065)
     local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     box:SetPoint("TOPLEFT", 250, -1060)

@@ -458,9 +458,9 @@ function addonTable.XpBar.UpdateSettings()
     -- Font
     local font = settings.font or "Fonts\\FRIZQT__.TTF"
     local fontSize = settings.fontSize or 11
-    if levelText then levelText:SetFont(font, fontSize, "OUTLINE") end
-    if xpText then xpText:SetFont(font, fontSize, "OUTLINE") end
-    if pctText then pctText:SetFont(font, fontSize, "OUTLINE") end
+    if levelText then levelText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE") end
+    if xpText then xpText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE") end
+    if pctText then pctText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE") end
 
     barFrame:Show()
     UpdateDisplay()
@@ -596,25 +596,25 @@ local function Init()
     -- Level text (left)
     levelText = barFrame:CreateFontString(nil, "OVERLAY")
     levelText:SetPoint("LEFT", barFrame, "LEFT", 6, 0)
-    levelText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    levelText:SetFont(LunaUITweaksAPI.Style.Font(), 11, "OUTLINE")
     levelText:SetTextColor(1, 1, 1, 1)
 
     -- XP text (center)
     xpText = barFrame:CreateFontString(nil, "OVERLAY")
     xpText:SetPoint("CENTER", barFrame, "CENTER", 0, 0)
-    xpText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    xpText:SetFont(LunaUITweaksAPI.Style.Font(), 11, "OUTLINE")
     xpText:SetTextColor(1, 1, 1, 1)
 
     -- Percent text (right)
     pctText = barFrame:CreateFontString(nil, "OVERLAY")
     pctText:SetPoint("RIGHT", barFrame, "RIGHT", -6, 0)
-    pctText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    pctText:SetFont(LunaUITweaksAPI.Style.Font(), 11, "OUTLINE")
     pctText:SetTextColor(1, 1, 1, 1)
 
     -- Pending quest XP label (small, just below the bottom-right of the bar)
     pendingQuestText = barFrame:CreateFontString(nil, "OVERLAY")
     pendingQuestText:SetPoint("TOPRIGHT", barFrame, "BOTTOMRIGHT", 0, -2)
-    pendingQuestText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+    pendingQuestText:SetFont(LunaUITweaksAPI.Style.Font(), 9, "OUTLINE")
     pendingQuestText:SetTextColor(1, 0.82, 0, 1)
     pendingQuestText:Hide()
 

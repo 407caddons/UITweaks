@@ -151,7 +151,7 @@ function Helpers.ResetPageSettings(key)
 end
 
 function Helpers.CreateResetButton(panel, dbKey, label)
-    local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local btn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"))
     btn:SetSize(120, 22)
     -- Reserve the right-hand scrollbar gutter used by scrolling panels.
     btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -6)
@@ -184,7 +184,7 @@ end
 -- @param panel frame The parent frame
 -- @return button The created button
 function Helpers.CreateResetAllButton(panel)
-    local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local btn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"))
     btn:SetSize(100, 22)
     btn:SetText("Reset All")
 
@@ -217,7 +217,7 @@ end
 -- @param yOffset number Y offset from TOPLEFT
 -- @return fontstring The created header
 function Helpers.CreateSectionHeader(parent, text, yOffset)
-    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = parent:CreateFontString(nil, "OVERLAY", "LunaFontNormalLarge")
     header:SetPoint("TOPLEFT", 16, yOffset)
     header:SetText(text)
     header:SetTextColor(.35, .9, .76)
@@ -233,7 +233,7 @@ end
 
 -- Persistent frame positions are edited through the global Layout Mode.
 function Helpers.CreateLayoutModeHint(parent, x, y, width)
-    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local hint = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     hint:SetPoint("TOPLEFT", x, y)
     hint:SetWidth(width or 240)
     hint:SetJustifyH("LEFT")
@@ -269,7 +269,7 @@ function Helpers.CreateColorPicker(parent, name, label, getFunc, setFunc, yOffse
     local r, g, b = getFunc()
     button.color:SetColorTexture(r, g, b)
 
-    button.text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    button.text = button:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     button.text:SetPoint("LEFT", button.bg, "RIGHT", 10, 0)
     button.text:SetText(label)
 
@@ -328,7 +328,7 @@ end
 function Helpers.CreateColorSwatch(parent, labelText, colorTable, onChangeFunc, xOffset, yOffset, hasOpacity)
     if hasOpacity == nil then hasOpacity = true end
 
-    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     label:SetPoint("TOPLEFT", xOffset, yOffset)
     label:SetText(labelText)
 
@@ -392,7 +392,7 @@ function Helpers.CreateFontDropdown(parent, name, labelText, currentFontPath, on
     xOffset = xOffset or 20
 
     -- Label
-    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     label:SetPoint("TOPLEFT", xOffset, yOffset)
     label:SetText(labelText)
 
@@ -447,6 +447,24 @@ function Helpers.CreateFontDropdown(parent, name, labelText, currentFontPath, on
     UIDropDownMenu_SetText(dropdown, selectedName)
 
     return dropdown
+end
+
+--- Global font picker (General UI): one face for all of Luna's text (utils/Style.lua).
+function Helpers.CreateGlobalFontDropdown(parent, xOffset, yOffset)
+    local dropdown = Helpers.CreateFontDropdown(parent, "UIThingsGlobalFontDropdown", "Font (all LunaUITweaks text)",
+        addonTable.Style.Font(), function(path) addonTable.Style.SetFont(path) end, xOffset, yOffset)
+    local hint = parent:CreateFontString(nil, "OVERLAY", "LunaFontDisableSmall")
+    hint:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 16, -2)
+    hint:SetText("Sizes are still set on each page.")
+    return dropdown
+end
+
+--- Placeholder where a per-module font picker used to be.
+function Helpers.CreateGlobalFontNote(parent, xOffset, yOffset)
+    local note = parent:CreateFontString(nil, "OVERLAY", "LunaFontDisableSmall")
+    note:SetPoint("TOPLEFT", xOffset, yOffset)
+    note:SetText("Font: set in General UI")
+    return note
 end
 
 --- Build status bar texture list
@@ -528,7 +546,7 @@ function Helpers.CreateTextureDropdown(parent, name, labelText, currentTexturePa
     xOffset = xOffset or 20
 
     -- Label
-    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     label:SetPoint("TOPLEFT", xOffset, yOffset)
     label:SetText(labelText)
 

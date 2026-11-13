@@ -19,7 +19,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
         end
     end
 
-    local framesTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local framesTitle = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     framesTitle:SetPoint("TOPLEFT", 16, -16)
     framesTitle:SetText("Custom Frames")
 
@@ -41,7 +41,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.frames.enabled)
 
     -- Frame Selector Dropdown
-    local frameSelectLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local frameSelectLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     frameSelectLabel:SetPoint("TOPLEFT", 20, -80)
     frameSelectLabel:SetText("Select Frame:")
 
@@ -222,7 +222,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
 
     -- Properties in frameControls
     -- Name EditBox
-    local nameLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local nameLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     nameLabel:SetPoint("TOPLEFT", 0, 0)
     nameLabel:SetText("Name:")
     local nameEdit = CreateFrame("EditBox", nil, frameControls, "InputBoxTemplate")
@@ -252,7 +252,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     -- Anchor Checkbox
     local anchorFrameBtn = CreateFrame("CheckButton", nil, frameControls, "ChatConfigCheckButtonTemplate")
     anchorFrameBtn:SetPoint("TOPLEFT", 140, -30)
-    local anchorText = anchorFrameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local anchorText = anchorFrameBtn:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     anchorText:SetPoint("LEFT", anchorFrameBtn, "RIGHT", 5, 0)
     anchorText:SetText("Is Widget Anchor")
     anchorFrameBtn:SetScript("OnClick", function(self)
@@ -263,7 +263,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     end)
 
     -- Dock Direction Dropdown (next to Anchor checkbox)
-    local dockLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local dockLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     dockLabel:SetPoint("TOPLEFT", 340, -34)
     dockLabel:SetText("Dock:")
     local dockDropdown = CreateFrame("Frame", "UIThingsFrameDockDropdown", frameControls, "UIDropDownMenuTemplate")
@@ -414,7 +414,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     end)
 
     -- Strata Dropdown
-    local strataLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local strataLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     strataLabel:SetPoint("TOPLEFT", 180, -150)
     strataLabel:SetText("Strata:")
     local strataDropdown = CreateFrame("Frame", "UIThingsFrameStrataDropdown", frameControls,
@@ -440,7 +440,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     UIDropDownMenu_Initialize(strataDropdown, StrataInit)
 
     -- Colors
-    local fillColorLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local fillColorLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     fillColorLabel:SetPoint("TOPLEFT", 0, -220)
     fillColorLabel:SetText("Fill Color:")
     local fillColorSwatch = CreateFrame("Button", nil, frameControls)
@@ -475,7 +475,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
     end)
 
     -- Border Color
-    local borderColorLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local borderColorLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     borderColorLabel:SetPoint("TOPLEFT", 0, -190)
     borderColorLabel:SetText("Border Color:")
     local borderColorSwatch = CreateFrame("Button", nil, frameControls)
@@ -558,7 +558,7 @@ function addonTable.ConfigSetup.Frames(panel, tab, configWindow)
         end
     end)
 
-    local bordersLabel = frameControls:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local bordersLabel = frameControls:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     bordersLabel:SetPoint("RIGHT", borderLeftBtn, "LEFT", -10, 0)
     bordersLabel:SetText("Borders:")
 

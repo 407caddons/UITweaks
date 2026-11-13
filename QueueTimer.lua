@@ -136,7 +136,7 @@ local function Init()
 
     timerText = timerBar:CreateFontString(nil, "OVERLAY")
     timerText:SetPoint("CENTER")
-    timerText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    timerText:SetFont(LunaUITweaksAPI.Style.Font(), 11, "OUTLINE")
     timerText:SetTextColor(1, 1, 1, 1)
 
     timerBar:SetScript("OnUpdate", OnUpdate)

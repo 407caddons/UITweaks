@@ -6,7 +6,7 @@ local Helpers = addonTable.ConfigHelpers
 
 function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "questReminder")
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Quest Reminders")
 
@@ -28,7 +28,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
 
     -- Help text
     local enableText = _G[enableBtn:GetName() .. "Text"]
-    local helpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local helpText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     helpText:SetPoint("LEFT", enableText, "RIGHT", 10, 0)
     helpText:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     helpText:SetJustifyH("LEFT")
@@ -86,7 +86,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     end)
 
     -- TTS Message
-    local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local ttsLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     ttsLabel:SetPoint("TOPLEFT", 40, -215)
     ttsLabel:SetText("TTS Message:")
 
@@ -116,7 +116,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     end)
 
     -- TTS Voice Dropdown
-    local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local voiceLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     voiceLabel:SetPoint("TOPLEFT", 40, -255)
     voiceLabel:SetText("Voice Type:")
 
@@ -235,8 +235,8 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     clearAllBtn:SetSize(120, 25)
     clearAllBtn:SetPoint("TOPLEFT", 20, -460)
     clearAllBtn:SetText("Clear All")
-    clearAllBtn:SetNormalFontObject("GameFontNormal")
-    clearAllBtn:SetHighlightFontObject("GameFontHighlight")
+    clearAllBtn:SetNormalFontObject("LunaFontNormal")
+    clearAllBtn:SetHighlightFontObject("LunaFontHighlight")
     clearAllBtn:SetScript("OnClick", function()
         StaticPopup_Show("LUNA_QUEST_REMINDER_CLEAR_ALL")
     end)
@@ -257,7 +257,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
     }
 
     -- Quest count label
-    local questCountLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local questCountLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     questCountLabel:SetPoint("LEFT", clearAllBtn, "RIGHT", 10, 0)
     questCountLabel:SetTextColor(0.6, 0.6, 0.6)
 
@@ -313,7 +313,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
                 row.bg:SetAllPoints()
                 row.bg:SetColorTexture(0, 0, 0, 0)
 
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.text = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 row.text:SetPoint("LEFT", 5, 0)
                 row.text:SetWidth(310)
                 row.text:SetJustifyH("LEFT")
@@ -337,7 +337,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
                 row.removeBtn:SetSize(60, 22)
                 row.removeBtn:SetPoint("RIGHT", -5, 0)
                 row.removeBtn:SetText("Remove")
-                row.removeBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.removeBtn:SetNormalFontObject("LunaFontNormalSmall")
 
                 questRows[i] = row
             end
@@ -399,7 +399,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
                 row.bg:SetAllPoints()
                 row.bg:SetColorTexture(0, 0, 0, 0)
 
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.text = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 row.text:SetPoint("LEFT", 5, 0)
                 row.text:SetWidth(310)
                 row.text:SetJustifyH("LEFT")
@@ -412,7 +412,7 @@ function addonTable.ConfigSetup.QuestReminder(panel, tab, configWindow)
                 row.removeBtn:SetSize(60, 22)
                 row.removeBtn:SetPoint("RIGHT", -5, 0)
                 row.removeBtn:SetText("Remove")
-                row.removeBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.removeBtn:SetNormalFontObject("LunaFontNormalSmall")
 
                 questRows[1] = row
             end

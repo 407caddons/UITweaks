@@ -386,7 +386,7 @@ function Coordinates.RefreshList()
         row.wpData = wp
         row.wpIndex = i
 
-        row.text:SetFont(font, fontSize, "")
+        row.text:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "")
         local dist = GetDistanceToWP(wp)
         local distStr = dist and ("|cFFAAAAAA" .. FormatDistanceShort(dist) .. "|r  ") or ""
         row.text:SetText(string.format("%s|cFFFFD700%.1f, %.1f|r  %s", distStr, wp.x * 100, wp.y * 100, wp.name or ""))
@@ -464,11 +464,11 @@ local function GetOrCreatePasteDialog()
     end)
     f:Hide()
 
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     title:SetPoint("TOP", 0, -10)
     title:SetText("Paste Waypoints")
 
-    local hint = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hint = f:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     hint:SetPoint("TOPLEFT", 10, -28)
     hint:SetText("One waypoint per line: [zone] x, y [name]")
     hint:SetTextColor(0.5, 0.5, 0.5)
@@ -494,7 +494,7 @@ local function GetOrCreatePasteDialog()
     local editBox = CreateFrame("EditBox", nil, sf)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
-    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetFontObject("LunaFontChat")
     editBox:SetMaxLetters(0)
     editBox:SetTextInsets(6, 6, 4, 4)
     editBox:SetWidth(sf:GetWidth())
@@ -523,7 +523,7 @@ local function GetOrCreatePasteDialog()
     f.editBox = editBox
 
     -- Add button
-    local addBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local addBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     addBtn:SetSize(80, 22)
     addBtn:SetPoint("BOTTOMRIGHT", -10, 10)
     addBtn:SetText("Add")
@@ -550,7 +550,7 @@ local function GetOrCreatePasteDialog()
     end)
 
     -- Cancel button
-    local cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local cancelBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
     cancelBtn:SetSize(80, 22)
     cancelBtn:SetPoint("RIGHT", addBtn, "LEFT", -5, 0)
     cancelBtn:SetText("Cancel")
@@ -628,7 +628,7 @@ local function CreateMainFrame()
     titleBar:SetPoint("TOPRIGHT", 0, 0)
     titleBar:SetHeight(24)
 
-    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local titleText = titleBar:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     titleText:SetPoint("LEFT", 6, 0)
     titleText:SetText("Waypoints")
     titleText:SetTextColor(1, 0.82, 0)
@@ -652,21 +652,21 @@ local function CreateMainFrame()
     clearBtn:SetScript("OnLeave", GameTooltip_Hide)
 
     -- Paste button
-    local pasteBtn = CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate")
+    local pasteBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate"))
     pasteBtn:SetSize(50, 18)
     pasteBtn:SetPoint("RIGHT", clearBtn, "LEFT", -4, 0)
     pasteBtn:SetText("Paste")
-    pasteBtn:SetNormalFontObject("GameFontNormalSmall")
+    pasteBtn:SetNormalFontObject("LunaFontNormalSmall")
     pasteBtn:SetScript("OnClick", function()
         Coordinates.ShowPasteDialog()
     end)
 
     -- Sort button
-    local sortBtn = CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate")
+    local sortBtn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, titleBar, "UIPanelButtonTemplate"))
     sortBtn:SetSize(40, 18)
     sortBtn:SetPoint("RIGHT", pasteBtn, "LEFT", -4, 0)
     sortBtn:SetText("Sort")
-    sortBtn:SetNormalFontObject("GameFontNormalSmall")
+    sortBtn:SetNormalFontObject("LunaFontNormalSmall")
     sortBtn:SetScript("OnClick", function()
         Coordinates.SortByDistance()
     end)
@@ -831,8 +831,34 @@ local function OnPlayerEnteringWorld()
     UpdateTitleZone()
 end
 
+-- A pin placed on the map (or set by another addon) becomes a list entry and the
+-- list is brought up. Entries already in the list (e.g. set by clicking a row)
+-- are just marked active.
+local function AddUserWaypointToList()
+    local db = UIThingsDB.coordinates
+    if not db or not db.enabled or not C_Map.HasUserWaypoint() then return end
+    local point = C_Map.GetUserWaypoint()
+    local position = point and point.position
+    if not position then return end
+    local mapID, x, y = point.uiMapID, position.x, position.y
+    for i, wp in ipairs(db.waypoints) do
+        if wp.mapID == mapID and math.abs(wp.x - x) <= 0.002 and math.abs(wp.y - y) <= 0.002 then
+            activeWaypointIndex = i
+            Coordinates.RefreshList()
+            if mainFrame then mainFrame:Show() end
+            return
+        end
+    end
+    local mapInfo = C_Map.GetMapInfo(mapID)
+    Coordinates.AddWaypoint(mapID, x, y, nil, mapInfo and mapInfo.name)
+    activeWaypointIndex = #db.waypoints
+    Coordinates.RefreshList()
+    if mainFrame then mainFrame:Show() end
+end
+
 local function OnUserWaypointUpdated()
     CheckActiveWaypointStolen()
+    AddUserWaypointToList()
 end
 
 local function OnSuperTrackingChanged()

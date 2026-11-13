@@ -6,7 +6,7 @@ function addon.ConfigSetup.ProcAlerts(panel, navButton)
     local selected, sound, refresh = nil, {preset = "none"}, nil
     local function DB() return UIThingsDB.procAlerts end
     local function Label(parent, text, x, y, width)
-        local f = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local f = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         f:SetPoint("TOPLEFT", x, y)
         f:SetWidth(width or 320)
         f:SetJustifyH("LEFT")
@@ -32,7 +32,7 @@ function addon.ConfigSetup.ProcAlerts(panel, navButton)
         return (C_Spell and C_Spell.GetSpellName(id)) or ("Spell " .. id)
     end
     local title = Label(panel, "Proc Alerts", 16, -16, 500)
-    title:SetFontObject("GameFontNormalHuge")
+    title:SetFontObject("LunaFontNormalHuge")
     Label(panel, "Play a sound when Blizzard makes an ability glow on your action bars.", 20, -46, 580)
     local enabled = Check("Enable proc sounds", 16, -65, function(self)
         DB().enabled = not not self:GetChecked()

@@ -28,7 +28,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     end
 
     -- Title
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Coordinates")
 
@@ -77,18 +77,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     Helpers.CreateColorSwatch(child, "Background Color:", UIThingsDB.coordinates.backgroundColor, UpdateCoordinates, 250, -170, true)
 
     -- Font dropdown
-    Helpers.CreateFontDropdown(
-        child,
-        "UIThingsCoordsFont",
-        "Font:",
-        UIThingsDB.coordinates.font,
-        function(fontPath, fontName)
-            UIThingsDB.coordinates.font = fontPath
-            UpdateCoordinates()
-        end,
-        20,
-        -210
-    )
+    Helpers.CreateGlobalFontNote(child, 20, -210)
 
     -- Font Size slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsCoordsFontSize", child, "OptionsSliderTemplate")
@@ -150,7 +139,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
     -- Commands section
     Helpers.CreateSectionHeader(child, "Commands", -440)
 
-    local cmdNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local cmdNote = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     cmdNote:SetPoint("TOPLEFT", 20, -465)
     cmdNote:SetText("/lway [zone] x, y [name] - always available")
     cmdNote:SetTextColor(0.7, 0.7, 0.7)
@@ -167,7 +156,7 @@ function addonTable.ConfigSetup.Coordinates(panel, tab, configWindow)
         end
     end)
 
-    local wayNote = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local wayNote = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     wayNote:SetPoint("TOPLEFT", 20, -515)
     wayNote:SetText("Note: /way may conflict with TomTom if installed")
     wayNote:SetTextColor(1, 0.5, 0.5)

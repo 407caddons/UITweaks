@@ -13,10 +13,10 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     if type(GetSpecialization) ~= "function"
         or type(GetSpecializationInfo) ~= "function"
         or not C_ClassTalents or not C_Traits then
-        local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
         title:SetPoint("TOPLEFT", 16, -16)
         title:SetText("Talent Reminders")
-        local message = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local message = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         message:SetPoint("TOPLEFT", 20, -60)
         message:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
         message:SetJustifyH("LEFT")
@@ -33,7 +33,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     pageScroll:SetScript("OnShow", function(self) panel:SetWidth(self:GetWidth()) end)
     local fonts = Helpers.fonts
 
-    local talentTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local talentTitle = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     talentTitle:SetPoint("TOPLEFT", 16, -16)
     talentTitle:SetText("Talent Reminders")
 
@@ -55,7 +55,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
 
     -- Help text
     local enableText = _G[enableTalentBtn:GetName() .. "Text"]
-    local helpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local helpText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     helpText:SetPoint("TOPLEFT", 20, -82)
     helpText:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     helpText:SetJustifyH("LEFT")
@@ -144,20 +144,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Font Dropdown
-    Helpers.CreateFontDropdown(
-        panel,
-        "UIThingsTalentFontDropdown",
-        "Font:",
-        UIThingsDB.talentReminders.alertFont,
-        function(fontPath, fontName)
-            UIThingsDB.talentReminders.alertFont = fontPath
-            if addonTable.TalentReminder and addonTable.TalentReminder.UpdateVisuals then
-                addonTable.TalentReminder.UpdateVisuals()
-            end
-        end,
-        380,
-        -325
-    )
+    Helpers.CreateGlobalFontNote(panel, 380, -325)
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsTalentAlertFontSizeSlider", panel,
@@ -280,7 +267,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end
 
     -- Dungeons
-    local dungeonLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local dungeonLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     dungeonLabel:SetPoint("TOPLEFT", 20, -573)
     dungeonLabel:SetText("Dungeons:")
 
@@ -324,7 +311,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Raids
-    local raidLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local raidLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     raidLabel:SetPoint("TOPLEFT", 20, -613)
     raidLabel:SetText("Raids:")
 
@@ -381,7 +368,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     end)
 
     -- Other difficulties (Timewalking and Follower)
-    local otherLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local otherLabel = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     otherLabel:SetPoint("TOPLEFT", 20, -653)
     otherLabel:SetText("Other:")
 
@@ -409,13 +396,13 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     -- Default Builds Section
     Helpers.CreateSectionHeader(panel, "Default Builds", -695)
 
-    local defaultsDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local defaultsDesc = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     defaultsDesc:SetPoint("TOPLEFT", 20, -720)
     defaultsDesc:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     defaultsDesc:SetJustifyH("LEFT")
     defaultsDesc:SetText("Checked for your current spec in any dungeon or raid with no saved build for it at that difficulty. Only uncategorized builds can be defaults.")
 
-    local defaultsEmptyHint = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local defaultsEmptyHint = panel:CreateFontString(nil, "OVERLAY", "LunaFontDisableSmall")
     defaultsEmptyHint:SetPoint("TOPLEFT", 20, -815)
     defaultsEmptyHint:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     defaultsEmptyHint:SetJustifyH("LEFT")
@@ -460,7 +447,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     for i, entry in ipairs({ { "dungeon", "Dungeons:" }, { "raid", "Raids:" } }) do
         local kind, labelText = entry[1], entry[2]
         local y = -748 - (i - 1) * 32
-        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        local label = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
         label:SetPoint("TOPLEFT", 20, y - 4)
         label:SetText(labelText)
 
@@ -513,24 +500,24 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
     snapshotBtn:SetSize(200, 25)
     snapshotBtn:SetPoint("TOPLEFT", 20, -875)
     snapshotBtn:SetText("Snapshot Current Talents")
-    snapshotBtn:SetNormalFontObject("GameFontNormal")
-    snapshotBtn:SetHighlightFontObject("GameFontHighlight")
+    snapshotBtn:SetNormalFontObject("LunaFontNormal")
+    snapshotBtn:SetHighlightFontObject("LunaFontHighlight")
 
     -- Test Button
     testBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
     testBtn:SetSize(120, 25)
     testBtn:SetPoint("LEFT", snapshotBtn, "RIGHT", 10, 0)
     testBtn:SetText("Test")
-    testBtn:SetNormalFontObject("GameFontNormal")
-    testBtn:SetHighlightFontObject("GameFontHighlight")
+    testBtn:SetNormalFontObject("LunaFontNormal")
+    testBtn:SetHighlightFontObject("LunaFontHighlight")
 
     -- Clear All Button
     clearBtn = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
     clearBtn:SetSize(120, 25)
     clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 10, 0)
     clearBtn:SetText("Clear All")
-    clearBtn:SetNormalFontObject("GameFontNormal")
-    clearBtn:SetHighlightFontObject("GameFontHighlight")
+    clearBtn:SetNormalFontObject("LunaFontNormal")
+    clearBtn:SetHighlightFontObject("LunaFontHighlight")
 
     -- Reminder List (Scroll Frame) - fills remaining space below buttons
     local reminderScrollFrame = CreateFrame("ScrollFrame", "UIThingsTalentReminderScroll", panel,
@@ -693,25 +680,25 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.bg:SetColorTexture(0, 0, 0, 0)
 
                 -- Class/Spec label
-                row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.classSpecLabel:SetPoint("TOPLEFT", 5, -2)
                 row.classSpecLabel:SetWidth(350)
                 row.classSpecLabel:SetJustifyH("LEFT")
 
                 -- Reminder name
-                row.nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.nameLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 row.nameLabel:SetPoint("TOPLEFT", 5, -15)
                 row.nameLabel:SetWidth(350)
                 row.nameLabel:SetJustifyH("LEFT")
 
                 -- Instance/Difficulty
-                row.infoLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.infoLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.infoLabel:SetPoint("TOPLEFT", 10, -30)
                 row.infoLabel:SetWidth(350)
                 row.infoLabel:SetJustifyH("LEFT")
 
                 -- Validation status icon/text
-                row.validationLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.validationLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.validationLabel:SetPoint("TOPRIGHT", -85, -15)
                 row.validationLabel:SetWidth(100)
                 row.validationLabel:SetJustifyH("RIGHT")
@@ -720,14 +707,14 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.enableBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.enableBtn:SetSize(60, 22)
                 row.enableBtn:SetPoint("TOPRIGHT", -10, -5)
-                row.enableBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.enableBtn:SetNormalFontObject("LunaFontNormalSmall")
 
                 -- Delete button (below enable button)
                 row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.deleteBtn:SetSize(60, 22)
                 row.deleteBtn:SetPoint("TOP", row.enableBtn, "BOTTOM", 0, -4)
                 row.deleteBtn:SetText("Delete")
-                row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.deleteBtn:SetNormalFontObject("LunaFontNormalSmall")
 
                 reminderRows[rowIndex] = row
             end
@@ -745,27 +732,27 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             end
 
             if not row.nameLabel then
-                row.nameLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.nameLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 row.nameLabel:SetPoint("TOPLEFT", 5, -15)
                 row.nameLabel:SetWidth(350)
                 row.nameLabel:SetJustifyH("LEFT")
             else
-                row.nameLabel:SetFontObject("GameFontNormal")
+                row.nameLabel:SetFontObject("LunaFontNormal")
             end
             if not row.classSpecLabel then
-                row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.classSpecLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.classSpecLabel:SetPoint("TOPLEFT", 5, -2)
                 row.classSpecLabel:SetWidth(350)
                 row.classSpecLabel:SetJustifyH("LEFT")
             end
             if not row.infoLabel then
-                row.infoLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.infoLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.infoLabel:SetPoint("TOPLEFT", 10, -30)
                 row.infoLabel:SetWidth(350)
                 row.infoLabel:SetJustifyH("LEFT")
             end
             if not row.validationLabel then
-                row.validationLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.validationLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.validationLabel:SetPoint("TOPRIGHT", -85, -15)
                 row.validationLabel:SetWidth(100)
                 row.validationLabel:SetJustifyH("RIGHT")
@@ -774,14 +761,14 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
                 row.enableBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.enableBtn:SetSize(60, 22)
                 row.enableBtn:SetPoint("TOPRIGHT", -10, -5)
-                row.enableBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.enableBtn:SetNormalFontObject("LunaFontNormalSmall")
             end
             if not row.deleteBtn then
                 row.deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.deleteBtn:SetSize(60, 22)
                 row.deleteBtn:SetPoint("TOP", row.enableBtn, "BOTTOM", 0, -4)
                 row.deleteBtn:SetText("Delete")
-                row.deleteBtn:SetNormalFontObject("GameFontNormalSmall")
+                row.deleteBtn:SetNormalFontObject("LunaFontNormalSmall")
             end
 
             -- Show all reminder elements
@@ -926,7 +913,7 @@ function addonTable.ConfigSetup.Talent(panel, tab, configWindow)
             end
 
             if not row.messageLabel then
-                row.messageLabel = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                row.messageLabel = row:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
                 row.messageLabel:SetPoint("TOPLEFT", 5, -5)
                 row.messageLabel:SetWidth(480)
                 row.messageLabel:SetJustifyH("LEFT")

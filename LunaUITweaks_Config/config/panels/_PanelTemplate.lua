@@ -26,7 +26,7 @@ function addonTable.ConfigSetup.PanelName(panel, tab, configWindow)
     end
 
     -- Panel Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Panel Title")
 

@@ -11,7 +11,7 @@ function Bars.RegisterConfig()
         local selected = 1
         local controls = {}
         local function Label(text, x, y, width)
-            local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            local label = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
             label:SetPoint("TOPLEFT", x, y)
             label:SetWidth(width or 580)
             label:SetJustifyH("LEFT")
@@ -19,7 +19,7 @@ function Bars.RegisterConfig()
             return label
         end
         local function Button(text, x, y, width, callback)
-            local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+            local button = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"))
             button:SetPoint("TOPLEFT", x, y)
             button:SetSize(width, 24)
             button:SetText(text)

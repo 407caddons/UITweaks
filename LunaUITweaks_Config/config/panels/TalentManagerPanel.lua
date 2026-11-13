@@ -8,7 +8,7 @@ function addonTable.ConfigSetup.TalentManager(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "talentManager")
     local fonts = Helpers.fonts
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Talent Builds")
 
@@ -28,7 +28,7 @@ function addonTable.ConfigSetup.TalentManager(panel, tab, configWindow)
     end)
     Helpers.UpdateModuleVisuals(panel, tab, UIThingsDB.talentManager.enabled)
 
-    local helpText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local helpText = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     helpText:SetPoint("TOPLEFT", 20, -75)
     helpText:SetPoint("RIGHT", panel, "RIGHT", -20, 0)
     helpText:SetJustifyH("LEFT")
@@ -60,19 +60,7 @@ function addonTable.ConfigSetup.TalentManager(panel, tab, configWindow)
     end)
 
     -- Font Dropdown
-    Helpers.CreateFontDropdown(
-        panel,
-        "UIThingsTalentMgrFontDropdown",
-        "Font:",
-        UIThingsDB.talentManager.font,
-        function(fontPath, fontName)
-            UIThingsDB.talentManager.font = fontPath
-            if addonTable.TalentManager and addonTable.TalentManager.UpdateSettings then
-                addonTable.TalentManager.UpdateSettings()
-            end
-        end,
-        20, -210
-    )
+    Helpers.CreateGlobalFontNote(panel, 20, -210)
 
     -- Font Size Slider
     local fontSizeSlider = CreateFrame("Slider", "UIThingsTalentMgrFontSizeSlider", panel, "OptionsSliderTemplate")

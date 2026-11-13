@@ -1,5 +1,6 @@
 local _, Bags = ...
 Bags.categories = {
+    {key = "favorites", name = "Favorites", dropKind = "favorite"},
     {key = "new", name = "New Items"},
     {key = "gear", name = "Gear"},
     {key = "consumables", name = "Consumables"},
@@ -7,6 +8,7 @@ Bags.categories = {
     {key = "mounts", name = "Mounts"},
     {key = "decor", name = "Housing Decor"},
     {key = "quest", name = "Quest Items"},
+    {key = "vendor", name = "Vendor", dropKind = "vendor"},
     {key = "junk", name = "Junk"},
     {key = "reagents", name = "Crafting Reagents"},
     {key = "other", name = "Other"},
@@ -94,6 +96,9 @@ function Bags.Scan(ids, groupNew)
                 local category, name = Bags.Classify(info, quest)
                 entry.isKeystone = Bags.IsKeystone(info)
                 if groupNew and not entry.isKeystone and Bags.IsNewItem(bag, slot, info.itemID) then category = "new" end
+                -- Player-assigned sections (bags only) win over automatic categories.
+                local mark = groupNew and Bags.MarkOf and Bags.MarkOf(bag, slot)
+                if mark then category = mark == "favorite" and "favorites" or "vendor" end
                 entry.name = name or ""
                 result[category][#result[category] + 1] = entry
                 result.occupied = result.occupied + 1

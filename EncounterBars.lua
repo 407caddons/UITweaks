@@ -68,8 +68,6 @@ function Bars.GetBlocker()
     if C_AddOns.IsAddOnLoaded("DBM-Core") then return "DBM is loaded" end
 end
 function Bars.IsActive() return active and not Bars.GetBlocker() end
--- Timer providers (e.g. MplusBargainTimer) call this when their state changes.
-function Bars.RequestRefresh() if active and Refresh then Refresh() end end
 
 local function NewAnchor(key, title)
     local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -78,7 +76,7 @@ local function NewAnchor(key, title)
     f:SetFrameLevel(20) -- Keep the drag handle readable over preview/live bars.
     f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     f:SetBackdropColor(0.04, 0.07, 0.09, 0.9)
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.title = f:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
     f.title:SetPoint("CENTER"); f.title:SetText(title)
     f:SetScript("OnDragStart", function(self) if not DB().locked then self:StartMoving() end end)
     f:SetScript("OnDragStop", function(self)
@@ -159,8 +157,8 @@ local function Draw(entry, remaining, index, anchorKey, position, paused, suppre
         -- Upward growth adds subsequent bars above the same first-bar position.
         f:SetPoint("TOPLEFT", anchors[anchorKey], "TOPLEFT", height + 4, growUp and offset or -offset)
         f.icon:SetSize(height, height)
-        f.text:SetFont(db.font, fontSize, "OUTLINE")
-        f.time:SetFont(db.font, fontSize, "OUTLINE")
+        f.text:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
+        f.time:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
         f.text:ClearAllPoints(); f.text:SetPoint("LEFT", 5, 0)
         f.text:SetPoint("RIGHT", f.time, "LEFT", -6, 0)
         f.time:SetWidth(math.max(65, fontSize * 5))
@@ -281,7 +279,6 @@ Refresh = function(suppressTransitions)
             else timeline[id] = nil end
         end
         if addon.CustomEncounterTimers then addon.CustomEncounterTimers.Append(list, GetTime()) end
-        if addon.MplusBargainTimer then addon.MplusBargainTimer.Append(list, GetTime()) end
         table.sort(list, function(a, b)
             if a.remaining == b.remaining then
                 if not not a.custom ~= not not b.custom then return not a.custom end
@@ -323,8 +320,7 @@ end
 
 UpdateLoop = function()
     local running = active and (next(timeline) ~= nil or next(timers) ~= nil
-        or (addon.CustomEncounterTimers and addon.CustomEncounterTimers.HasTimers())
-        or (addon.MplusBargainTimer and addon.MplusBargainTimer.HasTimers())) or false
+        or (addon.CustomEncounterTimers and addon.CustomEncounterTimers.HasTimers())) or false
     if running == loopRunning then return end
     loopRunning = running
     if running then

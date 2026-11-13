@@ -28,8 +28,30 @@ local function Key(bag, slot)
     end
     return bag .. ":" .. slot
 end
+-- While Blizzard's sort runs, items sit on the cursor and totals dip then
+-- return; scanning then would count the returning stacks as new. Scans are
+-- skipped until bag updates settle, then one scan reconciles (no net change).
+local sorting, sortToken = false, 0
+local function EndSort(token)
+    if token ~= sortToken then return end
+    sorting = false
+    Bags.TrackNewItems()
+    Bags.QueueRefresh()
+end
+function Bags.BeginSort()
+    sorting, sortToken = true, sortToken + 1
+    local token = sortToken
+    C_Timer.After(1.5, function() EndSort(token) end)
+end
 function Bags.TrackNewItems(reset)
     if not initialized and not reset then return end
+    if sorting and not reset then
+        -- Debounce: finish 0.6s after the last bag update of the sort.
+        sortToken = sortToken + 1
+        local token = sortToken
+        C_Timer.After(0.6, function() EndSort(token) end)
+        return
+    end
     local current, keys, totals, oldTotals, pool = {}, {}, {}, {}, {}
     local order = {}
     for _, bag in ipairs(Bags.InventoryIDs()) do

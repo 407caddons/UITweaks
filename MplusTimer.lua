@@ -145,7 +145,7 @@ local function CreateBar(parent, index)
     bg:SetColorTexture(0, 0, 0, 0.5)
 
     local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    text:SetFont(LunaUITweaksAPI.Style.Font(), 10, "OUTLINE")
     text:SetPoint("CENTER")
 
     bars[index] = frame
@@ -187,7 +187,7 @@ local function InitFrames()
 
     -- Deaths text (top left)
     deathsText = mainFrame:CreateFontString(nil, "OVERLAY")
-    deathsText:SetFont(fontPath, fontSize, "OUTLINE")
+    deathsText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     deathsText:SetPoint("TOPLEFT", 10, -8)
     deathsText:SetJustifyH("LEFT")
 
@@ -244,20 +244,20 @@ local function InitFrames()
 
     -- Timer text (large, right)
     timerText = mainFrame:CreateFontString(nil, "OVERLAY")
-    timerText:SetFont(fontPath, timerFontSize, "OUTLINE")
+    timerText:SetFont(LunaUITweaksAPI.Style.Font(), timerFontSize, "OUTLINE")
     timerText:SetPoint("TOPRIGHT", -10, -8)
     timerText:SetJustifyH("RIGHT")
 
     -- Key level text
     local kc = settings.keyColor or { r = 1, g = 0.82, b = 0 }
     keyText = mainFrame:CreateFontString(nil, "OVERLAY")
-    keyText:SetFont(fontPath, fontSize, "OUTLINE")
+    keyText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     keyText:SetTextColor(kc.r, kc.g, kc.b)
 
     -- Affix text
     local ac = settings.affixColor or { r = 0.8, g = 0.8, b = 0.8 }
     affixText = mainFrame:CreateFontString(nil, "OVERLAY")
-    affixText:SetFont(fontPath, fontSize - 1, "OUTLINE")
+    affixText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 1, "OUTLINE")
     affixText:SetTextColor(ac.r, ac.g, ac.b)
 
     -- Key + Affix positioned below timer
@@ -291,7 +291,7 @@ local function InitFrames()
 
     -- Bar time labels (below bars)
     for i = 1, 3 do
-        barTexts[i]:SetFont(fontPath, fontSize - 2, "OUTLINE")
+        barTexts[i]:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 2, "OUTLINE")
         barTexts[i]:SetTextColor(1, 1, 1)
     end
 
@@ -310,24 +310,24 @@ local function InitFrames()
     forcesBg:SetColorTexture(0, 0, 0, 0.5)
 
     forcesText = forcesBar:CreateFontString(nil, "OVERLAY")
-    forcesText:SetFont(fontPath, fontSize - 1, "OUTLINE")
+    forcesText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 1, "OUTLINE")
     forcesText:SetPoint("CENTER")
     forcesText:SetTextColor(0.4, 0.8, 1.0)
 
     -- Boss objective texts
     bossMeasure = mainFrame:CreateFontString(nil, "OVERLAY")
-    bossMeasure:SetFont(fontPath, fontSize, "OUTLINE")
+    bossMeasure:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
     bossMeasure:Hide()
     for i = 1, MAX_BOSSES do
         local bt = mainFrame:CreateFontString(nil, "OVERLAY")
-        bt:SetFont(fontPath, fontSize, "OUTLINE")
+        bt:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
         bt:SetJustifyH("LEFT")
         bt:SetWordWrap(false)
         bt:SetTextColor(1, 1, 1)
         bossTexts[i] = bt
 
         local bpt = mainFrame:CreateFontString(nil, "OVERLAY")
-        bpt:SetFont(fontPath, fontSize, "OUTLINE")
+        bpt:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
         bpt:SetJustifyH("RIGHT")
         bpt:SetWordWrap(false)
         bpt:SetTextColor(1, 1, 1)
@@ -362,15 +362,15 @@ local function ApplyLayout()
     local barHeight = settings.barHeight or 8
 
     wipe(bossFitCache)
-    bossMeasure:SetFont(fontPath, fontSize, "OUTLINE")
+    bossMeasure:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
 
     mainFrame:SetWidth(barWidth + 20)
 
-    deathsText:SetFont(fontPath, fontSize, "OUTLINE")
-    timerText:SetFont(fontPath, timerFontSize, "OUTLINE")
-    keyText:SetFont(fontPath, fontSize, "OUTLINE")
-    affixText:SetFont(fontPath, fontSize - 1, "OUTLINE")
-    forcesText:SetFont(fontPath, fontSize - 1, "OUTLINE")
+    deathsText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
+    timerText:SetFont(LunaUITweaksAPI.Style.Font(), timerFontSize, "OUTLINE")
+    keyText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
+    affixText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 1, "OUTLINE")
+    forcesText:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 1, "OUTLINE")
 
     -- Apply text colors from settings
     local kc = settings.keyColor or { r = 1, g = 0.82, b = 0 }
@@ -415,7 +415,7 @@ local function ApplyLayout()
     bars[3]:SetSize(barWidth * fractions[3], barHeight)
 
     for i = 1, 3 do
-        barTexts[i]:SetFont(fontPath, fontSize - 2, "OUTLINE")
+        barTexts[i]:SetFont(LunaUITweaksAPI.Style.Font(), fontSize - 2, "OUTLINE")
     end
 
     forcesBar:ClearAllPoints()
@@ -426,11 +426,11 @@ local function ApplyLayout()
     local bossY = barY - barHeight - 6 - barHeight - 8
     for i = 1, MAX_BOSSES do
         bossTexts[i]:ClearAllPoints()
-        bossTexts[i]:SetFont(fontPath, fontSize, "OUTLINE")
+        bossTexts[i]:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
         bossTexts[i]:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 10, bossY - ((i - 1) * (fontSize + 4)))
 
         bossPctTexts[i]:ClearAllPoints()
-        bossPctTexts[i]:SetFont(fontPath, fontSize, "OUTLINE")
+        bossPctTexts[i]:SetFont(LunaUITweaksAPI.Style.Font(), fontSize, "OUTLINE")
         bossPctTexts[i]:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -10, bossY - ((i - 1) * (fontSize + 4)))
     end
 

@@ -10,7 +10,7 @@ local function Controls(panel, section)
     local function DB() return QoL.Settings() end
     local function Apply() QoL.UpdateSettings() end
     local function Label(text, y)
-        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local label = panel:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
         label:SetPoint("TOPLEFT", 24, y)
         label:SetWidth(550)
         label:SetJustifyH("LEFT")
@@ -74,7 +74,7 @@ end
 function Setup.GeneralConvenience(panel, y)
     local DB, Apply, Label, Check, Slider, Button, Refresh = Controls(panel, "General")
     Helpers.CreateSectionHeader(panel, "Cursor ring", y)
-    Check("cursor", "Show cursor ring (hidden during mouse-look)", y - 30)
+    Check("cursor", "Show cursor ring", y - 30)
     Check("cursorClassColor", "Use class color", y - 60)
     Slider("cursorSize", "Ring size", y - 120, 12, 80, 1)
     Slider("cursorAlpha", "Opacity", y - 185, .1, 1, .1)
@@ -87,6 +87,7 @@ function Setup.GeneralConvenience(panel, y)
         Check("spellRanks", "Outline bar spells below your highest known rank and list them in chat at login/reload", y - 355)
     end
     Check("talentPoints", "Show a reminder while you have unspent talent points (out of combat; move it in Layout Mode)", y - 385)
+    Check("groupBuffs", "List group members missing your class buff, e.g. Arcane Intellect (out of combat; move it in Layout Mode)", y - 415)
     Refresh()
 end
 function Setup.LootConvenience(panel, y)

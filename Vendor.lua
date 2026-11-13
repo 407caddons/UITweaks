@@ -60,6 +60,8 @@ local function SellGreys()
         C_MerchantFrame.SellAllJunkItems()
         Log("Sold all junk items.")
     end
+    -- Items assigned to the Vendor section in Luna Bags are sold with the greys.
+    if LunaUITweaksAPI.BagsSellVendorItems then LunaUITweaksAPI.BagsSellVendorItems() end
 end
 
 local EventBus = addonTable.EventBus
@@ -78,7 +80,7 @@ warningFrame:SetScript("OnDragStop", function(self)
 end)
 warningFrame:Hide()
 
-local warningText = warningFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+local warningText = warningFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 warningText:SetPoint("CENTER")
 warningText:SetText("Repair your gear")
 warningText:SetTextColor(1, 0, 0) -- Red
@@ -97,7 +99,7 @@ bagWarningFrame:SetScript("OnDragStop", function(self)
 end)
 bagWarningFrame:Hide()
 
-local bagWarningText = bagWarningFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+local bagWarningText = bagWarningFrame:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
 bagWarningText:SetPoint("CENTER")
 bagWarningText:SetText("Bag space low")
 bagWarningText:SetTextColor(1, 0.5, 0) -- Orange
@@ -260,8 +262,8 @@ function addonTable.Vendor.UpdateSettings()
 
     -- Font (applies to both warnings)
     if settings.font and settings.fontSize then
-        warningText:SetFont(settings.font, settings.fontSize, "OUTLINE")
-        bagWarningText:SetFont(settings.font, settings.fontSize, "OUTLINE")
+        warningText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
+        bagWarningText:SetFont(LunaUITweaksAPI.Style.Font(), settings.fontSize, "OUTLINE")
     end
 
     -- Durability Warning Position

@@ -181,7 +181,7 @@ function addonTable.Frames.UpdateFrames()
 
         -- Name Overlay
         if not f.nameText then
-            f.nameText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+            f.nameText = f:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
             f.nameText:SetPoint("CENTER")
         end
 
@@ -249,7 +249,7 @@ function addonTable.Frames.UpdateFrames()
             end
 
             local function CreateBtn(text, relativeTo, point, rPoint, x, y, onClick)
-                local btn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+                local btn = LunaUITweaksAPI.Style.Button(CreateFrame("Button", nil, f, "UIPanelButtonTemplate"))
                 btn:SetSize(20, 20)
                 btn:SetPoint(point, relativeTo, rPoint, x, y)
                 btn:SetText(text)

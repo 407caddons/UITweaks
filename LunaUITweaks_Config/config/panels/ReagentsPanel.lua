@@ -7,7 +7,7 @@ local Helpers = addonTable.ConfigHelpers
 function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     Helpers.CreateResetButton(panel, "reagents")
     -- Panel Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Reagent Tracker")
 
@@ -41,7 +41,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     end)
 
     -- Description
-    local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local desc = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     desc:SetPoint("TOPLEFT", 40, -100)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
@@ -53,7 +53,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
     -- Character Data Section
     Helpers.CreateSectionHeader(panel, "Known Characters", -150)
 
-    local sectionDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local sectionDesc = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     sectionDesc:SetPoint("TOPLEFT", 20, -173)
     sectionDesc:SetWidth(560)
     sectionDesc:SetJustifyH("LEFT")
@@ -113,7 +113,7 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
         if #chars == 0 then
             -- Show empty message
             if not scrollChild.emptyText then
-                scrollChild.emptyText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                scrollChild.emptyText = scrollChild:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 scrollChild.emptyText:SetPoint("TOPLEFT", 0, 0)
                 scrollChild.emptyText:SetText("No character data yet. Log in on each character to register them.")
                 scrollChild.emptyText:SetTextColor(0.5, 0.5, 0.5)
@@ -140,30 +140,30 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
                 row.bg:SetAllPoints()
 
                 -- Character name
-                row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.nameText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                 row.nameText:SetPoint("LEFT", 5, 4)
                 row.nameText:SetWidth(160)
                 row.nameText:SetJustifyH("LEFT")
 
                 -- Realm text (smaller, below name)
-                row.realmText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.realmText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.realmText:SetPoint("LEFT", 5, -8)
                 row.realmText:SetWidth(160)
                 row.realmText:SetJustifyH("LEFT")
 
                 -- Last seen
-                row.lastSeenText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.lastSeenText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.lastSeenText:SetPoint("LEFT", 175, 0)
                 row.lastSeenText:SetWidth(110)
                 row.lastSeenText:SetJustifyH("LEFT")
 
                 -- Module badges (Reagents / Warehousing)
-                row.reagentsBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.reagentsBadge = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.reagentsBadge:SetPoint("LEFT", 295, 0)
                 row.reagentsBadge:SetWidth(75)
                 row.reagentsBadge:SetJustifyH("LEFT")
 
-                row.warehousingBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                row.warehousingBadge = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                 row.warehousingBadge:SetPoint("LEFT", 375, 0)
                 row.warehousingBadge:SetWidth(80)
                 row.warehousingBadge:SetJustifyH("LEFT")
@@ -272,27 +272,27 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
                     row.bg = row:CreateTexture(nil, "BACKGROUND")
                     row.bg:SetAllPoints()
 
-                    row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                    row.nameText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormal")
                     row.nameText:SetPoint("LEFT", 5, 4)
                     row.nameText:SetWidth(160)
                     row.nameText:SetJustifyH("LEFT")
 
-                    row.realmText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.realmText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                     row.realmText:SetPoint("LEFT", 5, -8)
                     row.realmText:SetWidth(160)
                     row.realmText:SetJustifyH("LEFT")
 
-                    row.lastSeenText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.lastSeenText = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                     row.lastSeenText:SetPoint("LEFT", 175, 0)
                     row.lastSeenText:SetWidth(110)
                     row.lastSeenText:SetJustifyH("LEFT")
 
-                    row.reagentsBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.reagentsBadge = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                     row.reagentsBadge:SetPoint("LEFT", 295, 0)
                     row.reagentsBadge:SetWidth(75)
                     row.reagentsBadge:SetJustifyH("LEFT")
 
-                    row.warehousingBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    row.warehousingBadge = row:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
                     row.warehousingBadge:SetPoint("LEFT", 375, 0)
                     row.warehousingBadge:SetWidth(80)
                     row.warehousingBadge:SetJustifyH("LEFT")
@@ -334,22 +334,22 @@ function addonTable.ConfigSetup.Reagents(panel, tab, configWindow)
 
     -- Column headers
     -- scrollFrame starts at x=20; row columns: name=LEFT+5, lastSeen=LEFT+175, reagents=LEFT+295, warehousing=LEFT+375, delete=RIGHT-5
-    local nameHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local nameHeader = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     nameHeader:SetPoint("TOPLEFT", 25, -193)
     nameHeader:SetText("Character")
     nameHeader:SetTextColor(1, 0.82, 0)
 
-    local lastSeenHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lastSeenHeader = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     lastSeenHeader:SetPoint("TOPLEFT", 195, -193)
     lastSeenHeader:SetText("Last Seen")
     lastSeenHeader:SetTextColor(1, 0.82, 0)
 
-    local reagentsHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local reagentsHeader = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     reagentsHeader:SetPoint("TOPLEFT", 315, -193)
     reagentsHeader:SetText("Reagents")
     reagentsHeader:SetTextColor(1, 0.82, 0)
 
-    local warehousingHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local warehousingHeader = panel:CreateFontString(nil, "OVERLAY", "LunaFontNormalSmall")
     warehousingHeader:SetPoint("TOPLEFT", 395, -193)
     warehousingHeader:SetText("Warehousing")
     warehousingHeader:SetTextColor(1, 0.82, 0)

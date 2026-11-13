@@ -22,7 +22,7 @@ local sliderCounter = 0
 local function MakeSlider(parent, label, yOff, minV, maxV, getVal, setVal, applyFn)
     sliderCounter = sliderCounter + 1
 
-    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local lbl = parent:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     lbl:SetPoint("TOPLEFT", 20, yOff)
     lbl:SetText(label)
 
@@ -109,7 +109,7 @@ local function MakeDropdown(parent, yOff, width, getItems, getCurrent, onSelect)
         while #itemButtons < #items do
             local b = CreateFrame("Button", nil, popup)
             b:SetHeight(20)
-            b.fs = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            b.fs = b:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
             b.fs:SetPoint("LEFT", 6, 0)
             b.fs:SetJustifyH("LEFT")
             b:SetScript("OnEnter", function(self)
@@ -190,11 +190,11 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     sf:SetScrollChild(child)
 
     -- ---- Title ----
-    local title = child:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    local title = child:CreateFontString(nil, "OVERLAY", "LunaFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Damage Meter")
 
-    local desc = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local desc = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     desc:SetPoint("TOPLEFT", 16, -44)
     desc:SetText("|cff888888A custom damage meter powered by Blizzard's C_DamageMeter API. Supports Damage, Healing, Interrupts, Deaths, Dispels, and Damage Taken.|r")
 
@@ -239,7 +239,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     yBase = yBase - 28
 
     -- Number of meters
-    local numLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local numLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     numLabel:SetPoint("TOPLEFT", 20, yBase)
     numLabel:SetText("Number of Meters:")
 
@@ -279,7 +279,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         local captMIdx = mIdx
 
         -- Row 1: "Meter X:" header label
-        local mLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local mLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         mLabel:SetPoint("TOPLEFT", 20, yBase)
         mLabel:SetText("Meter " .. mIdx .. ":")
 
@@ -304,7 +304,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
             end)
 
         -- Session radio (same row as dropdown)
-        local sessLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local sessLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
         sessLabel:SetPoint("TOPLEFT", 170, controlY)
         sessLabel:SetText("Session:")
 
@@ -436,7 +436,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     yBase = yBase - 56
 
     -- Border size
-    local borderLbl = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local borderLbl = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     borderLbl:SetPoint("TOPLEFT", 20, yBase)
     borderLbl:SetText("Border Size:")
     local borderEB = CreateFrame("EditBox", nil, child, "InputBoxTemplate")
@@ -487,7 +487,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     Helpers.CreateSectionHeader(child, "Dock to Frame", yBase)
     yBase = yBase - 28
 
-    local dockNote = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local dockNote = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     dockNote:SetPoint("TOPLEFT", 20, yBase)
     dockNote:SetWidth(580)
     dockNote:SetJustifyH("LEFT")
@@ -496,7 +496,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         .. "position to the selected frame every second.|r")
     yBase = yBase - 38
 
-    local dockLabel = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local dockLabel = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlight")
     dockLabel:SetPoint("TOPLEFT", 20, yBase)
     dockLabel:SetText("Dock to Frame:")
 
@@ -537,7 +537,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
         while #dockItemBtns < #items do
             local b = CreateFrame("Button", nil, dockPopup)
             b:SetHeight(20)
-            b.fs = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            b.fs = b:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
             b.fs:SetPoint("LEFT", 6, 0)
             b.fs:SetJustifyH("LEFT")
             b:SetScript("OnEnter", function(s) s.fs:SetTextColor(1, 1, 0) end)
@@ -589,7 +589,7 @@ function addonTable.ConfigSetup.DamageMeter(panel, tab, configWindow)
     Helpers.CreateSectionHeader(child, "Position & Size", yBase)
     yBase = yBase - 16
 
-    local dimNote = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local dimNote = child:CreateFontString(nil, "OVERLAY", "LunaFontHighlightSmall")
     dimNote:SetPoint("TOPLEFT", 20, yBase)
     dimNote:SetWidth(580)
     dimNote:SetJustifyH("LEFT")
