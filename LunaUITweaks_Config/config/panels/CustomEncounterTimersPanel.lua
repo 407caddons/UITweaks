@@ -22,7 +22,7 @@ function Custom.CreateEditor(parent, y)
         f:SetScript("OnClick", callback)
         return f
     end
-    Label(root, "Independent timers, sorted A–Z. Green = enabled; grey = disabled. Timers run only in combat.", 20, -32, 510)
+    Label(root, "Independent timers, sorted A–Z. Green = enabled; grey = disabled. Timers run only in combat unless set to ignore combat.", 20, -32, 510)
     local list = CreateFrame("ScrollFrame", nil, root, "UIPanelScrollFrameTemplate")
     list:SetPoint("TOPLEFT", 20, -110)
     list:SetSize(175, 620)
@@ -58,6 +58,17 @@ function Custom.CreateEditor(parent, y)
     enabled:SetPoint("TOPLEFT", 0, -58)
     enabled.Text:SetText("Enable this timer")
     enabled:SetScript("OnClick", Dirty)
+    local ignoreCombat = CreateFrame("CheckButton", nil, editor, "ChatConfigCheckButtonTemplate")
+    ignoreCombat:SetPoint("TOPLEFT", 150, -58)
+    ignoreCombat.Text:SetText("Ignore combat")
+    ignoreCombat:SetScript("OnClick", Dirty)
+    ignoreCombat:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Ignore combat")
+        GameTooltip:AddLine("Runs outside combat too (a spell-cast or buff timer starts out of combat) and keeps running into the next combat instead of stopping when combat or the encounter ends. Useful for cooldowns such as Blood Fury.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    ignoreCombat:SetScript("OnLeave", GameTooltip_Hide)
     local function Dropdown(label, top)
         Label(editor, label, 0, top, 300)
         local f = CreateFrame("Frame", nil, editor, "UIDropDownMenuTemplate")
@@ -66,9 +77,24 @@ function Custom.CreateEditor(parent, y)
         return f
     end
     local triggerDD = Dropdown("Start on", -98)
+    -- Buff trigger only: cancel the timer when the buff drops.
+    local stopOnLoss = CreateFrame("CheckButton", nil, editor, "ChatConfigCheckButtonTemplate")
+    stopOnLoss:SetPoint("TOPLEFT", 150, -92)
+    stopOnLoss.Text:SetText("Stop if the buff ends")
+    stopOnLoss:SetScript("OnClick", Dirty)
+    stopOnLoss:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Stop if the buff ends")
+        GameTooltip:AddLine("For \"Buff gained\" timers: remove the bar as soon as the buff is gone from you.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    stopOnLoss:SetScript("OnLeave", GameTooltip_Hide)
     local trigger = "combat"
-    local triggerNames = {combat = "Combat start", encounter = "Encounter start", cast = "Your spell cast"}
-    local spell = Edit("Your cast spell name or ID", 0, -161, 300, 200)
+    local triggerNames = {combat = "Combat start", encounter = "Encounter start", cast = "Your spell cast",
+        buff = "Buff gained (on you)"}
+    -- Triggers that need a spell: your cast, or a buff appearing on you.
+    local function UsesSpell(value) return value == "cast" or value == "buff" end
+    local spell = Edit("Spell name or ID (your cast, or the buff)", 0, -161, 300, 200)
     local popup = CreateFrame("Frame", nil, editor, "BackdropTemplate")
     popup:SetPoint("TOPLEFT", spell, "BOTTOMLEFT", 0, -2)
     popup:SetSize(300, 1)
@@ -90,7 +116,7 @@ function Custom.CreateEditor(parent, y)
         Dirty()
     end
     local function UpdateSearch()
-        if trigger ~= "cast" or not spell:HasFocus() or not editor:IsShown() then
+        if not UsesSpell(trigger) or not spell:HasFocus() or not editor:IsShown() then
             HideSearch()
             return
         end
@@ -132,7 +158,7 @@ function Custom.CreateEditor(parent, y)
             searchGeneration = searchGeneration + 1
             local generation = searchGeneration
             C_Timer.After(.3, function()
-                if generation == searchGeneration and spell:HasFocus() and editor:IsShown() and trigger == "cast" then
+                if generation == searchGeneration and spell:HasFocus() and editor:IsShown() and UsesSpell(trigger) then
                     addon.BuffAlerts.SearchEncounterJournal(spell:GetText())
                 end
             end)
@@ -177,13 +203,16 @@ function Custom.CreateEditor(parent, y)
         ownsPicker = false
     end
     local function Read()
-        return {name = name:GetText(), enabled = not not enabled:GetChecked(), trigger = trigger,
+        return {name = name:GetText(), enabled = not not enabled:GetChecked(),
+            ignoreCombat = not not ignoreCombat:GetChecked(), trigger = trigger,
+            stopOnLoss = not not stopOnLoss:GetChecked(),
             spell = spell:GetText(), first = first:GetText(), repeatText = repeatBox:GetText(),
             subzone = subzone:GetText(), map = map:GetText(), countdown = countdown, expiry = expiry,
             defaultColor = not not defaultColor:GetChecked(), color = {r = color.r, g = color.g, b = color.b}}
     end
     local function Values(timer)
-        return {name = timer.name, enabled = timer.enabled, trigger = timer.trigger,
+        return {name = timer.name, enabled = timer.enabled, ignoreCombat = timer.ignoreCombat == true,
+            trigger = timer.trigger, stopOnLoss = timer.stopOnLoss == true,
             spell = timer.spellID and tostring(timer.spellID) or "", first = Custom.FormatTime(timer.first),
             repeatText = timer.interval and Custom.FormatTime(timer.interval) or "",
             subzone = timer.location and timer.location.subzone or "",
@@ -213,10 +242,13 @@ function Custom.CreateEditor(parent, y)
             editor:Show()
             name:SetText(v.name)
             enabled:SetChecked(v.enabled)
+            ignoreCombat:SetChecked(v.ignoreCombat)
             trigger = v.trigger
             UIDropDownMenu_SetText(triggerDD, triggerNames[trigger])
             spell:SetText(v.spell)
-            spell:SetEnabled(trigger == "cast")
+            spell:SetEnabled(UsesSpell(trigger))
+            stopOnLoss:SetChecked(v.stopOnLoss)
+            stopOnLoss:SetEnabled(trigger == "buff")
             first:SetText(v.first)
             repeatBox:SetText(v.repeatText)
             subzone:SetText(v.subzone)
@@ -267,14 +299,15 @@ function Custom.CreateEditor(parent, y)
         child:SetHeight(math.max(1, #timers * 34))
     end
     UIDropDownMenu_Initialize(triggerDD, function()
-        for _, value in ipairs({"combat", "encounter", "cast"}) do
+        for _, value in ipairs({"combat", "encounter", "cast", "buff"}) do
             local item = UIDropDownMenu_CreateInfo()
             item.text = triggerNames[value]
             item.checked = trigger == value
             item.func = function()
                 trigger = value
                 UIDropDownMenu_SetText(triggerDD, item.text)
-                spell:SetEnabled(value == "cast")
+                spell:SetEnabled(UsesSpell(value))
+                stopOnLoss:SetEnabled(value == "buff")
                 HideSearch()
                 Dirty()
             end
@@ -336,7 +369,9 @@ function Custom.CreateEditor(parent, y)
             message:SetText("Invalid repeat interval.")
             return
         end
-        local data = {name = v.name, enabled = v.enabled, trigger = v.trigger, first = Custom.ParseTime(v.first),
+        local data = {name = v.name, enabled = v.enabled, ignoreCombat = v.ignoreCombat, trigger = v.trigger,
+            stopOnLoss = v.stopOnLoss,
+            first = Custom.ParseTime(v.first),
             interval = interval, spellID = tonumber(v.spell), expirySound = v.expiry}
         if countdown ~= "default" then data.countdown = countdown == "on" end
         if not v.defaultColor then data.color = v.color end

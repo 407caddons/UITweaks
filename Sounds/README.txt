@@ -1,3 +1,7 @@
+Sounds shipped with the addon are listed in BuffAlerts.BUNDLED_SOUNDS
+(BuffAlerts.lua) and show up as "Luna: ..." presets without registering them.
+Add the file name there when you ship a new sound.
+
 Place custom Buff Alert .ogg or .mp3 files in this folder.
 
 In the Buff Alerts configuration, choose "Custom file / file ID" and enter:

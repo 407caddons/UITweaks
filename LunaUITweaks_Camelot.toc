@@ -1,8 +1,8 @@
 ## Interface: 16001
-## Title: |cff00ff96Luna's UI Tweaks|r - Forever (Test)
-## Notes: Experimental first-pass WoW Forever compatibility build
+## Title: |cff00ff96Luna's UI Tweaks|r
+## Notes: UI enhancements for WoW Forever
 ## Author: 407c
-## Version: 1.35.0
+## Version: 1.37.0
 ## X-Curse-Project-ID: 1450486
 ## SavedVariables: UIThingsDB, LunaUITweaks_TalentReminders, LunaUITweaks_ReagentData, LunaUITweaks_QuestReminders, LunaUITweaks_WarehousingData, LunaUITweaks_CharacterData
 ## SavedVariablesPerCharacter:
@@ -62,6 +62,7 @@ BuffAlerts.lua
 ProcAlerts.lua
 NameplateColors.lua
 NameplateQuestMarks.lua
+NameplateCastTarget.lua
 CooldownManager.lua
 qualityOfLife\QualityOfLife.lua
 qualityOfLife\Cursor.lua

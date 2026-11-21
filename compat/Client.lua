@@ -85,9 +85,9 @@ function Client.GetBankIDs(bankType)
     return ids
 end
 function Client.PrintStatus()
-    print(("LunaUITweaks: %s test build; interface %s, build %s"):format(Client.flavor, tostring(Client.interface), tostring(Client.build)))
+    print(("LunaUITweaks: %s client; interface %s, build %s"):format(Client.flavor, tostring(Client.interface), tostring(Client.build)))
     if Client.isForever then
-        print("Forever first pass: Retail talents, M+/Vault, automated banking, gear review and Retail class alerts are disabled.")
+        print("Forever: Retail talents, M+/Vault, automated banking, gear review and Retail class alerts are disabled.")
         print("Damage meter: " .. tostring(C_DamageMeter and type(C_DamageMeter.GetCombatSessionFromType) == "function") .. "; cooldown viewer: " .. tostring(C_CooldownViewer ~= nil))
     end
     -- Talent-point APIs differ between clients: report which exist and their current values.

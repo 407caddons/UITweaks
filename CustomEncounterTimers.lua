@@ -3,6 +3,8 @@ local Custom = {}
 addon.CustomEncounterTimers = Custom
 local enabled, inCombat, encounterStarted = false, false, false
 local runs = {}
+local buffUp = {} -- [spellID] = true while a "buff" trigger's aura is on the player
+local CheckBuffs -- defined below Start; used by Configure
 local function DB() return UIThingsDB.encounterBars end
 local Public = addon.Secret.IsPublic
 local function Trim(v) return type(v) == "string" and v:match("^%s*(.-)%s*$") or "" end
@@ -37,7 +39,7 @@ function Custom.GetSortedTimers()
     return list
 end
 function Custom.GetIcon(timer)
-    if timer.trigger == "cast" and timer.spellID and C_Spell and C_Spell.GetSpellTexture then
+    if (timer.trigger == "cast" or timer.trigger == "buff") and timer.spellID and C_Spell and C_Spell.GetSpellTexture then
         return C_Spell.GetSpellTexture(timer.spellID) or 134376
     end
     return 134376
@@ -61,7 +63,8 @@ end
 function Custom.SaveTimer(id, values)
     local name = Trim(values.name)
     if name == "" or #name > 200 or name:find("[\r\n]") then return nil, "Enter a timer name (1–200 characters)." end
-    if values.trigger ~= "combat" and values.trigger ~= "encounter" and values.trigger ~= "cast" then
+    if values.trigger ~= "combat" and values.trigger ~= "encounter" and values.trigger ~= "cast"
+        and values.trigger ~= "buff" then
         return nil, "Choose a start trigger."
     end
     if not ValidNumber(values.first, 1, 3600)
@@ -71,9 +74,17 @@ function Custom.SaveTimer(id, values)
     if values.trigger == "cast" and not ValidNumber(values.spellID, 1, 2147483647) then
         return nil, "Enter the spell ID of your successful cast."
     end
+    if values.trigger == "buff" and not ValidNumber(values.spellID, 1, 2147483647) then
+        return nil, "Enter the spell ID of the buff."
+    end
     local timer = {id = id, name = name, enabled = not not values.enabled, trigger = values.trigger,
         first = values.first, interval = values.interval}
-    if values.trigger == "cast" then timer.spellID = values.spellID end
+    if values.trigger == "cast" or values.trigger == "buff" then timer.spellID = values.spellID end
+    -- Buff trigger only: cancel the running timer when the buff is lost.
+    if values.trigger == "buff" and values.stopOnLoss then timer.stopOnLoss = true end
+    -- Ignore combat: runs (and can start from a cast) outside combat and is not
+    -- cancelled when combat or the encounter ends.
+    if values.ignoreCombat then timer.ignoreCombat = true end
     if values.countdown ~= nil then timer.countdown = not not values.countdown end
     if values.expirySound and values.expirySound ~= "none" then
         if type(values.expirySound) ~= "string" or not values.expirySound:match("^[%w_:%-]+$") then
@@ -129,6 +140,7 @@ function Custom.Configure(active)
     if not active then
         enabled, inCombat, encounterStarted = false, false, false
         wipe(runs)
+        wipe(buffUp)
         return
     end
     if not enabled then
@@ -136,16 +148,23 @@ function Custom.Configure(active)
         encounterStarted = IsEncounterInProgress and not not IsEncounterInProgress() or false
     end
     enabled = true
+    CheckBuffs(true) -- buffs already up do not start timers
     local valid = {}
     for _, timer in ipairs(list) do if timer.enabled then valid[timer.id] = timer end end
     for id, run in pairs(runs) do if valid[id] ~= run.source then runs[id] = nil end end
 end
-local function Start(trigger, spellID)
+-- Runs that survive leaving combat / the encounter (timer set to ignore combat).
+local function Persistent(run) return run.source.ignoreCombat == true end
+local function WipeCombatRuns()
+    for id, run in pairs(runs) do if not Persistent(run) then runs[id] = nil end end
+end
+local function Start(trigger, spellID, persistentOnly)
     local location = Custom.CaptureLocation()
     local now = GetTime()
     for _, timer in ipairs(Custom.GetTimers()) do
         if timer.enabled and timer.trigger == trigger and Matches(timer, location)
-            and (trigger ~= "cast" or timer.spellID == spellID) then
+            and ((trigger ~= "cast" and trigger ~= "buff") or timer.spellID == spellID)
+            and (not persistentOnly or timer.ignoreCombat) then
             local entry = {custom = true, customKey = timer.id, name = timer.name, icon = Custom.GetIcon(timer),
                 duration = timer.first, ends = now + timer.first, firstEnd = now + timer.first, interval = timer.interval,
                 color = timer.color, countdown = timer.countdown, expirySound = timer.expirySound, spoken = {}}
@@ -153,11 +172,73 @@ local function Start(trigger, spellID)
         end
     end
 end
+-- "buff" trigger: true/false when the player has the aura, nil when unreadable
+-- (aura data hidden from addons, e.g. Retail combat and encounters).
+local function HasBuff(spellID)
+    if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then return nil end
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+        if not ok or not Public(aura) then return nil end
+        return aura ~= nil
+    end
+    if not UnitBuff then return nil end
+    for i = 1, 40 do
+        local name, _, _, _, _, _, _, _, _, id = UnitBuff("player", i)
+        if not name then return false end
+        if Public(id) and id == spellID then return true end
+    end
+    return false
+end
+-- Starts "buff" timers whose aura just appeared. seedOnly records what is
+-- already up (login, zoning, enabling) without starting anything.
+CheckBuffs = function(seedOnly)
+    local started = false
+    for _, timer in ipairs(Custom.GetTimers()) do
+        local id = timer.enabled and timer.trigger == "buff" and timer.spellID
+        if id then
+            local has = HasBuff(id)
+            if has == false then
+                if buffUp[id] then
+                    -- Lost: stop every running timer on this buff that asks for it.
+                    for runID, run in pairs(runs) do
+                        local source = run.source
+                        if source.trigger == "buff" and source.spellID == id and source.stopOnLoss then
+                            runs[runID] = nil
+                            started = true -- redraw
+                        end
+                    end
+                end
+                buffUp[id] = nil
+            elseif has and not buffUp[id] then
+                buffUp[id] = true
+                if not seedOnly then
+                    if InCombatLockdown() then
+                        inCombat = true
+                        Start("buff", id)
+                    else
+                        -- Out of combat only timers that ignore combat start.
+                        Start("buff", id, true)
+                    end
+                    started = true
+                end
+            end
+        end
+    end
+    return started
+end
+-- Returns true when an aura change started or stopped a timer (the caller redraws).
 function Custom.OnEvent(event, unit, castGUID, spellID)
     if not enabled then return end
-    if event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if not InCombatLockdown() or not Public(unit) or unit ~= "player"
-            or not Public(spellID) or type(spellID) ~= "number" then return end
+    if event == "UNIT_AURA" then
+        if not Public(unit) or unit ~= "player" then return end
+        return CheckBuffs(false)
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if not Public(unit) or unit ~= "player" or not Public(spellID) or type(spellID) ~= "number" then return end
+        if not InCombatLockdown() then
+            -- Out of combat only timers that ignore combat start.
+            Start("cast", spellID, true)
+            return
+        end
         inCombat = true
         Start("cast", spellID)
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -172,12 +253,14 @@ function Custom.OnEvent(event, unit, castGUID, spellID)
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         inCombat = false
-        wipe(runs)
+        WipeCombatRuns()
     elseif event == "ENCOUNTER_END" then
         encounterStarted = false
-        wipe(runs)
+        WipeCombatRuns()
     elseif event == "PLAYER_ENTERING_WORLD" then
-        wipe(runs)
+        WipeCombatRuns()
+        wipe(buffUp)
+        CheckBuffs(true)
         inCombat = not not InCombatLockdown()
         encounterStarted = IsEncounterInProgress and not not IsEncounterInProgress() or false
     elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
@@ -185,15 +268,16 @@ function Custom.OnEvent(event, unit, castGUID, spellID)
         for id, run in pairs(runs) do if not Matches(run.source, location) then runs[id] = nil end end
     end
 end
+-- Out of combat only runs that ignore combat are shown.
 function Custom.HasTimers()
-    if not enabled or not inCombat then return false end
-    for _, run in pairs(runs) do if next(run.entries) then return true end end
+    if not enabled then return false end
+    for _, run in pairs(runs) do if (inCombat or Persistent(run)) and next(run.entries) then return true end end
     return false
 end
 function Custom.Append(list, now)
-    if not enabled or not inCombat then return end
+    if not enabled then return end
     for _, run in pairs(runs) do
-        for key, entry in pairs(run.entries) do
+        for key, entry in pairs((inCombat or Persistent(run)) and run.entries or {}) do
             if now >= entry.ends then
                 -- Expiry is consumed before removing/advancing the entry. Never replay
                 -- missed repeats after a hitch, or sound on cancellation/recast.

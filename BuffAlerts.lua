@@ -26,6 +26,21 @@ BuffAlerts.SOUND_PRESETS = {
     { value = "runaway",    label = "Run Away",            fileID = 552035 },
 }
 
+-- Sounds shipped in the addon's Sounds folder (file name without .ogg). Add a
+-- name here when a new file is added; it appears as a preset labelled "Luna: ...".
+BuffAlerts.BUNDLED_SOUNDS = {
+    "buff", "drop", "stacks", "dodge", "fury", "lance", "shield",
+    "lets_go", "oh_no", "go", "1", "2", "3", "4", "5", "nova", "blink"
+}
+for _, name in ipairs(BuffAlerts.BUNDLED_SOUNDS) do
+    local label = name:gsub("_", " "):gsub("^%l", string.upper):gsub(" %l", string.upper)
+    BuffAlerts.SOUND_PRESETS[#BuffAlerts.SOUND_PRESETS + 1] = {
+        value = "luna:" .. name,
+        label = "Luna: " .. label,
+        file = "Interface\\AddOns\\" .. addonName .. "\\Sounds\\" .. name .. ".ogg",
+    }
+end
+
 local presetByValue = {}
 for _, preset in ipairs(BuffAlerts.SOUND_PRESETS) do
     presetByValue[preset.value] = preset
@@ -366,8 +381,8 @@ end
 function BuffAlerts.ResolveSound(sound)
     if type(sound) ~= "table" then return nil end
     local preset = presetByValue[sound.preset or "none"]
-    if preset and preset.fileID then
-        return preset.fileID
+    if preset and (preset.fileID or preset.file) then
+        return preset.fileID or preset.file
     end
     local custom = FindCustomSound(sound.preset)
     if custom then return NormalizeCustomSound(custom.file) end

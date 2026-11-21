@@ -1,8 +1,8 @@
 local addon = _G.LunaUITweaks
 addon.ConfigSetup = addon.ConfigSetup or {}
 
--- Nameplates page: threat colours (NameplateColors) and quest marks
--- (NameplateQuestMarks). Both store settings under UIThingsDB.nameplateColors,
+-- Nameplates page: threat colours (NameplateColors), casts targeting you
+-- (NameplateCastTarget) and quest marks (NameplateQuestMarks). Both store settings under UIThingsDB.nameplateColors,
 -- so the page's Reset button covers both.
 function addon.ConfigSetup.Nameplates(panel)
     local Helpers = addon.ConfigHelpers
@@ -39,6 +39,7 @@ function addon.ConfigSetup.Nameplates(panel)
         function(value) db.enabled = value; Colors.Refresh() end)
     local entries = {
         { "idle", "Out of combat" },
+        { "idleNeutral", "Out of combat: neutral" },
         { "noTank", "In combat: no tank has threat" },
         { "otherTank", "In combat: another tank has threat" },
         { "selfTank", "In combat: you have threat as a tank" },
@@ -46,16 +47,44 @@ function addon.ConfigSetup.Nameplates(panel)
     for i, entry in ipairs(entries) do
         local key = entry[1]
         Helpers.CreateColorPicker(panel, nil, entry[2], function()
-            local c = db[key]
-            return c.r, c.g, c.b
+            local c = db[key] or {}
+            return c.r or 1, c.g or 1, c.b or 1
         end, function(r, g, b)
             db[key] = { r = r, g = g, b = b }
             Colors.Refresh()
-        end, -105 - (i - 1) * 32)
+        end, -105 - (i - 1) * 28)
     end
+    -- Casts at you (right column) -------------------------------------------------
+    local cast = db.castTarget
+    local function ApplyCast() addon.NameplateCastTarget.UpdateSettings() end
+    local castHeading = panel:CreateFontString(nil, "ARTWORK", "LunaFontNormal")
+    castHeading:SetPoint("TOPLEFT", 360, -80)
+    castHeading:SetText("Casts targeting you")
+    castHeading:SetTextColor(.35, .9, .76)
+    local castCheck = Check("Outline enemies casting at you", -100,
+        function() return cast.enabled end,
+        function(value) cast.enabled = value; ApplyCast() end)
+    castCheck:ClearAllPoints()
+    castCheck:SetPoint("TOPLEFT", 356, -100)
+    local castColor = Helpers.CreateColorPicker(panel, nil, "Outline colour", function()
+        local c = cast.color or { r = 1, g = 0.15, b = 0.15 }
+        return c.r, c.g, c.b
+    end, function(r, g, b)
+        cast.color = { r = r, g = g, b = b, a = 1 }
+        ApplyCast()
+    end, -130)
+    if castColor then
+        castColor:ClearAllPoints()
+        castColor:SetPoint("TOPLEFT", panel, "TOPLEFT", 362, -130)
+    end
+    local castNote = Note("Only casts aimed at you (not area or ground casts). Drawn outside the quest outline.", -162)
+    castNote:ClearAllPoints()
+    castNote:SetPoint("TOPLEFT", 362, -162)
+    castNote:SetWidth(260)
+
     Note("Uses Blizzard's existing nameplates. Tank roles come from the group role assignment. If you pull threat "
         .. "as DPS or healer, the no-tank colour applies. When threat information is restricted or unavailable, "
-        .. "Blizzard's normal colours are used.", -240)
+        .. "Blizzard's normal colours are used.", -248)
 
     -- Quest marks ---------------------------------------------------------------
     local marks = db.questMarks

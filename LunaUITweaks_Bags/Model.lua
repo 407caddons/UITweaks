@@ -8,6 +8,7 @@ Bags.categories = {
     {key = "mounts", name = "Mounts"},
     {key = "decor", name = "Housing Decor"},
     {key = "quest", name = "Quest Items"},
+    {key = "questOther", name = "Quest Items (not in log)"},
     {key = "vendor", name = "Vendor", dropKind = "vendor"},
     {key = "junk", name = "Junk"},
     {key = "reagents", name = "Crafting Reagents"},
@@ -29,11 +30,83 @@ end
 function Bags.IsKeystone(info)
     return info.itemID == 158923 or (type(info.hyperlink) == "string" and info.hyperlink:find("|Hkeystone:", 1, true) ~= nil)
 end
+-- ============================================================
+-- Quest items: in the log vs not
+-- ============================================================
+-- Objective text without counts, spaces or punctuation ("Wolf Pelt: 3/8" -> "wolfpelt").
+local function Bare(text)
+    return (text:gsub("%d+%s*/%s*%d+", ""):gsub("%d+%s*%%", ""):gsub("[%p%s]", ""):lower())
+end
+local function Readable(v) return not (issecretvalue and issecretvalue(v)) end
+-- Item objectives (finished ones too: the items are still handed in) and usable
+-- quest items of every quest in the log. nil when the log cannot be read.
+local questCache
+function Bags.ClearQuestCache() questCache = nil end
+local function QuestLog()
+    if questCache ~= nil then return questCache or nil end
+    local cache = {objectives = {}, items = {}}
+    local function AddText(text)
+        if type(text) == "string" and Readable(text) and text ~= "" then cache.objectives[#cache.objectives + 1] = Bare(text) end
+    end
+    local function AddSpecial(logIndex)
+        local link = GetQuestLogSpecialItemInfo and GetQuestLogSpecialItemInfo(logIndex)
+        local id = type(link) == "string" and Readable(link) and tonumber(link:match("item:(%d+)"))
+        if id then cache.items[id] = true end
+    end
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo and C_QuestLog.GetQuestObjectives then
+        for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+            local info = C_QuestLog.GetInfo(i)
+            if info and not info.isHeader and info.questID then
+                for _, objective in ipairs(C_QuestLog.GetQuestObjectives(info.questID) or {}) do
+                    if objective.type == "item" then AddText(objective.text) end
+                end
+                AddSpecial(i)
+            end
+        end
+    elseif GetNumQuestLogEntries and GetQuestLogTitle and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+        -- Forever / classic-style quest log.
+        for i = 1, GetNumQuestLogEntries() do
+            local _, _, _, isHeader = GetQuestLogTitle(i)
+            if not isHeader then
+                for j = 1, GetNumQuestLeaderBoards(i) or 0 do
+                    local text, kind = GetQuestLogLeaderBoard(j, i)
+                    if kind == "item" then AddText(text) end
+                end
+                AddSpecial(i)
+            end
+        end
+    else
+        questCache = false
+        return nil
+    end
+    questCache = cache
+    return cache
+end
+-- True when the quest item belongs to a quest you have: it starts a quest that is
+-- in your log, it is a usable item of a logged quest, or its name is an item
+-- objective of one. Unknown (log unreadable) counts as in the log.
+function Bags.QuestItemInLog(info, quest, name)
+    if quest and quest.questID then return quest.isActive == true end
+    local log = QuestLog()
+    if not log then return true end
+    if log.items[info.itemID] then return true end
+    if type(name) ~= "string" or name == "" then return false end
+    local bare = Bare(name)
+    if bare == "" then return false end
+    -- Exact name, or its plural ("Wolf Pelts"); a plain substring would let short
+    -- names ("Quest") match longer objectives ("Quest flags").
+    for _, text in ipairs(log.objectives) do
+        if text == bare or text == bare .. "s" or text == bare .. "es" then return true end
+    end
+    return false
+end
 function Bags.Classify(info, quest)
     local data = ItemData(info.itemID)
     if Bags.IsKeystone(info) then return "other", data.name end
     local classes = Enum.ItemClass
-    if quest and (quest.isQuestItem or quest.questID) or data.classID == classes.Questitem then return "quest", data.name end
+    if quest and (quest.isQuestItem or quest.questID) or data.classID == classes.Questitem then
+        return Bags.QuestItemInLog(info, quest, data.name) and "quest" or "questOther", data.name
+    end
     if info.quality == Enum.ItemQuality.Poor then return "junk", data.name end
     if data.classID == classes.Weapon or data.classID == classes.Armor then return "gear", data.name end
     local misc = Enum.ItemMiscellaneousSubclass or {}

@@ -1,7 +1,6 @@
-# WoW Forever: first-pass test build
+# WoW Forever
 
-This is an experimental port for the Forever/Camelot 1.60.1 client (interface
-16001). It has not been tested in a running Forever client yet.
+LunaUITweaks supports the Forever/Camelot 1.60.1 client (interface 16001).
 
 ## Installation
 
@@ -18,9 +17,9 @@ Completely restart WoW after installing the new TOCs.
 
 Use `/luit` for settings, `/lunalayout` for positions, and `/luit compat` to print
 the detected client/interface/build and key API availability when reporting bugs.
-Start with Luna alone so errors can be attributed to this port.
+Disable other addons first so errors can be attributed to Luna.
 
-## Included for testing
+## Included
 
 General UI/minimap options, Layout Mode, vendor tools, loot toasts, quest tools,
 coordinates, cast bars, XP/reputation displays, basic widgets, aura/proc sound
@@ -28,11 +27,10 @@ rules, cursor ring, container opening, collection unwrapping, damage meter,
 cooldown-manager layouts, addon communication, generic encounter/pull/break
 and custom timers, and inventory-count tooltips.
 
-These remain experimental. Spell/aura rules need Forever spell IDs; Retail rules
-are not automatically converted. Some general UI options target Retail-style
-frames and may need further adjustment after testing.
+Spell/aura rules need Forever spell IDs; Retail rules are not automatically
+converted. Some general UI options target Retail-style frames.
 
-## Deliberately unavailable in this first pass
+## Unavailable on Forever
 
 - Talent Manager, automatic talent changes/reminders, and specialization widget.
   Use Blizzard's Forever talents directly for now.
@@ -45,8 +43,7 @@ frames and may need further adjustment after testing.
 - Retail encounter timeline replacement (manual pull/break timers remain).
 
 Unavailable pages explain the restriction; unavailable widgets are omitted from
-widget configuration. This port does not yet package or validate the separate
-Objective Tracker and Unit Frames companion addons.
+widget configuration.
 
 ## Settings and storage
 
@@ -57,15 +54,7 @@ Carried bags are discovered without assuming a fifth reagent bag. Inventory-coun
 tooltips use Forever's reported purchased bank container IDs and preserve cached
 bank counts when bank data cannot be read. Automated transfers remain disabled.
 
-## Initial checks in game
-
-1. Log in, open `/luit`, and run `/luit compat`.
-2. Try Layout Mode, cursor ring, vendor repair, loot, bag counts and quest tools.
-3. Track spells through Blizzard's Cooldown Manager, then test Luna's growth and
-   anchors with an active/inactive buff and during combat.
-4. Test damage/healing totals, rates, session switching and tooltips in combat.
-5. Gain XP below 60 and check the XP/reputation display at 60.
-6. Export Forever settings, change an option, and import the export to restore it.
+## Reporting problems
 
 Report the first Lua error, what triggered it, and `/luit compat` output. Reload
 before reproducing a later error if the first error interrupted initialization.

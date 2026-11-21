@@ -147,6 +147,7 @@ Use Luna's font objects (`LunaFontNormalHuge` etc., see `utils/Style.lua`; same 
 | ProcAlerts.lua | `ProcAlerts` | Sound alerts on spell activation overlay (proc) glows |
 | NameplateColors.lua | `NameplateColors` | Tank-threat coloring of Blizzard enemy nameplates |
 | NameplateQuestMarks.lua | `NameplateQuestMarks` | Kill/loot icon, objective progress and a coloured outline (Luna's own textures; Blizzard's border and threat-coloured bar untouched) on nameplates of active-quest units, including world quests (settings in `nameplateColors.questMarks`) |
+| NameplateCastTarget.lua | `NameplateCastTarget` | Red outline (outside the quest outline) on enemy nameplates while their cast targets you, via `UnitIsSpellTarget(unit, "player")` through `SetAlphaFromBoolean` (secret-safe); Retail and Forever (settings in `nameplateColors.castTarget`) |
 | CooldownManager.lua | `CooldownManager` | Repositions Blizzard Cooldown Manager viewer icons/bars into custom grids |
 | CompactGroupFinder.lua | `CompactGroupFinder` | Compact row layout for the Group Finder list |
 | qualityOfLife/QualityOfLife.lua | `QualityOfLife` | QoL framework: settings, `Enabled()`, submodule registry |
@@ -156,6 +157,7 @@ Use Luna's font objects (`LunaFontNormalHuge` etc., see `utils/Style.lua`; same 
 | qualityOfLife/GameplayAlerts.lua | `QualityOfLife.GameplayAlerts` | Movement cooldown, Time Spiral, Gateway and battle-res alerts |
 | qualityOfLife/SpellRanks.lua | `QualityOfLife.SpellRanks` | **Forever only** (Camelot TOC): orange outline + rank on action-bar spells below the highest known rank; chat list after login/reload (`qualityOfLife.spellRanks`) |
 | qualityOfLife/TalentPoints.lua | `QualityOfLife.TalentPoints` | On-screen unspent talent points reminder out of combat; Retail `C_ClassTalents.HasUnspent*`, Forever `UnitCharacterPoints`/`GetUnspentTalentPoints` (`qualityOfLife.talentPoints`) |
+| qualityOfLife/GroupBuffs.lua | `QualityOfLife.GroupBuffs` | Out-of-combat list of group members missing your buffs; per-class editable list (`qualityOfLife.groupBuffsList[CLASS]`, entries `{id, who=self/solo/group/tanks, on}`), rank-agnostic name match, reapply under `groupBuffsRefresh` minutes, pets ignored; secure click-to-cast icons. Editor in ConvenienceSections (General UI) |
 | widgets/Widgets.lua | `Widgets` | Widget framework: creation, positioning, lock/unlock |
 | widgets/*.lua | — | Individual widgets (FPS, bags, spec, durability, hearthstone, keystone, etc.) |
 | **LunaUITweaks_Config** (load-on-demand) | | |

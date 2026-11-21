@@ -290,6 +290,7 @@ local function OnEvent(self, event, ...)
             nameplateColors = {
                 enabled = true,
                 idle = { r = 0.65, g = 0.55, b = 0.18 },
+                idleNeutral = { r = 0.90, g = 0.82, b = 0.45 }, -- out of combat, neutral mobs
                 noTank = { r = 0.85, g = 0.20, b = 0.20 },
                 otherTank = { r = 0.25, g = 0.50, b = 0.90 },
                 selfTank = { r = 0.25, g = 0.75, b = 0.35 },
@@ -304,6 +305,8 @@ local function OnEvent(self, event, ...)
                     anchor = "RIGHT",
                     hideInInstances = false,
                 },
+                -- NameplateCastTarget.lua: outline enemies casting at you
+                castTarget = { enabled = true, color = { r = 1, g = 0.15, b = 0.15, a = 1 }, thickness = 3 },
             },
             vendor = {
                 enabled = false,
@@ -431,7 +434,7 @@ local function OnEvent(self, event, ...)
                 skipCinematics = true, hideTutorials = true, hideTalkingHead = true,
                 spellRanks = true, -- Forever only (qualityOfLife/SpellRanks.lua)
                 talentPoints = true, talentPointsPos = {point="TOP",x=0,y=-160},
-                groupBuffs = true, groupBuffsPos = {point="CENTER",x=-300,y=150},
+                groupBuffs = true, groupBuffsPos = {point="CENTER",x=-300,y=150}, groupBuffsRefresh = 5,
                 movement = true, movementTts = true, movementVoice = 0,
                 timeSpiral = true, gateway = true, battleRes = true,
                 alertFontSize = 24,

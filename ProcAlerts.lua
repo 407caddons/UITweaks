@@ -3,6 +3,15 @@ local Proc = {}
 addon.ProcAlerts = Proc
 local bus = addon.EventBus
 local rules, active, lastPlayed, observed = {}, {}, {}, {}
+-- Screen-edge proc art (SpellActivationOverlay), e.g. Heating Up at 3 stacks on
+-- Forever. Tracked apart from button glows: its spell ID is usually the aura,
+-- and a HIDE without an ID clears every overlay.
+local overlays = {}
+local EVENTS = { "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE",
+    "SPELL_ACTIVATION_OVERLAY_SHOW", "SPELL_ACTIVATION_OVERLAY_HIDE" }
+local function Valid(event)
+    return not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(event)
+end
 local registered, listening, learnTimer = false, false, nil
 local function DB() return UIThingsDB and UIThingsDB.procAlerts end
 local Public = addon.Secret.IsPublic
@@ -24,10 +33,18 @@ end
 function Proc.IsListening() return listening end
 local SyncEvents
 local function OnGlow(event, spellID)
+    if event == "SPELL_ACTIVATION_OVERLAY_HIDE" and Public(spellID) and spellID == nil then
+        wipe(overlays)
+        return
+    end
     -- Check accessibility before comparing, formatting, or using an ID as a key.
     if not ValidID(spellID) then return end
     if event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
         active[spellID] = nil
+        return
+    end
+    if event == "SPELL_ACTIVATION_OVERLAY_HIDE" then
+        overlays[spellID] = nil
         return
     end
     if listening then
@@ -36,8 +53,9 @@ local function OnGlow(event, spellID)
     end
     local db, rule = DB(), rules[spellID]
     if not db or not db.enabled or not rule then return end
-    if active[spellID] then return end
-    active[spellID] = true
+    local up = event == "SPELL_ACTIVATION_OVERLAY_SHOW" and overlays or active
+    if up[spellID] then return end
+    up[spellID] = true
     if db.combatOnly and not InCombatLockdown() then return end
     local now = GetTime()
     if lastPlayed[spellID] and now - lastPlayed[spellID] < 0.15 then return end
@@ -50,14 +68,17 @@ end
 SyncEvents = function()
     local needed = listening or (DB() and DB().enabled and next(rules) ~= nil)
     if needed and not registered then
-        bus.Register("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", OnGlow, "ProcAlerts")
-        bus.Register("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", OnGlow, "ProcAlerts")
+        for _, event in ipairs(EVENTS) do
+            if Valid(event) then bus.Register(event, OnGlow, "ProcAlerts") end
+        end
         registered = true
     elseif not needed and registered then
-        bus.Unregister("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", OnGlow)
-        bus.Unregister("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", OnGlow)
+        for _, event in ipairs(EVENTS) do
+            if Valid(event) then bus.Unregister(event, OnGlow) end
+        end
         registered = false
         wipe(active)
+        wipe(overlays)
         wipe(lastPlayed)
     end
 end
@@ -76,7 +97,7 @@ function Proc.SetListening(value)
         learnTimer = nil
     end
     if listening then
-        learnTimer = C_Timer.NewTimer(120, function()
+        learnTimer = C_Timer.NewTimer(600, function()
             learnTimer = nil
             Proc.SetListening(false)
         end)
@@ -110,6 +131,7 @@ function Proc.RemoveRule(spellID)
         end
     end
     active[spellID] = nil
+    overlays[spellID] = nil
     lastPlayed[spellID] = nil
     Proc.UpdateSettings()
 end
@@ -124,11 +146,13 @@ bus.Register("PLAYER_REGEN_ENABLED", PersistObserved, "ProcAlerts")
 bus.Register("PLAYER_LOGOUT", PersistObserved, "ProcAlerts")
 bus.Register("PLAYER_ENTERING_WORLD", function()
     wipe(active)
+    wipe(overlays)
     wipe(lastPlayed)
 end, "ProcAlerts")
 bus.Register("PLAYER_SPECIALIZATION_CHANGED", function(_, unit)
     if Public(unit) and unit == "player" then
         wipe(active)
+        wipe(overlays)
         wipe(lastPlayed)
         Proc.UpdateSettings()
     end

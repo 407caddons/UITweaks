@@ -80,7 +80,12 @@ function Colors.State(unit)
     end
     local combat = UnitAffectingCombat(unit)
     if not Public(combat) then return end
-    if not combat then return "idle" end
+    if not combat then
+        -- Neutral (yellow-named) mobs get their own, lighter out-of-combat colour.
+        local reaction = UnitReaction and UnitReaction(unit, "player")
+        if Public(reaction) and reaction == 4 then return "idleNeutral" end
+        return "idle"
+    end
 
     local holding, uncertain = CheckTank("player", unit)
     if holding then return "selfTank" end

@@ -404,6 +404,7 @@ function Bars.UpdateSettings()
         "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS",
         "ZONE_CHANGED_NEW_AREA" }) do events:RegisterEvent(event) end
     events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    events:RegisterUnitEvent("UNIT_AURA", "player") -- custom timers: "Buff gained" trigger
     if C_EncounterTimeline then
         for _, event in ipairs({ "ENCOUNTER_TIMELINE_EVENT_ADDED", "ENCOUNTER_TIMELINE_EVENT_REMOVED",
             "ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED", "ENCOUNTER_TIMELINE_VIEW_ACTIVATED",
@@ -508,8 +509,10 @@ events:SetScript("OnEvent", function(_, event, ...)
         return
     end
     if not Bars.IsActive() then Bars.UpdateSettings(); return end
-    if addon.CustomEncounterTimers then addon.CustomEncounterTimers.OnEvent(event, ...) end
-    if event == "UNIT_SPELLCAST_SUCCEEDED" then Refresh()
+    local started = addon.CustomEncounterTimers and addon.CustomEncounterTimers.OnEvent(event, ...)
+    if event == "UNIT_AURA" then
+        if started then Refresh() end
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then Refresh()
     elseif event == "PLAYER_ENTERING_WORLD" then Bars.UpdateSettings()
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END"
         or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then

@@ -33,7 +33,7 @@ function addon.ConfigSetup.ProcAlerts(panel, navButton)
     end
     local title = Label(panel, "Proc Alerts", 16, -16, 500)
     title:SetFontObject("LunaFontNormalHuge")
-    Label(panel, "Play a sound when Blizzard makes an ability glow on your action bars.", 20, -46, 580)
+    Label(panel, "Play a sound when Blizzard makes an ability glow on your action bars or shows proc art around the screen.", 20, -46, 580)
     local enabled = Check("Enable proc sounds", 16, -65, function(self)
         DB().enabled = not not self:GetChecked()
         Proc.UpdateSettings()
@@ -67,7 +67,7 @@ function addon.ConfigSetup.ProcAlerts(panel, navButton)
         listen:SetText(value and "Stop listening" or "Listen for procs")
     end
     Button(panel, "Refresh discoveries", 180, -135, 160, function() refresh() end)
-    Label(panel, "Listening lasts two minutes and works while this window is closed. Refresh after combat to see new procs.", 20, -169, 590)
+    Label(panel, "Listening lasts ten minutes and works while this window is closed. Refresh after combat to see new procs.", 20, -169, 590)
 
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 20, -207)
@@ -208,7 +208,7 @@ function addon.ConfigSetup.ProcAlerts(panel, navButton)
         end
         list:SetHeight(math.max(1, index * 29))
     end
-    Label(panel, "Only Blizzard proc glows are detected. A proc refreshing an existing glow may not send a new event.", 20, -195, 590)
+    Label(panel, "Only Blizzard proc glows and screen proc art are detected. A proc refreshing an existing glow may not send a new event.", 20, -195, 590)
     panel:HookScript("OnShow", function()
         Proc.UpdateSettings()
         refresh()

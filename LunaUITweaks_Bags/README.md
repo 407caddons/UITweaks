@@ -1,6 +1,6 @@
 # LunaUITweaks Bags — initial version
 
-Optional companion addon for Retail and the Forever test client. Requires LunaUITweaks. Disable other bag replacement addons before testing.
+Optional companion addon for Retail and WoW Forever. Requires LunaUITweaks. Disable other bag replacement addons while using it.
 
 ## Features
 
@@ -28,8 +28,6 @@ The source lives at `LunaUITweaks/LunaUITweaks_Bags`. WoW must also see it as a 
 ## Initial-version limitations
 
 No cached bank viewing away from a banker, category editor, search, bag equipment controls, automatic physical sorting, or custom gold-management controls yet. The native bank remains active behind an opaque custom panel so Blizzard retains its interaction and close lifecycle. Item layout changes wait until combat and stack splitting finish. Inventory open/close requests during combat apply after combat ends. Existing visible slots retain their locations and use Blizzard's secure item actions during combat; the game still decides which items can be used.
-
-This implementation has syntax and mocked regression checks; real-client interaction and taint checks still need in-game testing on Retail and Forever.
 
 Gear icons show their effective item level in small text at the bottom-right, including upgraded variants. Labels refresh when item information arrives and are cleared when pooled buttons display other items.
 

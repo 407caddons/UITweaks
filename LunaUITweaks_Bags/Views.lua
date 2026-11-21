@@ -544,8 +544,16 @@ function Bags.Render(view, ids, available)
     local used = {}
     view.buttons = {}
     local usedTiles = {}
-    local function Section(name, items, aggregate, dropKind)
-        if #items == 0 and not dropKind then return end
+    -- side = "left"/"right": a half-width section (Favorites / Vendor share the top
+    -- row); "right" is right-aligned and grows leftwards. Returns the y below it.
+    local function Section(name, items, aggregate, dropKind, side)
+        if #items == 0 and not dropKind then return y end
+        local cols = side and math.floor(COLUMNS / 2) or COLUMNS
+        local function Place(region, n)
+            local col, row = n % cols, math.floor(n / cols)
+            local x = side == "right" and (COLUMNS - 1 - col) * STEP or col * STEP
+            region:SetPoint("TOPLEFT", x, -y - row * STEP)
+        end
         heading = heading + 1
         local label = view.headings[heading]
         if not label then
@@ -553,7 +561,7 @@ function Bags.Render(view, ids, available)
             view.headings[heading] = label
         end
         label:ClearAllPoints()
-        label:SetPoint("TOPLEFT", 0, -y)
+        if side == "right" then label:SetPoint("TOPRIGHT", -(STEP - SIZE), -y) else label:SetPoint("TOPLEFT", 0, -y) end
         label:SetText(name .. " (" .. #items .. ")")
         label:Show()
         y = y + 24
@@ -562,23 +570,38 @@ function Bags.Render(view, ids, available)
             local button = SlotButton(view, index, entry, aggregate)
             used[button] = true
             button:ClearAllPoints()
-            button:SetPoint("TOPLEFT", ((i - 1) % COLUMNS) * STEP, -y - math.floor((i - 1) / COLUMNS) * STEP)
+            Place(button, i - 1)
             Populate(button, entry)
         end
         local count = #items
         if dropKind then
             local tile = DropTile(view, dropKind)
             tile:ClearAllPoints()
-            tile:SetPoint("TOPLEFT", (count % COLUMNS) * STEP, -y - math.floor(count / COLUMNS) * STEP)
+            Place(tile, count)
             tile:Show()
             usedTiles[tile] = true
             count = count + 1
         end
-        y = y + math.ceil(count / COLUMNS) * STEP + 12
+        y = y + math.ceil(count / cols) * STEP + 12
+        return y
+    end
+    -- Bags: Favorites (left) and Vendor (right) side by side at the top.
+    local paired = view == Bags.inventory
+    if paired then
+        local byKey = {}
+        for _, category in ipairs(Bags.categories) do byKey[category.key] = category end
+        local top = y
+        local fav, vendor = byKey.favorites, byKey.vendor
+        local leftEnd = Section(fav.name, scan.favorites, nil, fav.dropKind, "left")
+        y = top
+        local rightEnd = Section(vendor.name, scan.vendor, nil, vendor.dropKind, "right")
+        y = math.max(leftEnd, rightEnd)
     end
     for _, category in ipairs(Bags.categories) do
         -- Drop sections (with their "+") exist only in the bags, not the bank.
-        Section(category.name, scan[category.key], nil, view == Bags.inventory and category.dropKind or nil)
+        if not (paired and (category.key == "favorites" or category.key == "vendor")) then
+            Section(category.name, scan[category.key], nil, view == Bags.inventory and category.dropKind or nil)
+        end
     end
     if #scan.empty > 0 then
         Section("Free Space", {scan.empty[1]}, true)

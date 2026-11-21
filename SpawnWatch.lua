@@ -12,6 +12,7 @@ local state = "idle" -- idle | watching | seen
 local query, seenName = "", nil
 local pendingAttributes = false
 local openedByLayout = false
+local pendingHide = false -- closed in combat: invisible now, hidden when combat ends
 local flashUntil = 0
 
 local EVENTS = { "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "PLAYER_TARGET_CHANGED" }
@@ -80,6 +81,9 @@ end
 local function MatchedName(unit)
     if state ~= "watching" or query == "" or not unit then return nil end
     if not UnitExists(unit) or UnitIsPlayer(unit) then return nil end
+    -- Corpses keep their name; only a living creature counts as a sighting.
+    local dead = UnitIsDead(unit)
+    if not addon.Secret.IsPublic(dead) or dead then return nil end
     local name = UnitName(unit)
     if type(name) ~= "string" or not addon.Secret.CanAccessValue(name) then return nil end
     if name:lower():sub(1, #query) == query then return name end
@@ -147,6 +151,33 @@ end
 -- ============================================================
 -- Frame
 -- ============================================================
+-- The panel holds a secure Target button, so it is protected: Hide()/Show() are
+-- blocked in combat. Closing in combat stops watching and makes it invisible;
+-- the real Hide happens on PLAYER_REGEN_ENABLED.
+local function HidePanel()
+    if not frame then return end
+    if InCombatLockdown() then
+        Stop()
+        frame:SetAlpha(0)
+        pendingHide = true
+        return
+    end
+    pendingHide = false
+    frame:SetAlpha(1)
+    frame:Hide()
+end
+-- Returns false when the panel cannot be shown (closed, and in combat).
+local function ShowPanel()
+    if pendingHide then
+        pendingHide = false
+        frame:SetAlpha(1)
+        return true
+    end
+    if frame:IsShown() then return true end
+    if InCombatLockdown() then return false end
+    frame:Show()
+    return true
+end
 local function SavePosition()
     local db = DB()
     if not db or not frame then return end
@@ -194,7 +225,7 @@ local function Ensure()
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", 2, 2)
-    close:SetScript("OnClick", function() frame:Hide() end)
+    close:SetScript("OnClick", HidePanel)
 
     edit = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
     edit:SetSize(150, 20)
@@ -231,12 +262,22 @@ local function Ensure()
 end
 
 function SpawnWatch.Toggle()
+    -- First open builds the secure Target button, which cannot happen in combat.
+    if not frame and InCombatLockdown() then
+        print("|cFF00FF96Spawn Watch|r: can't open during combat.")
+        return
+    end
     Ensure()
-    frame:SetShown(not frame:IsShown())
+    if frame:IsShown() and not pendingHide then
+        HidePanel()
+    elseif not ShowPanel() then
+        print("|cFF00FF96Spawn Watch|r: can't open during combat.")
+    end
 end
 
 addon.EventBus.Register("PLAYER_REGEN_ENABLED", function()
     if pendingAttributes then ApplyTargetButton() end
+    if pendingHide then HidePanel() end
 end, "SpawnWatch")
 
 SLASH_LUNASPAWNWATCH1 = "/spawnwatch"
@@ -263,10 +304,10 @@ addon.LayoutMode.RegisterModule("SpawnWatch", {
         if not DB() then return end
         Ensure()
         if not locked then
-            if not frame:IsShown() then openedByLayout = true; frame:Show() end
+            if not frame:IsShown() or pendingHide then openedByLayout = ShowPanel() end
         elseif openedByLayout then
             openedByLayout = false
-            frame:Hide()
+            HidePanel()
         end
     end,
 })

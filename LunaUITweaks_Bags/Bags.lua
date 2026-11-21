@@ -203,7 +203,7 @@ events:SetScript("OnEvent", function(_, event, arg)
             Bags.BeginNewItemSession()
             if IsLoggedIn and IsLoggedIn() then Bags.OnNewItemWorldReady() end
             for _, name in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "ITEM_LOCK_CHANGED", "GET_ITEM_INFO_RECEIVED", "CHAT_MSG_LOOT",
-                "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "CURSOR_CHANGED", "PLAYERBANKSLOTS_CHANGED", "BANK_TABS_CHANGED", "BANKFRAME_OPENED", "UPDATE_BINDINGS"}) do events:RegisterEvent(name) end
+                "QUEST_LOG_UPDATE", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "CURSOR_CHANGED", "PLAYERBANKSLOTS_CHANGED", "BANK_TABS_CHANGED", "BANKFRAME_OPENED", "UPDATE_BINDINGS"}) do events:RegisterEvent(name) end
             -- Equipping/swapping a bag; skipped on clients without the event.
             if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid("BAG_CONTAINER_UPDATE") then
                 events:RegisterEvent("BAG_CONTAINER_UPDATE")
@@ -241,6 +241,9 @@ events:SetScript("OnEvent", function(_, event, arg)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         Bags.ClearItemCache()
         Bags.UpdateSearch()
+        Bags.QueueRefresh()
+    elseif event == "QUEST_LOG_UPDATE" then
+        Bags.ClearQuestCache()
         Bags.QueueRefresh()
     elseif event == "BAG_UPDATE_COOLDOWN" then Bags.UpdateCooldowns()
     else Bags.QueueRefresh() end
